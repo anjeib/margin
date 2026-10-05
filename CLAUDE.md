@@ -72,7 +72,7 @@ app/src/main/cpp    JNI-мост к whisper.cpp (исходники в third_par
 JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew assembleRelease
 ```
 - SDK: `/opt/homebrew/share/android-commandlinetools`, NDK 27.3.13750724, CMake 3.31.6, только arm64-v8a.
-- APK кладётся копией в `~/Desktop/Margin.apk`; при выпуске повышать `versionCode`/`versionName` в `app/build.gradle.kts`.
+- APK кладётся на рабочий стол с номером версии в имени: `~/Desktop/Margin-<версия>.apk` (предыдущий оттуда убирается, все версии — в `releases/`); при выпуске повышать `versionCode`/`versionName` в `app/build.gradle.kts`.
 - Подпись: `release.jks` + `keystore.properties` — **не удалять и не менять**, иначе обновление не встанет поверх.
 - `secrets.properties` (`OPENROUTER_KEY`, `YC_KEY`, `YC_FOLDER`) зашивается в APK → это личная сборка, APK никому не отдавать. Коммерческая версия: ключей в APK нет, приложение ходит через посредника в Яндекс Облаке (Cloud Functions + API Gateway, ключ в Lockbox, вход пользователя, проверка подписки RuStore на сервере, лимиты на пользователя, правила промпта на сервере).
 - debug-сборка имеет суффикс `.debug` и ставится рядом с release.
@@ -82,7 +82,7 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew assembleRelease
 Код в локальном git (без удалённого репозитория). **При каждом выпуске** (после повышения `versionCode`/`versionName` и успешной release-сборки):
 ```
 cp app/build/outputs/apk/release/app-release.apk releases/Margin-<версия>.apk
-cp app/build/outputs/apk/release/app-release.apk ~/Desktop/Margin.apk
+rm -f ~/Desktop/Margin-*.apk ~/Desktop/Margin.apk && cp app/build/outputs/apk/release/app-release.apk ~/Desktop/Margin-<версия>.apk
 git add -A && git commit -m "<версия>: <что изменилось>" && git tag v<версия>
 ```
 - `releases/` — архив APK по версиям (в git не входит: внутри зашиты ключи).
