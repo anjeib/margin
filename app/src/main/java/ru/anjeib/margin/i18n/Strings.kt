@@ -120,10 +120,6 @@ interface Strings {
     val newNote: String
     val noteTitleHint: String
     val noteBodyHint: String
-    val toTasks: String
-    fun extracted(n: Int): String
-    val aiSummary: String
-    val summarize: String
     val emptyNotes: String
     val untitled: String
 
@@ -176,10 +172,6 @@ interface Strings {
     val nothingFound: String
     val entryAdded: String
     val addOrChange: String
-    val addDate: String
-    val addTime: String
-    val addPeople: String
-    val addProject: String
     fun more(n: Int): String
     fun doneCount(n: Int): String
     val records: String
@@ -201,7 +193,6 @@ interface Strings {
     val allFilter: String
     fun entriesCount(n: Int): String
     fun updated(d: String): String
-    val tasksFromNote: String
     val peopleTitle: String
     val emptyPeople: String
     val rename: String
@@ -225,7 +216,16 @@ interface Strings {
     fun waitLine(what: String): String
     fun promiseLine(what: String): String
     val ideaMark: String
-    fun fromIdea(text: String): String
+    val linksTitle: String
+    val linkIdea: String
+    val inTasks: String
+    val fieldDue: String
+    val fieldTime: String
+    val fieldRepeat: String
+    val fieldPeople: String
+    val fieldWaiting: String
+    val fieldPromised: String
+    val notSet: String
     val historyTitle: String
     val srcTaskEntry: String
     val srcChat: String
@@ -297,7 +297,6 @@ interface Strings {
     val restoreFailed: String
     val snoozeHour: String
     val repeat: String
-    val addRepeat: String
     val noRepeat: String
     val everyDay: String
     val weekdays: String
@@ -485,10 +484,6 @@ object Ru : Strings {
     override val newNote = "Новая заметка"
     override val noteTitleHint = "Заголовок"
     override val noteBodyHint = "Пишите свободно…"
-    override val toTasks = "В задачи"
-    override fun extracted(n: Int) = "→ " + n + " " + pluralRu(n, "задача", "задачи", "задач")
-    override val aiSummary = "ИИ-конспект"
-    override val summarize = "Конспект"
     override val emptyNotes = "Заметок пока нет"
     override val untitled = "Без названия"
 
@@ -539,10 +534,6 @@ object Ru : Strings {
     override val nothingFound = "Задач не найдено"
     override val entryAdded = "Добавлена запись"
     override val addOrChange = "Добавить или изменить…"
-    override val addDate = "+ срок"
-    override val addTime = "+ время"
-    override val addPeople = "+ люди"
-    override val addProject = "+ проект"
     override fun more(n: Int) = "ещё $n"
     override fun doneCount(n: Int) = "Выполнено · $n"
     override val records = "Записи"
@@ -564,7 +555,6 @@ object Ru : Strings {
     override val allFilter = "Все"
     override fun entriesCount(n: Int) = "$n " + pluralRu(n, "запись", "записи", "записей")
     override fun updated(d: String) = "обновлено $d"
-    override val tasksFromNote = "Задачи из заметки"
     override val peopleTitle = "Люди"
     override val emptyPeople = "Люди появятся сами, когда вы упомянете их в задачах или заметках."
     override val rename = "Переименовать"
@@ -591,7 +581,6 @@ object Ru : Strings {
     override val restoreFailed = "Не удалось прочитать архив"
     override val snoozeHour = "Через час"
     override val repeat = "Повтор"
-    override val addRepeat = "+ повтор"
     override val noRepeat = "Не повторять"
     override val everyDay = "Каждый день"
     override val weekdays = "По будням"
@@ -636,7 +625,16 @@ object Ru : Strings {
     override fun waitLine(what: String) = "ждём: $what"
     override fun promiseLine(what: String) = "вы обещали: $what"
     override val ideaMark = "из идеи"
-    override fun fromIdea(text: String) = "из идеи «$text»"
+    override val linksTitle = "СВЯЗИ"
+    override val linkIdea = "Идея"
+    override val inTasks = "Уже в задачах"
+    override val fieldDue = "Срок"
+    override val fieldTime = "Время"
+    override val fieldRepeat = "Повтор"
+    override val fieldPeople = "Люди"
+    override val fieldWaiting = "Ждём от"
+    override val fieldPromised = "Обещано"
+    override val notSet = "не задано"
     override val historyTitle = "ИСТОРИЯ"
     override val srcTaskEntry = "из записи задачи"
     override val srcChat = "из разговора"
@@ -840,10 +838,6 @@ object En : Strings {
     override val newNote = "New note"
     override val noteTitleHint = "Title"
     override val noteBodyHint = "Write freely…"
-    override val toTasks = "To tasks"
-    override fun extracted(n: Int) = "→ $n " + if (n == 1) "task" else "tasks"
-    override val aiSummary = "AI summary"
-    override val summarize = "Summary"
     override val emptyNotes = "No notes yet"
     override val untitled = "Untitled"
 
@@ -894,10 +888,6 @@ object En : Strings {
     override val nothingFound = "No tasks found"
     override val entryAdded = "Record added"
     override val addOrChange = "Add or change…"
-    override val addDate = "+ date"
-    override val addTime = "+ time"
-    override val addPeople = "+ people"
-    override val addProject = "+ project"
     override fun more(n: Int) = "$n more"
     override fun doneCount(n: Int) = "Done · $n"
     override val records = "Records"
@@ -919,7 +909,6 @@ object En : Strings {
     override val allFilter = "All"
     override fun entriesCount(n: Int) = "$n " + if (n == 1) "entry" else "entries"
     override fun updated(d: String) = "updated $d"
-    override val tasksFromNote = "Tasks from this note"
     override val peopleTitle = "People"
     override val emptyPeople = "People appear by themselves once you mention them in tasks or notes."
     override val rename = "Rename"
@@ -946,7 +935,6 @@ object En : Strings {
     override val restoreFailed = "Couldn't read the archive"
     override val snoozeHour = "In an hour"
     override val repeat = "Repeat"
-    override val addRepeat = "+ repeat"
     override val noRepeat = "Don't repeat"
     override val everyDay = "Every day"
     override val weekdays = "Weekdays"
@@ -991,7 +979,16 @@ object En : Strings {
     override fun waitLine(what: String) = "waiting: $what"
     override fun promiseLine(what: String) = "you promised: $what"
     override val ideaMark = "from an idea"
-    override fun fromIdea(text: String) = "from the idea “$text”"
+    override val linksTitle = "LINKS"
+    override val linkIdea = "Idea"
+    override val inTasks = "Already a task"
+    override val fieldDue = "Date"
+    override val fieldTime = "Time"
+    override val fieldRepeat = "Repeat"
+    override val fieldPeople = "People"
+    override val fieldWaiting = "Waiting for"
+    override val fieldPromised = "Promised to"
+    override val notSet = "not set"
     override val historyTitle = "HISTORY"
     override val srcTaskEntry = "from a task record"
     override val srcChat = "from a conversation"

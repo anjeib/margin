@@ -598,52 +598,6 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         d.copy(notes = d.notes.filterNot { it.id == id && it.title.isBlank() && it.entries.isEmpty() })
     }
 
-    fun noteToTasks(id: String) {
-        val s = settings.value
-        val note = data.value.notes.find { it.id == id } ?: return
-        if (!Processor.ready(s)) { _toast.value = L.s.noKey; return }
-        _working.value += "tasks:$id"
-        viewModelScope.launch {
-            try {
-                val prompt = "Extract every actionable task from this note (note_id=${note.id}); set note_id=${note.id} on each create_task. " +
-                    "Include dates, people and subtasks when stated. Skip tasks that already exist with this note_id. Do not create notes.\n\n" +
-                    note.title + "\n" + note.text
-                val (plan, cost) = Processor.askPlan(s,
-                    Assistant.systemPrompt(data.value, s.copy(askWhenUnclear = false), query = note.title + " " + note.text), listOf("user" to prompt), smart = true)
-                prefs.addSpend(cost)
-                val current = data.value
-                val applied = Assistant.apply(current, plan.copy(question = null), note.title)
-                val created = applied.touchedTasks.filter { tid -> current.tasks.none { it.id == tid } }
-                snapshots[id] = current
-                store.replace(applied.data.copy(tasks = applied.data.tasks.map { if (it.id in created) it.copy(noteId = id) else it }))
-                _toast.value = applied.caption ?: L.s.nothingFound
-            } catch (e: Exception) {
-                _toast.value = e.message
-            } finally {
-                _working.value -= "tasks:$id"
-            }
-        }
-    }
-
-    fun summarize(id: String) {
-        val s = settings.value
-        val note = data.value.notes.find { it.id == id } ?: return
-        if (!Processor.ready(s)) { _toast.value = L.s.noKey; return }
-        _working.value += "sum:$id"
-        viewModelScope.launch {
-            try {
-                val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.summaryPrompt(), listOf("user" to note.title + "\n" + note.text), smart = true)
-                prefs.addSpend(r.rub)
-                val text = Assistant.field(Assistant.parseObject(r.content), "summary") ?: r.content.trim()
-                updateNote(id) { it.copy(aiSummary = text) }
-            } catch (e: Exception) {
-                _toast.value = e.message
-            } finally {
-                _working.value -= "sum:$id"
-            }
-        }
-    }
-
     // ---------------- people ----------------
 
     private fun updatePerson(id: String, f: (Person) -> Person) =

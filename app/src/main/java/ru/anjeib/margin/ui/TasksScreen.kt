@@ -156,7 +156,7 @@ fun TaskList(
     val s = M.s
     val today = LocalDate.now()
     var byProject by rememberSaveable { mutableStateOf(false) }
-    val collapsed = rememberSaveable(saver = setSaver) { mutableStateOf(setOf("s-done", "s-ideas", "s-pdone")) }
+    val collapsed = rememberSaveable(saver = setSaver) { mutableStateOf(setOf("s-done", "s-pdone")) }
     fun toggle(k: String) { collapsed.value = if (k in collapsed.value) collapsed.value - k else collapsed.value + k }
     fun isOpen(k: String) = k !in collapsed.value
 
@@ -393,7 +393,7 @@ fun TaskList(
     }
 }
 
-/** An idea that has not become a task yet: its text and one quiet way to make it one. */
+/** An idea that has not become a task yet: its text and the same «make a task» button as in notes. */
 @Composable
 private fun IdeaRow(ch: Chain, busy: Boolean, onOpen: () -> Unit, onMake: () -> Unit) {
     val c = M.c
@@ -405,10 +405,7 @@ private fun IdeaRow(ch: Chain, busy: Boolean, onOpen: () -> Unit, onMake: () -> 
             Spacer(Modifier.width(12.dp))
             Text(ch.entry.text.trim(), style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            Box(Modifier.width(110.dp), contentAlignment = Alignment.CenterEnd) {
-                if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
-                else Pill(s.toTaskPill, accent = true, onClick = onMake)
-            }
+            IdeaTaskButton(ch.tasks, busy, onOpenTask = {}, onMake = onMake)
         }
         Hairline(Modifier.padding(start = 36.dp, top = 4.dp))
     }

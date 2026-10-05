@@ -23,14 +23,12 @@ fun dateOf(stamp: String?): LocalDate? = stamp?.let { runCatching { LocalDateTim
 fun Person.involvedIn(t: Task) = t.people.any { matches(it) } || t.waitingFor?.let { matches(it) } == true ||
     t.promisedTo?.let { matches(it) } == true || t.subtasks.any { s -> s.assignee?.let { matches(it) } == true }
 
-/** «↳ из идеи «калькулятор стоимости»», «↳ из заметки …» or «↳ из разговора · 5 окт». */
+/** «↳ из заметки «vuzburo · идеи» · 5 окт» or «↳ из разговора · 5 окт». */
 fun originLine(t: Task, d: AppData): String? {
     val note = t.noteId?.let { id -> d.notes.find { it.id == id } }
     val created = LocalDate.parse(t.createdAt).dayMonth()
-    val idea = ideaOf(t, d)?.second
     return when {
-        idea != null -> L.s.fromIdea(idea.text.trim().let { if (it.length > 40) it.take(38).trimEnd() + "…" else it })
-        note != null -> L.s.fromNote(note.title.ifBlank { L.s.untitled }, created)
+        note != null -> L.s.fromNote(note.title.ifBlank { L.s.untitled }, (note.entries.find { it.id == t.sourceEntryId }?.at?.let { dateOf(it)?.dayMonth() } ?: created))
         t.source != null -> L.s.fromChat(created)
         else -> null
     }
@@ -44,6 +42,23 @@ fun ideaOf(t: Task, d: AppData): Pair<Note, Entry>? {
     return note.entries.maxByOrNull { (stemsOf(it.text) intersect q).size }?.let { note to it }
 }
 
+data class TaskLink(val kind: String, val title: String, val meta: String, val taskId: String? = null, val noteId: String? = null)
+
+/** «Связи» in a task card: its idea, what we wait for around it, what the user promised around it. */
+fun taskLinks(t: Task, d: AppData): List<TaskLink> = buildList {
+    ideaOf(t, d)?.let { (n, e) -> add(TaskLink("idea", L.s.linkIdea + " · " + (dateOf(e.at)?.dayMonth() ?: ""), "«" + e.text.take(90) + "»", noteId = n.id)) }
+    val near = d.tasks.filter { o ->
+        o.id != t.id && !o.done && (o.project != null && o.project == t.project ||
+            (t.people + listOfNotNull(t.promisedTo)).any { p -> p == o.waitingFor || p == o.promisedTo })
+    }
+    near.filter { it.waitingFor != null }.take(2).forEach { o ->
+        add(TaskLink("wait", L.s.waitingFor(o.waitingFor!!), listOfNotNull(o.title, o.dueDate?.shortLabel()?.lowercase()).joinToString(" · "), taskId = o.id))
+    }
+    (listOfNotNull(t.takeIf { it.promisedTo != null }) + near.filter { it.promisedTo != null }).distinctBy { it.id }.take(2).forEach { o ->
+        add(TaskLink("promise", L.s.promised(o.promisedTo!!), listOfNotNull(o.title, o.dueDate?.shortLabel()?.lowercase()).joinToString(" · "), taskId = o.id.takeIf { it != t.id }))
+    }
+}
+
 /** A dated history of a person, each line saying where it came from. */
 fun personHistory(p: Person, d: AppData): List<Triple<LocalDate, String, String>> {
     val names = listOf(p.name) + p.aliases
@@ -51,18 +66,23 @@ fun personHistory(p: Person, d: AppData): List<Triple<LocalDate, String, String>
     val out = mutableListOf<Triple<LocalDate, String, String>>()
     d.tasks.filter { p.involvedIn(it) }.forEach { t ->
         t.entries.filter { mentions(it.text) || p.involvedIn(t) }.takeLast(2).forEach { e -> dateOf(e.at)?.let { out += Triple(it, e.text.take(80), L.s.srcTaskEntry) } }
-        t.source?.takeIf { t.done && mentions(it) }?.let { out += Triple(LocalDate.parse(t.createdAt), it.take(80), L.s.srcChat) }
+        t.source?.takeIf { mentions(it) }?.let { out += Triple(LocalDate.parse(t.createdAt), it.take(80), L.s.srcChat) }
     }
     d.notes.forEach { n -> n.entries.filter { mentions(it.text) }.forEach { e -> dateOf(e.at)?.let { out += Triple(it, e.text.take(80), L.s.srcNote + " «${n.title}»") } } }
     return out.distinctBy { it.second }.sortedByDescending { it.first }.take(8)
+}
+
+/** Tasks an idea (a note entry) became: the exact link when known, else older tasks of the note sharing its words. */
+fun tasksOfEntry(n: Note, e: Entry, d: AppData): List<Task> {
+    val q = stemsOf(e.text)
+    if (q.isEmpty()) return d.tasks.filter { it.sourceEntryId == e.id }
+    return d.tasks.filter { t -> t.sourceEntryId == e.id || (t.sourceEntryId == null && t.noteId == n.id && (stemsOf(t.title) intersect q).size >= minOf(2, q.size)) }
 }
 
 /** Each idea of a project with the tasks it became; the page shows only those that are still just ideas. */
 data class Chain(val note: Note, val entry: Entry, val tasks: List<Task>)
 
 fun ideaChains(project: String, d: AppData): List<Chain> =
-    d.notes.filter { it.project == project }.flatMap { n -> n.entries.filter { it.text.isNotBlank() }.map { n to it } }.map { (n, e) ->
-        val q = stemsOf(e.text)
-        val tasks = d.tasks.filter { t -> t.sourceEntryId == e.id || (t.sourceEntryId == null && t.noteId == n.id && (stemsOf(t.title) intersect q).isNotEmpty()) }
-        Chain(n, e, tasks)
-    }.sortedByDescending { it.entry.at }.take(8)
+    d.notes.filter { it.project == project }.flatMap { n -> n.entries.filter { it.text.isNotBlank() }.map { n to it } }
+        .map { (n, e) -> Chain(n, e, tasksOfEntry(n, e, d)) }
+        .sortedByDescending { it.entry.at }.take(8)

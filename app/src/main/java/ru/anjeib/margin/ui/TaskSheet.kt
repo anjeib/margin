@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.EditNote
@@ -32,6 +33,8 @@ import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.DatePickerDefaults
@@ -153,46 +156,32 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 }
                 // Where the task came from: an idea in a note, or something said in a conversation.
                 originLine(task, data)?.let { o ->
-                    Text("↳ $o", style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    Text("↳ $o", style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(start = 48.dp, top = 2.dp).clip(RoundedCornerShape(6.dp))
                             .clickable(enabled = task.noteId != null) { task.noteId?.let(onOpenNote) })
                 }
 
-                // Meta: only what is filled, then quiet "+ …" for what's missing.
-                Spacer(Modifier.height(8.dp))
-                FlowRow(
-                    Modifier.padding(start = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-                    itemVerticalAlignment = Alignment.CenterVertically,
-                ) {
-                    task.project?.let { Box(Modifier.clickable { dialog = "project" }) { Tag(it) } }
-                    task.whenLabel()?.let { w ->
-                        MetaChip(Icons.Outlined.CalendarToday, w.substringBefore(" · ${task.time}").takeIf { task.dueDate != null || task.startDate != null }, task.isOverdue()) { dialog = "dates" }
-                    }
-                    task.time?.let { MetaChip(Icons.Outlined.Schedule, it) { dialog = "time" } }
-                    task.people.forEach { p ->
-                        Row(Modifier.clip(RoundedCornerShape(50)).clickable { data.person(p)?.let { onOpenPerson(it.id) } ?: run { dialog = "people" } },
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Monogram(p, 22.dp); Spacer(Modifier.width(5.dp))
-                            Text(p, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
+                // Standard fields, always the same rows in the same order: what is filled and what is not is seen at a glance.
+                Spacer(Modifier.height(16.dp))
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
+                    val dates = task.whenLabel()?.substringBefore(" · ${task.time}")?.takeIf { task.dueDate != null || task.startDate != null }
+                    FieldRow(Icons.Outlined.CalendarToday, s.fieldDue, dates, accent = task.isOverdue()) { dialog = "dates" }
+                    FieldRow(Icons.Outlined.Schedule, s.fieldTime, task.time) { dialog = "time" }
+                    FieldRow(Icons.Outlined.Repeat, s.fieldRepeat, task.repeat?.label()) { dialog = "repeat" }
+                    FieldRow(Icons.Outlined.PersonOutline, s.fieldPeople, task.people.joinToString(", ").ifBlank { null }, onClick = { dialog = "people" }, content = {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            task.people.forEach { p ->
+                                Row(Modifier.clip(RoundedCornerShape(50)).clickable { data.person(p)?.let { onOpenPerson(it.id) } ?: run { dialog = "people" } },
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Monogram(p, 22.dp); Spacer(Modifier.width(6.dp))
+                                    Text(p, style = Type.body.copy(color = c.ink, fontSize = 15.sp))
+                                }
+                            }
                         }
-                    }
-                    task.waitingFor?.let { MetaChip(Icons.Outlined.HourglassEmpty, s.waitingFor(it)) { dialog = "waiting" } }
-                    task.promisedTo?.let { MetaChip(Icons.AutoMirrored.Rounded.KeyboardArrowRight, s.promised(it)) { data.person(it)?.let { p -> onOpenPerson(p.id) } } }
-                    task.repeat?.let { MetaChip(Icons.Outlined.Repeat, it.label()) { dialog = "repeat" } }
-                }
-                val missing = buildList {
-                    if (task.dueDate == null && task.startDate == null) add(s.addDate to "dates")
-                    if (task.time == null) add(s.addTime to "time")
-                    if (task.people.isEmpty()) add(s.addPeople to "people")
-                    if (task.project == null) add(s.addProject to "project")
-                    if (task.repeat == null) add(s.addRepeat to "repeat")
-                }
-                if (missing.isNotEmpty()) FlowRow(Modifier.padding(start = 4.dp, top = 6.dp)) {
-                    missing.forEachIndexed { i, (label, d) ->
-                        if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.faint))
-                        Text(label, style = Type.small.copy(color = c.graphite), modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { dialog = d }.padding(2.dp))
-                    }
+                    })
+                    task.waitingFor?.let { FieldRow(Icons.Outlined.HourglassEmpty, s.fieldWaiting, it) { dialog = "waiting" } }
+                    task.promisedTo?.let { w -> FieldRow(Icons.AutoMirrored.Outlined.ArrowForward, s.fieldPromised, w) { data.person(w)?.let { p -> onOpenPerson(p.id) } } }
+                    FieldRow(Icons.Outlined.Tag, s.project, task.project?.let { "#$it" }, accent = true, last = true) { dialog = "project" }
                 }
 
                 // Follow-up is late: offer to nudge the person (SMS if we know the number, else share).
@@ -212,6 +201,31 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             else android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text), null)
                             runCatching { ctx.startActivity(i) }
                         })
+                    }
+                }
+
+                // «Связи»: the idea it grew from, what we wait for around it, what was promised around it.
+                val links = taskLinks(task, data)
+                if (links.isNotEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                    SectionLabel(s.linksTitle, Modifier.padding(start = 6.dp, bottom = 2.dp))
+                    links.forEach { l ->
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                                .clickable(enabled = l.noteId != null || l.taskId != null) { l.noteId?.let(onOpenNote) ?: l.taskId?.let(onOpenTask) }
+                                .padding(horizontal = 6.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(when (l.kind) { "idea" -> Icons.Outlined.EditNote; "wait" -> Icons.Outlined.HourglassEmpty; else -> Icons.AutoMirrored.Outlined.ArrowForward },
+                                null, tint = c.graphite, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(l.title, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (l.meta.isNotBlank()) Text(l.meta, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (l.noteId != null || l.taskId != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.faint)
+                        }
+                        Hairline(Modifier.padding(start = 36.dp))
                     }
                 }
 
@@ -370,10 +384,11 @@ fun QuietLink(text: String, onClick: () -> Unit) {
 /** «5 ОКТ» over the text, attachments under it. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun EntryView(e: Entry, onLong: () -> Unit) {
+fun EntryView(e: Entry, onLong: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
     val c = M.c
     val at = runCatching { LocalDateTime.parse(e.at) }.getOrNull()
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).combinedClickable(onClick = {}, onLongClick = onLong).padding(vertical = 2.dp)) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+    Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).combinedClickable(onClick = {}, onLongClick = onLong).padding(vertical = 2.dp)) {
         Text(at?.let { it.toLocalDate().dayMonth() + " · " + it.toLocalTime().toString().take(5) }?.uppercase() ?: "",
             style = Type.label.copy(color = c.faint, fontSize = 10.5.sp))
         if (e.text.isNotBlank()) {
@@ -385,6 +400,27 @@ fun EntryView(e: Entry, onLong: () -> Unit) {
             AttachmentsView(e.attachments)
         }
     }
+    if (trailing != null) { Spacer(Modifier.width(4.dp)); Box(Modifier.padding(top = 6.dp)) { trailing() } }
+    }
+}
+
+/** One row of the task's standard fields: icon, name, value — or a faint «не задано» that invites a tap. */
+@Composable
+private fun FieldRow(icon: ImageVector, label: String, value: String?, accent: Boolean = false, last: Boolean = false, content: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 46.dp).padding(horizontal = 14.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = c.graphite, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(label, style = Type.body.copy(color = c.graphite, fontSize = 15.sp), modifier = Modifier.width(100.dp), maxLines = 1)
+        Box(Modifier.weight(1f)) {
+            if (value != null && content != null) content()
+            else Text(value ?: s.notSet, style = Type.body.copy(color = when { value == null -> c.faint; accent -> c.accent; else -> c.ink }, fontSize = 15.sp),
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+    if (!last) Hairline(Modifier.padding(start = 44.dp))
 }
 
 @Composable

@@ -236,11 +236,6 @@ object Assistant {
         ${context(d, s)}
     """.trimIndent()
 
-    fun summaryPrompt(): String = """
-        Summarize the note in ${L.s.aiLanguage} as 1–3 short sentences capturing decisions, dates and open items. No markdown.
-        Reply with JSON only: {"summary": string}
-    """.trimIndent()
-
     fun personPrompt(d: AppData, p: Person): String {
         val n = p.name
         val mentions = buildString {

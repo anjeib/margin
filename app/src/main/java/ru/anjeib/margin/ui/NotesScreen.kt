@@ -27,6 +27,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AddTask
+import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
@@ -110,7 +112,6 @@ fun NoteCard(n: Note, data: AppData, onClick: () -> Unit, modifier: Modifier = M
     val c = M.c
     val s = M.s
     val date = runCatching { LocalDateTime.parse(n.updatedAt).toLocalDate().dayMonth() }.getOrDefault("")
-    val linked = data.tasks.count { it.noteId == n.id }
     val files = n.entries.flatMap { it.attachments }
     Column(
         modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).clickable(onClick = onClick)
@@ -123,16 +124,8 @@ fun NoteCard(n: Note, data: AppData, onClick: () -> Unit, modifier: Modifier = M
                 Text(listOfNotNull(n.entries.size.takeIf { it > 1 }?.let { s.entriesCount(it) }, date, attachmentsSummary(files)).joinToString(" · "),
                     style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
             }
-            if (linked > 0) { Spacer(Modifier.width(8.dp)); Pill(s.extracted(linked), accent = true) }
         }
-        if (n.aiSummary != null) {
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Spark(12.dp); Spacer(Modifier.width(6.dp))
-                Text(s.aiSummary, style = Type.small.copy(color = c.accent))
-            }
-        }
-        val preview = (n.aiSummary ?: n.entries.lastOrNull { it.text.isNotBlank() }?.text).orEmpty().trim().takeIf { it != n.title.trim() }.orEmpty()
+        val preview = n.entries.lastOrNull { it.text.isNotBlank() }?.text.orEmpty().trim().takeIf { it != n.title.trim() }.orEmpty()
         if (preview.isNotEmpty()) {
             Spacer(Modifier.height(6.dp))
             Text(preview, style = Type.small.copy(color = c.graphite, fontSize = 14.5.sp, lineHeight = 20.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -153,7 +146,6 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
     LaunchedEffect(title) { delay(400); vm.renameNote(note.id, title) }
     val close = { vm.renameNote(note.id, title); vm.dropEmptyNote(note.id); onBack() }
     BackHandler(onBack = close)
-    val tasks = data.tasks.filter { it.noteId == note.id }
     val scroll = rememberScrollState()
     LaunchedEffect(note.entries.size) { scroll.animateScrollTo(scroll.maxValue) }
 
@@ -163,9 +155,6 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = c.ink)
             }
             Spacer(Modifier.weight(1f))
-            AiButton(s.summarize, "sum:${note.id}" in working) { vm.summarize(note.id) }
-            Spacer(Modifier.width(6.dp))
-            AiButton(s.toTasks, "tasks:${note.id}" in working) { vm.noteToTasks(note.id) }
             Box {
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Outlined.MoreHoriz, null, tint = c.graphite)
@@ -188,21 +177,15 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 val upd = runCatching { LocalDateTime.parse(note.updatedAt).toLocalDate().dayMonth() }.getOrNull()
                 if (upd != null) Text("   " + s.updated(upd), style = Type.small.copy(color = c.graphite))
             }
-            note.aiSummary?.let {
-                Spacer(Modifier.height(14.dp))
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.accentSoft).padding(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Spark(12.dp); Spacer(Modifier.width(6.dp))
-                        SectionLabel(s.aiSummary)
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text(it, style = Type.body.copy(color = c.ink, fontSize = 15.sp))
-                }
-            }
             Spacer(Modifier.height(18.dp))
             Box {
                 Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                    note.entries.forEach { e -> EntryView(e, onLong = { entryMenu = e }) }
+                    // Each idea says for itself whether it is already a task, or becomes one with a tap.
+                    note.entries.forEach { e ->
+                        EntryView(e, onLong = { entryMenu = e }, trailing = if (e.text.isBlank()) null else ({
+                            IdeaTaskButton(tasksOfEntry(note, e, data), "idea:${e.id}" in working, onOpenTask = onOpenTask, onMake = { vm.ideaToTask(note.id, e.id) })
+                        }))
+                    }
                 }
                 DropdownMenu(entryMenu != null, { entryMenu = null }, containerColor = c.card) {
                     entryMenu?.let { e ->
@@ -212,11 +195,6 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 }
             }
             if (note.entries.isEmpty()) Text(s.noteBodyHint, style = Type.body.copy(color = c.faint, fontSize = 17.sp))
-            if (tasks.isNotEmpty()) {
-                Spacer(Modifier.height(24.dp))
-                SectionLabel(s.tasksFromNote, Modifier.padding(start = 4.dp, bottom = 4.dp))
-                tasks.forEach { t -> TaskRow(t, LocalDate.now(), showProject = false, onToggle = { vm.toggleTask(t.id) }, onOpen = { onOpenTask(t.id) }) }
-            }
             Spacer(Modifier.height(24.dp))
         }
         SmartComposer(
@@ -232,16 +210,17 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
     editEntry?.let { e -> TextDialog(s.edit, e.text, "", onDismiss = { editEntry = null }) { v -> vm.editNoteEntry(note.id, e.id, v); editEntry = null } }
 }
 
+/** Next to an idea: «make a task» when it is still just an idea, a quiet check that opens the task when it already is one. */
 @Composable
-private fun AiButton(label: String, busy: Boolean, onClick: () -> Unit) {
+fun IdeaTaskButton(made: List<ru.anjeib.margin.data.Task>, busy: Boolean, onOpenTask: (String) -> Unit, onMake: () -> Unit) {
     val c = M.c
-    Row(
-        Modifier.clip(RoundedCornerShape(50)).background(c.accentSoft).clickable(enabled = !busy, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(12.dp)) else Spark(12.dp)
-        Spacer(Modifier.width(6.dp))
-        Text(label, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
+    val s = M.s
+    Box(Modifier.size(40.dp).clip(CircleShape).clickable(enabled = !busy) { made.firstOrNull()?.let { onOpenTask(it.id) } ?: onMake() },
+        contentAlignment = Alignment.Center) {
+        when {
+            busy -> CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
+            made.isNotEmpty() -> Icon(Icons.Outlined.TaskAlt, s.inTasks, tint = c.graphite, modifier = Modifier.size(20.dp))
+            else -> Icon(Icons.Outlined.AddTask, s.toTaskPill, tint = c.accent, modifier = Modifier.size(20.dp))
+        }
     }
 }
