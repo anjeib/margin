@@ -23,8 +23,9 @@ fun dateOf(stamp: String?): LocalDate? = stamp?.let { runCatching { LocalDateTim
 fun Person.involvedIn(t: Task) = t.people.any { matches(it) } || t.waitingFor?.let { matches(it) } == true ||
     t.promisedTo?.let { matches(it) } == true || t.subtasks.any { s -> s.assignee?.let { matches(it) } == true }
 
-/** «↳ из заметки «vuzburo · идеи» · 5 окт» or «↳ из разговора · 5 окт». */
+/** «↳ из заметки «vuzburo · идеи» · 5 окт» or «↳ из разговора · 5 окт». Null when the idea row in «Связи» already says it. */
 fun originLine(t: Task, d: AppData): String? {
+    if (ideaOf(t, d) != null) return null
     val note = t.noteId?.let { id -> d.notes.find { it.id == id } }
     val created = LocalDate.parse(t.createdAt).dayMonth()
     return when {
@@ -44,18 +45,22 @@ fun ideaOf(t: Task, d: AppData): Pair<Note, Entry>? {
 
 data class TaskLink(val kind: String, val title: String, val meta: String, val taskId: String? = null, val noteId: String? = null)
 
-/** «Связи» in a task card: its idea, what we wait for around it, what the user promised around it. */
+/**
+ * «Связи» in a task card: its idea, and what else is open with the people of this task — what we wait from them, what was promised to them.
+ * Only links through a person: sharing a project alone is not a reason to show another task here.
+ */
 fun taskLinks(t: Task, d: AppData): List<TaskLink> = buildList {
     ideaOf(t, d)?.let { (n, e) -> add(TaskLink("idea", L.s.linkIdea + " · " + (dateOf(e.at)?.dayMonth() ?: ""), "«" + e.text.take(90) + "»", noteId = n.id)) }
+    val mine = t.people + listOfNotNull(t.waitingFor, t.promisedTo)
+    fun same(a: String, b: String) = a.equals(b, true) || d.person(a)?.matches(b) == true
     val near = d.tasks.filter { o ->
-        o.id != t.id && !o.done && (o.project != null && o.project == t.project ||
-            (t.people + listOfNotNull(t.promisedTo)).any { p -> p == o.waitingFor || p == o.promisedTo })
+        o.id != t.id && !o.done && mine.any { p -> o.waitingFor?.let { same(p, it) } == true || o.promisedTo?.let { same(p, it) } == true }
     }
     near.filter { it.waitingFor != null }.take(2).forEach { o ->
         add(TaskLink("wait", L.s.waitingFor(o.waitingFor!!), listOfNotNull(o.title, o.dueDate?.shortLabel()?.lowercase()).joinToString(" · "), taskId = o.id))
     }
-    (listOfNotNull(t.takeIf { it.promisedTo != null }) + near.filter { it.promisedTo != null }).distinctBy { it.id }.take(2).forEach { o ->
-        add(TaskLink("promise", L.s.promised(o.promisedTo!!), listOfNotNull(o.title, o.dueDate?.shortLabel()?.lowercase()).joinToString(" · "), taskId = o.id.takeIf { it != t.id }))
+    near.filter { it.promisedTo != null }.take(2).forEach { o ->
+        add(TaskLink("promise", L.s.promised(o.promisedTo!!), listOfNotNull(o.title, o.dueDate?.shortLabel()?.lowercase()).joinToString(" · "), taskId = o.id))
     }
 }
 
