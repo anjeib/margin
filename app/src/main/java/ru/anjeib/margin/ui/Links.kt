@@ -40,7 +40,8 @@ fun ideaOf(t: Task, d: AppData): Pair<Note, Entry>? {
     val note = t.noteId?.let { id -> d.notes.find { it.id == id } } ?: return null
     note.entries.find { it.id == t.sourceEntryId }?.let { return note to it }
     val q = stemsOf(t.title + " " + t.source.orEmpty())
-    return note.entries.maxByOrNull { (stemsOf(it.text) intersect q).size }?.let { note to it }
+    // Only an entry that really shares words — never «the least unrelated» one.
+    return note.entries.map { it to (stemsOf(it.text) intersect q).size }.filter { it.second > 0 }.maxByOrNull { it.second }?.let { note to it.first }
 }
 
 data class TaskLink(val kind: String, val title: String, val meta: String, val taskId: String? = null, val noteId: String? = null)

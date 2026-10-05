@@ -57,7 +57,7 @@ class YandexCompareTest {
             d.tasks.any { it.repeat?.freq == "weekly" && it.repeat.days == listOf(2) && it.time == "10:00" }
         },
         Step("это у доктора Иванова на Ленина 5, не забыть полис", scopeTask = "томатолог") { _, d ->
-            d.tasks.first { it.title.contains("томатолог", true) }.entries.any { it.text.contains("Ленина") }
+            d.tasks.first { it.title.contains("томатолог", true) }.let { t -> (t.entries.any { it.text.contains("Ленина") } || t.place?.contains("Ленина") == true) && t.entries.any { it.text.contains("полис", true) } }
         },
         Step("перенеси на пятницу в 15:00", scopeTask = "томатолог") { _, d ->
             d.tasks.first { it.title.contains("томатолог", true) }.let { it.due == "2026-10-09" && it.time == "15:00" }

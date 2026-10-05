@@ -134,9 +134,58 @@ class MainVm(app: Application) : AndroidViewModel(app) {
      * Sends what the user wrote (plus attachments) to the assistant.
      * Main scope goes through the preview card; inside a task or in notes changes apply at once with an Undo line.
      */
+    // ---------------- first run: two questions in the chat instead of a settings page ----------------
+
+    fun startSetup() {
+        if (settings.value.setupStep != 0) return
+        prefs.update { it.copy(setupStep = 1) }
+        ask(L.s.setupBriefQ, L.s.setupBriefOptions)
+    }
+
+    private fun ask(text: String, options: List<String>) {
+        val m = ChatMsg(fromUser = false, text = text, options = options)
+        addAssistant(m)
+        _trayFrom.value = _trayFrom.value ?: m.id
+    }
+
+    /** Answers to the first-run questions are handled here; anything else ends the setup and goes to the AI as usual. */
+    private fun setupAnswer(t: String): Boolean {
+        val step = settings.value.setupStep
+        if (step != 1 && step != 2) return false
+        val low = t.lowercase()
+        when (step) {
+            1 -> {
+                val off = Regex("не нужн|не надо|^нет|no thanks|^no\\b|not needed|^skip|пропуст").containsMatchIn(low)
+                val m = Regex("^(\\d{1,2})(?::(\\d{2}))?$").find(low.replace(" ", ""))
+                if (!off && m == null) { prefs.update { it.copy(setupStep = 3) }; return false }
+                val time = m?.let { "%02d:%02d".format(it.groupValues[1].toInt().coerceIn(0, 23), it.groupValues[2].ifEmpty { "0" }.toInt().coerceIn(0, 59)) }
+                you(t)
+                updateSettings { it.copy(morningBrief = !off, morningTime = time ?: it.morningTime, setupStep = 2) }
+                ask(L.s.setupNameQ, listOf(L.s.skip))
+            }
+            2 -> {
+                val skip = Regex("^(пропуст|skip|не важно|нет$)").containsMatchIn(low)
+                // A long phrase is a task, not a name: stop asking and let the AI take it.
+                if (!skip && (t.length > 30 || t.trim().split(Regex("\\s+")).size > 3)) { prefs.update { it.copy(setupStep = 3) }; return false }
+                you(t)
+                val name = if (skip) "" else t.properName()
+                prefs.update { it.copy(userName = name.ifBlank { it.userName }, setupStep = 3) }
+                addAssistant(ChatMsg(fromUser = false, text = L.s.setupDone(name)))
+            }
+        }
+        return true
+    }
+
+    private fun you(t: String) {
+        val user = ChatMsg(fromUser = true, text = t)
+        store.update { it.copy(chat = (it.chat + user).takeLast(60)) }
+        _trayFrom.value = _trayFrom.value ?: user.id
+    }
+
     fun send(text: String, smart: Boolean = false, label: String? = null, scope: Scope = Scope.Main, files: List<Attachment> = emptyList()) {
         val t = text.trim()
         if ((t.isEmpty() && files.isEmpty()) || _busy.value != null) return
+        if (scope == Scope.Main && files.isEmpty() && !smart && setupAnswer(t)) return
         if (_pending.value != null) confirm() // typing on means the preview was fine
         val s = settings.value
 
@@ -273,12 +322,26 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         _pending.value = _pending.value?.copy(auto = false)
     }
 
+    /** «называй меня Аня», «сводку присылай в 9», «вечерний обзор не нужен» — the app's own settings, set by words. */
+    private fun applySettings(m: Map<String, String>) {
+        if (m.isEmpty()) return
+        fun time(v: String) = Regex("^(\\d{1,2}):(\\d{2})$").find(v)?.let { "%02d:%02d".format(it.groupValues[1].toInt().coerceIn(0, 23), it.groupValues[2].toInt().coerceIn(0, 59)) }
+        updateSettings { s0 ->
+            var s1 = s0
+            m["name"]?.let { s1 = s1.copy(userName = it.properName()) }
+            m["morning"]?.let { v -> s1 = if (v == "off") s1.copy(morningBrief = false) else time(v)?.let { s1.copy(morningBrief = true, morningTime = it) } ?: s1 }
+            m["evening"]?.let { v -> s1 = if (v == "off") s1.copy(eveningReview = false) else time(v)?.let { s1.copy(eveningReview = true, eveningTime = it) } ?: s1 }
+            s1
+        }
+    }
+
     /** Tasks of the last exchanges — «перенеси его на пятницу» is about them even without naming them. */
     private fun recentTasks() = data.value.chat.takeLast(5).flatMap { it.taskIds }.toSet()
 
     private fun applyPlan(plan: AiPlan, files: List<Attachment> = emptyList(), silentUser: Boolean = false, source: String = "", strict: Boolean = false): List<String> {
         val current = data.value // the user may have edited something while we waited
         val applied = Assistant.apply(current, plan, source, strict = strict, recent = recentTasks())
+        applySettings(applied.settings)
         val withFiles = if (files.isNotEmpty()) attachTo(applied, Scope.Main, files, current) else applied.data
         val msg = ChatMsg(
             fromUser = false,
@@ -296,6 +359,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private fun applyScoped(plan: AiPlan, scope: Scope, files: List<Attachment>, source: String = "") {
         val current = data.value
         val applied = Assistant.apply(current, plan, source, strict = true, focus = (scope as? Scope.InTask)?.taskId)
+        applySettings(applied.settings)
         val next = attachTo(applied, scope, files, current)
         val undoId = newId()
         snapshots[undoId] = current
@@ -595,8 +659,45 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private fun updatePerson(id: String, f: (Person) -> Person) =
         store.update { d -> d.copy(persons = d.persons.map { if (it.id == id) f(it) else it }) }
 
-    fun editPerson(id: String, about: String?, phone: String?, email: String?) = updatePerson(id) {
-        it.copy(about = about?.trim()?.ifBlank { null }, aboutFromUser = !about.isNullOrBlank(), phone = phone?.trim()?.ifBlank { null }, email = email?.trim()?.ifBlank { null })
+    /** One contact or fact of a person, typed by hand. «personal» takes one fact per line. */
+    fun setPersonField(id: String, field: String, value: String) = updatePerson(id) { p ->
+        val v = value.trim().ifBlank { null }
+        when (field) {
+            "about" -> p.copy(about = v, aboutFromUser = v != null)
+            "company" -> p.copy(company = v)
+            "phone" -> p.copy(phone = v)
+            "email" -> p.copy(email = v)
+            "address" -> p.copy(address = v)
+            "max" -> p.copy(max = v)
+            "telegram" -> p.copy(telegram = v?.removePrefix("https://t.me/")?.removePrefix("@")?.let { "@$it" })
+            "personal" -> p.copy(personal = value.lines().map { it.trim() }.filter { it.isNotEmpty() }.map { it.sentence() })
+            else -> p
+        }
+    }
+
+    fun say(text: String) { _toast.value = text }
+
+    /** «Вы написали» in the card: spelling and capitals fixed once, by the quick model; the words stay the user's. */
+    fun tidySource(id: String) {
+        val s = settings.value
+        val t0 = data.value.tasks.find { it.id == id } ?: return
+        val raw = t0.source ?: return
+        if (t0.sourceFixed || !Processor.ready(s) || !Processor.online(ctx) || "tidy:$id" in _working.value) return
+        _working.value += "tidy:$id"
+        viewModelScope.launch {
+            try {
+                val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.tidyPrompt(), listOf("user" to raw))
+                prefs.addSpend(r.rub)
+                val clean = (Assistant.field(Assistant.parseObject(r.content), "text") ?: r.content).trim().trim('«', '»', '"').trim()
+                // Only a cleaner copy of the same words is accepted — never a rewrite.
+                val ok = clean.length in (raw.length * 8 / 10)..(raw.length * 13 / 10 + 8) && !clean.contains('{')
+                updateTask(id) { it.copy(source = if (ok) clean else it.source, sourceFixed = true) }
+            } catch (e: Exception) {
+                android.util.Log.w("Margin", "tidy failed: ${e.message}")
+            } finally {
+                _working.value -= "tidy:$id"
+            }
+        }
     }
 
     /** Renames a person everywhere their name is used. */
@@ -628,6 +729,10 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     /** «Свежая сводка» about a person: who they are + what's going on now. */
+    fun personFingerprint(p: Person, d: AppData): String = d.tasks.filter { t ->
+        t.people.any { p.matches(it) } || t.waitingFor?.let { p.matches(it) } == true || t.promisedTo?.let { p.matches(it) } == true
+    }.map { it.id + it.title + it.done + it.due + it.waitingFor + it.promisedTo }.sorted().joinToString(",")
+
     fun refreshPerson(id: String) {
         val s = settings.value
         val p = data.value.persons.find { it.id == id } ?: return
@@ -642,7 +747,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                     // The user's own words about a person stay; an earlier AI guess may be replaced or dropped.
                     it.copy(about = if (it.aboutFromUser) it.about else Assistant.field(o, "about")?.trim()?.ifBlank { null },
                         summary = Assistant.field(o, "summary")?.replaceFirstChar { c -> c.uppercase() } ?: it.summary,
-                        summaryAt = nowStamp(), updatedAt = nowStamp())
+                        summaryAt = nowStamp(), summaryFp = personFingerprint(it, data.value), updatedAt = nowStamp())
                 }
             } catch (e: Exception) {
                 _toast.value = e.message
@@ -677,11 +782,13 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     /** «В задачу» on an idea: exactly one task, linked back to the idea it came from. */
-    fun ideaToTask(noteId: String, entryId: String) {
+    /** [entryId] null — a note that is all title («Посмотреть Одиссею»): the title is the idea. */
+    fun ideaToTask(noteId: String, entryId: String?) {
         val s = settings.value
-        val e = data.value.notes.find { it.id == noteId }?.entries?.find { it.id == entryId } ?: return
+        val note = data.value.notes.find { it.id == noteId } ?: return
+        val e = (if (entryId == null) Entry(id = "title:$noteId", text = note.title) else note.entries.find { it.id == entryId }) ?: return
         if (!Processor.ready(s)) { _toast.value = L.s.noKey; return }
-        _working.value += "idea:$entryId"
+        _working.value += "idea:${e.id}"
         viewModelScope.launch {
             try {
                 val (plan, cost) = Processor.askPlan(s, Assistant.systemPrompt(data.value, s.copy(askWhenUnclear = false), query = e.text),
@@ -699,7 +806,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             } catch (ex: Exception) {
                 _toast.value = ex.message
             } finally {
-                _working.value -= "idea:$entryId"
+                _working.value -= "idea:${e.id}"
             }
         }
     }

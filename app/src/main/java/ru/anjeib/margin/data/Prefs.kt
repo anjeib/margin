@@ -34,6 +34,8 @@ data class Settings(
     /** Read the phone calendar so plans see meetings. */
     val calendar: Boolean = false,
     val onboarded: Boolean = false,
+    /** First-run questions in the chat: 0 not yet, 1 brief asked, 2 name asked, 3 done. */
+    val setupStep: Int = 0,
     /** A document (e.g. on Google Drive) the app keeps overwriting with a full backup. */
     /** Brief collapsed / hidden for this date (yyyy-MM-dd). */
     val briefCollapsed: String = "",
@@ -83,6 +85,7 @@ class Prefs private constructor(context: Context) {
         whisperAlways = sp.getBoolean("whisperAlways", false),
         calendar = sp.getBoolean("calendar", false),
         onboarded = sp.getBoolean("onboarded", false),
+        setupStep = sp.getInt("setupStep", if (sp.getBoolean("onboarded", false)) 3 else 0),
         briefCollapsed = sp.getString("briefCollapsed", "") ?: "",
         briefHidden = sp.getString("briefHidden", "") ?: "",
         spentMonth = sp.getString("spentMonth", "") ?: "",
@@ -117,6 +120,7 @@ class Prefs private constructor(context: Context) {
             putBoolean("whisperAlways", s.whisperAlways)
             putBoolean("calendar", s.calendar)
             putBoolean("onboarded", s.onboarded)
+            putInt("setupStep", s.setupStep)
             putString("briefCollapsed", s.briefCollapsed)
             putString("briefHidden", s.briefHidden)
             putString("spentMonth", s.spentMonth)

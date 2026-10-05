@@ -60,6 +60,15 @@ data class Person(
     /** «Свежая сводка»: what's going on with this person now (AI), and when it was written. */
     val summary: String? = null,
     val summaryAt: String? = null,
+    /** What the summary was written from — when their tasks change, it is out of date. */
+    val summaryFp: String? = null,
+    val company: String? = null,
+    val address: String? = null,
+    val telegram: String? = null,
+    /** MAX messenger: a username or a phone. */
+    val max: String? = null,
+    /** «Личная информация»: short facts the user told about them (birthday, family, what they like). */
+    val personal: List<String> = emptyList(),
 ) {
     fun matches(n: String) = name.equals(n, true) || aliases.any { it.equals(n, true) }
 }
@@ -108,6 +117,10 @@ data class Task(
     val source: String? = null,
     /** The note entry (idea) this task grew from, when it came from one. */
     val sourceEntryId: String? = null,
+    /** [source] was already tidied up (spelling, capitals) for the card. */
+    val sourceFixed: Boolean = false,
+    /** Where it happens: an address or a place («Ленина 5», «кафе Зерно»). */
+    val place: String? = null,
     val subtasks: List<Subtask> = emptyList(),
     val repeat: Repeat? = null,
     /** How many times the task was pushed to a later day — lets reviews spot what never happens. */

@@ -3,6 +3,12 @@ package ru.anjeib.margin.ui
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import ru.anjeib.margin.data.isOverdue
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -84,9 +90,10 @@ fun PeopleList(data: AppData, onOpen: (String) -> Unit, contentPadding: PaddingV
                 val promise = data.tasks.firstOrNull { !it.done && it.promisedTo?.let { w -> p.matches(w) } == true }
                 Column(Modifier.weight(1f)) {
                     Text(p.name, style = Type.cardTitle.copy(color = c.ink))
-                    Text(listOfNotNull(p.about, wait?.let { s.waitLine(it.title.replaceFirstChar { c -> c.lowercase() }) }, promise?.let { s.promiseLine(it.title.replaceFirstChar { c -> c.lowercase() }) })
-                        .joinToString(" · ").ifBlank { listOfNotNull(p.phone, p.email).joinToString(" · ").ifBlank { "—" } },
-                        style = Type.small.copy(color = c.graphite), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    // Nothing known yet → no line at all, not a dash.
+                    val line = listOfNotNull(p.about, p.company, wait?.let { s.waitLine(it.title.replaceFirstChar { c -> c.lowercase() }) }, promise?.let { s.promiseLine(it.title.replaceFirstChar { c -> c.lowercase() }) })
+                        .joinToString(" · ").ifBlank { listOfNotNull(p.phone, p.email).joinToString(" · ") }
+                    if (line.isNotBlank()) Text(line, style = Type.small.copy(color = c.graphite), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 if (open > listOfNotNull(wait, promise).size) Text(s.tasksCount(open), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
             }
@@ -94,6 +101,7 @@ fun PeopleList(data: AppData, onOpen: (String) -> Unit, contentPadding: PaddingV
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenNote: (String) -> Unit) {
     val c = M.c
@@ -104,15 +112,16 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
     var dialog by remember { mutableStateOf<String?>(null) }
     BackHandler(onBack = onBack)
     // A fresh summary when there's none for today and the person shows up in things.
-    LaunchedEffect(person.id) {
-        val fresh = person.summaryAt?.startsWith(LocalDate.now().toString()) == true
+    // Rewritten once a day — and as soon as their tasks changed since the last summary.
+    val fp = vm.personFingerprint(person, data)
+    LaunchedEffect(person.id, fp) {
+        val fresh = person.summaryAt?.startsWith(LocalDate.now().toString()) == true && (person.summaryFp == null || person.summaryFp == fp)
         if (!fresh && data.tasks.any { it.involves(person) }) vm.refreshPerson(person.id)
     }
 
     val tasks = data.tasks.filter { it.involves(person) }
-    val waiting = tasks.filter { !it.done && it.waitingFor?.let { w -> person.matches(w) } == true }
-    val promised = tasks.filter { !it.done && it.promisedTo?.let { w -> person.matches(w) } == true }
-    val open = tasks.filter { !it.done } - waiting.toSet() - promised.toSet()
+    // One list: the hourglass and «вы обещали» on the row already say which way it goes.
+    val open = tasks.filter { !it.done }.sortedWith(compareBy({ !it.isOverdue() }, { it.dueDate ?: LocalDate.MAX }))
     val done = tasks.filter { it.done }.sortedByDescending { it.doneAt }.take(5)
     val notes = data.notes.filter { n -> listOf(person.name).plus(person.aliases).any { n.title.contains(it, true) || n.text.contains(it, true) } }
 
@@ -128,7 +137,6 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 }
                 DropdownMenu(menu, { menu = false }, containerColor = c.card) {
                     DropdownMenuItem(text = { Text(s.rename, style = Type.body) }, onClick = { menu = false; dialog = "rename" })
-                    DropdownMenuItem(text = { Text(s.editContacts, style = Type.body) }, onClick = { menu = false; dialog = "phone" })
                     if (data.persons.size > 1) DropdownMenuItem(text = { Text(s.mergeWith, style = Type.body) }, onClick = { menu = false; dialog = "merge" })
                     DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menu = false; vm.deletePerson(person.id); onBack() })
                 }
@@ -140,17 +148,57 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 Spacer(Modifier.width(18.dp))
                 Column(Modifier.weight(1f)) {
                     Text(person.name, style = Type.display.copy(color = c.ink, fontSize = 36.sp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val projects = data.tasks.filter { it.involves(person) }.mapNotNull { it.project }.distinct().take(2)
-                        Text(listOfNotNull(person.about, projects.joinToString(", ").ifBlank { null }, person.phone).joinToString(" · "),
-                            style = Type.small.copy(color = c.graphite, fontSize = 14.sp), modifier = Modifier.weight(1f).clickable { dialog = "about" },
-                            maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        person.phone?.let { ph ->
-                            Box(Modifier.size(40.dp).clip(CircleShape).clickable { runCatching { ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$ph"))) } },
-                                contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Call, null, tint = c.graphite, modifier = Modifier.size(20.dp)) }
-                        }
+                    // Who they are: role · company · the projects they show up in.
+                    val projects = tasks.mapNotNull { it.project }.distinct().take(2).map { projectLabel(it) }
+                    listOfNotNull(person.about, person.company, projects.joinToString(", ").ifBlank { null }).joinToString(" · ").takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { dialog = if (person.about == null) "company" else "about" })
                     }
                 }
+            }
+            // Ways to reach them: a tap calls / writes / opens, a long press changes it.
+            fun reach(kind: String) {
+                val i = when (kind) {
+                    "phone" -> Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + person.phone))
+                    "email" -> Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + person.email))
+                    "telegram" -> person.telegram?.removePrefix("@")?.let { h -> Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/" + (if (h.all { it.isDigit() || it == '+' }) "+" + h.trimStart('+') else h))) }
+                    "address" -> Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(person.address)))
+                    else -> null
+                }
+                if (i != null) runCatching { ctx.startActivity(i) }
+                else (ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)?.let { cb ->
+                    // MAX has no public link format yet: the handle goes to the clipboard.
+                    cb.setPrimaryClip(android.content.ClipData.newPlainText("MAX", person.max)); vm.say(s.copied)
+                }
+            }
+            val contacts = listOfNotNull(
+                person.phone?.let { Triple(Icons.Outlined.Call, it, "phone") },
+                person.email?.let { Triple(Icons.Outlined.Email, it, "email") },
+                person.telegram?.let { Triple(Icons.AutoMirrored.Outlined.Send, it, "telegram") },
+                person.max?.let { Triple(Icons.Outlined.ChatBubbleOutline, "MAX · $it", "max") },
+                person.address?.let { Triple(Icons.Outlined.Place, it, "address") },
+            )
+            if (contacts.isNotEmpty()) FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                contacts.forEach { (icon, label, kind) -> ContactChip(icon, label, onClick = { reach(kind) }, onLong = { dialog = kind }) }
+            }
+            val missing = listOfNotNull(
+                (s.fieldRole to "about").takeIf { person.about == null }, (s.fieldCompany to "company").takeIf { person.company == null },
+                (s.fieldPhone to "phone").takeIf { person.phone == null }, (s.fieldEmail to "email").takeIf { person.email == null },
+                (s.fieldAddress to "address").takeIf { person.address == null }, ("MAX" to "max").takeIf { person.max == null },
+                ("Telegram" to "telegram").takeIf { person.telegram == null },
+            )
+            if (missing.isNotEmpty()) FlowRow(Modifier.padding(top = 10.dp)) {
+                missing.forEachIndexed { i, (label, d) ->
+                    if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.faint))
+                    Text("+ " + (if (label.first().isUpperCase() && label.length <= 8 && label.any { it in 'A'..'Z' }) label else label.lowercase()),
+                        style = Type.small.copy(color = c.graphite), modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { dialog = d }.padding(2.dp))
+                }
+            }
+            // «Личная информация»: what the user told about them as a person — birthday, family, what they like.
+            Column(Modifier.padding(top = 22.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { dialog = "personal" }.padding(vertical = 4.dp)) {
+                SectionLabel(s.personalTitle, Modifier.padding(start = 4.dp, bottom = 6.dp))
+                if (person.personal.isEmpty()) Text("+ " + s.personalHint, style = Type.small.copy(color = c.graphite), modifier = Modifier.padding(start = 4.dp))
+                else person.personal.forEach { Text(it, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)) }
             }
             Spacer(Modifier.height(18.dp))
             // «Свежая сводка»: what's going on with this person now.
@@ -167,19 +215,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 Text(person.summary ?: person.about ?: s.aboutHint, style = Type.body.copy(color = if (person.summary != null) c.ink else c.graphite, fontSize = 15.5.sp),
                     modifier = Modifier.padding(end = 10.dp))
             }
-            person.email?.let { em ->
-                Spacer(Modifier.height(10.dp))
-                ContactButton(Icons.Outlined.Email, em) { runCatching { ctx.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$em"))) } }
-            }
             val today = LocalDate.now()
-            if (waiting.isNotEmpty()) {
-                SectionLabel(s.promisedToYou, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 4.dp))
-                waiting.forEach { t -> TaskRow(t, today, true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }) }
-            }
-            if (promised.isNotEmpty()) {
-                SectionLabel(s.youPromised, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 4.dp))
-                promised.forEach { t -> TaskRow(t, today, true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }) }
-            }
             if (open.isNotEmpty()) {
                 SectionLabel(s.tasksCaps, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 4.dp))
                 open.forEach { t -> TaskRow(t, today, true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }) }
@@ -210,12 +246,19 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
     }
 
     when (dialog) {
-        "about" -> TextDialog(s.whoIs, person.about.orEmpty(), s.aboutHint, onDismiss = { dialog = null }) { v -> vm.editPerson(person.id, v, person.phone, person.email); dialog = null }
-        "rename" -> TextDialog(s.rename, person.name, "", onDismiss = { dialog = null }) { v -> vm.renamePerson(person.id, v); dialog = null }
-        "phone" -> TextDialog(s.editContacts, listOfNotNull(person.phone, person.email).joinToString(", "), s.contactsHint, onDismiss = { dialog = null }) { v ->
-            val parts = v.split(',', ';').map { it.trim() }.filter { it.isNotEmpty() }
-            vm.editPerson(person.id, person.about, parts.firstOrNull { '@' !in it }, parts.firstOrNull { '@' in it }); dialog = null
+        "about", "company", "phone", "email", "address", "max", "telegram" -> {
+            val k = dialog!!
+            val (title, value) = when (k) {
+                "about" -> s.fieldRole to person.about; "company" -> s.fieldCompany to person.company; "phone" -> s.fieldPhone to person.phone
+                "email" -> s.fieldEmail to person.email; "address" -> s.fieldAddress to person.address; "max" -> "MAX" to person.max
+                else -> "Telegram" to person.telegram
+            }
+            TextDialog(title, value.orEmpty(), if (k == "telegram") "@username" else "", onDismiss = { dialog = null }) { v -> vm.setPersonField(person.id, k, v); dialog = null }
         }
+        "personal" -> TextDialog(s.personalTitle.lowercase().replaceFirstChar { it.uppercase() }, person.personal.joinToString("\n"), s.personalHint, onDismiss = { dialog = null }) { v ->
+            vm.setPersonField(person.id, "personal", v); dialog = null
+        }
+        "rename" -> TextDialog(s.rename, person.name, "", onDismiss = { dialog = null }) { v -> vm.renamePerson(person.id, v); dialog = null }
         "merge" -> AlertDialog(
             onDismissRequest = { dialog = null },
             containerColor = c.card,
@@ -237,13 +280,15 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
     }
 }
 
+/** A way to reach the person: tap to use it, hold to change it. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ContactButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun ContactChip(icon: ImageVector, label: String, onClick: () -> Unit, onLong: () -> Unit) {
     val c = M.c
-    Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
+    Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).combinedClickable(onClick = onClick, onLongClick = onLong).padding(horizontal = 14.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = c.graphite, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(8.dp))
-        Text(label, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
+        Text(label, style = Type.small.copy(color = c.ink, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

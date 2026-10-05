@@ -68,8 +68,6 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
     val keyStatus by vm.keyStatus.collectAsState()
     var keyDraft by remember { mutableStateOf<String?>(null) }
     var picker by remember { mutableStateOf<String?>(null) } // "main" | "fast"
-    var timeFor by remember { mutableStateOf<String?>(null) } // "morning" | "evening"
-    var nameDraft by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) { if (settings.apiKey.isNotBlank()) vm.checkKey() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -122,22 +120,6 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                 if (v && !ru.anjeib.margin.data.PhoneCalendar.allowed(ctx)) calPerm.launch(android.Manifest.permission.READ_CALENDAR)
                 else { vm.updateSettings { it.copy(calendar = v) }; vm.refreshCalendar() }
             }
-        }
-
-        Group(s.behavior) {
-            ToggleRow(s.autoConfirm, s.autoConfirmHint, settings.autoConfirm) { v -> vm.updateSettings { it.copy(autoConfirm = v) } }
-            Divider()
-            ToggleRow(s.autoSubtasks, s.autoSubtasksHint, settings.autoSubtasks) { v -> vm.updateSettings { it.copy(autoSubtasks = v) } }
-            Divider()
-            ToggleRow(s.askUnclear, null, settings.askWhenUnclear) { v -> vm.updateSettings { it.copy(askWhenUnclear = v) } }
-            Divider()
-            ToggleRow(s.morningBriefAt + " · " + settings.morningTime, null, settings.morningBrief,
-                onLabel = { timeFor = "morning" }) { v -> vm.updateSettings { it.copy(morningBrief = v) } }
-            Divider()
-            ToggleRow(s.eveningReviewAt + " · " + settings.eveningTime, null, settings.eveningReview,
-                onLabel = { timeFor = "evening" }) { v -> vm.updateSettings { it.copy(eveningReview = v) } }
-            Divider()
-            ValueRow(s.yourName, null, settings.userName.ifBlank { "—" }) { nameDraft = settings.userName }
         }
 
         Group(s.appearance) {
@@ -250,34 +232,6 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                 TextButton({ vm.updateSettings { if (it.provider == "yandex") it.copy(yaKey = v) else it.copy(apiKey = v) }; keyDraft = null; vm.checkKey() }) { Text(s.save, color = c.accent) }
             },
             dismissButton = { TextButton({ keyDraft = null }) { Text(s.cancel, color = c.graphite) } },
-        )
-    }
-
-    nameDraft?.let { draft ->
-        TextDialog(s.yourName, draft, "", onDismiss = { nameDraft = null }) { v -> vm.updateSettings { it.copy(userName = v.trim()) }; nameDraft = null }
-    }
-
-    timeFor?.let { which ->
-        val cur = runCatching { LocalTime.parse(if (which == "morning") settings.morningTime else settings.eveningTime) }.getOrDefault(LocalTime.of(8, 30))
-        val st = rememberTimePickerState(cur.hour, cur.minute, is24Hour = true)
-        AlertDialog(
-            onDismissRequest = { timeFor = null },
-            containerColor = c.card,
-            text = {
-                TimePicker(st, colors = TimePickerDefaults.colors(
-                    clockDialColor = c.chip, selectorColor = c.accent, timeSelectorSelectedContainerColor = c.accentSoft,
-                    timeSelectorUnselectedContainerColor = c.chip, timeSelectorSelectedContentColor = c.ink,
-                    timeSelectorUnselectedContentColor = c.ink, clockDialSelectedContentColor = c.bg, clockDialUnselectedContentColor = c.ink,
-                ))
-            },
-            confirmButton = {
-                TextButton({
-                    val t = "%02d:%02d".format(st.hour, st.minute)
-                    vm.updateSettings { if (which == "morning") it.copy(morningTime = t) else it.copy(eveningTime = t) }
-                    timeFor = null
-                }) { Text(s.save, color = c.accent) }
-            },
-            dismissButton = { TextButton({ timeFor = null }) { Text(s.cancel, color = c.graphite) } },
         )
     }
 

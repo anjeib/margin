@@ -32,6 +32,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.PeopleOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -73,6 +74,7 @@ private const val TASKS = "tasks"
 private const val NOTES = "notes"
 private const val PEOPLE = "people"
 private const val SETTINGS = "settings"
+private const val INBOX = "inbox"
 
 @Composable
 fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
@@ -121,7 +123,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
         drawerState = drawer,
         scrimColor = c.scrim,
         drawerContent = {
-            Drawer(data, screen, view, onGo = ::go, onWeekly = { go(TASKS); vm.send(s.promptWeekly, smart = true, label = s.weeklyReview) })
+            Drawer(data, screen, view, onGo = ::go)
         },
     ) {
         Box(Modifier.fillMaxSize().background(c.bg)) {
@@ -137,12 +139,13 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
                                     v, data, settings, working, vm, events,
                                     briefQuiet = typing || tray != null || pending != null || busy == "main",
                                     onOpen = { openTask = it }, onView = { view = it }, onOpenNote = { openNote = it },
-                                    onOpenNotes = { screen = NOTES }, contentPadding = pad,
+                                    onOpenNotes = { screen = NOTES }, onOpenInbox = { screen = INBOX }, contentPadding = pad,
                                 )
                             }
                             NOTES -> NotesList(data, onOpen = { openNote = it }, contentPadding = pad)
                             PEOPLE -> PeopleList(data, onOpen = { openPerson = it }, contentPadding = pad)
                             SETTINGS -> SettingsScreen(settings, vm, pad)
+                            INBOX -> InboxScreen(data, vm, onOpenNote = { openNote = it }, contentPadding = pad)
                         }
                     }
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(20.dp).background(Brush.verticalGradient(listOf(Color.Transparent, c.bg))))
@@ -217,7 +220,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
         }
     }
 
-    if (!settings.onboarded) Onboarding(vm, onDone = { vm.updateSettings { it.copy(onboarded = true) } })
+    if (!settings.onboarded) Onboarding(vm, onDone = { vm.updateSettings { it.copy(onboarded = true) }; vm.startSetup() })
 
     openTask?.let { id ->
         val t = data.tasks.find { it.id == id }
@@ -264,7 +267,7 @@ private fun SuggestionChips(data: AppData, vm: MainVm) {
 }
 
 @Composable
-private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, String?) -> Unit, onWeekly: () -> Unit) {
+private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, String?) -> Unit) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
@@ -276,6 +279,7 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
                 Text(today.longTitle(), style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
             }
             Spacer(Modifier.height(22.dp))
+            NavRow(Icons.Outlined.Inbox, s.inboxNote, data.inboxCount().takeIf { it > 0 }?.toString() ?: "", screen == INBOX) { onGo(INBOX, null) }
             NavRow(Icons.Outlined.TaskAlt, s.tasks, "", screen == TASKS && !view.startsWith("p:")) { onGo(TASKS, Views.TODAY) }
             NavRow(Icons.Outlined.Description, s.notes, "", screen == NOTES) { onGo(NOTES, null) }
             NavRow(Icons.Outlined.PeopleOutline, s.peopleTitle, "", screen == PEOPLE) { onGo(PEOPLE, null) }
@@ -291,19 +295,7 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
             }
 
           }
-            // Bottom of the drawer: the weekly review and settings, out of the way.
-            Row(
-                Modifier.padding(horizontal = 18.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)
-                    .clickable(onClick = onWeekly).padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Spark(); Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(s.weeklyReview, style = Type.body.copy(color = c.ink, fontSize = 15.sp))
-                    Text(s.weeklyReviewHint, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
-                }
-                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.faint)
-            }
+            // Settings at the bottom, out of the way.
             Spacer(Modifier.height(8.dp))
             NavRow(Icons.Outlined.Settings, s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
         }

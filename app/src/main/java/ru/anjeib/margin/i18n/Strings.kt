@@ -22,8 +22,6 @@ interface Strings {
     val waiting: String
     fun waitingFor(who: String): String
     val create: String
-    val autoConfirm: String
-    val autoConfirmHint: String
     fun stepsCount(n: Int): String
     val chipEvening: String
     val promptEvening: String
@@ -37,8 +35,6 @@ interface Strings {
     val completed: String
     val projects: String
     val people: String
-    val weeklyReview: String
-    val weeklyReviewHint: String
     val allTasks: String
 
     // composer
@@ -88,7 +84,6 @@ interface Strings {
     fun ideaBecameTask(title: String): String
     val granted: String
     val youWrote: String
-    val closeWord: String
     fun nextOn(date: String): String
     fun was(what: String): String
     val makeBrief: String
@@ -146,12 +141,6 @@ interface Strings {
     val fastModel: String
     val fastModelHint: String
     val spentMonth: String
-    val behavior: String
-    val autoSubtasks: String
-    val autoSubtasksHint: String
-    val askUnclear: String
-    val morningBriefAt: String
-    val eveningReviewAt: String
     val appearance: String
     val themeLight: String
     val themeDark: String
@@ -159,7 +148,6 @@ interface Strings {
     val language: String
     val langAuto: String
     val data: String
-    val yourName: String
     val searchModels: String
     val loading: String
     val perMillion: String
@@ -178,6 +166,16 @@ interface Strings {
     val saved: String
     val savedToInbox: String
     val inboxNote: String
+    val inboxHint: String
+    val setupBriefQ: String
+    val setupBriefOptions: List<String>
+    val setupNameQ: String
+    fun setupDone(name: String): String
+    val settingsChanged: String
+    val inboxEmpty: String
+    val inboxEmptyHint: String
+    val savedUnsorted: String
+    fun queuedLine(n: Int): String
     val nothingFound: String
     val entryAdded: String
     val addOrChange: String
@@ -205,11 +203,8 @@ interface Strings {
     val peopleTitle: String
     val emptyPeople: String
     val rename: String
-    val editContacts: String
     val mergeWith: String
-    val whoIs: String
     val aboutHint: String
-    val contactsHint: String
     val waitingFromThem: String
     val voiceSection: String
     val voiceAi: String
@@ -232,12 +227,20 @@ interface Strings {
     val fieldTime: String
     val fieldRepeat: String
     val fieldPeople: String
+    val fieldPlace: String
+    val fieldRole: String
+    val fieldCompany: String
+    val fieldPhone: String
+    val fieldEmail: String
+    val fieldAddress: String
+    val personalTitle: String
+    val personalHint: String
+    val copied: String
+    val placeHint: String
     val historyTitle: String
     val srcTaskEntry: String
     val srcChat: String
     val srcNote: String
-    val promisedToYou: String
-    val youPromised: String
     val noDue: String
     val tasksCaps: String
     val makeSummary: String
@@ -369,7 +372,6 @@ interface Strings {
     val promptNext: String
     val promptPlanDay: String
     fun promptBreakDown(what: String): String
-    val promptWeekly: String
 }
 
 object Ru : Strings {
@@ -388,8 +390,6 @@ object Ru : Strings {
     override val waiting = "Ожидание"
     override fun waitingFor(who: String) = "Ждём: $who"
     override val create = "Создать"
-    override val autoConfirm = "Создавать без подтверждения"
-    override val autoConfirmHint = "Через пару секунд, если не нажать «Отменить»"
     override fun stepsCount(n: Int) = "$n " + pluralRu(n, "шаг", "шага", "шагов")
     override val chipEvening = "Итоги дня"
     override val promptEvening = "Сделай короткий вечерний обзор: что сделано сегодня, что не успел. Предложи, что перенести на завтра, и спроси про задачи, которые переносились 3 раза и больше, — оставить или удалить. Если на завтра задач больше, чем реально успеть, скажи об этом."
@@ -402,8 +402,6 @@ object Ru : Strings {
     override val completed = "Выполнено"
     override val projects = "ПРОЕКТЫ"
     override val people = "ЛЮДИ"
-    override val weeklyReview = "Обзор недели"
-    override val weeklyReviewHint = "итоги и план на следующую"
     override val allTasks = "Все задачи"
 
     override val composerHint = "Напишите задачу или мысль…"
@@ -449,7 +447,6 @@ object Ru : Strings {
     override fun ideaBecameTask(title: String) = "Теперь это задача: $title"
     override val granted = "разрешено"
     override val youWrote = "Вы написали"
-    override val closeWord = "Закрыть"
     override fun nextOn(date: String) = "следующий раз $date"
     override fun was(what: String) = "было $what"
     override val makeBrief = "Собрать бриф"
@@ -504,12 +501,6 @@ object Ru : Strings {
     override val fastModel = "Быстрый разбор"
     override val fastModelHint = "превращает ваш текст в задачи"
     override val spentMonth = "Расход за месяц"
-    override val behavior = "ПОВЕДЕНИЕ"
-    override val autoSubtasks = "ИИ сам разбивает крупные задачи"
-    override val autoSubtasksHint = "Подзадачи из текста создаются всегда"
-    override val askUnclear = "Уточнять, если неясен срок"
-    override val morningBriefAt = "Утренний бриф"
-    override val eveningReviewAt = "Вечерний обзор"
     override val appearance = "ОФОРМЛЕНИЕ"
     override val themeLight = "Светлая"
     override val themeDark = "Тёмная"
@@ -517,7 +508,6 @@ object Ru : Strings {
     override val language = "Язык"
     override val langAuto = "Как в системе"
     override val data = "ДАННЫЕ"
-    override val yourName = "Как к вам обращаться"
     override val searchModels = "Поиск модели…"
     override val loading = "Загрузка…"
     override val perMillion = "за 1M токенов"
@@ -535,6 +525,17 @@ object Ru : Strings {
     override val saved = "Сохранено"
     override val savedToInbox = "Сохранено во «Входящие»"
     override val inboxNote = "Входящие"
+    override val inboxHint = "Что ещё не разложено по задачам и заметкам"
+    override val setupBriefQ = "Присылать утром короткую сводку дня? Выберите время — или «Не нужно»."
+    override val setupBriefOptions = listOf("8:00", "9:00", "10:00", "Не нужно")
+    override val setupNameQ = "Как к вам обращаться? Напишите имя — или пропустите."
+    override fun setupDone(name: String) = (if (name.isNotBlank()) "Приятно познакомиться, $name. " else "Готово. ") +
+        "Пишите внизу, что нужно сделать, — обычными словами. Поменять это можно так же: «сводку в 9», «называй меня Аня»."
+    override val settingsChanged = "Настройки изменены"
+    override val inboxEmpty = "Здесь пусто"
+    override val inboxEmptyHint = "Сюда попадает то, что записано без интернета, — оно разберётся само, когда связь вернётся."
+    override val savedUnsorted = "СОХРАНЕНО БЕЗ РАЗБОРА"
+    override fun queuedLine(n: Int) = "Ждут интернета: " + n + " " + pluralRu(n, "запись", "записи", "записей")
     override val nothingFound = "Задач не найдено"
     override val entryAdded = "Добавлена запись"
     override val addOrChange = "Добавить или изменить…"
@@ -562,11 +563,8 @@ object Ru : Strings {
     override val peopleTitle = "Люди"
     override val emptyPeople = "Люди появятся сами, когда вы упомянете их в задачах или заметках."
     override val rename = "Переименовать"
-    override val editContacts = "Контакты"
     override val mergeWith = "Объединить с…"
-    override val whoIs = "Кто это"
     override val aboutHint = "ИИ опишет, кто это и чем вы заняты вместе"
-    override val contactsHint = "Телефон, почта — через запятую"
     override val waitingFromThem = "Ждём"
     override val voiceSection = "ГОЛОС"
     override val voiceAi = "ИИ-распознавание речи"
@@ -577,7 +575,7 @@ object Ru : Strings {
     override val offline = "Нет интернета"
     override val offlineSaved = "Нет интернета. Всё сохранено во «Входящие» и будет разобрано, как только появится сеть."
     override val queueDoneTitle = "Входящие разобраны"
-    override val waitingNet = "Входящие · ждут интернета"
+    override val waitingNet = "ЖДУТ ИНТЕРНЕТА"
     override val whisperOfferOffline = "Нет интернета. Скачайте офлайн-распознавание в настройках, чтобы диктовать без сети."
     override val snoozeHour = "Через час"
     override val repeat = "Повтор"
@@ -625,12 +623,20 @@ object Ru : Strings {
     override val fieldTime = "Время"
     override val fieldRepeat = "Повтор"
     override val fieldPeople = "Люди"
+    override val fieldPlace = "Место"
+    override val fieldRole = "Должность"
+    override val fieldCompany = "Компания"
+    override val fieldPhone = "Телефон"
+    override val fieldEmail = "Почта"
+    override val fieldAddress = "Адрес"
+    override val personalTitle = "ЛИЧНАЯ ИНФОРМАЦИЯ"
+    override val personalHint = "день рождения, семья, что любит"
+    override val copied = "Скопировано"
+    override val placeHint = "Адрес или название, например «Ленина 5»"
     override val historyTitle = "ИСТОРИЯ"
     override val srcTaskEntry = "из записи задачи"
     override val srcChat = "из разговора"
     override val srcNote = "заметка"
-    override val promisedToYou = "ОБЕЩАНО ВАМ"
-    override val youPromised = "ВЫ ОБЕЩАЛИ"
     override val noDue = "без срока"
     override val tasksCaps = "ЗАДАЧИ"
     override val makeSummary = "Собрать сводку"
@@ -718,7 +724,6 @@ object Ru : Strings {
     override val promptNext = "Что мне сделать дальше? Посоветуй одну-две задачи с учётом сроков и времени."
     override val promptPlanDay = "Составь реалистичный план на сегодня: расставь время задачам на сегодня через update_task (time), начиная с ближайшего свободного часа, не трогая задачи с уже заданным временем. В reply — 1–2 предложения, что главное."
     override fun promptBreakDown(what: String) = "Разбей $what на конкретные шаги."
-    override val promptWeekly = "Сделай обзор недели: что сделано, что зависло, что перенести, и предложи 3 главных задачи на следующую неделю."
 }
 
 object En : Strings {
@@ -737,8 +742,6 @@ object En : Strings {
     override val waiting = "Waiting"
     override fun waitingFor(who: String) = "Waiting: $who"
     override val create = "Create"
-    override val autoConfirm = "Create without confirming"
-    override val autoConfirmHint = "After a couple of seconds unless you tap Undo"
     override fun stepsCount(n: Int) = "$n " + if (n == 1) "step" else "steps"
     override val chipEvening = "Wrap up the day"
     override val promptEvening = "Do a short evening review: what got done today and what didn't. Suggest what to move to tomorrow, and ask about tasks postponed 3+ times — keep or delete. If tomorrow holds more than is realistic, say so."
@@ -751,8 +754,6 @@ object En : Strings {
     override val completed = "Completed"
     override val projects = "PROJECTS"
     override val people = "PEOPLE"
-    override val weeklyReview = "Weekly review"
-    override val weeklyReviewHint = "wins and next week's plan"
     override val allTasks = "All tasks"
 
     override val composerHint = "Write a task or a thought…"
@@ -798,7 +799,6 @@ object En : Strings {
     override fun ideaBecameTask(title: String) = "Now a task: $title"
     override val granted = "allowed"
     override val youWrote = "You wrote"
-    override val closeWord = "Close"
     override fun nextOn(date: String) = "next on $date"
     override fun was(what: String) = "was $what"
     override val makeBrief = "Make a brief"
@@ -853,12 +853,6 @@ object En : Strings {
     override val fastModel = "Quick parsing"
     override val fastModelHint = "turns your text into tasks"
     override val spentMonth = "Spent this month"
-    override val behavior = "BEHAVIOR"
-    override val autoSubtasks = "AI breaks big tasks into steps"
-    override val autoSubtasksHint = "Subtasks you write are always created"
-    override val askUnclear = "Ask when the date is unclear"
-    override val morningBriefAt = "Morning brief"
-    override val eveningReviewAt = "Evening review"
     override val appearance = "APPEARANCE"
     override val themeLight = "Light"
     override val themeDark = "Dark"
@@ -866,7 +860,6 @@ object En : Strings {
     override val language = "Language"
     override val langAuto = "System"
     override val data = "DATA"
-    override val yourName = "Your name"
     override val searchModels = "Search models…"
     override val loading = "Loading…"
     override val perMillion = "per 1M tokens"
@@ -884,6 +877,17 @@ object En : Strings {
     override val saved = "Saved"
     override val savedToInbox = "Saved to Inbox"
     override val inboxNote = "Inbox"
+    override val inboxHint = "What isn’t sorted into tasks and notes yet"
+    override val setupBriefQ = "Send a short summary of the day in the morning? Pick a time — or “No need”."
+    override val setupBriefOptions = listOf("8:00", "9:00", "10:00", "No need")
+    override val setupNameQ = "What should I call you? Type a name — or skip."
+    override fun setupDone(name: String) = (if (name.isNotBlank()) "Nice to meet you, $name. " else "All set. ") +
+        "Type below what needs doing, in plain words. You can change this the same way: “summary at 9”, “call me Anna”."
+    override val settingsChanged = "Settings changed"
+    override val inboxEmpty = "Nothing here"
+    override val inboxEmptyHint = "Things written without internet land here and sort themselves once you’re back online."
+    override val savedUnsorted = "SAVED UNSORTED"
+    override fun queuedLine(n: Int) = "Waiting for internet: $n"
     override val nothingFound = "No tasks found"
     override val entryAdded = "Record added"
     override val addOrChange = "Add or change…"
@@ -911,11 +915,8 @@ object En : Strings {
     override val peopleTitle = "People"
     override val emptyPeople = "People appear by themselves once you mention them in tasks or notes."
     override val rename = "Rename"
-    override val editContacts = "Contacts"
     override val mergeWith = "Merge with…"
-    override val whoIs = "Who"
     override val aboutHint = "AI will describe who this is and what you do together"
-    override val contactsHint = "Phone, email — comma separated"
     override val waitingFromThem = "Waiting on"
     override val voiceSection = "VOICE"
     override val voiceAi = "AI speech recognition"
@@ -926,7 +927,7 @@ object En : Strings {
     override val offline = "Offline"
     override val offlineSaved = "No internet. Everything is saved to Inbox and will be sorted as soon as you're back online."
     override val queueDoneTitle = "Inbox sorted"
-    override val waitingNet = "Inbox · waiting for internet"
+    override val waitingNet = "WAITING FOR INTERNET"
     override val whisperOfferOffline = "No internet. Download offline recognition in Settings to dictate without a connection."
     override val snoozeHour = "In an hour"
     override val repeat = "Repeat"
@@ -974,12 +975,20 @@ object En : Strings {
     override val fieldTime = "Time"
     override val fieldRepeat = "Repeat"
     override val fieldPeople = "People"
+    override val fieldPlace = "Place"
+    override val fieldRole = "Role"
+    override val fieldCompany = "Company"
+    override val fieldPhone = "Phone"
+    override val fieldEmail = "Email"
+    override val fieldAddress = "Address"
+    override val personalTitle = "PERSONAL"
+    override val personalHint = "birthday, family, what they like"
+    override val copied = "Copied"
+    override val placeHint = "Address or name, e.g. “5 Lenin St”"
     override val historyTitle = "HISTORY"
     override val srcTaskEntry = "from a task record"
     override val srcChat = "from a conversation"
     override val srcNote = "note"
-    override val promisedToYou = "PROMISED TO YOU"
-    override val youPromised = "YOU PROMISED"
     override val noDue = "no date"
     override val tasksCaps = "TASKS"
     override val makeSummary = "Make a summary"
@@ -1067,7 +1076,6 @@ object En : Strings {
     override val promptNext = "What should I do next? Suggest one or two tasks given deadlines and the time of day."
     override val promptPlanDay = "Make a realistic plan for today: give today's tasks times via update_task (time), starting from the next free hour, leaving already-timed tasks alone. In reply, 1–2 sentences on what matters most."
     override fun promptBreakDown(what: String) = "Break $what into concrete steps."
-    override val promptWeekly = "Do a weekly review: what got done, what's stuck, what to move, and suggest the 3 main tasks for next week."
 }
 
 /** Current language for code outside composition (dates, notifications, prompts). */

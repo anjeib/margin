@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DateRangePicker
@@ -59,7 +60,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +74,7 @@ import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.Entry
 import ru.anjeib.margin.data.Subtask
 import ru.anjeib.margin.data.Task
+import ru.anjeib.margin.data.sentence
 import ru.anjeib.margin.data.dayMonth
 import ru.anjeib.margin.data.dowShort
 import ru.anjeib.margin.data.isOverdue
@@ -105,15 +106,19 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     var showAllEntries by remember { mutableStateOf(false) }
     val busy by vm.busy.collectAsState()
     val notice by vm.notice.collectAsState()
-    val latest by rememberUpdatedState(task)
     val scopeKey = MainVm.key(Scope.InTask(task.id))
     var savedAt by remember { mutableStateOf(0L) }
     /** Every manual edit saves at once; a quiet «Сохранено» confirms it. */
     fun save(t: Task) { vm.saveTask(t); savedAt = System.currentTimeMillis() }
     androidx.compose.runtime.LaunchedEffect(savedAt) { if (savedAt > 0) { kotlinx.coroutines.delay(1600); savedAt = 0 } }
 
-    fun commitTitle() { if (title.isNotBlank() && title.trim() != latest.title) { vm.saveTask(latest.copy(title = title.trim())); savedAt = System.currentTimeMillis() } }
-    DisposableEffect(task.id) { onDispose { commitTitle(); vm.clearNotice() } }
+    // The typed title belongs to the task it was typed in: when «Связи» switch the sheet to another task,
+    // the old title must land on the old task, never on the new one.
+    fun commitTitle(id: String = task.id) {
+        val cur = vm.data.value.tasks.find { it.id == id } ?: return
+        if (title.isNotBlank() && title.trim() != cur.title) { vm.saveTask(cur.copy(title = title.trim())); savedAt = System.currentTimeMillis() }
+    }
+    DisposableEffect(task.id) { val id = task.id; onDispose { commitTitle(id); vm.clearNotice() } }
     // The AI may rename the task while the sheet is open.
     androidx.compose.runtime.LaunchedEffect(task.title) { if (task.title != title) title = task.title }
 
@@ -158,26 +163,28 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         modifier = Modifier.weight(1f).padding(top = 6.dp, start = 2.dp),
                     )
                 }
-                // Where the task came from: an idea in a note, or something said in a conversation.
-                originLine(task, data)?.let { o ->
+                // From a note without a matching idea: one quiet line (an idea itself is in «Связи», words said — in their own block below).
+                if (task.noteId != null) originLine(task, data)?.let { o ->
                     Text("↳ $o", style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 48.dp, top = 2.dp).clip(RoundedCornerShape(6.dp))
-                            .clickable(enabled = task.noteId != null || task.source != null) { task.noteId?.let(onOpenNote) ?: run { dialog = "source" } })
+                        modifier = Modifier.padding(start = 48.dp, top = 2.dp).clip(RoundedCornerShape(6.dp)).clickable { task.noteId?.let(onOpenNote) })
                 }
 
-                // One quiet line of what is filled — dates first, the project tag last — and «+ …» for what is not.
-                Spacer(Modifier.height(10.dp))
-                FlowRow(
-                    Modifier.padding(start = 48.dp),
+                // Date and time first and larger — that is what one opens a task to see.
+                val dates = task.whenLabel()?.substringBefore(" · ${task.time}")?.takeIf { task.dueDate != null || task.startDate != null }
+                if (dates != null || task.time != null) Row(Modifier.padding(start = 48.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    dates?.let { BigChip(Icons.Outlined.CalendarToday, it, task.isOverdue()) { dialog = "dates" } }
+                    task.time?.let { BigChip(Icons.Outlined.Schedule, it, task.isOverdue()) { dialog = "time" } }
+                }
+                // Then the rest in one quiet line — the project tag last — and «+ …» for what is not filled.
+                val ctxOpen = androidx.compose.ui.platform.LocalContext.current
+                val rest = task.repeat != null || task.people.isNotEmpty() || task.waitingFor != null || task.promisedTo != null || task.place != null || task.project != null
+                if (rest) FlowRow(
+                    Modifier.padding(start = 48.dp, top = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
                     itemVerticalAlignment = Alignment.CenterVertically,
                 ) {
                     var first = true
                     @Composable fun sep() { if (!first) Box(Modifier.size(1.dp, 14.dp).background(c.hairline)); first = false }
-                    task.whenLabel()?.substringBefore(" · ${task.time}")?.takeIf { task.dueDate != null || task.startDate != null }?.let { w ->
-                        sep(); MetaChip(Icons.Outlined.CalendarToday, w, task.isOverdue()) { dialog = "dates" }
-                    }
-                    task.time?.let { sep(); MetaChip(Icons.Outlined.Schedule, it) { dialog = "time" } }
                     task.repeat?.let { sep(); MetaChip(Icons.Outlined.Repeat, it.label()) { dialog = "repeat" } }
                     if (task.people.isNotEmpty()) sep()
                     task.people.forEach { p ->
@@ -189,6 +196,15 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     }
                     task.waitingFor?.let { sep(); MetaChip(Icons.Outlined.HourglassEmpty, s.waitingFor(it)) { dialog = "waiting" } }
                     task.promisedTo?.let { w -> sep(); MetaChip(Icons.AutoMirrored.Outlined.ArrowForward, s.promised(w)) { data.person(w)?.let { p -> onOpenPerson(p.id) } } }
+                    // A place opens the map; to change it, hold.
+                    task.place?.let { pl -> sep()
+                        Row(Modifier.clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = {
+                            runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
+                        }, onLongClick = { dialog = "place" }).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Place, null, tint = c.graphite, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp))
+                            Text(pl, style = Type.small.copy(color = c.ink, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                     task.project?.let { sep(); Box(Modifier.clickable { dialog = "project" }) { Tag(it) } }
                 }
                 val missing = buildList {
@@ -196,14 +212,25 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     if (task.time == null) add(s.fieldTime to "time")
                     if (task.repeat == null) add(s.fieldRepeat to "repeat")
                     if (task.people.isEmpty()) add(s.fieldPeople to "people")
+                    if (task.place == null) add(s.fieldPlace to "place")
                     if (task.project == null) add(s.project to "project")
                     if (!task.done) add(s.subtaskOne to "subtask")
                 }
-                if (missing.isNotEmpty()) FlowRow(Modifier.padding(start = 46.dp, top = 6.dp)) {
+                if (missing.isNotEmpty()) FlowRow(Modifier.padding(start = 46.dp, top = 8.dp)) {
                     missing.forEachIndexed { i, (label, d) ->
                         if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.faint))
                         Text("+ " + label.lowercase(), style = Type.small.copy(color = c.graphite),
                             modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { dialog = d }.padding(2.dp))
+                    }
+                }
+                // «Вы написали»: the words the task was born from, tidied up — when no idea in «Связи» already says where it came from.
+                if (task.source != null && task.noteId == null) {
+                    androidx.compose.runtime.LaunchedEffect(task.id) { vm.tidySource(task.id) }
+                    Column(Modifier.padding(start = 48.dp, top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.chip.copy(alpha = 0.55f))
+                        .padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        Text(s.youWrote.uppercase() + " · " + LocalDate.parse(task.createdAt).dayMonth().uppercase(), style = Type.label.copy(color = c.faint, fontSize = 10.5.sp))
+                        Spacer(Modifier.height(4.dp))
+                        Text(task.source.sentence(), style = Type.body.copy(color = c.ink, fontSize = 15.sp))
                     }
                 }
                 Hairline(Modifier.padding(top = 14.dp))
@@ -334,18 +361,12 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
         "waiting" -> TextDialog(s.waiting, task.waitingFor.orEmpty(), "", onDismiss = { dialog = null }) { v ->
             save(task.copy(waitingFor = v.trim().ifBlank { null })); dialog = null
         }
+        "place" -> TextDialog(s.fieldPlace, task.place.orEmpty(), s.placeHint, onDismiss = { dialog = null }) { v -> save(task.copy(place = v.trim().ifBlank { null })); dialog = null }
         "subtask" -> TextDialog(s.subtaskOne, "", "", onDismiss = { dialog = null }) { v -> if (v.isNotBlank()) vm.addSubtask(task.id, v.trim()); dialog = null }
         "repeat" -> RepeatDialog(task, onDismiss = { dialog = null }) { r ->
             val due = task.due ?: if (r != null) LocalDate.now().toString() else null
             save(task.copy(repeat = r, due = due)); dialog = null
         }
-        // «↳ из разговора»: the words the task was born from.
-        "source" -> AlertDialog(
-            onDismissRequest = { dialog = null }, containerColor = c.card,
-            title = { Text(s.youWrote, style = Type.cardTitle.copy(color = c.ink)) },
-            text = { Text("«" + task.source.orEmpty() + "»", style = Type.body.copy(color = c.ink)) },
-            confirmButton = { TextButton({ dialog = null }) { Text(s.closeWord, color = c.graphite) } },
-        )
         "delete" -> AlertDialog(
             onDismissRequest = { dialog = null },
             containerColor = c.card,
@@ -404,6 +425,18 @@ private fun MetaChip(icon: ImageVector, text: String?, alert: Boolean = false, o
         Icon(icon, null, tint = if (alert) c.accent else c.graphite, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
         Text(text, style = Type.small.copy(color = if (alert) c.accent else c.ink, fontSize = 14.sp))
+    }
+}
+
+/** Date and time in the card: larger, on a soft ground, so the eye finds them first. */
+@Composable
+private fun BigChip(icon: ImageVector, text: String, alert: Boolean = false, onClick: () -> Unit) {
+    val c = M.c
+    Row(Modifier.clip(RoundedCornerShape(12.dp)).background(if (alert) c.accentSoft else c.chip).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = if (alert) c.accent else c.graphite, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = Type.body.copy(color = if (alert) c.accent else c.ink, fontSize = 17.sp))
     }
 }
 

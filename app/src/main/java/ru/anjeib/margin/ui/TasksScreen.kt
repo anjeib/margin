@@ -149,6 +149,7 @@ fun TaskList(
     onView: (String) -> Unit,
     onOpenNote: (String) -> Unit,
     onOpenNotes: () -> Unit = {},
+    onOpenInbox: () -> Unit = {},
     contentPadding: PaddingValues,
 ) {
     val landed by vm.landed.collectAsState()
@@ -227,9 +228,14 @@ fun TaskList(
                     LaunchedEffect(today, L.lang) { vm.makeBrief() }
                     BriefCard(data, settings, "brief" in working, briefQuiet, vm, onFocus = { vm.send(s.promptNext, smart = true, label = s.startFocus) })
                 }
-                if (data.queue.isNotEmpty()) {
-                    section(s.waitingNet, "s-queue", data.queue.size)
-                    items(data.queue, key = { "q" + it.id }) { q -> QueuedRow(q.text, q.files.size, onDrop = { vm.dropQueued(q.id) }) }
+                // Written without internet: one quiet line here, the items themselves live in «Входящие».
+                if (data.queue.isNotEmpty()) item("queue") {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onOpenInbox).padding(horizontal = 10.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.CloudOff, null, tint = c.graphite, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(s.queuedLine(data.queue.size) + " →", style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+                    }
                 }
                 val timed = list.filter { it.time != null && it.dueDate?.let { d -> !d.isBefore(today) } != false }.sortedBy { it.time }
                 val rest = (list - timed.toSet()).sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) }))
@@ -268,7 +274,7 @@ fun TaskList(
                     }
                 }
                 // Notes never mix into task lists — one quiet line says what was written today.
-                val notesToday = data.notes.filter { n -> n.updatedAt.startsWith(today.toString()) && (n.entries.isNotEmpty() || n.title.isNotBlank()) }
+                val notesToday = data.notes.filter { n -> n.title != s.inboxNote && n.updatedAt.startsWith(today.toString()) && (n.entries.isNotEmpty() || n.title.isNotBlank()) }
                 if (notesToday.isNotEmpty()) item("notes-today") {
                     Row(
                         Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(14.dp))
@@ -451,7 +457,7 @@ private fun EventRow(e: CalEvent) {
 }
 
 @Composable
-private fun QueuedRow(text: String, files: Int, onDrop: () -> Unit) {
+fun QueuedRow(text: String, files: Int, onDrop: () -> Unit) {
     val c = M.c
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).padding(start = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
@@ -479,7 +485,8 @@ fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Uni
     val (d, n) = t.subtasks.progress()
     Column(Modifier.fillMaxWidth().background(c.bg).clickable(onClick = onOpen)) {
         Row(Modifier.fillMaxWidth().padding(end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (t.waitingFor != null && !t.done) Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+            // Waiting on someone: the hourglass closes it too («получено»), like the circle does for the user's own tasks.
+            if (t.waitingFor != null && !t.done) Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.HourglassEmpty, null, tint = c.graphite, modifier = Modifier.size(18.dp))
             } else CheckCircle(t.done, size = 20.dp, onToggle = onToggle)
             Text(

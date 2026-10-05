@@ -178,10 +178,11 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
                     t.waitingFor?.takeIf { it != old.waitingFor }?.let { s.waitingFor(it) },
                     t.promisedTo?.takeIf { it != old.promisedTo }?.let { s.promised(it) },
                     t.repeat?.takeIf { it != old.repeat }?.label(),
+                    t.place?.takeIf { it != old.place },
                     (t.subtasks.size - old.subtasks.size).takeIf { it > 0 }?.let { s.stepsCount(it) },
                 ).ifEmpty { listOfNotNull(t.whenLabel()) } }
                 else -> { created++; listOfNotNull(
-                    t.whenLabel(), t.repeat?.label(), t.waitingFor?.let { s.waitingFor(it) }, t.promisedTo?.let { s.promised(it) },
+                    t.whenLabel(), t.place, t.repeat?.label(), t.waitingFor?.let { s.waitingFor(it) }, t.promisedTo?.let { s.promised(it) },
                     t.people.filterNot { it.equals(t.waitingFor, true) }.takeIf { it.isNotEmpty() }?.joinToString(", "), if (n > 0) s.stepsCount(n) else null,
                 ) }
             }

@@ -70,7 +70,7 @@ fun NotesList(data: AppData, onOpen: (String) -> Unit, contentPadding: PaddingVa
     var searching by rememberSaveable { mutableStateOf(false) }
     var filter by rememberSaveable { mutableStateOf<String?>(null) }
     val words = q.lowercase().split(' ').filter { it.isNotBlank() }
-    val notes = data.notes.filter { n ->
+    val notes = data.notes.filter { n -> n.title != s.inboxNote }.filter { n ->
         val hay = (n.title + " " + n.text + " " + n.aiSummary.orEmpty() + " " + n.entries.flatMap { it.attachments }.joinToString(" ") { it.name + " " + it.transcript.orEmpty() }).lowercase()
         words.all { it in hay } && (filter == null || n.project == filter)
     }
@@ -166,10 +166,17 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
             }
         }
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp)) {
-            Box(Modifier.padding(top = 6.dp)) {
-                if (title.isEmpty()) Text(s.noteTitleHint, style = Type.title.copy(color = c.faint, fontSize = 32.sp))
-                BasicTextField(title, { title = it }, textStyle = Type.title.copy(color = c.ink, fontSize = 32.sp, lineHeight = 38.sp),
-                    cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Top) {
+                Box(Modifier.weight(1f)) {
+                    if (title.isEmpty()) Text(s.noteTitleHint, style = Type.title.copy(color = c.faint, fontSize = 32.sp))
+                    BasicTextField(title, { title = it }, textStyle = Type.title.copy(color = c.ink, fontSize = 32.sp, lineHeight = 38.sp),
+                        cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+                }
+                // A note that is all title is one idea: it gets the same «to a task» button as an entry.
+                if (note.entries.isEmpty() && note.title.isNotBlank()) Box(Modifier.padding(top = 8.dp)) {
+                    IdeaTaskButton(data.tasks.filter { it.noteId == note.id && it.sourceEntryId == null }, "idea:title:${note.id}" in working,
+                        onOpenTask = onOpenTask, onMake = { vm.ideaToTask(note.id, null) })
+                }
             }
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
