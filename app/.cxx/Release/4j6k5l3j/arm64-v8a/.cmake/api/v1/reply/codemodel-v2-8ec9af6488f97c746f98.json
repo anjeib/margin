@@ -1,0 +1,220 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Release-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.6.0"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						3
+					]
+				},
+				{
+					"build" : "whisper",
+					"childIndexes" : 
+					[
+						2,
+						5
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-whisper-Release-5b533049978fe087bf92.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.5"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 1,
+					"source" : "/Users/anjeib/Desktop/\u041f\u0440\u043e\u0435\u043a\u0442\u044b/Margin/third_party/whisper.cpp"
+				},
+				{
+					"build" : "whisper/ggml",
+					"childIndexes" : 
+					[
+						3
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-whisper.ggml-Release-7dae9b3f73b6d0f2942f.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.14"
+					},
+					"parentIndex" : 1,
+					"projectIndex" : 2,
+					"source" : "/Users/anjeib/Desktop/\u041f\u0440\u043e\u0435\u043a\u0442\u044b/Margin/third_party/whisper.cpp/ggml"
+				},
+				{
+					"build" : "whisper/ggml/src",
+					"childIndexes" : 
+					[
+						4
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-whisper.ggml.src-Release-97cde98ceb59be3b5f79.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.14"
+					},
+					"parentIndex" : 2,
+					"projectIndex" : 2,
+					"source" : "/Users/anjeib/Desktop/\u041f\u0440\u043e\u0435\u043a\u0442\u044b/Margin/third_party/whisper.cpp/ggml/src",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				},
+				{
+					"build" : "whisper/ggml/src/ggml-cpu",
+					"jsonFile" : "directory-whisper.ggml.src.ggml-cpu-Release-f2a5a00de57f653c8b99.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.14"
+					},
+					"parentIndex" : 3,
+					"projectIndex" : 2,
+					"source" : "/Users/anjeib/Desktop/\u041f\u0440\u043e\u0435\u043a\u0442\u044b/Margin/third_party/whisper.cpp/ggml/src/ggml-cpu"
+				},
+				{
+					"build" : "whisper/src",
+					"jsonFile" : "directory-whisper.src-Release-585ebe8bbdcb66b955b9.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.5"
+					},
+					"parentIndex" : 1,
+					"projectIndex" : 1,
+					"source" : "/Users/anjeib/Desktop/\u041f\u0440\u043e\u0435\u043a\u0442\u044b/Margin/third_party/whisper.cpp/src",
+					"targetIndexes" : 
+					[
+						4,
+						5
+					]
+				}
+			],
+			"name" : "Release",
+			"projects" : 
+			[
+				{
+					"childIndexes" : 
+					[
+						1
+					],
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "margin_whisper",
+					"targetIndexes" : 
+					[
+						3
+					]
+				},
+				{
+					"childIndexes" : 
+					[
+						2
+					],
+					"directoryIndexes" : 
+					[
+						1,
+						5
+					],
+					"name" : "whisper.cpp",
+					"parentIndex" : 0,
+					"targetIndexes" : 
+					[
+						4,
+						5
+					]
+				},
+				{
+					"directoryIndexes" : 
+					[
+						2,
+						3,
+						4
+					],
+					"name" : "ggml",
+					"parentIndex" : 1,
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 3,
+					"id" : "ggml::@1d562b45171badc9bf5f",
+					"jsonFile" : "target-ggml-Release-990c33201029370b0ef3.json",
+					"name" : "ggml",
+					"projectIndex" : 2
+				},
+				{
+					"directoryIndex" : 3,
+					"id" : "ggml-base::@1d562b45171badc9bf5f",
+					"jsonFile" : "target-ggml-base-Release-f2ada12c8e3d49d79556.json",
+					"name" : "ggml-base",
+					"projectIndex" : 2
+				},
+				{
+					"directoryIndex" : 3,
+					"id" : "ggml-cpu::@1d562b45171badc9bf5f",
+					"jsonFile" : "target-ggml-cpu-Release-c522924b51226715dbb4.json",
+					"name" : "ggml-cpu",
+					"projectIndex" : 2
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "margin_whisper::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-margin_whisper-Release-2c62a17233ad709497db.json",
+					"name" : "margin_whisper",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 5,
+					"id" : "parakeet::@63d3ec8989aed7458de8",
+					"jsonFile" : "target-parakeet-Release-7f03ad410d9f03b6f70b.json",
+					"name" : "parakeet",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 5,
+					"id" : "whisper::@63d3ec8989aed7458de8",
+					"jsonFile" : "target-whisper-Release-403c4ea78bd9ed0b2596.json",
+					"name" : "whisper",
+					"projectIndex" : 1
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/Users/anjeib/Desktop/\u041f\u0440\u043e\u0435\u043a\u0442\u044b/Margin/app/.cxx/Release/4j6k5l3j/arm64-v8a",
+		"source" : "/Users/anjeib/Desktop/\u041f\u0440\u043e\u0435\u043a\u0442\u044b/Margin/app/src/main/cpp"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 7
+	}
+}

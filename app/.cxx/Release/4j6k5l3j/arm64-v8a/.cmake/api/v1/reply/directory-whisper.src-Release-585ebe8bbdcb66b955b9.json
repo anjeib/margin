@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "whisper/src",
+		"source" : "/Users/anjeib/Desktop/\u041f\u0440\u043e\u0435\u043a\u0442\u044b/Margin/third_party/whisper.cpp/src"
+	}
+}

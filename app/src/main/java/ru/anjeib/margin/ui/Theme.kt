@@ -1,0 +1,139 @@
+package ru.anjeib.margin.ui
+
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import ru.anjeib.margin.R
+import ru.anjeib.margin.data.ThemeMode
+import ru.anjeib.margin.i18n.Strings
+
+@Immutable
+data class Palette(
+    val dark: Boolean,
+    val bg: Color,
+    val card: Color,
+    val ink: Color,
+    val graphite: Color,
+    val faint: Color,
+    val hairline: Color,
+    val accent: Color,
+    val accentSoft: Color,
+    val chip: Color,
+    val bubble: Color,
+    val onBubble: Color,
+    val scrim: Color,
+    val ok: Color,
+)
+
+val LightPalette = Palette(
+    dark = false,
+    bg = Color(0xFFF6F3EE),
+    card = Color(0xFFFCFAF7),
+    ink = Color(0xFF1A1A1A),
+    graphite = Color(0xFF8A857D),
+    faint = Color(0xFFB9B3A9),
+    hairline = Color(0xFFE6E1D8),
+    accent = Color(0xFFC8643B),
+    accentSoft = Color(0xFFF2E6DC),
+    chip = Color(0xFFEFEAE2),
+    bubble = Color(0xFF1C1B1A),
+    onBubble = Color(0xFFF6F3EE),
+    scrim = Color(0x661A1A1A),
+    ok = Color(0xFF7D8B6A),
+)
+
+val DarkPalette = Palette(
+    dark = true,
+    bg = Color(0xFF141210),
+    card = Color(0xFF1E1B18),
+    ink = Color(0xFFEDE7DD),
+    graphite = Color(0xFF8E877C),
+    faint = Color(0xFF5E5850),
+    hairline = Color(0xFF2B2723),
+    accent = Color(0xFFD9774E),
+    accentSoft = Color(0xFF2C221C),
+    chip = Color(0xFF25211D),
+    bubble = Color(0xFFEDE7DD),
+    onBubble = Color(0xFF141210),
+    scrim = Color(0x99000000),
+    ok = Color(0xFF9AA886),
+)
+
+@OptIn(ExperimentalTextApi::class)
+private fun playfair(w: Int, italic: Boolean = false) = Font(
+    if (italic) R.font.playfair_italic else R.font.playfair,
+    FontWeight(w),
+    if (italic) FontStyle.Italic else FontStyle.Normal,
+    variationSettings = FontVariation.Settings(FontVariation.weight(w)),
+)
+
+@OptIn(ExperimentalTextApi::class)
+private fun inter(w: Int) = Font(
+    R.font.inter, FontWeight(w),
+    variationSettings = FontVariation.Settings(FontVariation.weight(w)),
+)
+
+val Serif = FontFamily(playfair(400), playfair(500), playfair(600), playfair(400, true), playfair(500, true))
+val Sans = FontFamily(inter(400), inter(500), inter(600))
+
+object Type {
+    val display = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 40.sp, lineHeight = 46.sp, letterSpacing = (-0.5).sp)
+    val title = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 26.sp, lineHeight = 32.sp)
+    val cardTitle = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 19.sp, lineHeight = 25.sp)
+    val body = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 16.sp, lineHeight = 23.sp)
+    val task = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 16.5.sp, lineHeight = 22.sp)
+    val small = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 13.5.sp, lineHeight = 18.sp)
+    val label = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 11.5.sp, letterSpacing = 1.2.sp)
+    val tab = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 15.sp)
+    val italic = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontSize = 15.sp, lineHeight = 21.sp)
+}
+
+val LocalPalette = staticCompositionLocalOf { LightPalette }
+val LocalStr = staticCompositionLocalOf<Strings> { ru.anjeib.margin.i18n.Ru }
+
+object M {
+    val c: Palette @Composable get() = LocalPalette.current
+    val s: Strings @Composable get() = LocalStr.current
+}
+
+@Composable
+fun MarginTheme(mode: ThemeMode, strings: Strings, content: @Composable () -> Unit) {
+    val dark = when (mode) {
+        ThemeMode.Light -> false
+        ThemeMode.Dark -> true
+        ThemeMode.Auto -> isSystemInDarkTheme()
+    }
+    val p = if (dark) DarkPalette else LightPalette
+    val scheme = if (dark) darkColorScheme(
+        primary = p.accent, onPrimary = Color.White, background = p.bg, onBackground = p.ink,
+        surface = p.card, onSurface = p.ink, surfaceVariant = p.chip, onSurfaceVariant = p.graphite,
+        surfaceContainer = p.card, surfaceContainerHigh = p.card, surfaceContainerHighest = p.chip,
+        surfaceContainerLow = p.bg, outline = p.hairline, outlineVariant = p.hairline,
+        secondaryContainer = p.accentSoft, onSecondaryContainer = p.ink, primaryContainer = p.accentSoft,
+        onPrimaryContainer = p.ink, scrim = Color.Black,
+    ) else lightColorScheme(
+        primary = p.accent, onPrimary = Color.White, background = p.bg, onBackground = p.ink,
+        surface = p.card, onSurface = p.ink, surfaceVariant = p.chip, onSurfaceVariant = p.graphite,
+        surfaceContainer = p.card, surfaceContainerHigh = p.card, surfaceContainerHighest = p.chip,
+        surfaceContainerLow = p.bg, outline = p.hairline, outlineVariant = p.hairline,
+        secondaryContainer = p.accentSoft, onSecondaryContainer = p.ink, primaryContainer = p.accentSoft,
+        onPrimaryContainer = p.ink, scrim = Color.Black,
+    )
+    CompositionLocalProvider(LocalPalette provides p, LocalStr provides strings) {
+        MaterialTheme(colorScheme = scheme, content = content)
+    }
+}

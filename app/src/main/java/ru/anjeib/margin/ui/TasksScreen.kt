@@ -1,0 +1,603 @@
+package ru.anjeib.margin.ui
+
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.HourglassEmpty
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import ru.anjeib.margin.data.AppData
+import ru.anjeib.margin.data.CalEvent
+import ru.anjeib.margin.data.Settings
+import ru.anjeib.margin.data.Task
+import ru.anjeib.margin.data.dowShort
+import ru.anjeib.margin.data.isOverdue
+import ru.anjeib.margin.data.longTitle
+import ru.anjeib.margin.data.progress
+import ru.anjeib.margin.data.rangeLabel
+import ru.anjeib.margin.data.shortLabel
+import ru.anjeib.margin.data.weekEnd
+import ru.anjeib.margin.data.weekStart
+import ru.anjeib.margin.i18n.L
+import java.time.LocalDate
+import java.time.LocalTime
+
+/** Which slice of tasks is on screen. Encoded as a string so it survives rotation. */
+object Views {
+    const val TODAY = "today"
+    const val WEEK = "week"
+    const val ALL = "all"
+    const val DONE = "done"
+    fun project(p: String) = "p:$p"
+}
+
+// ---------------- selection logic ----------------
+
+private fun Task.span(): Pair<LocalDate, LocalDate>? {
+    val s = startDate ?: dueDate ?: return null
+    val e = dueDate ?: startDate ?: return null
+    return s to e
+}
+
+private fun sortKey(t: Task): String = (t.dueDate ?: t.startDate)?.toString().orEmpty().ifEmpty { "9999" } + (t.time ?: "99:99")
+
+/** Due today, overdue, or starting today. */
+fun isToday(t: Task, today: LocalDate = LocalDate.now()): Boolean {
+    if (t.done) return false
+    val s = t.startDate; val d = t.dueDate
+    return when {
+        d != null -> !d.isAfter(today) || s == today
+        s != null -> s == today
+        else -> false
+    }
+}
+
+fun isThisWeek(t: Task, today: LocalDate = LocalDate.now()): Boolean {
+    if (t.done) return false
+    val (s, e) = t.span() ?: return false
+    return !s.isAfter(today.weekEnd()) && (!e.isBefore(today) || t.isOverdue(today))
+}
+
+/** A window running now that isn't "for today" — shown as «В работе на неделе». */
+fun isRunning(t: Task, today: LocalDate = LocalDate.now()) = isThisWeek(t, today) && !isToday(t, today)
+
+/** Counters for the top tabs: today, week, all open. */
+fun tabCounts(d: AppData): Triple<Int, Int, Int> {
+    val today = LocalDate.now()
+    return Triple(d.tasks.count { isToday(it, today) }, d.tasks.count { isThisWeek(it, today) }, d.tasks.count { !it.done })
+}
+
+/** Short right-hand label for compact rows: «вчера», «вт 18:00», «до вс», «20 окт». */
+private fun Task.rowLabel(today: LocalDate): String? {
+    val s = startDate; val d = dueDate
+    val day = when {
+        d != null && s != null && s != d -> L.s.until(if (!d.isAfter(today.weekEnd())) d.dowShort().lowercase() else d.shortLabel(today).lowercase())
+        d != null -> if (d == today && time != null) null else d.shortLabel(today).lowercase()
+        s != null -> s.shortLabel(today).lowercase()
+        else -> null
+    }
+    return listOfNotNull(day, time).joinToString(" ").ifEmpty { null }
+}
+
+private val setSaver = Saver<MutableState<Set<String>>, ArrayList<String>>(
+    save = { ArrayList(it.value) }, restore = { mutableStateOf(it.toSet()) },
+)
+
+// ---------------- screen ----------------
+
+@Composable
+fun TaskList(
+    view: String,
+    data: AppData,
+    settings: Settings,
+    working: Set<String>,
+    vm: MainVm,
+    events: List<CalEvent>,
+    briefQuiet: Boolean,
+    onOpen: (String) -> Unit,
+    onView: (String) -> Unit,
+    onOpenNote: (String) -> Unit,
+    onOpenNotes: () -> Unit = {},
+    contentPadding: PaddingValues,
+) {
+    val landed by vm.landed.collectAsState()
+    val c = M.c
+    val s = M.s
+    val today = LocalDate.now()
+    var byProject by rememberSaveable { mutableStateOf(false) }
+    val collapsed = rememberSaveable(saver = setSaver) { mutableStateOf(setOf("s-done", "s-ideas", "s-pdone")) }
+    fun toggle(k: String) { collapsed.value = if (k in collapsed.value) collapsed.value - k else collapsed.value + k }
+    fun isOpen(k: String) = k !in collapsed.value
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        fun header(title: String, subtitle: String?, trailing: (@Composable () -> Unit)? = null) {
+            item("header") {
+                Row(Modifier.padding(top = 18.dp, bottom = 12.dp, start = 4.dp), verticalAlignment = Alignment.Bottom) {
+                    Column(Modifier.weight(1f)) {
+                        // Long dates shrink to one line instead of wrapping.
+                        BasicText(title, style = Type.display.copy(color = c.ink), maxLines = 1,
+                            autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 40.sp, stepSize = 1.sp))
+                        if (subtitle != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(subtitle, style = Type.small.copy(color = c.graphite, fontSize = 15.sp))
+                        }
+                    }
+                    trailing?.invoke()
+                }
+            }
+        }
+
+        fun LazyListScope.cards(list: List<Task>, timeColumn: Boolean = false, showProject: Boolean = true, showIdea: Boolean = false) {
+            items(list, key = { it.id }) { t ->
+                SwipeTask(t, onDone = { vm.completeWithUndo(t.id) }, onLater = { vm.postpone(t.id, 1) }, modifier = Modifier.animateItem().landing(t.id in landed, 18)) {
+                    TaskCard(
+                        t, onToggle = { vm.toggleTask(t.id) }, onOpen = { onOpen(t.id) },
+                        onToggleSub = { vm.toggleSubtask(t.id, it) },
+                        timeColumn = if (timeColumn) t.time ?: "" else null,
+                        showProject = showProject, showIdea = showIdea,
+                    )
+                }
+            }
+        }
+
+        fun LazyListScope.rows(list: List<Task>, key: String, showProject: Boolean = true) {
+            items(list, key = { key + it.id }) { t ->
+                SwipeTask(t, onDone = { vm.completeWithUndo(t.id) }, onLater = { vm.postpone(t.id, 1) }, modifier = Modifier.animateItem().landing(t.id in landed, 0), radius = 0) {
+                    TaskRow(t, today, showProject, onToggle = { vm.toggleTask(t.id) }, onOpen = { onOpen(t.id) })
+                }
+            }
+        }
+
+        /** Small-caps section header with a count; tap folds it. */
+        fun LazyListScope.section(label: String, key: String, count: Int? = null, collapsible: Boolean = false) {
+            item(key) {
+                val rot by animateFloatAsState(if (isOpen(key)) 0f else -90f, label = "sec")
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(8.dp))
+                        .then(if (collapsible) Modifier.clickable { toggle(key) } else Modifier)
+                        .padding(start = 6.dp, end = 4.dp, top = 6.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SectionLabel(label)
+                    if (count != null) Text("  $count", style = Type.label.copy(color = c.faint))
+                    Spacer(Modifier.weight(1f))
+                    if (collapsible) Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.faint, modifier = Modifier.size(18.dp).rotate(rot))
+                }
+            }
+        }
+
+        when {
+            view == Views.TODAY -> {
+                val list = data.tasks.filter { isToday(it, today) }
+                val running = data.tasks.filter { isRunning(it, today) }.sortedBy { sortKey(it) }
+                val doneToday = data.tasks.filter { it.done && it.doneAt == today.toString() }
+                header(today.longTitle(), s.tasksCount(list.size))
+                if (settings.apiKey.isNotBlank() && settings.morningBrief && settings.briefHidden != today.toString() && data.tasks.any { !it.done }) item("brief") {
+                    LaunchedEffect(today, L.lang) { vm.makeBrief() }
+                    BriefCard(data, settings, "brief" in working, briefQuiet, vm, onFocus = { vm.send(s.promptNext, smart = true, label = s.startFocus) })
+                }
+                if (data.queue.isNotEmpty()) {
+                    section(s.waitingNet, "s-queue", data.queue.size)
+                    items(data.queue, key = { "q" + it.id }) { q -> QueuedRow(q.text, q.files.size, onDrop = { vm.dropQueued(q.id) }) }
+                }
+                val timed = list.filter { it.time != null && it.dueDate?.let { d -> !d.isBefore(today) } != false }.sortedBy { it.time }
+                val rest = (list - timed.toSet()).sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) }))
+                val todays = events.filter { it.start.toLocalDate() == today || (it.allDay && !it.start.toLocalDate().isAfter(today) && it.end.toLocalDate().isAfter(today)) }
+                if (list.isEmpty() && running.isEmpty() && doneToday.isEmpty() && todays.isEmpty()) item("empty") { Empty(s.emptyToday, s.emptyHint) }
+                todays.filter { it.allDay }.forEach { e -> item("ev-all" + e.title + e.start) { EventRow(e) } }
+                // One timeline: meetings and timed tasks interleaved by time.
+                val timeline = (todays.filter { !it.allDay }.map { it.start.toLocalTime().toString().take(5) to (it as Any) } + timed.map { it.time!! to (it as Any) })
+                    .sortedBy { it.first }
+                timeline.forEachIndexed { i, (_, x) ->
+                    if (x is CalEvent) item("ev$i" + x.title) { EventRow(x) }
+                    else cards(listOf(x as Task), timeColumn = true)
+                }
+                cards(rest)
+                if (running.isNotEmpty()) {
+                    val k = "s-running"
+                    // Busy days fold the week away by default.
+                    item("auto-fold") { LaunchedEffect(list.size > 5) { if (list.size > 5 && isOpen(k)) toggle(k) } }
+                    section(s.inWorkThisWeek, k, running.size, collapsible = true)
+                    if (isOpen(k)) rows(running, k)
+                }
+                if (doneToday.isNotEmpty()) {
+                    section(s.done, "s-done-today", doneToday.size, collapsible = true)
+                    if (isOpen("s-done-today")) rows(doneToday, "dt")
+                }
+                // Notes never mix into task lists — one quiet line says what was written today.
+                val notesToday = data.notes.filter { n -> n.updatedAt.startsWith(today.toString()) && (n.entries.isNotEmpty() || n.title.isNotBlank()) }
+                if (notesToday.isNotEmpty()) item("notes-today") {
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(14.dp))
+                            .clickable { if (notesToday.size == 1) onOpenNote(notesToday[0].id) else onOpenNotes() }
+                            .landing(notesToday.any { it.id in landed }, 14).padding(horizontal = 10.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("✎", style = Type.body.copy(color = c.graphite))
+                        Spacer(Modifier.width(10.dp))
+                        Text(s.notesToday(notesToday.take(3).joinToString(", ") { it.title.ifBlank { s.untitled } } + if (notesToday.size > 3) "…" else ""),
+                            style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+
+            view == Views.WEEK -> {
+                val list = data.tasks.filter { isThisWeek(it, today) }.sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) }))
+                val done = data.tasks.filter { it.done && it.doneAt?.let { d -> !LocalDate.parse(d).isBefore(today.weekStart()) } == true }
+                header(s.thisWeekSoft, rangeLabel(today.weekStart(), today.weekEnd()) + " · " + s.tasksCount(list.size))
+                if (list.isEmpty() && done.isEmpty()) item("empty") { Empty(s.emptyWeek, s.emptyHint) }
+                cards(list)
+                if (done.isNotEmpty()) {
+                    section(s.done, "s-done-week", done.size, collapsible = true)
+                    if (isOpen("s-done-week")) rows(done, "dw")
+                }
+            }
+
+            view == Views.ALL -> {
+                val open = data.tasks.filter { !it.done }
+                header(s.all, s.tasksCount(open.size)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {
+                        ToggleText(s.byDates, !byProject) { byProject = false }
+                        Text("  |  ", style = Type.small.copy(color = c.faint))
+                        ToggleText(s.byProjects, byProject) { byProject = true }
+                    }
+                }
+                if (open.isEmpty()) item("empty") { Empty(s.emptyAll, s.emptyHint) }
+                if (!byProject) {
+                    val monthEnd = today.withDayOfMonth(today.lengthOfMonth())
+                    val groups = open.groupBy { t ->
+                        if (t.waitingFor != null) return@groupBy 6
+                        val (st, _) = t.span() ?: return@groupBy 5
+                        when {
+                            t.isOverdue(today) -> 0
+                            isToday(t, today) -> 1
+                            !st.isAfter(today.weekEnd()) -> 2
+                            !st.isAfter(monthEnd) -> 3
+                            else -> 4
+                        }
+                    }
+                    val names = listOf(s.overdue, s.today, s.thisWeekSoft, s.thisMonth, s.later, s.noDates, s.waitingOthers)
+                    (0..6).forEach { g ->
+                        val l = groups[g] ?: return@forEach
+                        val k = "s-$g"
+                        section(names[g], k, l.size, collapsible = true)
+                        if (isOpen(k)) rows(l.sortedBy { sortKey(it) }, k)
+                    }
+                } else {
+                    val groups = open.groupBy { it.project }
+                    (groups.keys.filterNotNull().sorted() + listOf(null)).forEach { p ->
+                        val l = groups[p] ?: return@forEach
+                        val k = "p-" + (p ?: "-")
+                        section(p?.let { "#$it" } ?: s.noProject, k, l.size, collapsible = true)
+                        if (isOpen(k)) rows(l.sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) })), k, showProject = false)
+                    }
+                }
+                val recent = data.tasks.filter { it.done && it.doneAt?.let { d -> LocalDate.parse(d).isAfter(today.minusDays(8)) } == true }
+                    .sortedByDescending { it.doneAt }
+                if (data.tasks.any { it.done }) {
+                    section(s.done, "s-done", recent.size, collapsible = true)
+                    if (isOpen("s-done")) {
+                        rows(recent, "d")
+                        item("all-done") {
+                            Text(s.showAll + " →", style = Type.small.copy(color = c.graphite),
+                                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onView(Views.DONE) }.padding(8.dp))
+                        }
+                    }
+                }
+            }
+
+            view == Views.DONE -> {
+                val list = data.tasks.filter { it.done }.sortedByDescending { it.doneAt }
+                header(s.completed, s.tasksCount(list.size))
+                list.groupBy { it.doneAt }.forEach { (day, l) ->
+                    section(day?.let { LocalDate.parse(it).shortLabel(today) } ?: "—", "dd-$day", l.size)
+                    rows(l, "dd$day")
+                }
+            }
+
+            view.startsWith("p:") -> {
+                val p = view.removePrefix("p:")
+                val openTasks = data.tasks.filter { !it.done && it.project == p }.sortedBy { sortKey(it) }
+                val done = data.tasks.filter { it.done && it.project == p }
+                val chains = ideaChains(p, data)
+                val ideas = chains.filter { it.tasks.isEmpty() }
+                header(p, s.tasksCount(openTasks.size))
+                // «Сводка недели»: written once a day on first visit, ↻ to rewrite.
+                item("p-summary") {
+                    val sum = data.projectSummaries[p]
+                    LaunchedEffect(p) { if (sum?.at?.startsWith(today.toString()) != true && (openTasks.isNotEmpty() || chains.isNotEmpty())) vm.refreshProject(p) }
+                    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(RoundedCornerShape(18.dp)).background(c.accentSoft)
+                        .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Spark(12.dp); Spacer(Modifier.width(6.dp))
+                            SectionLabel(s.weekSummary + (sum?.at?.let { " · " + s.summaryAt(it.drop(11).take(5)) } ?: ""), Modifier.weight(1f))
+                            val busy = "project:$p" in working
+                            Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !busy) { vm.refreshProject(p) }, contentAlignment = Alignment.Center) {
+                                if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
+                                else Icon(Icons.Outlined.Refresh, s.refresh, tint = c.graphite, modifier = Modifier.size(17.dp))
+                            }
+                        }
+                        Text(sum?.text ?: s.makeSummary, style = Type.body.copy(color = if (sum != null) c.ink else c.graphite, fontSize = 15.5.sp), modifier = Modifier.padding(end = 10.dp))
+                    }
+                }
+                // One fact once: who we wait for is in the summary and on the task row, the idea a task came from is a quiet «✎».
+                if (openTasks.isNotEmpty()) { section(s.tasksCaps, "s-ptasks", openTasks.size); cards(openTasks, showProject = false, showIdea = true) }
+                if (ideas.isNotEmpty()) {
+                    section(s.ideasOpen, "s-ideas", ideas.size, collapsible = true)
+                    if (isOpen("s-ideas")) items(ideas, key = { "ch" + it.entry.id }) { ch ->
+                        IdeaRow(ch, "idea:${ch.entry.id}" in working, onOpen = { onOpenNote(ch.note.id) }, onMake = { vm.ideaToTask(ch.note.id, ch.entry.id) })
+                    }
+                }
+                val notes = data.notes.filter { it.project == p }
+                if (notes.isNotEmpty()) {
+                    section(s.notes, "s-notes", notes.size)
+                    items(notes, key = { "n" + it.id }) { n -> NoteCard(n, data, onClick = { onOpenNote(n.id) }) }
+                }
+                if (done.isNotEmpty()) {
+                    section(s.done, "s-pdone", done.size, collapsible = true)
+                    if (isOpen("s-pdone")) rows(done, "pd", showProject = false)
+                }
+            }
+        }
+    }
+}
+
+/** An idea that has not become a task yet: its text and one quiet way to make it one. */
+@Composable
+private fun IdeaRow(ch: Chain, busy: Boolean, onOpen: () -> Unit, onMake: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    Column {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onOpen).padding(start = 6.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.EditNote, null, tint = c.faint, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(ch.entry.text.trim(), style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.width(110.dp), contentAlignment = Alignment.CenterEnd) {
+                if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
+                else Pill(s.toTaskPill, accent = true, onClick = onMake)
+            }
+        }
+        Hairline(Modifier.padding(start = 36.dp, top = 4.dp))
+    }
+}
+
+/** A soft accent glow that fades out — "this just arrived here". */
+@Composable
+fun Modifier.landing(active: Boolean, radius: Int): Modifier {
+    val c = M.c
+    val a by androidx.compose.animation.core.animateFloatAsState(if (active) 1f else 0f, androidx.compose.animation.core.tween(if (active) 250 else 1200), label = "land")
+    if (a == 0f) return this
+    val tint = c.accent.copy(alpha = 0.16f * a)
+    return this.clip(RoundedCornerShape(radius.dp)).drawWithContent { drawContent(); drawRect(tint) }
+}
+
+@Composable
+private fun EventRow(e: CalEvent) {
+    val c = M.c
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(14.dp)).background(c.chip.copy(alpha = 0.6f))
+        .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(if (e.allDay) "—" else e.start.toLocalTime().toString().take(5), style = Type.small.copy(color = c.graphite), modifier = Modifier.width(48.dp))
+        Icon(Icons.Outlined.Event, null, tint = c.graphite, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(e.title, style = Type.body.copy(color = c.graphite, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!e.allDay) Text(e.start.toLocalTime().toString().take(5) + "–" + e.end.toLocalTime().toString().take(5) + (e.location?.let { " · $it" } ?: ""),
+                style = Type.small.copy(color = c.faint, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun QueuedRow(text: String, files: Int, onDrop: () -> Unit) {
+    val c = M.c
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).padding(start = 14.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.CloudOff, null, tint = c.graphite, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(text.ifBlank { "📎 $files" }, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onDrop), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Close, M.s.delete, tint = c.faint, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun ToggleText(label: String, selected: Boolean, onClick: () -> Unit) {
+    val c = M.c
+    Text(label, style = Type.small.copy(color = if (selected) c.ink else c.graphite, fontSize = 14.sp),
+        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(horizontal = 2.dp, vertical = 4.dp))
+}
+
+/** One-line task row for overviews: circle · title · tag · progress · date. */
+@Composable
+fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Unit, onOpen: () -> Unit) {
+    val c = M.c
+    val overdue = t.isOverdue(today)
+    val (d, n) = t.subtasks.progress()
+    Column(Modifier.fillMaxWidth().background(c.bg).clickable(onClick = onOpen)) {
+        Row(Modifier.fillMaxWidth().padding(end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (t.waitingFor != null && !t.done) Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.HourglassEmpty, null, tint = c.graphite, modifier = Modifier.size(18.dp))
+            } else CheckCircle(t.done, size = 20.dp, onToggle = onToggle)
+            Text(
+                // «Договор от Саши» already says who — don't add «— Саша».
+                t.title + (t.waitingFor?.takeIf { w -> !t.done && !t.title.contains(w.take(3), true) }?.let { " — $it" } ?: "") +
+                    (t.promisedTo?.takeIf { p -> !t.done && !t.title.contains(p.take(3), true) }?.let { " → $it" } ?: ""),
+                style = Type.body.copy(fontSize = 15.5.sp, color = if (t.done) c.graphite else c.ink,
+                    textDecoration = if (t.done) TextDecoration.LineThrough else null),
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(vertical = 11.dp),
+            )
+            if (showProject && !t.done) t.project?.let { Spacer(Modifier.width(6.dp)); Tag(it) }
+            if (n > 0 && !t.done) Text("  $d/$n", style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
+            if (!t.done) t.rowLabel(today)?.let {
+                Text("  $it", style = Type.small.copy(color = if (overdue) c.accent else c.graphite, fontSize = 13.sp), maxLines = 1)
+            }
+        }
+        Hairline(Modifier.padding(start = 40.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeTask(t: Task, onDone: () -> Unit, onLater: () -> Unit, modifier: Modifier, radius: Int = 18, content: @Composable () -> Unit) {
+    val c = M.c
+    val s = M.s
+    val state = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
+        when (v) {
+            SwipeToDismissBoxValue.StartToEnd -> onDone()
+            SwipeToDismissBoxValue.EndToStart -> onLater()
+            else -> {}
+        }
+        false // always spring back; the list itself reflects the change
+    })
+    SwipeToDismissBox(
+        state = state,
+        modifier = modifier,
+        enableDismissFromEndToStart = !t.done,
+        backgroundContent = {
+            val dir = state.dismissDirection
+            val toEnd = dir == SwipeToDismissBoxValue.StartToEnd
+            Box(
+                Modifier.fillMaxSize().clip(RoundedCornerShape(radius.dp))
+                    .background(if (dir == SwipeToDismissBoxValue.Settled) c.bg else if (toEnd) c.ink else c.accent)
+                    .padding(horizontal = 22.dp),
+                contentAlignment = if (toEnd) Alignment.CenterStart else Alignment.CenterEnd,
+            ) {
+                if (dir != SwipeToDismissBoxValue.Settled)
+                    // Show where the task will land, not an abstract «tomorrow».
+                    Text(if (toEnd) (if (t.done) s.undo else s.markDone)
+                        else "→ " + (ru.anjeib.margin.data.postponed(t, 1).let { it.dueDate ?: it.startDate }?.shortLabel()?.lowercase() ?: ""),
+                        style = Type.tab.copy(color = c.bg))
+            }
+        },
+    ) { content() }
+}
+
+/**
+ * Morning brief: full in the morning, then a single line. It folds as soon as the user starts typing
+ * or the assistant answers ([quiet]); × hides it until tomorrow.
+ */
+@Composable
+private fun BriefCard(data: AppData, settings: Settings, loading: Boolean, quiet: Boolean, vm: MainVm, onFocus: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    val today = LocalDate.now().toString()
+    val brief = data.brief?.takeIf { it.date == today && it.lang == L.lang.name }
+    var userOpen by rememberSaveable { mutableStateOf(false) }
+    val autoFold = settings.briefCollapsed == today || LocalTime.now().hour >= 12
+    val folded = brief != null && (quiet || (autoFold && !userOpen))
+    LaunchedEffect(quiet) { if (quiet) { userOpen = false; vm.collapseBrief() } }
+
+    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(18.dp)).background(c.accentSoft)) {
+        // Nothing left for today → say so without asking the AI.
+        val openToday = data.tasks.any { isToday(it) || isRunning(it) }
+        val stale = brief?.fingerprint != null && brief.fingerprint != vm.briefFingerprint(data)
+        if (folded || (brief != null && !openToday)) {
+            Row(
+                Modifier.fillMaxWidth().clickable { userOpen = true }.padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Spark(); Spacer(Modifier.width(10.dp))
+                val head = brief?.headline ?: brief?.text?.substringBefore('.')
+                Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+                    Text(
+                        if (!openToday) s.allDoneToday
+                        else listOfNotNull(head?.let { s.mainThing + ": " + it }, brief?.focus?.let { s.windowShort + " " + it }).joinToString(" · "),
+                        style = Type.small.copy(color = c.ink, fontSize = 14.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    if (openToday) Text(
+                        listOfNotNull(brief?.at?.let { s.briefAt(it) }, if (stale) s.briefStale else null).joinToString(" · "),
+                        style = Type.small.copy(color = if (stale) c.accent else c.graphite, fontSize = 11.5.sp),
+                    )
+                }
+                if (openToday) Box(Modifier.size(40.dp).clip(CircleShape).clickable(enabled = !loading) { vm.makeBrief(force = true) }, contentAlignment = Alignment.Center) {
+                    if (loading) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
+                    else Icon(Icons.Outlined.Refresh, s.refresh, tint = if (stale) c.accent else c.graphite, modifier = Modifier.size(18.dp))
+                }
+            }
+            return@Column
+        }
+        Column(Modifier.padding(start = 18.dp, end = 6.dp, top = 8.dp, bottom = 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spark(); Spacer(Modifier.width(8.dp))
+                Text(s.morningBrief + (brief?.at?.let { " · " + s.briefAt(it) } ?: ""), style = Type.small.copy(color = c.accent, fontSize = 14.sp), modifier = Modifier.weight(1f))
+                Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !loading) { vm.makeBrief(force = true) }, contentAlignment = Alignment.Center) {
+                    if (loading) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
+                    else Icon(Icons.Outlined.Refresh, s.refresh, tint = c.graphite, modifier = Modifier.size(18.dp))
+                }
+                Box(Modifier.size(36.dp).clip(CircleShape).clickable { vm.hideBrief() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Close, s.dismiss, tint = c.graphite, modifier = Modifier.size(18.dp))
+                }
+            }
+            Column(Modifier.padding(end = 12.dp)) {
+                if (brief == null) Text(if (loading) s.thinking else s.makeBrief, style = Type.body.copy(color = c.graphite),
+                    modifier = Modifier.clickable(enabled = !loading) { vm.makeBrief(force = true) })
+                else {
+                    Text(brief.text, style = Type.body.copy(color = c.ink))
+                    brief.focus?.let {
+                        Spacer(Modifier.height(6.dp))
+                        Text("${s.focusWindow}: $it", style = Type.small.copy(color = c.graphite))
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Pill(s.startFocus, filled = true, onClick = onFocus)
+                        Pill(s.collapse, onClick = { userOpen = false; vm.collapseBrief() })
+                    }
+                }
+            }
+        }
+    }
+}

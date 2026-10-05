@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android Auto Backup to the user's Google account: data and settings, not attachments/models (25 MB cap). -->
+<full-backup-content>
+    <include domain="file" path="margin.json" />
+    <include domain="sharedpref" path="margin.xml" />
+</full-backup-content>

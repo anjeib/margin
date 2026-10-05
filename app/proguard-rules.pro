@@ -1,0 +1,5 @@
+-keepattributes *Annotation*, InnerClasses
+-keepclassmembers class ru.anjeib.margin.** { *** Companion; }
+-keepclasseswithmembers class ru.anjeib.margin.** { kotlinx.serialization.KSerializer serializer(...); }
+-keep,includedescriptorclasses class ru.anjeib.margin.**$$serializer { *; }
+-keep class ru.anjeib.margin.voice.WhisperNative { native <methods>; }

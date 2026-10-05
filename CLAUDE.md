@@ -1,0 +1,97 @@
+# Margin — ИИ-ежедневник для Android
+
+Личный ежедневник в виде мессенджера: одно поле ввода внизу, ИИ (через OpenRouter) сам превращает свободный текст и голос в задачи, подзадачи, заметки, ожидания и контакты. Kotlin + Jetpack Compose, один модуль `app`, пакет `ru.anjeib.margin`.
+
+Владелец общается по-русски — отвечать по-русски.
+
+## Принципы продукта (не нарушать без явной просьбы)
+
+- **Чат прежде всего, минимум интерфейса.** 90% работы — через поле ввода. Без приоритетов, канбана, сложных фильтров, лишних ИИ-кнопок у каждой задачи.
+- **Тишина вместо болтовни.** После ввода пузырь пользователя сам превращается в результат (пометка «задача/заметка/2 задачи», «Изменить · Отменить» на ~2.6 с), затем исчезает, а элемент подсвечивается в списке. Голые подтверждения «Сохранено…» не показываются. В ленте остаются только ответы, вопросы с вариантами и ошибки.
+- **Заметки не смешиваются со списками задач.** На «Сегодня» — одна тихая строка «Сегодня в заметках: …». Заметки — ленты датированных записей, привязаны к проекту.
+- **Мягкие сроки.** «На этой неделе» = окно start..due, без ложной точности; без даты — нормально.
+- **Интерфейс целиком на русском ИЛИ целиком на английском**, никогда не вперемешку. Любая новая строка добавляется в `i18n/Strings.kt` сразу в оба объекта (`Ru` и `En`). Язык по умолчанию — системный (`LangMode.Auto`).
+- **Две темы**: светлая «бумага» и тёмная «тёплый уголь» + Авто. Цвета только из `Palette` (`M.c`), никаких захардкоженных цветов в экранах.
+- Дизайн-референсы: `design/*.png` (v1) и `design/v2-*.png` — сверяться с ними.
+
+- **Мысль → задача → человек** — сердце продукта (макеты `design/v3-*.png`). У задачи есть источник (`source` — исходная фраза, `noteId`/`sourceEntryId` — идея из заметки) и обещания в обе стороны (`waitingFor` — ждём от человека, `promisedTo` — пользователь обещал). Связи считаются на телефоне (`ui/Links.kt`), сводки по человеку и проекту пишет ИИ раз в день и по ↻. ИИ не придумывает роли людей: `Person.aboutFromUser` отделяет слова пользователя от догадок. Связь показывается тихо, а не схемой: строка «↳ из идеи «…»» в карточке задачи, «✎ из идеи» в строке задачи на странице проекта, «Идеи без задач» (свёрнуто) с кнопкой «В задачу». Цепочки «идея → задача → человек» и блок «Связи» из макетов v3 убраны в 3.5 как шум.
+- **Один факт на экране — один раз.** Если «ждём от Димы» уже есть в сводке или в строке задачи, отдельный блок для этого не нужен. Перед добавлением блока проверить, не повторяет ли он то, что уже видно.
+
+## Стиль
+
+- Шрифты: Playfair Display (заголовки, `Type.display/title/cardTitle`), Inter (текст). Один акцент — терракота `c.accent`, мягкий фон акцента `c.accentSoft`.
+- Тексты коротко и спокойно, без эмодзи и восклицательных знаков (кроме служебных значков ✎ ↻ 📎).
+- Код: стиль как в окружающих файлах; комментарии короткие, объясняют «почему».
+
+## Устройство
+
+```
+ai/Assistant.kt     промпты, JSON-схема действий, разбор и применение (валидация!) к AppData
+ai/OpenRouter.kt    HTTP-клиент: chat (с картинками), transcribe (WAV), список моделей, проверка ключа
+ai/Processor.kt     вложения → куда положить, заметка «Входящие», офлайн-очередь + QueueWorker
+data/Models.kt      Task, Subtask, Entry, Attachment, Note, Person, Repeat, Queued, AppData (+ migrated())
+data/Store.kt       всё состояние в одном JSON (filesDir/margin.json), атомарная запись
+data/Prefs.kt       настройки (SharedPreferences "margin"); ключ API по умолчанию из BuildConfig
+data/Files.kt       вложения в filesDir/att, превью, WavRecorder (16 кГц моно)
+data/Repeats.kt     повторяющиеся задачи: next(), nextOccurrence() при выполнении
+data/PhoneCalendar  чтение календаря телефона (только чтение)
+data/Backup.kt      zip-архив (данные + вложения, без ключа), восстановление, BackupWorker
+data/Dates.kt       подписи дат на двух языках
+voice/LocalWhisper  офлайн-распознавание: whisper.cpp через JNI, модели качаются по запросу
+notify/Reminders    точные будильники, утро/вечер, кнопки «Готово / Через час»
+ui/MainVm.kt        вся логика экрана: send() по областям (Main / InTask / Notes), превью, отмена
+ui/App.kt           навигация, меню, вкладки со счётчиками
+ui/Tray.kt          лента над полем ввода: пузырь → результат
+ui/TasksScreen.kt   Сегодня / Неделя / Все (обзор по срокам или проектам) / Выполнено / проект
+ui/TaskSheet.kt     карточка задачи: только заполненные поля, «Записи», своё поле ввода с ИИ
+ui/NotesScreen.kt, PeopleScreen.kt, Search.kt, Onboarding.kt, SettingsScreen.kt, Input.kt (поле ввода, «+», диктовка)
+app/src/main/cpp    JNI-мост к whisper.cpp (исходники в third_party/whisper.cpp)
+```
+
+Поток ИИ: `MainVm.send()` → `Assistant.systemPrompt()` (правила + схема + контекст: задачи, заметки, люди, календарь) → `OpenRouter.chat()` → `Assistant.parsePlan()` → `Assistant.apply(data, plan, source)` → превью (Main) или сразу с «Отменить» (InTask/Notes). Модель никогда не меняет данные напрямую — только через `apply`, где проверяются id, даты, дубликаты.
+
+**Провайдер по умолчанию — Yandex AI Studio** (`ai/Llm.kt` — единая точка, `ai/Yandex.kt` — клиент, OpenAI-совместимый API, модели `gpt://<folder>/<name>/latest`). Причины: 152-ФЗ и оплата из РФ. Каталог в облаке — `margin` (отдельно от vuzburo), ключ сервисного аккаунта `margin-app`.
+- Режим «Гибрид» (по умолчанию): простые фразы → `aliceai-llm-flash`, сложные (`Assistant.isComplex`: несколько дел, идеи/заметки, «разбей», длинные) и умные запросы (бриф, обзоры) → `deepseek-v4.1-flash`. «Экономно» — только Alice, «Точно» — только DeepSeek.
+- Голос: Yandex SpeechKit v1 (0,1626 ₽ за начатые 15 с), офлайн — Whisper на телефоне.
+- OpenRouter остался альтернативой в настройках (Gemini Flash-Lite / Sonnet / gpt-audio-mini).
+- Экономика (замеры октябрь 2026, 13 фраз × прогоны, «шумный» ежедневник): гибрид 26/26, ≈0,35–0,47 ₽ за сообщение; только Alice 24/26, ≈0,28 ₽; только DeepSeek 26/26, ≈0,64 ₽. YandexGPT Lite (24/39) и Pro 5.1 (1,9 ₽/сообщ.), Qwen3.6 и gpt-oss — не подошли. Скидку на кэш Яндекс не гарантирует — считать без неё.
+- Расход на токены держится на трёх вещах — не ломать: компактная схема без null-полей и стабильный префикс (правила+схема в начале), отбор контекста на телефоне (`Assistant.context(query=…)`: скелет недели + до 10 связанных задач + до 3 заметок), повтор при испорченном JSON (`Assistant.isBroken`, `Processor.askPlan`).
+- Сравнение моделей: `YA_LIVE=1 NOISE=1 RUNS=2 DEBUG=1 MODELS="hybrid,aliceai-llm-flash,deepseek-v4.1-flash" ./gradlew :app:testDebugUnitTest --tests '*YandexCompareTest*' --rerun-tasks -i` (ключ из `~/.yc_margin_key`, `~/.yc_margin_folder`).
+
+## Сборка
+
+```
+JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew assembleRelease
+```
+- SDK: `/opt/homebrew/share/android-commandlinetools`, NDK 27.3.13750724, CMake 3.31.6, только arm64-v8a.
+- APK кладётся копией в `~/Desktop/Margin.apk`; при выпуске повышать `versionCode`/`versionName` в `app/build.gradle.kts`.
+- Подпись: `release.jks` + `keystore.properties` — **не удалять и не менять**, иначе обновление не встанет поверх.
+- `secrets.properties` (`OPENROUTER_KEY`, `YC_KEY`, `YC_FOLDER`) зашивается в APK → это личная сборка, APK никому не отдавать. Коммерческая версия: ключей в APK нет, приложение ходит через посредника в Яндекс Облаке (Cloud Functions + API Gateway, ключ в Lockbox, вход пользователя, проверка подписки RuStore на сервере, лимиты на пользователя, правила промпта на сервере).
+- debug-сборка имеет суффикс `.debug` и ставится рядом с release.
+
+## Версии и откат
+
+Код в локальном git (без удалённого репозитория). **При каждом выпуске** (после повышения `versionCode`/`versionName` и успешной release-сборки):
+```
+cp app/build/outputs/apk/release/app-release.apk releases/Margin-<версия>.apk
+cp app/build/outputs/apk/release/app-release.apk ~/Desktop/Margin.apk
+git add -A && git commit -m "<версия>: <что изменилось>" && git tag v<версия>
+```
+- `releases/` — архив APK по версиям (в git не входит: внутри зашиты ключи).
+- Откат кода: `git checkout v3.5 -- .` (или `git log --oneline`, `git diff v3.5`). Старый APK ставится из `releases/` без пересборки; поверх более новой версии — только через удаление приложения (Android не даёт понизить versionCode), данные перед этим выгрузить архивом.
+- В git не входят: ключи (`secrets.properties`, `keystore.properties`, `*.jks`), `third_party/`. whisper.cpp восстанавливается так: `git clone https://github.com/ggml-org/whisper.cpp.git third_party/whisper.cpp && git -C third_party/whisper.cpp checkout 60c0be6ac8fa71b1a2ae2dd938a31a34a508e774`.
+- `release.jks` + `keystore.properties` существуют в одном экземпляре — их копия должна храниться вне этого Mac.
+
+## Проверка
+
+- Живой тест ИИ (несколько центов): `MARGIN_LIVE=1 OPENROUTER_KEY=$(sed -n 's/OPENROUTER_KEY=//p' secrets.properties) JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew :app:testDebugUnitTest --tests '*AssistantLiveTest*' --rerun-tasks -i`. После правок промпта прогонять 2–3 раза: быстрая модель нестабильна, одна удача ничего не доказывает.
+- Whisper на устройстве: `./gradlew connectedDebugAndroidTest` (качает модель 60 МБ; `-Pandroid.testInstrumentationRunnerArguments.model=small` — 190 МБ).
+- Эмулятор: AVD `calc35` (arm64). Русский интерфейс: `adb shell cmd locale set-app-locales ru.anjeib.margin --locales ru-RU`. Кириллицу удобнее подавать через share-intent: `adb shell "am start -n ru.anjeib.margin/.MainActivity -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT '…'"`.
+- Изменения интерфейса проверять скриншотом в эмуляторе (светлая и тёмная тема: `adb shell cmd uimode night yes/no`).
+
+## Отложено / идеи
+
+- Локальная LLM на телефоне как отдельный режим (сначала тест на 100–200 реальных фразах).
+- Разбор дат в коде для офлайн-режима и живого превью при наборе.
+- Синхронизация между устройствами; версия для RuStore требует российских моделей и своей оплаты.
+- Виджет на рабочий стол.

@@ -1,0 +1,12 @@
+secrets.properties
+keystore.properties
+*.jks
+api.textClipping
+build/
+.gradle/
+local.properties
+.kotlin/
+.DS_Store
+# whisper.cpp is fetched separately (see CLAUDE.md), APK archive holds builds with keys inside
+third_party/
+releases/
