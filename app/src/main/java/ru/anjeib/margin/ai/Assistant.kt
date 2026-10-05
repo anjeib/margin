@@ -13,6 +13,7 @@ import ru.anjeib.margin.data.Entry
 import ru.anjeib.margin.data.Note
 import ru.anjeib.margin.data.Person
 import ru.anjeib.margin.data.Repeat
+import ru.anjeib.margin.data.next
 import ru.anjeib.margin.data.nextOccurrence
 import ru.anjeib.margin.data.Settings
 import ru.anjeib.margin.data.Subtask
@@ -20,6 +21,9 @@ import ru.anjeib.margin.data.Task
 import ru.anjeib.margin.data.findSub
 import ru.anjeib.margin.data.mapTree
 import ru.anjeib.margin.data.nowStamp
+import ru.anjeib.margin.data.properName
+import ru.anjeib.margin.data.sentence
+import ru.anjeib.margin.data.withNames
 import ru.anjeib.margin.data.text
 import ru.anjeib.margin.data.weekEnd
 import ru.anjeib.margin.data.weekStart
@@ -84,13 +88,16 @@ object Assistant {
         appendLine("- One message may hold several things: one action per thing. Concrete steps → subtasks (dictated steps verbatim, assignee if stated).")
         appendLine("- Ideas, thoughts, opinions (\"идея:\", \"мне кажется\"), facts, phones, links are NOTES, never tasks or subtasks. append_note only to a listed note on the SAME topic/project; otherwise create_note with a short topical title (project ideas → \"<project> · $ideas\"). Never invent ids.")
         appendLine("- Someone owes the user something (\"Дима должен прислать макет в среду\") → a NEW task: title = what is expected, waiting_for = person, due = when expected (else +2 days). Never put waiting_for on an existing task.")
+        appendLine("- \"заказать/купить/спросить у X\" is the user's own errand: X goes to people, not waiting_for.")
+        appendLine("- A step with its own person AND its own deadline (\"Катя — макеты к четвергу\") → its own create_task (people, due, same project), not a subtask.")
         appendLine("- The user promised something to someone (\"обещал Анне показать до пятницы\", \"договорились, что я пришлю Диме тексты\") → a task for the user with promised_to = that person (and due if said).")
-        appendLine("- Facts about a person (role, phone) → person action.")
+        appendLine("- Facts about a person → person action: about = their role in 2–4 words (\"дизайнер vuzburo\"), phone/email if given.")
         appendLine("- More work for an EXISTING listed task (same topic, \"ещё\", \"для …\") → add_subtasks to it; changed dates/people → update_task; done → complete. Don't duplicate tasks.")
         appendLine(if (s.autoSubtasks) "- A clearly big new task with no steps given → add 3–5 short subtasks." else "- Don't invent subtasks.")
         appendLine(if (s.askWhenUnclear) "- Timing essential but missing (a call, a meeting) → create the task without dates AND ask when, 3–4 short options like \"${L.s.today} 16:00\". At most one question." else "- Never ask questions.")
         appendLine("- An answer to your earlier question → update_task on that task, no duplicate.")
-        appendLine("- A question or a request for advice → answer in reply (2–4 short sentences, no markdown), actions only if asked.")
+        appendLine("- Change only what the user asked about: never touch other tasks, never add or alter dates, times or repeats nobody mentioned.")
+        appendLine("- A question or a request for advice → answer in reply (2–4 short sentences, no markdown), actions only if asked. \"Что горит / что сорвётся\" → the 3–5 riskiest items (overdue, due within 3 days, waiting on others, your promises), each with why — not a plain list.")
         appendLine("- reply/question/options in ${L.s.aiLanguage}: brief, calm, no emoji, no exclamation marks.")
     }
 
@@ -224,11 +231,11 @@ object Assistant {
             scopeRule(scope).let { if (it.isNotBlank()) it + "\n\n" else "" } +
             "Context:\n" + context(d, s, focusTask = (scope as? Scope.InTask)?.taskId, query = query, recent = recent)
 
-    fun briefPrompt(d: AppData, s: Settings): String = """
-        You are the assistant inside Margin, a calm planner. Write the user's morning brief for today in ${L.s.aiLanguage}.
-        At most 3 short sentences and 45 words, no markdown, no emoji: what today holds, anything overdue, the single most important thing.
+    fun briefPrompt(d: AppData, s: Settings, evening: Boolean = false): String = """
+        You are the assistant inside Margin, a calm planner. ${if (evening) "It is evening. Write the user's brief for TOMORROW (${LocalDate.now().plusDays(1)}) in ${L.s.aiLanguage}: in a few words what is still open today, then what tomorrow holds and the single most important thing for tomorrow." else "Write the user's brief for today in ${L.s.aiLanguage}: what today holds, anything overdue, the single most important thing."}
+        At most 3 short sentences and 45 words, no markdown, no emoji, plain words (no jargon like «окно», «фокус-блок»). Never say "nothing urgent" when something is due today or overdue.
         If a promise to someone ("promised to …") is due today or overdue, or something you wait for ("waiting for …") is late, mention it.
-        Also give "headline": the most important thing in 3–6 words (e.g. "тексты vuzburo"), and a realistic focus window for deep work today avoiding timed tasks.
+        Also give "headline": the most important thing in 3–6 words (e.g. "тексты vuzburo"), and a realistic free time slot for it ${if (evening) "tomorrow" else "today"} avoiding timed tasks.
         "main_task_id": the task_id of that most important thing (from the context), if it is a task.
         Reply with JSON only: {"text": string, "headline": string, "focus": "HH:MM–HH:MM" | null, "main_task_id": string | null}
 
@@ -252,7 +259,7 @@ object Assistant {
         return """
             You keep a planner. Today is ${LocalDate.now()}. About the person "$n", in ${L.s.aiLanguage}, no markdown:
             "about": who they are to the user, max 6 words (e.g. "дизайнер vuzburo") — ONLY if the mentions or "Known so far" say it; never guess a role or a job. Unknown → "".
-            "summary": what's going on now, 1–2 sentences, max 35 words, written TO the user in second person ("Ждёте от неё…", "Вы обещали…"), starting with a capital letter, short dates like "9 окт" (no year): what is expected from them, what the user promised them, when they last came up. Never say "пользователь".
+            "summary": what's going on now, 1–2 sentences, max 35 words, written TO the user in second person ("Ждёте от неё…", "Вы обещали…"), starting with a capital letter, short dates like "9 окт" (no year): what is expected from them, what the user promised them, when they last came up. Never say something was done or sent unless its task is marked [done]. Never say "пользователь".
             Known so far: ${p.about?.takeIf { p.aboutFromUser } ?: "—"}
             Mentions:
             $mentions
@@ -265,11 +272,12 @@ object Assistant {
         val notes = d.notes.filter { it.project == project }
         return """
             You keep a planner. Today is ${LocalDate.now()}. Write the weekly summary of project "$project" in ${L.s.aiLanguage}:
-            1–2 short sentences, max 35 words, no markdown: what moved, what we wait for and from whom, what is on the user and by when. Mention ideas only if they wait for a decision.
+            1–2 short sentences, max 35 words, no markdown, written to the user ("вы"): what moved, what we wait for and from whom, what is on the user and by when.
+            Say something moved ONLY if a task is marked [done] in the last 7 days; otherwise say what is next. Ideas below have no task yet — mention them only if they wait for a decision.
             Tasks:
-            ${tasks.take(40).joinToString("\n") { t -> "- ${t.title}${if (t.done) " [done]" else ""}${t.due?.let { " due $it" } ?: ""}${t.waitingFor?.let { " (waiting for $it)" } ?: ""}${t.promisedTo?.let { " (promised to $it)" } ?: ""}" }}
+            ${tasks.take(40).joinToString("\n") { t -> "- ${t.title}${if (t.done) " [done ${t.doneAt}]" else ""}${t.due?.let { " due $it" } ?: ""}${t.waitingFor?.let { " (waiting for $it)" } ?: ""}${t.promisedTo?.let { " (promised to $it)" } ?: ""}" }}
             Ideas (note entries):
-            ${notes.flatMap { it.entries }.takeLast(20).joinToString("\n") { "- " + it.text.take(140) }}
+            ${notes.flatMap { it.entries }.filter { e -> d.tasks.none { it.sourceEntryId == e.id } }.takeLast(20).joinToString("\n") { "- " + it.text.take(140) }}
             Reply with JSON only: {"summary": string}
         """.trimIndent()
     }
@@ -311,7 +319,10 @@ object Assistant {
 
     /** Actions in the shapes small models actually produce: a proper list, one bare action, or {"create_note": {...}}. */
     private fun actionsOf(o: JsonObject): List<JsonObject> {
-        (o["actions"] as? JsonArray)?.let { arr -> return arr.mapNotNull { it as? JsonObject }.filter { it.str("type") in actionTypes } }
+        // Small models sometimes mangle the key itself: ".type", " type".
+        fun fixed(x: JsonObject): JsonObject = if ("type" in x) x else x.entries.firstOrNull { it.key.trim().trimStart('.', '_').equals("type", true) }
+            ?.let { (k, v) -> JsonObject(x - k + ("type" to v)) } ?: x
+        (o["actions"] as? JsonArray)?.let { arr -> return arr.mapNotNull { (it as? JsonObject)?.let(::fixed) }.filter { it.str("type") in actionTypes } }
         if (o.str("type") in actionTypes) return listOf(o)
         return o.entries.filter { it.key in actionTypes }.mapNotNull { (k, v) ->
             (v as? JsonObject)?.let { JsonObject(it + ("type" to JsonPrimitive(k))) }
@@ -350,16 +361,33 @@ object Assistant {
 
     // ---------------- applying ----------------
 
-    /** [source] — what the user actually wrote; used to recover a project the model forgot to name. */
-    fun apply(data: AppData, plan: AiPlan, source: String = ""): Applied {
+    /**
+     * [source] — what the user actually wrote; used to recover a project the model forgot to name.
+     * [strict] — the user typed this: the model may change only what the words are about ([focus] — the open task,
+     * [recent] — tasks of the last exchanges, for «перенеси его»). Unasked dates, times, repeats and other tasks stay as they were.
+     */
+    fun apply(data: AppData, plan: AiPlan, source: String = "", strict: Boolean = false, focus: String? = null, recent: Set<String> = emptySet()): Applied {
         var d = data
         val touched = linkedSetOf<String>()
         val touchedNotes = linkedSetOf<String>()
-        var created = 0; var updated = 0; var subAdded = 0; var notes = 0; var entries = 0
+        var created = 0; var updated = 0; var subAdded = 0; var notes = 0; var entries = 0; var completed = 0
         val me = setOf("я", "me", L.s.me.lowercase())
+        val said = stems(source)
+        val low = source.lowercase()
+        val saysWhen = strict.not() || whenCue.containsMatchIn(low)
+        val saysTime = strict.not() || timeCue.containsMatchIn(low)
+        val saysRepeat = strict.not() || repeatCue.containsMatchIn(low)
+        val saysOwe = strict.not() || oweCue.containsMatchIn(low)
+        val bulk = strict.not() || bulkCue.containsMatchIn(low)
+        /** Is this existing task what the user is talking about? */
+        fun asked(t: Task): Boolean = bulk || t.id == focus || t.id in recent ||
+            (stems(t.title + " " + t.people.joinToString(" ") + " " + listOfNotNull(t.waitingFor, t.promisedTo, t.project).joinToString(" ")) intersect said).isNotEmpty()
+        /** One spelling per person: the known one, or the name with a capital letter. */
+        fun who(n: String?): String? = n?.trim()?.takeIf { it.isNotEmpty() }?.let { x -> if (x.lowercase() in me) x else d.person(x)?.name ?: x.properName() }
+        fun subs(l: List<Subtask>, names: List<String> = emptyList()): List<Subtask> = l.map { it.copy(title = it.title.withNames(names + d.persons.map { p -> p.name }), assignee = who(it.assignee), children = subs(it.children, names)) }
 
         fun learn(people: List<String>, project: String?) {
-            val newPeople = people.distinct().filter { it.lowercase() !in me && d.person(it) == null }.map { Person(name = it) }
+            val newPeople = people.distinct().filter { it.lowercase() !in me && d.person(it) == null }.map { Person(name = it.properName()) }
             val newProject = project?.takeIf { p -> d.projects.none { it.equals(p, true) } }
             if (newPeople.isNotEmpty() || newProject != null)
                 d = d.copy(persons = d.persons + newPeople, projects = d.projects + listOfNotNull(newProject))
@@ -369,9 +397,13 @@ object Assistant {
         for (a in plan.actions) {
             when (a.str("type")) {
                 "create_task" -> {
-                    val title = a.str("title")?.trim()?.trimEnd('.') ?: continue
+                    val title = a.str("title")?.trim()?.trimEnd('.')?.cap() ?: continue
+                    // The same open task already exists — small models re-create what they see in the context.
+                    // Same words with a new date or a new promise is a new thing, not a copy.
+                    if (strict && d.tasks.any { o -> !o.done && o.title.trim().trimEnd('.').equals(title, true) &&
+                            (a.date("due") == null || a.date("due") == o.due) && a.str("promised_to") == null && a.str("waiting_for") == null }) continue
                     val entryText = a.str("entry") ?: a.str("comment")
-                    val t = withAutoReminder(
+                    val raw = withAutoReminder(
                         Task(
                             title = title,
                             start = a.date("start"),
@@ -380,7 +412,7 @@ object Assistant {
                             remindAt = a.dateTime("remind_at"),
                             people = a.strList("people"),
                             project = a.project(),
-                            entries = listOfNotNull(entryText?.let { Entry(text = it) }),
+                            entries = listOfNotNull(entryText?.let { Entry(text = it.sentence()) }),
                             waitingFor = a.str("waiting_for"),
                             promisedTo = a.str("promised_to"),
                             source = source.trim().take(240).ifBlank { null },
@@ -389,6 +421,15 @@ object Assistant {
                             subtasks = subtasks(a["subtasks"]),
                         ).normalized()
                     )
+                    // «заказать муку у Тимура» is the user's own errand, not something Тимур owes.
+                    val errand = raw.waitingFor != null && !saysOwe && errandCue.containsMatchIn(low)
+                    val involved = (raw.people + listOfNotNull(raw.waitingFor, raw.promisedTo)).mapNotNull { who(it) }
+                    val t = raw.copy(
+                        title = raw.title.withNames(involved),
+                        time = raw.time?.takeIf { saysTime }, remindAt = raw.remindAt?.takeIf { raw.time == null || saysTime || "remind_at" in a },
+                        people = ((raw.people + listOfNotNull(raw.waitingFor.takeIf { errand })).mapNotNull { who(it) }).distinct(),
+                        waitingFor = if (errand) null else who(raw.waitingFor), promisedTo = who(raw.promisedTo), subtasks = subs(raw.subtasks, involved),
+                    ).onSchedule(source).let { if (it.time == null && raw.time != null) it.copy(remindAt = null) else it }
                     learn(t.people + t.subtasks.mapNotNull { it.assignee } + listOfNotNull(t.waitingFor, t.promisedTo), t.project)
                     d = d.copy(tasks = d.tasks + t)
                     touched += t.id; created++
@@ -396,8 +437,9 @@ object Assistant {
                 "add_subtasks" -> {
                     val id = a.str("task_id") ?: continue
                     val existing = d.tasks.find { it.id == id }?.subtasks?.let { flat(it) }?.map { it.title.lowercase() }?.toSet() ?: emptySet()
-                    val subs = subtasks(a["subtasks"]).filter { it.title.lowercase() !in existing }
+                    val subs = subs(subtasks(a["subtasks"]), d.tasks.first { it.id == id }.people).filter { it.title.lowercase() !in existing }
                     if (subs.isEmpty() || d.tasks.none { it.id == id }) continue
+                    if (strict && !asked(d.tasks.first { it.id == id })) continue
                     val parent = a.str("parent_subtask_id")
                     d = d.copy(tasks = d.tasks.map { t ->
                         if (t.id != id) t
@@ -413,51 +455,74 @@ object Assistant {
                 }
                 "update_task" -> {
                     val id = a.str("task_id") ?: continue
-                    d = d.copy(tasks = d.tasks.map { t ->
-                        if (t.id != id) t else withAutoReminder(
-                            t.copy(
-                                title = if ("title" in a) a.str("title") ?: t.title else t.title,
-                                start = if ("start" in a) a.date("start") else t.start,
-                                due = if ("due" in a) a.date("due") else t.due,
-                                time = if ("time" in a) a.time("time") else t.time,
-                                remindAt = if ("remind_at" in a) a.dateTime("remind_at") else if ("due" in a || "time" in a || "start" in a) null else t.remindAt,
-                                people = if ("people" in a) a.strList("people") else t.people,
-                                project = if ("project" in a) a.project() else t.project,
-                                waitingFor = if ("waiting_for" in a) a.str("waiting_for") else t.waitingFor,
-                                promisedTo = if ("promised_to" in a) a.str("promised_to") else t.promisedTo,
-                                noteId = if ("note_id" in a) validNote(a.str("note_id")) else t.noteId,
-                                repeat = if ("repeat" in a) repeat(a["repeat"]) else t.repeat,
-                            ).normalized()
-                        ).also { learn(it.people + listOfNotNull(it.waitingFor, it.promisedTo), it.project) }
-                    })
-                    if (d.tasks.any { it.id == id }) { touched += id; updated++ }
+                    val old = d.tasks.find { it.id == id } ?: continue
+                    if (strict && !asked(old)) continue
+                    // Only what the words are about: an unasked date, time, repeat or «ждём» keeps its old value.
+                    fun has(k: String, ok: Boolean) = k in a && ok
+                    val newWait = if (has("waiting_for", saysOwe || a.str("waiting_for") == null)) who(a.str("waiting_for")) else old.waitingFor
+                    val newPromise = if (has("promised_to", saysOwe || a.str("promised_to") == null)) who(a.str("promised_to")) else old.promisedTo
+                    val dated = has("due", saysWhen) || has("start", saysWhen)
+                    val timed = has("time", saysTime)
+                    var next = withAutoReminder(
+                        old.copy(
+                            title = if ("title" in a) a.str("title")?.trim()?.trimEnd('.')?.sentence()?.withNames(old.people + listOfNotNull(old.waitingFor, old.promisedTo)) ?: old.title else old.title,
+                            start = if (has("start", saysWhen)) a.date("start") else old.start,
+                            due = if (has("due", saysWhen)) a.date("due") else old.due,
+                            time = if (timed) a.time("time") else old.time,
+                            remindAt = if ("remind_at" in a) a.dateTime("remind_at") else if (dated || timed) null else old.remindAt,
+                            people = if ("people" in a) a.strList("people").mapNotNull { who(it) }.distinct() else old.people,
+                            project = if ("project" in a) a.project() else old.project,
+                            waitingFor = newWait,
+                            promisedTo = newPromise,
+                            noteId = if ("note_id" in a) validNote(a.str("note_id")) else old.noteId,
+                            repeat = if (has("repeat", saysRepeat)) repeat(a["repeat"]) else old.repeat,
+                        ).normalized()
+                    )
+                    // A new promise or expectation is a thing of its own: it never turns a recurring task into a one-off.
+                    val split = old.repeat != null && ((newPromise != null && old.promisedTo == null) || (newWait != null && old.waitingFor == null))
+                    if (split) {
+                        next = next.copy(id = ru.anjeib.margin.data.newId(), repeat = null, entries = emptyList(), subtasks = emptyList(), createdAt = LocalDate.now().toString(), source = source.trim().take(240).ifBlank { null })
+                        d = d.copy(tasks = d.tasks + next)
+                        created++
+                    } else {
+                        if (dated && next.repeat != null) next = next.onSchedule(source)
+                        d = d.copy(tasks = d.tasks.map { if (it.id == id) next else it })
+                        updated++
+                    }
+                    learn(next.people + listOfNotNull(next.waitingFor, next.promisedTo), next.project)
+                    touched += next.id
                 }
                 "add_entry" -> {
                     val id = a.str("task_id") ?: continue
                     val text = a.str("text") ?: continue
-                    if (d.tasks.none { it.id == id }) continue
-                    d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(entries = it.entries + Entry(text = text)) else it })
+                    val target = d.tasks.find { it.id == id } ?: continue
+                    if (strict && !asked(target)) continue
+                    d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(entries = it.entries + Entry(text = text.sentence())) else it })
                     touched += id; entries++
                 }
                 "complete_task" -> {
                     val id = a.str("task_id") ?: continue
-                    val next = d.tasks.find { it.id == id && !it.done }?.nextOccurrence()
+                    val target = d.tasks.find { it.id == id && !it.done } ?: continue
+                    if (strict && !asked(target)) continue
+                    val next = target.nextOccurrence()
                     d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, doneAt = LocalDate.now().toString()) else it } + listOfNotNull(next))
-                    touched += id; updated++
+                    touched += id; completed++
                 }
                 "complete_subtask" -> {
                     val id = a.str("task_id") ?: continue
                     val sid = a.str("subtask_id") ?: continue
+                    if (strict && d.tasks.find { it.id == id }?.let { asked(it) } != true) continue
                     d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(subtasks = it.subtasks.mapTree(sid) { s -> s.withDone(true) }) else it })
                     touched += id; updated++
                 }
                 "delete_task" -> {
                     val id = a.str("task_id") ?: continue
+                    if (strict && d.tasks.find { it.id == id }?.let { asked(it) } != true) continue
                     d = d.copy(tasks = d.tasks.filterNot { it.id == id })
                     updated++
                 }
                 "create_note", "append_note" -> {
-                    val text = a.str("text") ?: a.str("body") ?: ""
+                    val text = (a.str("text") ?: a.str("body") ?: "").sentence()
                     // The user chose «в отдельную заметку»: no appending, no project-ideas redirect.
                     val forceNew = a.str("force_new") == "true"
                     // Only append where the note is really about the same thing; small models grab a random listed note.
@@ -488,7 +553,7 @@ object Assistant {
                             touchedNotes += home.id; notes++
                             continue
                         }
-                        val title = (if (lazyTitle) project?.let { "$it · $ideas" } else given) ?: given ?: text.lineSequence().firstOrNull()?.take(60) ?: continue
+                        val title = ((if (lazyTitle) project?.let { "$it · $ideas" } else given) ?: given ?: text.lineSequence().firstOrNull()?.take(60) ?: continue).sentence()
                         val body = if (title == text) "" else text
                         val n = Note(title = title, project = project, entries = listOfNotNull(body.takeIf { it.isNotBlank() }?.let { Entry(text = it) }))
                         learn(emptyList(), n.project)
@@ -501,14 +566,14 @@ object Assistant {
                     val id = validNote(a.str("note_id")) ?: continue
                     d = d.copy(notes = d.notes.map { n ->
                         if (n.id != id) n else n.copy(
-                            title = a.str("title") ?: n.title,
+                            title = a.str("title")?.sentence() ?: n.title,
                             project = if ("project" in a) a.project() else n.project,
                         )
                     })
                     touchedNotes += id; notes++
                 }
                 "person" -> {
-                    val name = a.str("name")?.trim() ?: continue
+                    val name = a.str("name")?.properName() ?: continue
                     if (name.lowercase() in me) continue
                     val existing = d.person(name)
                     val p = (existing ?: Person(name = name)).let {
@@ -529,12 +594,43 @@ object Assistant {
             created > 1 -> s.tasksCreated(created)
             created == 1 -> s.taskCreated
             subAdded > 0 -> s.subtasksAdded(subAdded)
+            completed > 0 && updated == 0 -> s.markedDone
             updated > 0 -> s.taskUpdated
             entries > 0 -> s.entryAdded
             notes > 0 -> s.notesCreated
             else -> null
         }
         return Applied(d, touched.toList().filter { id -> d.tasks.any { it.id == id } }, touchedNotes.toList(), caption, created)
+    }
+
+    // What the user's words are about — so the model can't quietly change what wasn't mentioned.
+    private val whenCue = Regex("сегодн|завтра|вчера|понедельн|вторник|сред[аеуы]|четверг|пятниц|суббот|воскресен|\\b(пн|вт|ср|чт|пт|сб|вс)\\b|числ|недел|месяц|январ|феврал|март|апрел|ма[йя]\\b|июн|июл|август|сентябр|октябр|ноябр|декабр|через|после|\\bдо\\b|\\bк\\s|перенес|отлож|сдвин|срок|дат|\\d{1,2}[./]\\d{1,2}|\\d{1,2}\\s*-?\\s*(го|е|ого)\\b|\\d{1,2}\\s+(янв|фев|мар|апр|мая|июн|июл|авг|сен|окт|ноя|дек)|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|week|month|next|until|\\bby\\b|move|postpone|date|deadline")
+    private val timeCue = Regex("\\d{1,2}[:.]\\d{2}|\\bв\\s?\\d{1,2}\\b|утр|вечер|днём|днем|обед|ночь|ночи|полдень|полноч|час|время|\\bam\\b|\\bpm\\b|morning|evening|noon|night|o'clock|time|\\bat\\s?\\d")
+    private val repeatCue = Regex("кажд|ежедн|еженед|ежемес|ежегод|по будн|по выходн|по (понедельн|вторн|сред|четверг|пятниц|суббот|воскресен)|раз в|повтор|every|daily|weekly|monthly|yearly|repeat")
+    private val oweCue = Regex("жд[уёеа]|ждать|пришл|пришлёт|пришлет|должен|должна|должны|обещал|вернёт|вернет|ответит|сдаст|сдаёт|сдает|скинет|подготовит|сделает|отправит|привез|оплатит|wait|will send|owes?\\b|promis|expect")
+    private val errandCue = Regex("заказ|куп|взять|забрать|спрос|узна|уточн|запрос|order|buy|ask|pick up")
+    private val bulkCue = Regex("\\bвсе\\b|\\bвсё\\b|\\bвсех\\b|всю|остальн|просроч|everything|\\ball\\b|overdue")
+    private val ordinals = mapOf("перв" to 1, "втор" to 2, "трет" to 3, "четв" to 4, "пят" to 5, "шест" to 6, "седьм" to 7, "восьм" to 8, "девят" to 9, "десят" to 10, "пятнадцат" to 15, "двадцат" to 20)
+
+    /** A repeating task always stands on its nearest coming date (models put «первого числа» into the past). */
+    private fun Task.onSchedule(source: String, today: LocalDate = LocalDate.now()): Task {
+        val r = repeat ?: return this
+        val due0 = dueDate
+        val first: LocalDate? = when (r.freq) {
+            "daily" -> if (due0 == null || due0.isBefore(today)) today else null
+            "weekly" -> if (r.days.isEmpty()) { if (due0 == null) today else if (due0.isBefore(today)) generateSequence(due0) { r.next(it) }.first { !it.isBefore(today) } else null }
+                else if (due0 == null || due0.isBefore(today) || due0.dayOfWeek.value !in r.days) generateSequence(today) { it.plusDays(1) }.first { it.dayOfWeek.value in r.days } else null
+            "monthly", "yearly" -> {
+                // «первого числа», «10-го числа»: the day of month the user named.
+                val m = Regex("(\\d{1,2})\\s*-?\\s*(го|е|ого)?\\s*числ|(\\p{L}+?)(ого|ье)\\s+числ").find(source.lowercase())
+                val day = m?.groupValues?.get(1)?.toIntOrNull() ?: m?.groupValues?.get(3)?.let { w -> ordinals.entries.firstOrNull { w.startsWith(it.key) }?.value }
+                val base = due0 ?: day?.let { today.withDayOfMonth(it.coerceIn(1, today.lengthOfMonth())) } ?: today
+                generateSequence(base) { r.next(it) }.first { !it.isBefore(today) }.takeIf { it != due0 }
+            }
+            else -> null
+        } ?: return this
+        val shift = due0?.let { java.time.temporal.ChronoUnit.DAYS.between(it, first) }
+        return copy(due = first.toString(), start = if (shift != null) startDate?.plusDays(shift)?.toString() else null, remindAt = time?.let { "${first}T$it" })
     }
 
     private fun subtasks(el: JsonElement?): List<Subtask> =
@@ -557,7 +653,7 @@ object Assistant {
         return Repeat(freq, interval, if (freq == "weekly") days else emptyList())
     }
 
-    private fun String.cap() = replaceFirstChar { it.uppercase() }
+    private fun String.cap() = sentence()
     private fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it) + flat(it.children) }
 
     /** Keeps start <= due and drops a start equal to due. */

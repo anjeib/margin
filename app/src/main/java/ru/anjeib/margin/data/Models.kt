@@ -149,7 +149,7 @@ data class ChatMsg(
 )
 
 @Serializable
-data class ProjectSummary(val text: String, val at: String)
+data class ProjectSummary(val text: String, val at: String, val fp: String? = null)
 
 @Serializable
 data class Brief(
@@ -203,6 +203,20 @@ data class AppData(
             d = d.copy(notes = d.notes.map { n ->
                 if (n.body.isBlank()) n else n.copy(body = "", entries = listOf(Entry(at = n.updatedAt.take(16), text = n.body.trim())) + n.entries)
             })
+        // Records written before 3.10 could start with a small letter («купить хлеб», «тимур»).
+        fun subs(l: List<Subtask>, names: List<String>): List<Subtask> = l.map { it.copy(title = it.title.sentence().withNames(names), children = subs(it.children, names)) }
+        val names = d.persons.map { it.name.properName() }
+        val fixed = d.copy(
+            persons = d.persons.map { it.copy(name = it.name.properName()) },
+            tasks = d.tasks.map { t ->
+                val who = t.people + listOfNotNull(t.waitingFor, t.promisedTo)
+                t.copy(title = t.title.sentence().withNames(who + names), people = t.people.map { if (it.length > 1) it.properName() else it },
+                    waitingFor = t.waitingFor?.properName(), promisedTo = t.promisedTo?.properName(), subtasks = subs(t.subtasks, who + names),
+                    entries = t.entries.map { e -> e.copy(text = e.text.sentence()) })
+            },
+            notes = d.notes.map { n -> n.copy(title = n.title.sentence(), entries = n.entries.map { e -> e.copy(text = e.text.sentence()) }) },
+        )
+        if (fixed != d) d = fixed
         return d
     }
 }

@@ -141,11 +141,14 @@ fun Pill(
     ) { Text(text, style = Type.small.copy(color = fg, fontSize = 14.sp)) }
 }
 
+/** Projects are stored as typed by the model (lowercase); Russian names read better with a capital: «Садовая», «Дента+». */
+fun projectLabel(p: String): String = if (p.firstOrNull()?.let { it in 'а'..'я' || it == 'ё' } == true) p.replaceFirstChar { it.uppercase() } else p
+
 @Composable
 fun Tag(text: String) {
     val c = M.c
     Text(
-        "#$text",
+        "#" + projectLabel(text),
         style = Type.small.copy(color = c.accent, fontSize = 12.5.sp),
         modifier = Modifier
             .clip(RoundedCornerShape(50))
@@ -227,7 +230,7 @@ fun TaskMeta(t: Task, showProject: Boolean = true, showIdea: Boolean = false) {
             Spacer(Modifier.width(5.dp))
             Text(whenText, style = Type.small.copy(color = if (overdue) c.accent else c.graphite))
         }
-        t.promisedTo?.let { Text("→ " + it, style = Type.small.copy(color = c.graphite)) }
+        t.promisedTo?.let { Text(s.promised(it), style = Type.small.copy(color = c.graphite)) }
         if (showIdea && t.noteId != null) Text("✎ " + s.ideaMark, style = Type.small.copy(color = c.graphite))
         t.waitingFor?.let {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -319,7 +322,7 @@ fun SubtaskRow(s: Subtask, depth: Int, onToggle: () -> Unit, onLong: (() -> Unit
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (onLong != null) Modifier.combinedClickable(onClick = onToggle, onLongClick = onLong) else Modifier)
+            .then(if (onLong != null) Modifier.combinedClickable(onClick = onLong, onLongClick = onLong) else Modifier)
             .padding(start = (8 + depth * 22).dp),
     ) {
         CheckCircle(s.done, size = 18.dp, onToggle = onToggle)

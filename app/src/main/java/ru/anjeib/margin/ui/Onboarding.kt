@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -39,9 +41,14 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
     val s = M.s
     var page by rememberSaveable { mutableIntStateOf(0) }
     val pages = listOf(s.ob1Title to s.ob1Text, s.ob2Title to s.ob2Text, s.ob3Title to s.ob3Text, s.ob4Title to s.ob4Text)
-    val notif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    fun has(p: String) = androidx.core.content.ContextCompat.checkSelfPermission(ctx, p) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    // A pressed button shows what happened — otherwise nobody knows whether it worked.
+    var notifOk by remember { mutableStateOf(Build.VERSION.SDK_INT >= 33 && has(Manifest.permission.POST_NOTIFICATIONS)) }
+    var calOk by remember { mutableStateOf(has(Manifest.permission.READ_CALENDAR)) }
+    val notif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> notifOk = ok }
     val cal = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        vm.updateSettings { it.copy(calendar = ok) }; vm.refreshCalendar()
+        calOk = ok; vm.updateSettings { it.copy(calendar = ok) }; vm.refreshCalendar()
     }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().padding(horizontal = 28.dp)) {
@@ -59,8 +66,10 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                 if (p == pages.lastIndex) {
                     Spacer(Modifier.height(24.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (Build.VERSION.SDK_INT >= 33) Pill(s.notifications, accent = true, onClick = { notif.launch(Manifest.permission.POST_NOTIFICATIONS) })
-                        Pill(s.calendar, accent = true, onClick = { cal.launch(Manifest.permission.READ_CALENDAR) })
+                        if (Build.VERSION.SDK_INT >= 33) Pill(if (notifOk) "✓ " + s.notifications + " · " + s.granted else s.notifications, accent = !notifOk,
+                            onClick = if (notifOk) null else ({ notif.launch(Manifest.permission.POST_NOTIFICATIONS) }))
+                        Pill(if (calOk) "✓ " + s.calendar + " · " + s.granted else s.calendar, accent = !calOk,
+                            onClick = if (calOk) null else ({ cal.launch(Manifest.permission.READ_CALENDAR) }))
                     }
                 }
             }

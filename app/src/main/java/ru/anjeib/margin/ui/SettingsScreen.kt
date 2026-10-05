@@ -62,7 +62,7 @@ import java.time.YearMonth
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun SettingsScreen(settings: Settings, vm: MainVm, onExport: () -> Unit, contentPadding: PaddingValues) {
+fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues) {
     val c = M.c
     val s = M.s
     val keyStatus by vm.keyStatus.collectAsState()
@@ -74,14 +74,9 @@ fun SettingsScreen(settings: Settings, vm: MainVm, onExport: () -> Unit, content
     LaunchedEffect(Unit) { if (settings.apiKey.isNotBlank()) vm.checkKey() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val whisper by ru.anjeib.margin.voice.LocalWhisper.state.collectAsState()
-    var restoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val calPerm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
         vm.updateSettings { it.copy(calendar = ok) }; vm.refreshCalendar()
     }
-    val zip = "application/zip"
-    val pickTarget = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument(zip)) { u -> u?.let { vm.setBackupTarget(it) } }
-    val exportTo = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument(zip)) { u -> u?.let { vm.exportTo(it) } }
-    val importFrom = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { u -> restoreUri = u }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(contentPadding)) {
         Text(s.settings, style = Type.display.copy(color = c.ink), modifier = Modifier.padding(top = 18.dp, bottom = 18.dp, start = 4.dp))
@@ -162,19 +157,11 @@ fun SettingsScreen(settings: Settings, vm: MainVm, onExport: () -> Unit, content
         }
 
         Group(s.backupSection) {
-            if (settings.backupUri.isBlank()) ValueRow(s.autoBackup, s.autoBackupHint, s.chooseBackup) { pickTarget.launch("margin-backup.zip") }
-            else {
-                ValueRow(s.autoBackup, settings.lastBackup.takeIf { it.isNotBlank() }?.let { s.lastBackupAt(it.replace('T', ' ').take(16)) }, s.backupNow) { vm.backupNow() }
-                Divider()
-                ValueRow(s.stopBackup, null, "", chevron = false) { vm.stopAutoBackup() }
+            // First the main switch and what it means, then the optional file copy.
+            ToggleRow(s.googleBackup, if (settings.googleBackup) s.googleBackupHint else s.googleBackupOff, settings.googleBackup) { on ->
+                vm.updateSettings { it.copy(googleBackup = on) }
+                runCatching { android.app.backup.BackupManager(ctx).dataChanged() }
             }
-            Divider()
-            ValueRow(s.exportArchive, null, "") { exportTo.launch("margin-" + java.time.LocalDate.now() + ".zip") }
-            Divider()
-            ValueRow(s.importArchive, null, "") { importFrom.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }
-            Divider()
-            ValueRow(s.exportMd, null, "", onClick = onExport)
-            Text(s.googleBackupHint, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(16.dp))
         }
         if (settings.devMode) {
         Group(s.devSection) {
@@ -243,16 +230,6 @@ fun SettingsScreen(settings: Settings, vm: MainVm, onExport: () -> Unit, content
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         Spacer(Modifier.height(24.dp))
-    }
-
-    restoreUri?.let { u ->
-        AlertDialog(
-            onDismissRequest = { restoreUri = null },
-            containerColor = c.card,
-            title = { Text(s.restoreQ, style = Type.cardTitle.copy(color = c.ink)) },
-            confirmButton = { TextButton({ vm.restoreFrom(u); restoreUri = null }) { Text(s.restore, color = c.accent) } },
-            dismissButton = { TextButton({ restoreUri = null }) { Text(s.cancel, color = c.graphite) } },
-        )
     }
 
     keyDraft?.let { draft ->

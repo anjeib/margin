@@ -94,7 +94,7 @@ fun NotesList(data: AppData, onOpen: (String) -> Unit, contentPadding: PaddingVa
         if (projects.isNotEmpty()) item("filters") {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill(s.allFilter, filled = filter == null, onClick = { filter = null })
-                projects.forEach { p -> Pill(p, filled = filter == p, onClick = { filter = if (filter == p) null else p }) }
+                projects.forEach { p -> Pill(projectLabel(p), filled = filter == p, onClick = { filter = if (filter == p) null else p }) }
             }
         }
         if (notes.isEmpty()) item("empty") { Empty(s.emptyNotes, s.notesHint) }

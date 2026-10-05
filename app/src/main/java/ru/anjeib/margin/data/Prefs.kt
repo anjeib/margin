@@ -27,14 +27,14 @@ data class Settings(
     val voiceModel: String = DEFAULT_VOICE,
     /** Send dictated text right away instead of leaving it in the composer. */
     val voiceSendNow: Boolean = true,
+    /** Android Auto Backup to the Google account (see MarginBackupAgent). */
+    val googleBackup: Boolean = true,
     /** Use the on-device Whisper model even when online. */
     val whisperAlways: Boolean = false,
     /** Read the phone calendar so plans see meetings. */
     val calendar: Boolean = false,
     val onboarded: Boolean = false,
     /** A document (e.g. on Google Drive) the app keeps overwriting with a full backup. */
-    val backupUri: String = "",
-    val lastBackup: String = "",
     /** Brief collapsed / hidden for this date (yyyy-MM-dd). */
     val briefCollapsed: String = "",
     val briefHidden: String = "",
@@ -79,11 +79,10 @@ class Prefs private constructor(context: Context) {
         voiceAi = sp.getBoolean("voiceAi", true),
         voiceModel = sp.getString("voiceModel", null) ?: Settings.DEFAULT_VOICE,
         voiceSendNow = sp.getBoolean("voiceAutoSend", true),
+        googleBackup = sp.getBoolean("googleBackup", true),
         whisperAlways = sp.getBoolean("whisperAlways", false),
         calendar = sp.getBoolean("calendar", false),
         onboarded = sp.getBoolean("onboarded", false),
-        backupUri = sp.getString("backupUri", "") ?: "",
-        lastBackup = sp.getString("lastBackup", "") ?: "",
         briefCollapsed = sp.getString("briefCollapsed", "") ?: "",
         briefHidden = sp.getString("briefHidden", "") ?: "",
         spentMonth = sp.getString("spentMonth", "") ?: "",
@@ -114,11 +113,10 @@ class Prefs private constructor(context: Context) {
             putBoolean("voiceAi", s.voiceAi)
             putString("voiceModel", s.voiceModel)
             putBoolean("voiceAutoSend", s.voiceSendNow)
+            putBoolean("googleBackup", s.googleBackup)
             putBoolean("whisperAlways", s.whisperAlways)
             putBoolean("calendar", s.calendar)
             putBoolean("onboarded", s.onboarded)
-            putString("backupUri", s.backupUri)
-            putString("lastBackup", s.lastBackup)
             putString("briefCollapsed", s.briefCollapsed)
             putString("briefHidden", s.briefHidden)
             putString("spentMonth", s.spentMonth)

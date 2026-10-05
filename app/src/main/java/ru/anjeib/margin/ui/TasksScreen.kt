@@ -182,7 +182,7 @@ fun TaskList(
             items(list, key = { it.id }) { t ->
                 SwipeTask(t, onDone = { vm.completeWithUndo(t.id) }, onLater = { vm.postpone(t.id, 1) }, modifier = Modifier.animateItem().landing(t.id in landed, 18)) {
                     TaskCard(
-                        t, onToggle = { vm.toggleTask(t.id) }, onOpen = { onOpen(t.id) },
+                        t, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) },
                         onToggleSub = { vm.toggleSubtask(t.id, it) },
                         timeColumn = if (timeColumn) t.time ?: "" else null,
                         showProject = showProject, showIdea = showIdea,
@@ -194,7 +194,7 @@ fun TaskList(
         fun LazyListScope.rows(list: List<Task>, key: String, showProject: Boolean = true) {
             items(list, key = { key + it.id }) { t ->
                 SwipeTask(t, onDone = { vm.completeWithUndo(t.id) }, onLater = { vm.postpone(t.id, 1) }, modifier = Modifier.animateItem().landing(t.id in landed, 0), radius = 0) {
-                    TaskRow(t, today, showProject, onToggle = { vm.toggleTask(t.id) }, onOpen = { onOpen(t.id) })
+                    TaskRow(t, today, showProject, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) })
                 }
             }
         }
@@ -254,6 +254,18 @@ fun TaskList(
                 if (doneToday.isNotEmpty()) {
                     section(s.done, "s-done-today", doneToday.size, collapsible = true)
                     if (isOpen("s-done-today")) rows(doneToday, "dt")
+                }
+                // Undated tasks live in «Все» — one quiet line keeps them from being forgotten.
+                val undated = data.tasks.count { !it.done && it.dueDate == null && it.startDate == null && it.waitingFor == null }
+                if (undated > 0) item("undated") {
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(14.dp)).clickable { onView(Views.ALL) }.padding(horizontal = 10.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("○", style = Type.body.copy(color = c.graphite))
+                        Spacer(Modifier.width(10.dp))
+                        Text(s.undatedCount(undated) + " →", style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+                    }
                 }
                 // Notes never mix into task lists — one quiet line says what was written today.
                 val notesToday = data.notes.filter { n -> n.updatedAt.startsWith(today.toString()) && (n.entries.isNotEmpty() || n.title.isNotBlank()) }
@@ -319,7 +331,7 @@ fun TaskList(
                     (groups.keys.filterNotNull().sorted() + listOf(null)).forEach { p ->
                         val l = groups[p] ?: return@forEach
                         val k = "p-" + (p ?: "-")
-                        section(p?.let { "#$it" } ?: s.noProject, k, l.size, collapsible = true)
+                        section(p?.let { "#" + projectLabel(it) } ?: s.noProject, k, l.size, collapsible = true)
                         if (isOpen(k)) rows(l.sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) })), k, showProject = false)
                     }
                 }
@@ -352,11 +364,12 @@ fun TaskList(
                 val done = data.tasks.filter { it.done && it.project == p }
                 val chains = ideaChains(p, data)
                 val ideas = chains.filter { it.tasks.isEmpty() }
-                header(p, s.tasksCount(openTasks.size))
+                header(projectLabel(p), s.tasksCount(openTasks.size))
                 // «Сводка недели»: written once a day on first visit, ↻ to rewrite.
                 item("p-summary") {
                     val sum = data.projectSummaries[p]
-                    LaunchedEffect(p) { if (sum?.at?.startsWith(today.toString()) != true && (openTasks.isNotEmpty() || chains.isNotEmpty())) vm.refreshProject(p) }
+                    val fp = vm.projectFingerprint(p, data)
+                    LaunchedEffect(p, fp) { if ((sum?.at?.startsWith(today.toString()) != true || (sum.fp != null && sum.fp != fp)) && (openTasks.isNotEmpty() || chains.isNotEmpty())) vm.refreshProject(p) }
                     Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(RoundedCornerShape(18.dp)).background(c.accentSoft)
                         .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -472,7 +485,7 @@ fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Uni
             Text(
                 // «Договор от Саши» already says who — don't add «— Саша».
                 t.title + (t.waitingFor?.takeIf { w -> !t.done && !t.title.contains(w.take(3), true) }?.let { " — $it" } ?: "") +
-                    (t.promisedTo?.takeIf { p -> !t.done && !t.title.contains(p.take(3), true) }?.let { " → $it" } ?: ""),
+                    (t.promisedTo?.takeIf { p -> !t.done && !t.title.contains(p.take(3), true) }?.let { " · " + M.s.promised(it).replaceFirstChar { c -> c.lowercase() } } ?: ""),
                 style = Type.body.copy(fontSize = 15.5.sp, color = if (t.done) c.graphite else c.ink,
                     textDecoration = if (t.done) TextDecoration.LineThrough else null),
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(vertical = 11.dp),
@@ -541,8 +554,11 @@ private fun BriefCard(data: AppData, settings: Settings, loading: Boolean, quiet
     Column(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(18.dp)).background(c.accentSoft)) {
         // Nothing left for today → say so without asking the AI.
         val openToday = data.tasks.any { isToday(it) || isRunning(it) }
-        val stale = brief?.fingerprint != null && brief.fingerprint != vm.briefFingerprint(data)
-        if (folded || (brief != null && !openToday)) {
+        val evening = (brief?.at ?: LocalTime.now().toString().take(5)) >= "18:00"
+        val live = openToday || evening
+        // Rebuilt by itself when the day changes; only after the daily limit does it say so.
+        val stale = brief?.fingerprint != null && brief.fingerprint != vm.briefFingerprint(data) && brief.revisions >= 4
+        if (folded || (brief != null && !live)) {
             Row(
                 Modifier.fillMaxWidth().clickable { userOpen = true }.padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -551,16 +567,16 @@ private fun BriefCard(data: AppData, settings: Settings, loading: Boolean, quiet
                 val head = brief?.headline ?: brief?.text?.substringBefore('.')
                 Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
                     Text(
-                        if (!openToday) s.allDoneToday
-                        else listOfNotNull(head?.let { s.mainThing + ": " + it }, brief?.focus?.let { s.windowShort + " " + it }).joinToString(" · "),
+                        if (!live) (if (data.tasks.any { it.done && it.doneAt == today }) s.allDoneToday else s.nothingToday)
+                        else s.mainThing + ": " + (head ?: ""),
                         style = Type.small.copy(color = c.ink, fontSize = 14.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    if (openToday) Text(
+                    if (live) Text(
                         listOfNotNull(brief?.at?.let { s.briefAt(it) }, if (stale) s.briefStale else null).joinToString(" · "),
                         style = Type.small.copy(color = if (stale) c.accent else c.graphite, fontSize = 11.5.sp),
                     )
                 }
-                if (openToday) Box(Modifier.size(40.dp).clip(CircleShape).clickable(enabled = !loading) { vm.makeBrief(force = true) }, contentAlignment = Alignment.Center) {
+                if (live) Box(Modifier.size(40.dp).clip(CircleShape).clickable(enabled = !loading) { vm.makeBrief(force = true) }, contentAlignment = Alignment.Center) {
                     if (loading) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
                     else Icon(Icons.Outlined.Refresh, s.refresh, tint = if (stale) c.accent else c.graphite, modifier = Modifier.size(18.dp))
                 }
@@ -570,7 +586,7 @@ private fun BriefCard(data: AppData, settings: Settings, loading: Boolean, quiet
         Column(Modifier.padding(start = 18.dp, end = 6.dp, top = 8.dp, bottom = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spark(); Spacer(Modifier.width(8.dp))
-                Text(s.morningBrief + (brief?.at?.let { " · " + s.briefAt(it) } ?: ""), style = Type.small.copy(color = c.accent, fontSize = 14.sp), modifier = Modifier.weight(1f))
+                Text((if (evening) s.eveningBrief else s.morningBrief) + (brief?.at?.let { " · " + s.briefAt(it) } ?: ""), style = Type.small.copy(color = c.accent, fontSize = 14.sp), modifier = Modifier.weight(1f))
                 Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !loading) { vm.makeBrief(force = true) }, contentAlignment = Alignment.Center) {
                     if (loading) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
                     else Icon(Icons.Outlined.Refresh, s.refresh, tint = c.graphite, modifier = Modifier.size(18.dp))

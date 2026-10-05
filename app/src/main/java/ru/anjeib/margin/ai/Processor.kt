@@ -84,11 +84,14 @@ object Processor {
                         smart: Boolean = false, complex: Boolean = false, images: List<String> = emptyList()): Pair<AiPlan, Double> {
         var rub = 0.0
         repeat(2) { attempt ->
-            val r = Llm.complete(s, system, messages, smart = smart, complex = complex, images = images)
+            val r = try { Llm.complete(s, system, messages, smart = smart, complex = complex, images = images) } catch (e: AiException) {
+                // An empty reply happens now and then (DeepSeek mostly): ask once more, then say it plainly.
+                if (e.message == EMPTY) { if (attempt == 0) return@repeat else throw AiException(L.s.errEmpty) } else throw e
+            }
             rub += r.rub
             if (!Assistant.isBroken(r.content) || attempt == 1) return Assistant.parsePlan(r.content) to rub
         }
-        error("unreachable")
+        throw AiException(L.s.errEmpty)
     }
 
     fun enqueue(ctx: Context, q: Queued) {
@@ -123,7 +126,7 @@ object Processor {
                 listOf("user" to Assistant.userMessage(q.text)), complex = Assistant.isComplex(q.text, scope), images = images)
             prefs.addSpend(cost)
             val current = store.data.value
-            val applied = Assistant.apply(current, plan.copy(question = null), q.text)
+            val applied = Assistant.apply(current, plan.copy(question = null), q.text, strict = true)
             val next = attachTo(applied, scope, q.files, current)
             store.replace(next.copy(queue = next.queue.filterNot { it.id == q.id }))
             done++

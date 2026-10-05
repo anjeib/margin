@@ -51,6 +51,9 @@ import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.ChatMsg
 import ru.anjeib.margin.data.progress
 import ru.anjeib.margin.data.whenLabel
+import ru.anjeib.margin.data.label
+import ru.anjeib.margin.data.nextOccurrence
+import ru.anjeib.margin.data.shortLabel
 
 private val bubbleShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 6.dp)
 
@@ -160,16 +163,29 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
     val c = M.c
     val s = M.s
     val after = p.preview.data
-    var created = 0; var changed = 0; var notes = 0; var people = 0; var appended = false
+    var created = 0; var changed = 0; var done = 0; var notes = 0; var people = 0; var appended = false
     val lines = buildList {
         p.preview.touchedTasks.forEach { id ->
             val t = after.tasks.find { it.id == id } ?: return@forEach
-            if (current.tasks.none { it.id == id }) created++ else changed++
+            val old = current.tasks.find { it.id == id }
             val (_, n) = t.subtasks.progress()
-            add(t.title to listOfNotNull(
-                t.whenLabel(), t.waitingFor?.let { s.waitingFor(it) },
-                t.people.filterNot { it.equals(t.waitingFor, true) }.takeIf { it.isNotEmpty() }?.joinToString(", "), if (n > 0) s.stepsCount(n) else null,
-            ).joinToString(" · "))
+            // A change says what it changed: «ср 7 окт 09:00 · было вт 6 окт», a done task says done (and when it comes back).
+            val meta = when {
+                old != null && t.done && !old.done -> { done++; listOfNotNull(s.markedDone,
+                    t.nextOccurrence()?.let { nx -> (nx.dueDate ?: nx.startDate)?.shortLabel()?.lowercase()?.let { s.nextOn(it) } }) }
+                old != null -> { changed++; listOfNotNull(
+                    t.whenLabel()?.let { w -> if (old.whenLabel() != w) w + (old.whenLabel()?.let { " · " + s.was(it.lowercase()) } ?: "") else null },
+                    t.waitingFor?.takeIf { it != old.waitingFor }?.let { s.waitingFor(it) },
+                    t.promisedTo?.takeIf { it != old.promisedTo }?.let { s.promised(it) },
+                    t.repeat?.takeIf { it != old.repeat }?.label(),
+                    (t.subtasks.size - old.subtasks.size).takeIf { it > 0 }?.let { s.stepsCount(it) },
+                ).ifEmpty { listOfNotNull(t.whenLabel()) } }
+                else -> { created++; listOfNotNull(
+                    t.whenLabel(), t.repeat?.label(), t.waitingFor?.let { s.waitingFor(it) }, t.promisedTo?.let { s.promised(it) },
+                    t.people.filterNot { it.equals(t.waitingFor, true) }.takeIf { it.isNotEmpty() }?.joinToString(", "), if (n > 0) s.stepsCount(n) else null,
+                ) }
+            }
+            add(t.title to meta.joinToString(" · "))
         }
         after.notes.forEach { n ->
             val old = current.notes.find { it.id == n.id }
@@ -191,6 +207,7 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
     val kind = listOfNotNull(
         when { created == 1 -> s.kindTask; created > 1 -> s.kindTasks(created); else -> null },
         if (changed > 0 && created == 0) s.kindChanged else null,
+        if (done > 0 && created == 0 && changed == 0) s.markedDone.lowercase() else null,
         if (notes > 0) s.kindNote else null,
         if (people > 0) s.kindContact else null,
     ).joinToString(" · ")

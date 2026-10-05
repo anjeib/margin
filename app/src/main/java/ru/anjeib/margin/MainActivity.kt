@@ -41,7 +41,8 @@ class MainActivity : ComponentActivity() {
         readShare(intent)
         // Permissions are asked in onboarding (first run) — no system dialog on top of it.
         Reminders.scheduleDaily(this)
-        ru.anjeib.margin.data.Backup.schedule(this)
+        // The daily file copy is gone (3.10): drop its job where earlier versions scheduled it.
+        androidx.work.WorkManager.getInstance(this).cancelUniqueWork("backup")
 
         setContent {
             val settings by vm.settings.collectAsState()
@@ -60,7 +61,7 @@ class MainActivity : ComponentActivity() {
                         isAppearanceLightNavigationBars = !dark
                     }
                 }
-                App(vm, shared.value, onSharedConsumed = { shared.value = null }, onExport = ::export)
+                App(vm, shared.value, onSharedConsumed = { shared.value = null })
             }
         }
     }
@@ -72,45 +73,5 @@ class MainActivity : ComponentActivity() {
 
     private fun readShare(i: Intent?) {
         if (i?.action == Intent.ACTION_SEND) shared.value = i.getStringExtra(Intent.EXTRA_TEXT)
-    }
-
-    private fun export() {
-        val md = toMarkdown(Store.get(this).data.value)
-        val dir = File(cacheDir, "export").apply { mkdirs() }
-        val f = File(dir, "margin.md").apply { writeText(md) }
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", f)
-        startActivity(Intent.createChooser(
-            Intent(Intent.ACTION_SEND).setType("text/markdown").putExtra(Intent.EXTRA_STREAM, uri)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Margin",
-        ))
-    }
-
-    private fun toMarkdown(d: AppData): String = buildString {
-        val s = L.s
-        appendLine("# Margin")
-        appendLine()
-        appendLine("## ${s.tasks}")
-        fun subs(list: List<Subtask>, depth: Int) {
-            list.forEach { st ->
-                appendLine("  ".repeat(depth + 1) + "- [${if (st.done) "x" else " "}] ${st.title}" + (st.assignee?.let { " — $it" } ?: ""))
-                subs(st.children, depth + 1)
-            }
-        }
-        d.tasks.sortedBy { it.done }.forEach { t ->
-            val meta = listOfNotNull(t.whenLabel(), t.project?.let { "#$it" }, t.people.takeIf { it.isNotEmpty() }?.joinToString(),
-                t.waitingFor?.let { s.waitingFor(it) }).joinToString(" · ")
-            appendLine("- [${if (t.done) "x" else " "}] ${t.title}" + if (meta.isNotEmpty()) " ($meta)" else "")
-            subs(t.subtasks, 0)
-            t.entries.filter { it.text.isNotBlank() }.forEach { appendLine("  > ${it.at.take(10)} — ${it.text}") }
-        }
-        appendLine()
-        appendLine("## ${s.notes}")
-        d.notes.forEach { n ->
-            appendLine()
-            appendLine("### ${n.title.ifBlank { s.untitled }}")
-            n.project?.let { appendLine("#$it") }
-            n.aiSummary?.let { appendLine("_${it}_"); appendLine() }
-            n.entries.forEach { e -> if (e.text.isNotBlank()) { appendLine("**${e.at.take(10)}** ${e.text}"); appendLine() } }
-        }
     }
 }

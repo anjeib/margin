@@ -76,7 +76,7 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
             if (words.isNotEmpty() && tasks.isEmpty() && notes.isEmpty() && people.isEmpty()) item { Empty(s.nothing, "") }
             if (tasks.isNotEmpty()) {
                 item { SectionLabel(s.tasks, Modifier.padding(start = 6.dp, top = 16.dp, bottom = 4.dp)) }
-                items(tasks, key = { "t" + it.id }) { t -> TaskRow(t, LocalDate.now(), true, onToggle = { vm.toggleTask(t.id) }, onOpen = { onTask(t.id) }) }
+                items(tasks, key = { "t" + it.id }) { t -> TaskRow(t, LocalDate.now(), true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onTask(t.id) }) }
             }
             if (notes.isNotEmpty()) {
                 item { SectionLabel(s.notes, Modifier.padding(start = 6.dp, top = 20.dp, bottom = 8.dp)) }

@@ -174,15 +174,15 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             val today = LocalDate.now()
             if (waiting.isNotEmpty()) {
                 SectionLabel(s.promisedToYou, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 4.dp))
-                waiting.forEach { t -> TaskRow(t, today, true, onToggle = { vm.toggleTask(t.id) }, onOpen = { onOpenTask(t.id) }) }
+                waiting.forEach { t -> TaskRow(t, today, true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }) }
             }
             if (promised.isNotEmpty()) {
                 SectionLabel(s.youPromised, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 4.dp))
-                promised.forEach { t -> TaskRow(t, today, true, onToggle = { vm.toggleTask(t.id) }, onOpen = { onOpenTask(t.id) }) }
+                promised.forEach { t -> TaskRow(t, today, true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }) }
             }
             if (open.isNotEmpty()) {
                 SectionLabel(s.tasksCaps, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 4.dp))
-                open.forEach { t -> TaskRow(t, today, true, onToggle = { vm.toggleTask(t.id) }, onOpen = { onOpenTask(t.id) }) }
+                open.forEach { t -> TaskRow(t, today, true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }) }
             }
             // A dated history, each line saying where it came from.
             val history = personHistory(person, data)
@@ -203,7 +203,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             }
             if (done.isNotEmpty()) {
                 SectionLabel(s.done, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 4.dp))
-                done.forEach { t -> TaskRow(t, today, true, onToggle = { vm.toggleTask(t.id) }, onOpen = { onOpenTask(t.id) }) }
+                done.forEach { t -> TaskRow(t, today, true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }) }
             }
             Spacer(Modifier.height(32.dp))
         }

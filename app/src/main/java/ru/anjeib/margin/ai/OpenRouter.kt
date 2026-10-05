@@ -20,6 +20,9 @@ import java.net.URL
 
 class AiException(message: String) : Exception(message)
 
+/** The model answered with nothing — worth one more try, never worth showing as is. */
+const val EMPTY = "empty"
+
 data class AiReply(val content: String, val costUsd: Double)
 
 data class ModelInfo(val id: String, val name: String, val promptPerM: Double, val completionPerM: Double, val audio: Boolean = false)

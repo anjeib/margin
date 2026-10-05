@@ -57,10 +57,10 @@ object Yandex {
             }.toString()
             var (code, text) = try { post(apiKey, folder, body(json)) } catch (e: java.io.IOException) { throw AiException(ru.anjeib.margin.i18n.L.s.errNet) }
             if (json && code == 400) { val r = try { post(apiKey, folder, body(false)) } catch (e: java.io.IOException) { throw AiException(ru.anjeib.margin.i18n.L.s.errNet) }; code = r.first; text = r.second }
-            if (code !in 200..299) throw AiException("Yandex $code: ${text.take(300)}")
+            if (code !in 200..299) { android.util.Log.w("Margin", "Yandex $code: ${text.take(300)}"); throw AiException(ru.anjeib.margin.i18n.L.s.errService) }
             val root = AppJson.parseToJsonElement(text).jsonObject
             val content = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonObject
-                ?.get("content")?.jsonPrimitive?.contentOrNull ?: throw AiException("empty")
+                ?.get("content")?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: throw AiException(EMPTY)
             val u = root["usage"] as? JsonObject
             val usage = Usage(
                 input = u?.get("prompt_tokens")?.jsonPrimitive?.intOrNull ?: 0,

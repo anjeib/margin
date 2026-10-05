@@ -17,6 +17,9 @@ import ru.anjeib.margin.ai.OpenRouter
 import ru.anjeib.margin.ai.Processor
 import ru.anjeib.margin.ai.Scope
 import ru.anjeib.margin.data.AppData
+import ru.anjeib.margin.data.properName
+import ru.anjeib.margin.data.sentence
+import ru.anjeib.margin.data.withNames
 import ru.anjeib.margin.data.Attachment
 import ru.anjeib.margin.data.Brief
 import ru.anjeib.margin.data.ChatMsg
@@ -104,7 +107,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     val keyStatus: StateFlow<String?> = _keyStatus
 
     companion object {
-        const val AUTO_CONFIRM_MS = 2600L
+        const val AUTO_CONFIRM_MS = 5000L
         fun key(scope: Scope) = when (scope) { Scope.Main -> "main"; Scope.Notes -> "notes"; is Scope.InTask -> "task:" + scope.taskId }
     }
 
@@ -174,7 +177,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 prefs.addSpend(cost)
                 when {
                     scope != Scope.Main -> applyScoped(plan, scope, files, t)
-                    plan.actions.isEmpty() -> { applyPlan(plan, files, source = t); }
+                    plan.actions.isEmpty() -> { applyPlan(plan, files, source = t, strict = !smart); }
                     else -> propose(plan, files, userId, smart, t)
                 }
             } catch (e: Exception) {
@@ -209,7 +212,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     private fun propose(plan: AiPlan, files: List<Attachment>, userMsgId: String? = null, smart: Boolean = false, source: String = "") {
-        val p = Pending(newId(), plan, Assistant.apply(data.value, plan, source), settings.value.autoConfirm, files, userMsgId, smart, source)
+        val p = Pending(newId(), plan, Assistant.apply(data.value, plan, source, strict = !smart, recent = recentTasks()), settings.value.autoConfirm, files, userMsgId, smart, source)
         _pending.value = p
         autoJob?.cancel()
         if (p.auto) autoJob = viewModelScope.launch {
@@ -224,7 +227,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         autoJob?.cancel()
         _pending.value = null
         val before = data.value
-        val ids = applyPlan(p.plan, p.files, source = p.source)
+        val ids = applyPlan(p.plan, p.files, source = p.source, strict = !p.smart)
         // Nothing left to say → the bubble leaves and the result settles into its list.
         val talk = p.plan.question != null || (p.smart && !p.plan.reply.isNullOrBlank())
         if (!talk) {
@@ -252,7 +255,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             ) else a
         }
         val plan = p.plan.copy(actions = actions)
-        _pending.value = p.copy(plan = plan, preview = Assistant.apply(data.value, plan, p.source), auto = false)
+        _pending.value = p.copy(plan = plan, preview = Assistant.apply(data.value, plan, p.source, strict = !p.smart, recent = recentTasks()), auto = false)
     }
 
     /** Cancel before anything was saved: the bubble simply goes away. */
@@ -270,9 +273,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         _pending.value = _pending.value?.copy(auto = false)
     }
 
-    private fun applyPlan(plan: AiPlan, files: List<Attachment> = emptyList(), silentUser: Boolean = false, source: String = ""): List<String> {
+    /** Tasks of the last exchanges — «перенеси его на пятницу» is about them even without naming them. */
+    private fun recentTasks() = data.value.chat.takeLast(5).flatMap { it.taskIds }.toSet()
+
+    private fun applyPlan(plan: AiPlan, files: List<Attachment> = emptyList(), silentUser: Boolean = false, source: String = "", strict: Boolean = false): List<String> {
         val current = data.value // the user may have edited something while we waited
-        val applied = Assistant.apply(current, plan, source)
+        val applied = Assistant.apply(current, plan, source, strict = strict, recent = recentTasks())
         val withFiles = if (files.isNotEmpty()) attachTo(applied, Scope.Main, files, current) else applied.data
         val msg = ChatMsg(
             fromUser = false,
@@ -289,7 +295,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     private fun applyScoped(plan: AiPlan, scope: Scope, files: List<Attachment>, source: String = "") {
         val current = data.value
-        val applied = Assistant.apply(current, plan, source)
+        val applied = Assistant.apply(current, plan, source, strict = true, focus = (scope as? Scope.InTask)?.taskId)
         val next = attachTo(applied, scope, files, current)
         val undoId = newId()
         snapshots[undoId] = current
@@ -335,11 +341,13 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         if (!Processor.ready(s) || "brief" in _working.value) return
         refreshCalendar()
         val prev = data.value.brief?.takeIf { it.date == today && it.lang == L.lang.name }
-        if (!force && prev?.headline != null) return
+        // After 18:00 the brief turns to tomorrow — one rebuild if the morning one is still up.
+        val evening = java.time.LocalTime.now().hour >= 18
+        if (!force && prev?.headline != null && !(evening && (prev.at ?: "") < "18:00")) return
         _working.value += "brief"
         viewModelScope.launch {
             try {
-                val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.briefPrompt(data.value, s), listOf("user" to "brief"), smart = true)
+                val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.briefPrompt(data.value, s, evening), listOf("user" to "brief"), smart = true)
                 prefs.addSpend(r.rub)
                 val o = Assistant.parseObject(r.content)
                 val text = Assistant.field(o, "text") ?: r.content.trim()
@@ -357,8 +365,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Today's open tasks as a set — compared with the one the brief was built on. */
-    fun briefFingerprint(d: AppData): String = d.tasks.filter { isToday(it) || isRunning(it) }.map { it.id }.sorted().joinToString(",")
+    /** Today's and tomorrow's open tasks with their dates — compared with what the brief was built on. */
+    fun briefFingerprint(d: AppData): String {
+        val tomorrow = LocalDate.now().plusDays(1)
+        return d.tasks.filter { !it.done && (isToday(it) || isRunning(it) || it.dueDate == tomorrow) }
+            .map { it.id + it.due + it.time }.sorted().joinToString(",")
+    }
 
     /**
      * Keeps «Главное» honest: when the task it names is done, moved off today or deleted, the brief is rebuilt
@@ -366,12 +378,13 @@ class MainVm(app: Application) : AndroidViewModel(app) {
      */
     private fun watchBrief(d: AppData) {
         val b = d.brief?.takeIf { it.date == LocalDate.now().toString() && it.lang == L.lang.name } ?: return
-        val main = b.mainTaskId ?: return
-        val t = d.tasks.find { it.id == main }
-        val stillOn = t != null && !t.done && (isToday(t) || isRunning(t))
-        if (!stillOn && b.revisions < 4 && d.tasks.any { isToday(it) || isRunning(it) }) {
+        val t = b.mainTaskId?.let { main -> d.tasks.find { it.id == main } }
+        val stillOn = b.mainTaskId == null || (t != null && !t.done && (isToday(t) || isRunning(t) || t.dueDate == LocalDate.now().plusDays(1)))
+        // The day changed under the brief: rebuild it quietly instead of saying «есть изменения».
+        val changed = b.fingerprint != null && b.fingerprint != briefFingerprint(d)
+        if ((!stillOn || changed) && b.revisions < 4 && d.tasks.any { !it.done }) {
             briefJob?.cancel()
-            briefJob = viewModelScope.launch { kotlinx.coroutines.delay(2500); makeBrief(force = true) }
+            briefJob = viewModelScope.launch { kotlinx.coroutines.delay(4000); makeBrief(force = true) }
         }
     }
     private var briefJob: kotlinx.coroutines.Job? = null
@@ -421,32 +434,6 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { ru.anjeib.margin.voice.LocalWhisper.download(ctx, m) }
     }
 
-    // ---------------- backup ----------------
-
-    fun exportTo(uri: android.net.Uri) = viewModelScope.launch {
-        runCatching { ctx.contentResolver.openOutputStream(uri, "wt")?.use { ru.anjeib.margin.data.Backup.write(ctx, it) } }
-            .onSuccess { _toast.value = L.s.backupSaved }.onFailure { _toast.value = it.message }
-    }
-
-    fun restoreFrom(uri: android.net.Uri) = viewModelScope.launch {
-        _toast.value = if (ru.anjeib.margin.data.Backup.restore(ctx, uri)) L.s.restored else L.s.restoreFailed
-    }
-
-    fun setBackupTarget(uri: android.net.Uri) {
-        ru.anjeib.margin.data.Backup.persist(ctx, uri)
-        backupNow()
-    }
-
-    fun backupNow() = viewModelScope.launch {
-        val err = ru.anjeib.margin.data.Backup.toSavedTarget(ctx)
-        _toast.value = if (err == null) L.s.backupSaved else L.s.backupFailed + ": " + err
-    }
-
-    fun stopAutoBackup() {
-        prefs.update { it.copy(backupUri = "") }
-        ru.anjeib.margin.data.Backup.schedule(ctx)
-    }
-
     // ---------------- tasks ----------------
 
     private fun updateTask(id: String, f: (Task) -> Task) =
@@ -467,7 +454,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     fun addSubtask(taskId: String, title: String, parent: String? = null) {
-        val st = Subtask(title = title.trim()).takeIf { it.title.isNotEmpty() } ?: return
+        val st = Subtask(title = title.sentence()).takeIf { it.title.isNotEmpty() } ?: return
         updateTask(taskId) { t ->
             if (parent == null) t.copy(subtasks = t.subtasks + st, done = false)
             else t.copy(subtasks = t.subtasks.mapTree(parent) { it.copy(children = it.children + st, done = false) })
@@ -475,14 +462,17 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     fun renameSubtask(taskId: String, subId: String, title: String) = updateTask(taskId) { t ->
-        t.copy(subtasks = t.subtasks.mapTree(subId) { if (title.isBlank()) null else it.copy(title = title.trim()) })
+        t.copy(subtasks = t.subtasks.mapTree(subId) { if (title.isBlank()) null else it.copy(title = title.sentence()) })
     }
 
     fun deleteSubtask(taskId: String, subId: String) = updateTask(taskId) { t ->
         t.copy(subtasks = t.subtasks.mapTree(subId) { null })
     }
 
-    fun saveTask(t: Task) {
+    fun saveTask(t0: Task) {
+        val t = t0.copy(title = t0.title.sentence().withNames(t0.people + listOfNotNull(t0.waitingFor, t0.promisedTo)),
+            people = t0.people.map { if (it == L.s.me) it else data.value.person(it)?.name ?: it.properName() },
+            waitingFor = t0.waitingFor?.let { data.value.person(it)?.name ?: it.properName() }, promisedTo = t0.promisedTo?.let { data.value.person(it)?.name ?: it.properName() })
         updateTask(t.id) { Assistant.withAutoReminder(t) }
         store.update { d ->
             val newPeople = (t.people + listOfNotNull(t.waitingFor, t.promisedTo)).filter { p -> p != L.s.me && d.person(p) == null }.distinct().map { Person(name = it) }
@@ -494,7 +484,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun deleteTask(id: String) = store.update { d -> d.copy(tasks = d.tasks.filterNot { it.id == id }) }
 
     fun editTaskEntry(taskId: String, entryId: String, text: String) = updateTask(taskId) { t ->
-        t.copy(entries = t.entries.mapNotNull { if (it.id != entryId) it else if (text.isBlank() && it.attachments.isEmpty()) null else it.copy(text = text.trim()) })
+        t.copy(entries = t.entries.mapNotNull { if (it.id != entryId) it else if (text.isBlank() && it.attachments.isEmpty()) null else it.copy(text = text.sentence()) })
     }
 
     fun deleteTaskEntry(taskId: String, entryId: String) = updateTask(taskId) { t ->
@@ -515,9 +505,11 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** Swipe-right: done, with a few seconds to take it back. */
     fun completeWithUndo(id: String) {
         val before = data.value
-        val wasDone = before.tasks.find { it.id == id }?.done ?: return
+        val t = before.tasks.find { it.id == id } ?: return
         toggleTask(id)
-        offerUndo(before, if (wasDone) L.s.reopened else L.s.markedDone)
+        // A repeating task comes back — say when, or it looks like the tap didn't work.
+        val next = if (!t.done) t.nextOccurrence()?.let { n -> (n.dueDate ?: n.startDate)?.shortLabel()?.lowercase() } else null
+        offerUndo(before, when { t.done -> L.s.reopened; next != null -> L.s.doneNext(next); else -> L.s.markedDone })
     }
 
     private fun offerUndo(before: AppData, text: String) {
@@ -525,7 +517,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         snapshots[id] = before
         _undoBar.value = Notice("bar", text, id)
         undoJob?.cancel()
-        undoJob = viewModelScope.launch { kotlinx.coroutines.delay(6000); if (_undoBar.value?.undoId == id) _undoBar.value = null }
+        undoJob = viewModelScope.launch { kotlinx.coroutines.delay(8000); if (_undoBar.value?.undoId == id) _undoBar.value = null }
     }
 
     fun undoBar() {
@@ -562,7 +554,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private fun updateNote(id: String, f: (Note) -> Note) =
         store.update { d -> d.copy(notes = d.notes.map { if (it.id == id) f(it) else it }) }
 
-    fun renameNote(id: String, title: String) = updateNote(id) { if (it.title == title) it else it.copy(title = title) }
+    fun renameNote(id: String, title: String) = updateNote(id) { val x = title.sentence(); if (it.title == x) it else it.copy(title = x) }
     fun setNoteProject(id: String, project: String?) = store.update { d ->
         val p = project?.trim()?.removePrefix("#")?.lowercase()?.ifBlank { null }
         d.copy(notes = d.notes.map { if (it.id == id) it.copy(project = p) else it },
@@ -574,7 +566,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         if (text.isBlank() && files.isEmpty()) return
         store.update { d ->
             val n = d.notes.find { it.id == id } ?: return@update d
-            val upd = n.copy(entries = n.entries + Entry(text = text.trim(), attachments = files), updatedAt = nowStamp())
+            val upd = n.copy(entries = n.entries + Entry(text = text.sentence(), attachments = files), updatedAt = nowStamp())
             d.copy(notes = listOf(upd) + d.notes.filterNot { it.id == id })
         }
     }
@@ -609,7 +601,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** Renames a person everywhere their name is used. */
     fun renamePerson(id: String, newName: String) {
-        val n = newName.trim().ifEmpty { return }
+        val n = newName.properName().ifEmpty { return }
         store.update { d ->
             val p = d.persons.find { it.id == id } ?: return@update d
             d.copy(persons = d.persons.map { if (it.id == id) it.copy(name = n, aliases = (it.aliases + p.name).distinct()) else it }, tasks = d.tasks.map { it.renamed(p, n) })
@@ -661,6 +653,11 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     /** «Сводка недели» for a project page. */
+    /** What the project summary is about: its tasks' state and its ideas — a change means the summary is out of date. */
+    fun projectFingerprint(project: String, d: AppData): String =
+        d.tasks.filter { it.project == project }.map { it.id + it.done + it.due + it.waitingFor + it.promisedTo }.sorted().joinToString(",") +
+            "|" + d.notes.filter { it.project == project }.sumOf { it.entries.size }
+
     fun refreshProject(project: String) {
         val s = settings.value
         if (!Processor.ready(s) || "project:$project" in _working.value) return
@@ -670,7 +667,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.projectPrompt(data.value, project), listOf("user" to "summary"), smart = true)
                 prefs.addSpend(r.rub)
                 val text = Assistant.field(Assistant.parseObject(r.content), "summary") ?: return@launch
-                store.update { it.copy(projectSummaries = it.projectSummaries + (project to ru.anjeib.margin.data.ProjectSummary(text, nowStamp()))) }
+                store.update { it.copy(projectSummaries = it.projectSummaries + (project to ru.anjeib.margin.data.ProjectSummary(text, nowStamp(), projectFingerprint(project, it)))) }
             } catch (e: Exception) {
                 _toast.value = e.message
             } finally {
@@ -697,6 +694,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                     if (it.id in created) it.copy(noteId = noteId, sourceEntryId = entryId, source = e.text.take(240)) else it
                 }))
                 land(created)
+                // The note screen has no list to light up — say it in words.
+                data.value.tasks.firstOrNull { it.id in created }?.let { _toast.value = L.s.ideaBecameTask(it.title) }
             } catch (ex: Exception) {
                 _toast.value = ex.message
             } finally {

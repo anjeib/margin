@@ -172,7 +172,8 @@ fun SmartComposer(
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(28.dp))
                 .padding(start = 4.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            // Long text grows upwards; the buttons stay where the thumb is.
+            verticalAlignment = Alignment.Bottom,
         ) {
             if (rec != null) {
                 // Recording bar: cancel · pulsing dot + level · confirm

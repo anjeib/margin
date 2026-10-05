@@ -68,7 +68,9 @@ fun Task.whenLabel(today: LocalDate = LocalDate.now()): String? {
     return listOfNotNull(dates, time).joinToString(" · ").ifEmpty { null }
 }
 
-fun Task.isOverdue(today: LocalDate = LocalDate.now()): Boolean = !done && (dueDate?.isBefore(today) == true)
+/** Past its day — or today, past its time (a 14:00 call at 21:00 is late too). */
+fun Task.isOverdue(today: LocalDate = LocalDate.now()): Boolean = !done && (dueDate?.isBefore(today) == true ||
+    (dueDate == today && today == LocalDate.now() && time?.let { runCatching { java.time.LocalTime.parse(it).isBefore(java.time.LocalTime.now()) }.getOrNull() } == true))
 
 fun pluralRu(n: Int, one: String, few: String, many: String): String {
     val m10 = n % 10; val m100 = n % 100

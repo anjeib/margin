@@ -118,7 +118,7 @@ class YandexCompareTest {
                             content = r.content; rub += r.rub; inTok += r.usage.input; cached += r.usage.cached; outTok += r.usage.output
                         }
                         ms += System.currentTimeMillis() - t0; calls++
-                        d = Assistant.apply(d, Assistant.parsePlan(content).copy(question = null), st.text).data
+                        d = Assistant.apply(d, Assistant.parsePlan(content).copy(question = null), st.text, strict = true, focus = (scope as? Scope.InTask)?.taskId).data
                         val good = runCatching { st.check(before, d) }.getOrDefault(false)
                         if (!good && System.getenv("DEBUG") == "1") println("  FAIL $m step ${i + 1}: " + content.replace("\n", " ").take(500))
                         good
@@ -133,5 +133,98 @@ class YandexCompareTest {
             println(full); report.appendLine(full)
         }
         println("\n===== SUMMARY =====\n$report")
+    }
+
+    /** Phrases the AI testers tripped on (October 2026), each from its own small seeded state. */
+    data class Case(val name: String, val text: String, val seed: List<ru.anjeib.margin.data.Task>, val scopeTask: String? = null, val check: (AppData, AppData) -> Boolean)
+
+    private fun task(title: String, due: String? = null, time: String? = null, project: String? = null, people: List<String> = emptyList(),
+                     repeat: ru.anjeib.margin.data.Repeat? = null) =
+        ru.anjeib.margin.data.Task(title = title, due = due, time = time, project = project, people = people, repeat = repeat)
+
+    /** Nothing but [touched] changed: same count, same dates/times/people/promises on every other task. */
+    private fun untouched(b: AppData, d: AppData, vararg touched: String): Boolean {
+        fun sig(x: ru.anjeib.margin.data.Task) = listOf(x.title, x.due, x.time, x.repeat, x.waitingFor, x.promisedTo, x.project, x.people)
+        val keep = b.tasks.filter { t -> touched.none { t.title.contains(it, true) } }
+        return keep.all { o -> d.tasks.find { it.id == o.id }?.let { sig(it) == sig(o) } == true }
+    }
+
+    private val cases = listOf(
+        Case("мука: повтор, не ожидание", "кажд понедельник заказать муку у тимура", emptyList()) { b, d ->
+            val t = d.tasks.firstOrNull { it.title.contains("мук", true) }
+            t != null && t.waitingFor == null && t.repeat?.freq == "weekly" && t.repeat.days == listOf(1) && d.tasks.size == b.tasks.size + 1
+        },
+        Case("аренда: первое число — в будущем", "аренда первого числа каждый месяц", emptyList()) { _, d ->
+            val t = d.tasks.firstOrNull { it.title.contains("аренд", true) }
+            t != null && t.repeat?.freq == "monthly" && t.due == "2026-11-01"
+        },
+        Case("надиктовка: не сливать с арендой",
+            "лена до пятницы сдаёт график смен я жду ещё обещал виктору арендодателю оплату до десятого сломалась тестомесилка на садовой вызвать мастера завтра утром купить кассовую ленту",
+            listOf(task("Оплатить аренду", due = "2026-11-01", repeat = ru.anjeib.margin.data.Repeat("monthly", days = listOf(1))))) { b, d ->
+            untouched(b, d) && d.tasks.any { it.promisedTo?.contains("Виктор", true) == true && it.due == "2026-10-10" } &&
+                d.tasks.any { it.waitingFor?.contains("Лен", true) == true && it.due == "2026-10-09" } &&
+                d.tasks.any { it.title.contains("мастер", true) && it.due == "2026-10-06" }
+        },
+        Case("перенос: время сохраняется", "перенеси мастера на послезавтра",
+            listOf(task("Вызвать мастера по тестомесилке", due = "2026-10-06", time = "09:00", project = "садовая"), task("Купить кассовую ленту", due = "2026-10-06"))) { b, d ->
+            untouched(b, d, "мастер") && d.tasks.first { it.title.contains("мастер", true) }.let { it.due == "2026-10-07" && it.time == "09:00" }
+        },
+        Case("подзадачи в открытой карточке", "подзадачи: собрать мудборд, 3 варианта эскизов, финальная презентация", olga(), scopeTask = "логотип") { b, d ->
+            untouched(b, d, "логотип") && d.tasks.size == b.tasks.size && d.tasks.first { it.title.contains("логотип", true) }.subtasks.size == 3
+        },
+        Case("подзадачи из главного поля", "к логотипу для кофейни подзадачи: собрать мудборд, 3 варианта эскизов, финальная презентация", olga()) { b, d ->
+            untouched(b, d, "логотип") && d.tasks.size == b.tasks.size && d.tasks.first { it.title.contains("логотип", true) }.subtasks.size == 3
+        },
+        Case("срок у дела человека", "Дента+: Катя делает макеты главной к четвергу, Артём верстает после макетов, Ирина должна прислать тексты до среды", emptyList()) { _, d ->
+            // Katya's deadline must survive somewhere: as a task (subtasks have no dates).
+            d.tasks.any { (it.title.contains("макет", true) || it.people.any { p -> p.contains("Кат") }) && it.due == "2026-10-08" } &&
+                d.tasks.any { it.waitingFor?.contains("Ирин") == true && it.due == "2026-10-07" }
+        },
+        Case("заказ у поставщика — не ожидание", "заказать упаковку у ПакетПро до среды", emptyList()) { _, d ->
+            d.tasks.any { it.title.contains("упаков", true) && it.waitingFor == null && it.due == "2026-10-07" }
+        },
+    )
+
+    private fun olga() = listOf(
+        task("Логотип для кофейни «Зерно»", due = "2026-10-09", project = "зерно"),
+        task("Ответить Игорю по эскизам", due = "2026-10-06"),
+        task("Созвон с Мариной", due = "2026-10-06", time = "11:00", people = listOf("Марина")),
+        task("Отправить Марине мудборд", project = "портфолио"),
+    )
+
+    @Test
+    fun testerCases() = runBlocking {
+        assumeTrue(System.getenv("YA_LIVE") == "1" && key.isNotBlank() && folder.isNotBlank())
+        L.lang = Lang.Ru
+        val models = (System.getenv("MODELS") ?: "hybrid,aliceai-llm-flash,deepseek-v4.1-flash").split(',')
+        val runs = System.getenv("RUNS")?.toIntOrNull() ?: 2
+        val s = Settings(apiKey = "x")
+        val report = StringBuilder()
+        for (m in models) {
+            var pass = 0; var total = 0; var rub = 0.0
+            val fails = mutableMapOf<String, Int>()
+            repeat(runs) {
+                cases.forEach { c ->
+                    val base = noise()
+                    val b = base.copy(tasks = base.tasks + c.seed)
+                    val scope = c.scopeTask?.let { n -> b.tasks.firstOrNull { it.title.contains(n, true) }?.let { Scope.InTask(it.id) } } ?: Scope.Main
+                    val ok = try {
+                        val sys = Assistant.systemPrompt(b, s, scope, query = c.text)
+                        val mm = if (m == "hybrid") (if (Assistant.isComplex(c.text, scope)) "deepseek-v4.1-flash" else "aliceai-llm-flash") else m
+                        var r = Yandex.chat(key, folder, mm, sys, listOf("user" to Assistant.userMessage(c.text)))
+                        if (Assistant.isBroken(r.content)) { rub += r.rub; r = Yandex.chat(key, folder, mm, sys, listOf("user" to Assistant.userMessage(c.text))) }
+                        rub += r.rub
+                        val d = Assistant.apply(b, Assistant.parsePlan(r.content).copy(question = null), c.text, strict = true, focus = (scope as? Scope.InTask)?.taskId).data
+                        val good = runCatching { c.check(b, d) }.getOrDefault(false)
+                        if (!good) println("  FAIL $m [${c.name}] via $mm: " + r.content.replace("\n", " ").take(600))
+                        good
+                    } catch (e: Exception) { println("  $m [${c.name}] error: ${e.message?.take(200)}"); false }
+                    total++; if (ok) pass++ else fails[c.name] = (fails[c.name] ?: 0) + 1
+                }
+            }
+            val line = "%-22s %3d/%-3d  %6.3f ₽/msg  failed: %s".format(m, pass, total, rub / total.coerceAtLeast(1), fails)
+            println(line); report.appendLine(line)
+        }
+        println("\n===== TESTER CASES =====\n$report")
     }
 }

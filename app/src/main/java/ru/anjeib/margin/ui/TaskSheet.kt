@@ -162,7 +162,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 originLine(task, data)?.let { o ->
                     Text("↳ $o", style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(start = 48.dp, top = 2.dp).clip(RoundedCornerShape(6.dp))
-                            .clickable(enabled = task.noteId != null) { task.noteId?.let(onOpenNote) })
+                            .clickable(enabled = task.noteId != null || task.source != null) { task.noteId?.let(onOpenNote) ?: run { dialog = "source" } })
                 }
 
                 // One quiet line of what is filled — dates first, the project tag last — and «+ …» for what is not.
@@ -197,6 +197,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     if (task.repeat == null) add(s.fieldRepeat to "repeat")
                     if (task.people.isEmpty()) add(s.fieldPeople to "people")
                     if (task.project == null) add(s.project to "project")
+                    if (!task.done) add(s.subtaskOne to "subtask")
                 }
                 if (missing.isNotEmpty()) FlowRow(Modifier.padding(start = 46.dp, top = 6.dp)) {
                     missing.forEachIndexed { i, (label, d) ->
@@ -333,10 +334,18 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
         "waiting" -> TextDialog(s.waiting, task.waitingFor.orEmpty(), "", onDismiss = { dialog = null }) { v ->
             save(task.copy(waitingFor = v.trim().ifBlank { null })); dialog = null
         }
+        "subtask" -> TextDialog(s.subtaskOne, "", "", onDismiss = { dialog = null }) { v -> if (v.isNotBlank()) vm.addSubtask(task.id, v.trim()); dialog = null }
         "repeat" -> RepeatDialog(task, onDismiss = { dialog = null }) { r ->
             val due = task.due ?: if (r != null) LocalDate.now().toString() else null
             save(task.copy(repeat = r, due = due)); dialog = null
         }
+        // «↳ из разговора»: the words the task was born from.
+        "source" -> AlertDialog(
+            onDismissRequest = { dialog = null }, containerColor = c.card,
+            title = { Text(s.youWrote, style = Type.cardTitle.copy(color = c.ink)) },
+            text = { Text("«" + task.source.orEmpty() + "»", style = Type.body.copy(color = c.ink)) },
+            confirmButton = { TextButton({ dialog = null }) { Text(s.closeWord, color = c.graphite) } },
+        )
         "delete" -> AlertDialog(
             onDismissRequest = { dialog = null },
             containerColor = c.card,

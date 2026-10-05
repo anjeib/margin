@@ -80,6 +80,17 @@ interface Strings {
 
     // brief
     val morningBrief: String
+    val eveningBrief: String
+    val nothingToday: String
+    fun doneNext(date: String): String
+    fun undatedCount(n: Int): String
+    val subtaskOne: String
+    fun ideaBecameTask(title: String): String
+    val granted: String
+    val youWrote: String
+    val closeWord: String
+    fun nextOn(date: String): String
+    fun was(what: String): String
     val makeBrief: String
     val refresh: String
     val startFocus: String
@@ -148,7 +159,6 @@ interface Strings {
     val language: String
     val langAuto: String
     val data: String
-    val exportMd: String
     val yourName: String
     val searchModels: String
     val loading: String
@@ -164,7 +174,6 @@ interface Strings {
     val byProjects: String
     val showAll: String
     val mainThing: String
-    val windowShort: String
     val collapse: String
     val saved: String
     val savedToInbox: String
@@ -288,10 +297,6 @@ interface Strings {
     val queueDoneTitle: String
     val waitingNet: String
     val whisperOfferOffline: String
-    val backupSaved: String
-    val backupFailed: String
-    val restored: String
-    val restoreFailed: String
     val snoozeHour: String
     val repeat: String
     val noRepeat: String
@@ -317,16 +322,9 @@ interface Strings {
     val deleteModel: String
     val cancelDownload: String
     val backupSection: String
-    val autoBackup: String
-    val autoBackupHint: String
-    val chooseBackup: String
-    val backupNow: String
-    val stopBackup: String
-    val exportArchive: String
-    val importArchive: String
-    val restoreQ: String
-    val restore: String
     val googleBackupHint: String
+    val googleBackup: String
+    val googleBackupOff: String
     val skip: String
     val next: String
     val allow: String
@@ -345,13 +343,13 @@ interface Strings {
     fun nudgeText(what: String): String
     fun whisperDownloading(p: Int): String
     fun whisperReady(name: String): String
-    fun lastBackupAt(t: String): String
 
     // errors
     val errNoKey: String
     val errWeird: String
-    val errEmpty: String
     val errNet: String
+    val errService: String
+    val errEmpty: String
     val errBadKey: String
     val errNoMoney: String
     val errRate: String
@@ -426,7 +424,7 @@ object Ru : Strings {
     override val undone = "Отменено"
     override val remindFriday = "Напомнить в пятницу"
     override val dismiss = "Скрыть"
-    override val noKey = "Чтобы ИИ разбирал задачи, добавьте ключ OpenRouter."
+    override val noKey = "Чтобы ИИ разбирал задачи, нужен ключ — добавьте его в настройках."
     override val openSettings = "Открыть настройки"
     override fun movedOverdue(n: Int) = "Перенесено на сегодня: $n"
     override val nothingOverdue = "Просроченных задач нет"
@@ -434,7 +432,7 @@ object Ru : Strings {
     override val emptyToday = "На сегодня ничего"
     override val emptyWeek = "Неделя свободна"
     override val emptyAll = "Задач пока нет"
-    override val emptyHint = "Напишите внизу, что нужно сделать, — обычными словами."
+    override val emptyHint = "Напишите внизу, что нужно сделать, — обычными словами. Например: «завтра в 11 созвон с Мариной» или «каждый понедельник заказать муку»."
     override val noTime = "Без времени"
     override val done = "Выполнено"
     override val doneLower = "выполнено"
@@ -442,11 +440,22 @@ object Ru : Strings {
     override val swipeNextWeek = "+1 неделя"
     override val markDone = "Готово"
 
-    override val morningBrief = "Утренний бриф"
+    override val morningBrief = "Главное сегодня"
+    override val eveningBrief = "На завтра"
+    override val nothingToday = "На сегодня дел нет"
+    override fun doneNext(date: String) = "Готово · следующий раз $date"
+    override fun undatedCount(n: Int) = "Ещё без срока: " + tasksCount(n)
+    override val subtaskOne = "Подзадача"
+    override fun ideaBecameTask(title: String) = "Теперь это задача: $title"
+    override val granted = "разрешено"
+    override val youWrote = "Вы написали"
+    override val closeWord = "Закрыть"
+    override fun nextOn(date: String) = "следующий раз $date"
+    override fun was(what: String) = "было $what"
     override val makeBrief = "Собрать бриф"
     override val refresh = "Обновить"
     override val startFocus = "Начать с главного"
-    override val focusWindow = "Окно для фокуса"
+    override val focusWindow = "Время для главного"
 
     override val subtasks = "Подзадачи"
     override val comment = "Комментарий"
@@ -508,7 +517,6 @@ object Ru : Strings {
     override val language = "Язык"
     override val langAuto = "Как в системе"
     override val data = "ДАННЫЕ"
-    override val exportMd = "Экспорт в Markdown"
     override val yourName = "Как к вам обращаться"
     override val searchModels = "Поиск модели…"
     override val loading = "Загрузка…"
@@ -523,7 +531,6 @@ object Ru : Strings {
     override val byProjects = "по проектам"
     override val showAll = "Показать все"
     override val mainThing = "Главное"
-    override val windowShort = "окно"
     override val collapse = "Свернуть"
     override val saved = "Сохранено"
     override val savedToInbox = "Сохранено во «Входящие»"
@@ -572,10 +579,6 @@ object Ru : Strings {
     override val queueDoneTitle = "Входящие разобраны"
     override val waitingNet = "Входящие · ждут интернета"
     override val whisperOfferOffline = "Нет интернета. Скачайте офлайн-распознавание в настройках, чтобы диктовать без сети."
-    override val backupSaved = "Резервная копия сохранена"
-    override val backupFailed = "Не удалось сохранить копию"
-    override val restored = "Данные восстановлены"
-    override val restoreFailed = "Не удалось прочитать архив"
     override val snoozeHour = "Через час"
     override val repeat = "Повтор"
     override val noRepeat = "Не повторять"
@@ -601,22 +604,15 @@ object Ru : Strings {
     override val deleteModel = "Удалить модель"
     override val cancelDownload = "Остановить загрузку"
     override val backupSection = "РЕЗЕРВНАЯ КОПИЯ"
-    override val autoBackup = "Автокопия раз в день"
-    override val autoBackupHint = "Выберите место, например Google Диск — копия будет обновляться сама"
-    override val chooseBackup = "Выбрать место"
-    override val backupNow = "Сохранить сейчас"
-    override val stopBackup = "Отключить автокопию"
-    override val exportArchive = "Экспорт архива"
-    override val importArchive = "Восстановить из архива"
-    override val restoreQ = "Заменить все задачи и заметки данными из архива?"
-    override val restore = "Восстановить"
-    override val googleBackupHint = "Задачи и настройки также сохраняются в аккаунт Google автоматически и вернутся при переустановке."
+    override val googleBackupHint = "Раз в день задачи, заметки и настройки сохраняются в ваш аккаунт Google (Google Диск) и вернутся на новом телефоне."
+    override val googleBackup = "Копия в аккаунт Google"
+    override val googleBackupOff = "Выключена: если телефон потеряется, задачи и заметки не вернутся."
     override val skip = "Пропустить"
     override val next = "Дальше"
     override val begin = "Начать"
     override val kindTask = "задача"
     override val freshSummary = "СВЕЖАЯ СВОДКА"
-    override val weekSummary = "СВОДКА НЕДЕЛИ"
+    override val weekSummary = "СВОДКА ПРОЕКТА"
     override val toTaskPill = "В задачу"
     override val ideasOpen = "ИДЕИ БЕЗ ЗАДАЧ"
     override fun waitLine(what: String) = "ждём: $what"
@@ -640,7 +636,7 @@ object Ru : Strings {
     override val makeSummary = "Собрать сводку"
     override fun fromNote(title: String, date: String) = "из заметки «$title» · $date"
     override fun fromChat(date: String) = "из разговора · $date"
-    override fun promised(who: String) = "Обещано: $who"
+    override fun promised(who: String) = "Вы обещали: $who"
     override fun summaryAt(t: String) = "обновлено $t"
     override val reopened = "Задача снова открыта"
     override val markedDone = "Готово"
@@ -683,7 +679,7 @@ object Ru : Strings {
     override val ob1Title = "Пишите как думаете"
     override val ob1Text = "Одной фразой: «на этой неделе запустить сайт, Дима — дизайн». Margin сам сделает задачу, сроки, подзадачи и ответственных."
     override val ob2Title = "Жесты"
-    override val ob2Text = "Свайп вправо — готово. Свайп влево — перенести на день. Меню — свайп от левого края. Нажатие на задачу открывает её карточку."
+    override val ob2Text = "Свайп вправо — готово. Свайп влево — перенести на день. Меню — кнопка ☰ слева вверху. Нажатие на задачу открывает её карточку."
     override val ob3Title = "Голос, фото, файлы"
     override val ob3Text = "Микрофон распознаёт речь с помощью ИИ, «+» прикрепляет фото, файлы и контакты. Мысли и идеи попадают в заметки, люди — в раздел «Люди»."
     override val ob4Title = "Пара разрешений"
@@ -695,11 +691,11 @@ object Ru : Strings {
     override fun nudgeText(what: String) = "Привет! Как там «$what»?"
     override fun whisperDownloading(p: Int) = "Загрузка… $p%"
     override fun whisperReady(name: String) = "Готово · $name"
-    override fun lastBackupAt(t: String) = "Последняя копия: $t"
     override val errNoKey = "Добавьте ключ OpenRouter в настройках"
     override val errWeird = "Непонятный ответ OpenRouter"
-    override val errEmpty = "Модель вернула пустой ответ"
-    override val errNet = "Нет связи с OpenRouter"
+    override val errNet = "Нет связи с интернетом"
+    override val errService = "ИИ сейчас недоступен. Попробуйте чуть позже"
+    override val errEmpty = "Не получилось разобрать. Попробуйте написать ещё раз"
     override val errBadKey = "Ключ OpenRouter не подходит — проверьте его в настройках"
     override val errNoMoney = "На счёте OpenRouter закончились деньги"
     override val errRate = "Слишком много запросов, попробуйте через минуту"
@@ -777,7 +773,7 @@ object En : Strings {
     override val undone = "Undone"
     override val remindFriday = "Remind on Friday"
     override val dismiss = "Dismiss"
-    override val noKey = "Add your OpenRouter key so the AI can sort your tasks."
+    override val noKey = "The AI needs a key to sort your tasks — add it in settings."
     override val openSettings = "Open settings"
     override fun movedOverdue(n: Int) = "Moved to today: $n"
     override val nothingOverdue = "Nothing overdue"
@@ -785,7 +781,7 @@ object En : Strings {
     override val emptyToday = "Nothing for today"
     override val emptyWeek = "Your week is clear"
     override val emptyAll = "No tasks yet"
-    override val emptyHint = "Type below what needs doing — in plain words."
+    override val emptyHint = "Type below what needs doing — in plain words. For example: “call Marina tomorrow at 11” or “order flour every Monday”."
     override val noTime = "Anytime"
     override val done = "Done"
     override val doneLower = "done"
@@ -793,11 +789,22 @@ object En : Strings {
     override val swipeNextWeek = "+1 week"
     override val markDone = "Done"
 
-    override val morningBrief = "Morning brief"
+    override val morningBrief = "Today’s focus"
+    override val eveningBrief = "For tomorrow"
+    override val nothingToday = "Nothing left for today"
+    override fun doneNext(date: String) = "Done · next on $date"
+    override fun undatedCount(n: Int) = "Also without a date: " + tasksCount(n)
+    override val subtaskOne = "Subtask"
+    override fun ideaBecameTask(title: String) = "Now a task: $title"
+    override val granted = "allowed"
+    override val youWrote = "You wrote"
+    override val closeWord = "Close"
+    override fun nextOn(date: String) = "next on $date"
+    override fun was(what: String) = "was $what"
     override val makeBrief = "Make a brief"
     override val refresh = "Refresh"
     override val startFocus = "Start with the main thing"
-    override val focusWindow = "Focus window"
+    override val focusWindow = "Time for the main thing"
 
     override val subtasks = "Subtasks"
     override val comment = "Comment"
@@ -859,7 +866,6 @@ object En : Strings {
     override val language = "Language"
     override val langAuto = "System"
     override val data = "DATA"
-    override val exportMd = "Export to Markdown"
     override val yourName = "Your name"
     override val searchModels = "Search models…"
     override val loading = "Loading…"
@@ -874,7 +880,6 @@ object En : Strings {
     override val byProjects = "by project"
     override val showAll = "Show all"
     override val mainThing = "Focus"
-    override val windowShort = "window"
     override val collapse = "Collapse"
     override val saved = "Saved"
     override val savedToInbox = "Saved to Inbox"
@@ -923,10 +928,6 @@ object En : Strings {
     override val queueDoneTitle = "Inbox sorted"
     override val waitingNet = "Inbox · waiting for internet"
     override val whisperOfferOffline = "No internet. Download offline recognition in Settings to dictate without a connection."
-    override val backupSaved = "Backup saved"
-    override val backupFailed = "Backup failed"
-    override val restored = "Data restored"
-    override val restoreFailed = "Couldn't read the archive"
     override val snoozeHour = "In an hour"
     override val repeat = "Repeat"
     override val noRepeat = "Don't repeat"
@@ -952,22 +953,15 @@ object En : Strings {
     override val deleteModel = "Delete model"
     override val cancelDownload = "Stop download"
     override val backupSection = "BACKUP"
-    override val autoBackup = "Daily automatic backup"
-    override val autoBackupHint = "Pick a place, e.g. Google Drive — the copy updates itself"
-    override val chooseBackup = "Choose location"
-    override val backupNow = "Back up now"
-    override val stopBackup = "Turn off auto backup"
-    override val exportArchive = "Export archive"
-    override val importArchive = "Restore from archive"
-    override val restoreQ = "Replace all tasks and notes with the archive?"
-    override val restore = "Restore"
-    override val googleBackupHint = "Tasks and settings are also backed up to your Google account automatically and come back on reinstall."
+    override val googleBackupHint = "Once a day tasks, notes and settings are saved to your Google account (Google Drive) and come back on a new phone."
+    override val googleBackup = "Copy to your Google account"
+    override val googleBackupOff = "Off: if the phone is lost, tasks and notes won’t come back."
     override val skip = "Skip"
     override val next = "Next"
     override val begin = "Start"
     override val kindTask = "task"
     override val freshSummary = "FRESH SUMMARY"
-    override val weekSummary = "WEEKLY SUMMARY"
+    override val weekSummary = "PROJECT SUMMARY"
     override val toTaskPill = "Make a task"
     override val ideasOpen = "IDEAS WITHOUT TASKS"
     override fun waitLine(what: String) = "waiting: $what"
@@ -991,7 +985,7 @@ object En : Strings {
     override val makeSummary = "Make a summary"
     override fun fromNote(title: String, date: String) = "from note “$title” · $date"
     override fun fromChat(date: String) = "from a conversation · $date"
-    override fun promised(who: String) = "Promised: $who"
+    override fun promised(who: String) = "You promised: $who"
     override fun summaryAt(t: String) = "updated $t"
     override val reopened = "Task reopened"
     override val markedDone = "Done"
@@ -1034,7 +1028,7 @@ object En : Strings {
     override val ob1Title = "Write the way you think"
     override val ob1Text = "In one sentence: “launch the site this week, Dima does design”. Margin makes the task, dates, subtasks and owners."
     override val ob2Title = "Gestures"
-    override val ob2Text = "Swipe right — done. Swipe left — move a day later. Menu — swipe from the left edge. Tap a task to open it."
+    override val ob2Text = "Swipe right — done. Swipe left — move a day later. Menu — the ☰ button at the top left. Tap a task to open it."
     override val ob3Title = "Voice, photos, files"
     override val ob3Text = "The mic transcribes with AI, “+” attaches photos, files and contacts. Thoughts go to notes, people to People."
     override val ob4Title = "A couple of permissions"
@@ -1046,11 +1040,11 @@ object En : Strings {
     override fun nudgeText(what: String) = "Hi! How is “$what” going?"
     override fun whisperDownloading(p: Int) = "Downloading… $p%"
     override fun whisperReady(name: String) = "Ready · $name"
-    override fun lastBackupAt(t: String) = "Last backup: $t"
     override val errNoKey = "Add your OpenRouter key in settings"
     override val errWeird = "Unexpected response from OpenRouter"
-    override val errEmpty = "The model returned an empty answer"
-    override val errNet = "Can't reach OpenRouter"
+    override val errNet = "No internet connection"
+    override val errService = "The AI is unavailable right now. Try again a bit later"
+    override val errEmpty = "Couldn’t make sense of it. Please try again"
     override val errBadKey = "The OpenRouter key doesn't work — check it in settings"
     override val errNoMoney = "Your OpenRouter balance is empty"
     override val errRate = "Too many requests, try again in a minute"

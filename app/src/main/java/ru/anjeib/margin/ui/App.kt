@@ -75,7 +75,7 @@ private const val PEOPLE = "people"
 private const val SETTINGS = "settings"
 
 @Composable
-fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit, onExport: () -> Unit) {
+fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
     val c = M.c
     val s = M.s
     val ctx = LocalContext.current
@@ -142,7 +142,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit, onExport: () 
                             }
                             NOTES -> NotesList(data, onOpen = { openNote = it }, contentPadding = pad)
                             PEOPLE -> PeopleList(data, onOpen = { openPerson = it }, contentPadding = pad)
-                            SETTINGS -> SettingsScreen(settings, vm, onExport, pad)
+                            SETTINGS -> SettingsScreen(settings, vm, pad)
                         }
                     }
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(20.dp).background(Brush.verticalGradient(listOf(Color.Transparent, c.bg))))
@@ -286,7 +286,7 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
                 SectionLabel(s.projects, Modifier.padding(start = 30.dp, bottom = 6.dp))
                 projects.forEach { p ->
                     val n = data.tasks.count { !it.done && it.project == p }
-                    NavRow(null, p, if (n > 0) n.toString() else "", screen == TASKS && view == Views.project(p)) { onGo(TASKS, Views.project(p)) }
+                    NavRow(null, projectLabel(p), if (n > 0) n.toString() else "", screen == TASKS && view == Views.project(p)) { onGo(TASKS, Views.project(p)) }
                 }
             }
 
