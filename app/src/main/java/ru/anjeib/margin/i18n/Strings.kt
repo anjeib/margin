@@ -223,9 +223,6 @@ interface Strings {
     val fieldTime: String
     val fieldRepeat: String
     val fieldPeople: String
-    val fieldWaiting: String
-    val fieldPromised: String
-    val notSet: String
     val historyTitle: String
     val srcTaskEntry: String
     val srcChat: String
@@ -632,9 +629,6 @@ object Ru : Strings {
     override val fieldTime = "Время"
     override val fieldRepeat = "Повтор"
     override val fieldPeople = "Люди"
-    override val fieldWaiting = "Ждём от"
-    override val fieldPromised = "Обещано"
-    override val notSet = "не задано"
     override val historyTitle = "ИСТОРИЯ"
     override val srcTaskEntry = "из записи задачи"
     override val srcChat = "из разговора"
@@ -986,9 +980,6 @@ object En : Strings {
     override val fieldTime = "Time"
     override val fieldRepeat = "Repeat"
     override val fieldPeople = "People"
-    override val fieldWaiting = "Waiting for"
-    override val fieldPromised = "Promised to"
-    override val notSet = "not set"
     override val historyTitle = "HISTORY"
     override val srcTaskEntry = "from a task record"
     override val srcChat = "from a conversation"

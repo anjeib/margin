@@ -165,28 +165,47 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             .clickable(enabled = task.noteId != null) { task.noteId?.let(onOpenNote) })
                 }
 
-                // Standard fields, always the same rows in the same order: what is filled and what is not is seen at a glance.
-                Spacer(Modifier.height(16.dp))
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) {
-                    val dates = task.whenLabel()?.substringBefore(" · ${task.time}")?.takeIf { task.dueDate != null || task.startDate != null }
-                    FieldRow(Icons.Outlined.CalendarToday, s.fieldDue, dates, accent = task.isOverdue()) { dialog = "dates" }
-                    FieldRow(Icons.Outlined.Schedule, s.fieldTime, task.time) { dialog = "time" }
-                    FieldRow(Icons.Outlined.Repeat, s.fieldRepeat, task.repeat?.label()) { dialog = "repeat" }
-                    FieldRow(Icons.Outlined.PersonOutline, s.fieldPeople, task.people.joinToString(", ").ifBlank { null }, onClick = { dialog = "people" }, content = {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            task.people.forEach { p ->
-                                Row(Modifier.clip(RoundedCornerShape(50)).clickable { data.person(p)?.let { onOpenPerson(it.id) } ?: run { dialog = "people" } },
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    Monogram(p, 22.dp); Spacer(Modifier.width(6.dp))
-                                    Text(p, style = Type.body.copy(color = c.ink, fontSize = 15.sp))
-                                }
-                            }
+                // One quiet line of what is filled — dates first, the project tag last — and «+ …» for what is not.
+                Spacer(Modifier.height(10.dp))
+                FlowRow(
+                    Modifier.padding(start = 48.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                    var first = true
+                    @Composable fun sep() { if (!first) Box(Modifier.size(1.dp, 14.dp).background(c.hairline)); first = false }
+                    task.whenLabel()?.substringBefore(" · ${task.time}")?.takeIf { task.dueDate != null || task.startDate != null }?.let { w ->
+                        sep(); MetaChip(Icons.Outlined.CalendarToday, w, task.isOverdue()) { dialog = "dates" }
+                    }
+                    task.time?.let { sep(); MetaChip(Icons.Outlined.Schedule, it) { dialog = "time" } }
+                    task.repeat?.let { sep(); MetaChip(Icons.Outlined.Repeat, it.label()) { dialog = "repeat" } }
+                    if (task.people.isNotEmpty()) sep()
+                    task.people.forEach { p ->
+                        Row(Modifier.clip(RoundedCornerShape(50)).clickable { data.person(p)?.let { onOpenPerson(it.id) } ?: run { dialog = "people" } },
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Monogram(p, 22.dp); Spacer(Modifier.width(5.dp))
+                            Text(p, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
                         }
-                    })
-                    task.waitingFor?.let { FieldRow(Icons.Outlined.HourglassEmpty, s.fieldWaiting, it) { dialog = "waiting" } }
-                    task.promisedTo?.let { w -> FieldRow(Icons.AutoMirrored.Outlined.ArrowForward, s.fieldPromised, w) { data.person(w)?.let { p -> onOpenPerson(p.id) } } }
-                    FieldRow(Icons.Outlined.Tag, s.project, task.project?.let { "#$it" }, accent = true, last = true) { dialog = "project" }
+                    }
+                    task.waitingFor?.let { sep(); MetaChip(Icons.Outlined.HourglassEmpty, s.waitingFor(it)) { dialog = "waiting" } }
+                    task.promisedTo?.let { w -> sep(); MetaChip(Icons.AutoMirrored.Outlined.ArrowForward, s.promised(w)) { data.person(w)?.let { p -> onOpenPerson(p.id) } } }
+                    task.project?.let { sep(); Box(Modifier.clickable { dialog = "project" }) { Tag(it) } }
                 }
+                val missing = buildList {
+                    if (task.dueDate == null && task.startDate == null) add(s.fieldDue to "dates")
+                    if (task.time == null) add(s.fieldTime to "time")
+                    if (task.repeat == null) add(s.fieldRepeat to "repeat")
+                    if (task.people.isEmpty()) add(s.fieldPeople to "people")
+                    if (task.project == null) add(s.project to "project")
+                }
+                if (missing.isNotEmpty()) FlowRow(Modifier.padding(start = 46.dp, top = 6.dp)) {
+                    missing.forEachIndexed { i, (label, d) ->
+                        if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.faint))
+                        Text("+ " + label.lowercase(), style = Type.small.copy(color = c.graphite),
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { dialog = d }.padding(2.dp))
+                    }
+                }
+                Hairline(Modifier.padding(top = 14.dp))
 
                 // Follow-up is late: offer to nudge the person (SMS if we know the number, else share).
                 if (task.waitingFor != null && task.isOverdue()) {
@@ -406,25 +425,6 @@ fun EntryView(e: Entry, onLong: () -> Unit, trailing: (@Composable () -> Unit)? 
     }
     if (trailing != null) { Spacer(Modifier.width(4.dp)); Box(Modifier.padding(top = 6.dp)) { trailing() } }
     }
-}
-
-/** One row of the task's standard fields: icon, name, value — or a faint «не задано» that invites a tap. */
-@Composable
-private fun FieldRow(icon: ImageVector, label: String, value: String?, accent: Boolean = false, last: Boolean = false, content: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
-    val c = M.c
-    val s = M.s
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 46.dp).padding(horizontal = 14.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = c.graphite, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(12.dp))
-        Text(label, style = Type.body.copy(color = c.graphite, fontSize = 15.sp), modifier = Modifier.width(100.dp), maxLines = 1)
-        Box(Modifier.weight(1f)) {
-            if (value != null && content != null) content()
-            else Text(value ?: s.notSet, style = Type.body.copy(color = when { value == null -> c.faint; accent -> c.accent; else -> c.ink }, fontSize = 15.sp),
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-    if (!last) Hairline(Modifier.padding(start = 44.dp))
 }
 
 @Composable
