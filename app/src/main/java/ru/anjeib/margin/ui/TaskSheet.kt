@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -123,9 +125,11 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 2.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) },
     ) {
         val maxH = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.92f).dp
-        // Short tasks get a short sheet; long ones scroll inside up to ~92% of the screen.
-        Column(Modifier.fillMaxWidth().heightIn(max = maxH).imePadding().navigationBarsPadding()) {
-            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+        // The sheet itself lifts above the keyboard, so the content gives up exactly the keyboard's height.
+        val ime = androidx.compose.foundation.layout.WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+        // Always the same height: the fields sit in the same place for every task, the input stays at the bottom.
+        Column(Modifier.fillMaxWidth().height((maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
                 // ⋯ menu
                 Box(Modifier.fillMaxWidth()) {
                     androidx.compose.animation.AnimatedVisibility(savedAt > 0, Modifier.align(Alignment.CenterStart),

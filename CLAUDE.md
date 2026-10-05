@@ -44,7 +44,7 @@ ui/MainVm.kt        вся логика экрана: send() по областя
 ui/App.kt           навигация, меню, вкладки со счётчиками
 ui/Tray.kt          лента над полем ввода: пузырь → результат
 ui/TasksScreen.kt   Сегодня / Неделя / Все (обзор по срокам или проектам) / Выполнено / проект
-ui/TaskSheet.kt     карточка задачи: только заполненные поля, «Записи», своё поле ввода с ИИ
+ui/TaskSheet.kt     карточка задачи: лист снизу всегда на 92% экрана (минус клавиатура), типовые поля, «Связи», «Записи», своё поле ввода с ИИ
 ui/NotesScreen.kt, PeopleScreen.kt, Search.kt, Onboarding.kt, SettingsScreen.kt, Input.kt (поле ввода, «+», диктовка)
 app/src/main/cpp    JNI-мост к whisper.cpp (исходники в third_party/whisper.cpp)
 ```
