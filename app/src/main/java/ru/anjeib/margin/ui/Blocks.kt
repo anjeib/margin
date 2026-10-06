@@ -37,6 +37,7 @@ import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Pause
@@ -115,7 +116,6 @@ fun BlockStream(
     var active by remember(owner) { mutableStateOf<String?>(null) }
     var inserting by remember(owner) { mutableStateOf<String?>(null) }
     var menuFor by remember(owner) { mutableStateOf<String?>(null) }
-    LaunchedEffect(owner) { vm.enrichMissing(owner) }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         entries.forEachIndexed { i, e ->
             val on = active == e.id
@@ -183,7 +183,7 @@ private fun Block(owner: String, e: Entry, vm: MainVm, onFill: (Fill) -> Unit, a
         e.attachments.forEach { a ->
             Spacer(Modifier.height(8.dp))
             when (a.kind) {
-                "photo" -> PhotoBlock(a, vm, active, onActivate, onCaption = { onFill(Fill("caption", e.id, a.id, a.caption)) })
+                "photo" -> PhotoBlock(a, vm, active, onActivate, onCaption = { onFill(Fill("caption", e.id, a.id, a.caption)) }, onText = { act -> vm.photoText(owner, e.id, a, act) })
                 "video" -> VideoBlock(a, active, onActivate, onCaption = { onFill(Fill("caption", e.id, a.id, a.caption)) })
                 "audio" -> VoiceBlock(a, vm)
                 "contact" -> ContactBlock(a)
@@ -198,7 +198,7 @@ private fun open(ctx: android.content.Context, a: Attachment) { Files.openIntent
 
 /** A photo wide, its caption, and — when there is text on it — that text, folded to three lines. */
 @Composable
-private fun PhotoBlock(a: Attachment, vm: MainVm, active: Boolean, onActivate: () -> Unit, onCaption: () -> Unit) {
+private fun PhotoBlock(a: Attachment, vm: MainVm, active: Boolean, onActivate: () -> Unit, onCaption: () -> Unit, onText: (String) -> Unit) {
     val c = M.c
     val s = M.s
     val ctx = LocalContext.current
@@ -210,9 +210,21 @@ private fun PhotoBlock(a: Attachment, vm: MainVm, active: Boolean, onActivate: (
                 ?: Box(Modifier.fillMaxWidth().height(160.dp))
         }
         Caption(a.caption, onCaption)
-        when {
-            "ocr:${a.id}" in working -> Text(s.readingPhoto, style = Type.small.copy(color = c.faint, fontSize = 12.5.sp), modifier = Modifier.padding(top = 4.dp))
-            !a.ocr.isNullOrBlank() -> FoldedText(s.textOnPhoto, a.ocr)
+        // The text on a photo only on request: what to do with it decides whether it is worth reading.
+        var menu by remember { mutableStateOf(false) }
+        if ("ocr:${a.id}" in working) Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(8.dp))
+            Text(s.readingPhoto, style = Type.small.copy(color = c.faint, fontSize = 12.5.sp))
+        } else if (active) Box(Modifier.padding(top = 6.dp)) {
+            Row(Modifier.clip(RoundedCornerShape(50)).background(c.accentSoft).clickable { menu = true }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.DocumentScanner, null, tint = c.accent, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
+                Text(s.photoTextAction, style = Type.small.copy(color = c.accent, fontSize = 13.5.sp))
+            }
+            DropdownMenu(menu, { menu = false }, containerColor = c.card) {
+                DropdownMenuItem(text = { Text(s.insertAsText, style = Type.body) }, onClick = { menu = false; onText("insert") })
+                DropdownMenuItem(text = { Text(s.makeContact, style = Type.body) }, onClick = { menu = false; onText("contact") })
+                DropdownMenuItem(text = { Text(s.makeTasks, style = Type.body) }, onClick = { menu = false; onText("tasks") })
+            }
         }
     }
 }
@@ -241,18 +253,6 @@ private fun Caption(text: String?, onEdit: () -> Unit) {
     val s = M.s
     if (text != null) Text(text, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.padding(top = 6.dp).clickable(onClick = onEdit))
     else Text("+ " + s.captionWord.lowercase(), style = Type.small.copy(color = c.faint, fontSize = 13.sp), modifier = Modifier.padding(top = 4.dp).clickable(onClick = onEdit))
-}
-
-/** Recognised or transcribed words: a faint label, three lines, a tap shows all. */
-@Composable
-private fun FoldedText(label: String, text: String) {
-    val c = M.c
-    var all by remember { mutableStateOf(false) }
-    Column(Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.chip.copy(alpha = 0.55f)).clickable { all = !all }.padding(10.dp)) {
-        Text(label.uppercase(), style = Type.label.copy(color = c.faint, fontSize = 10.sp))
-        Spacer(Modifier.height(3.dp))
-        Text(text, style = Type.small.copy(color = c.ink, fontSize = 14.sp), maxLines = if (all) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis)
-    }
 }
 
 /** A voice note that plays in place, with what was said written under it. */

@@ -87,7 +87,12 @@ interface Strings {
     val moveUp: String
     val moveDown: String
     val readingPhoto: String
-    val textOnPhoto: String
+    val photoTextAction: String
+    val insertAsText: String
+    val makeContact: String
+    val makeTasks: String
+    val noTextOnPhoto: String
+    fun contactMade(name: String): String
     val textWord: String
     val photoWord: String
     val textAfter: String
@@ -475,7 +480,12 @@ object Ru : Strings {
     override val moveUp = "Выше"
     override val moveDown = "Ниже"
     override val readingPhoto = "Читаю текст на фото…"
-    override val textOnPhoto = "Текст на фото"
+    override val photoTextAction = "Текст с фото"
+    override val insertAsText = "Вставить текстом"
+    override val makeContact = "Создать контакт"
+    override val makeTasks = "Сделать задачи"
+    override val noTextOnPhoto = "На фото не нашлось текста"
+    override fun contactMade(name: String) = "В «Людях»: $name"
     override val textWord = "Текст"
     override val photoWord = "Фото"
     override val textAfter = "Текст после блока"
@@ -867,7 +877,12 @@ object En : Strings {
     override val moveUp = "Move up"
     override val moveDown = "Move down"
     override val readingPhoto = "Reading the text on the photo…"
-    override val textOnPhoto = "Text on the photo"
+    override val photoTextAction = "Text from photo"
+    override val insertAsText = "Insert as text"
+    override val makeContact = "Create a contact"
+    override val makeTasks = "Make tasks"
+    override val noTextOnPhoto = "No text found on the photo"
+    override fun contactMade(name: String) = "Added to People: $name"
     override val textWord = "Text"
     override val photoWord = "Photo"
     override val textAfter = "Text after the block"

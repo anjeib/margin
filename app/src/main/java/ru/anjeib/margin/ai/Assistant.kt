@@ -289,6 +289,10 @@ object Assistant {
         """.trimIndent()
     }
 
+    /** A business card's text → who it is. Only what the card says. */
+    fun cardPrompt() = "This is the text of a business card. Reply with JSON only: {\"name\": full name, \"about\": job title, \"company\": …, \"phone\": …, \"email\": …, \"telegram\": …, \"address\": …}. " +
+        "Leave out what the card doesn't say; never guess."
+
     /** The words a task was born from, tidied up for the card — a separate tiny request, once per task. */
     fun tidyPrompt() = "Fix spelling, capital letters (names, places) and punctuation in the user's note. Keep the words and their order, " +
         "do not add anything, keep the language. Reply with JSON only: {\"text\": string}"

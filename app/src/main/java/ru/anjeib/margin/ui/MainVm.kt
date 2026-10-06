@@ -367,32 +367,72 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         enrich(owner, e.id, a)
     }
 
-    /** Once per open per session: photos still without their text get another try (say, once the OCR role is granted). */
-    private val enriched = mutableSetOf<String>()
-    fun enrichMissing(owner: String) {
-        entriesOf(owner).forEach { e -> e.attachments.filter { it.kind == "photo" && it.ocr == null && enriched.add(it.id) }.forEach { enrich(owner, e.id, it) } }
-    }
-
     private fun enrich(owner: String, entryId: String, a: Attachment) {
         val s = settings.value
         when (a.kind) {
             "audio" -> if (a.transcript.isNullOrBlank()) transcribe(a) { text -> updateAttachment(owner, entryId, a.id) { it.copy(transcript = text.sentence()) } }
-            "photo" -> if (a.ocr == null && Processor.ready(s) && Processor.online(ctx)) viewModelScope.launch {
-                _working.value += "ocr:${a.id}"
-                try {
+        }
+    }
+
+    /**
+     * Text on a photo, only when asked («Текст с фото»): read once (Yandex Vision), remembered, then used —
+     * put in as a text block, turned into a contact (a business card), or into tasks (a whiteboard, a paper list).
+     */
+    fun photoText(owner: String, entryId: String, a: Attachment, action: String) {
+        val s = settings.value
+        if (!Processor.ready(s)) { _toast.value = L.s.noKey; return }
+        if (a.ocr == null && !Processor.online(ctx)) { _toast.value = L.s.errNet; return }
+        viewModelScope.launch {
+            _working.value += "ocr:${a.id}"
+            try {
+                val text = a.ocr ?: run {
                     val jpeg = Files.jpeg(ctx, a) ?: return@launch
                     val url = Files.imageDataUrl(ctx, a) ?: return@launch
                     val r = ru.anjeib.margin.ai.Llm.ocr(s, jpeg, url)
                     prefs.addSpend(r.rub)
-                    // An empty result is remembered too — «no text here» is an answer, not a reason to ask again.
-                    updateAttachment(owner, entryId, a.id) { it.copy(ocr = r.content.trim()) }
-                } catch (e: Exception) {
-                    android.util.Log.w("Margin", "ocr: ${e.message}")
-                } finally {
-                    _working.value -= "ocr:${a.id}"
+                    r.content.trim().also { x -> updateAttachment(owner, entryId, a.id) { it.copy(ocr = x) } }
                 }
+                if (text.isBlank()) { _toast.value = L.s.noTextOnPhoto; return@launch }
+                when (action) {
+                    "insert" -> insertText(owner, entryId, text)
+                    "contact" -> contactFromCard(owner, entryId, text)
+                    "tasks" -> tasksFromText(owner, text)
+                }
+            } catch (e: Exception) {
+                _toast.value = (e as? AiException)?.message ?: e.message
+            } finally {
+                _working.value -= "ocr:${a.id}"
             }
         }
+    }
+
+    /** A business card's words → a person with what the card says, and a contact card right after the photo. */
+    private suspend fun contactFromCard(owner: String, afterId: String, text: String) {
+        val s = settings.value
+        val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.cardPrompt(), listOf("user" to text))
+        prefs.addSpend(r.rub)
+        val o = Assistant.parseObject(r.content) ?: run { _toast.value = L.s.errEmpty; return }
+        val name = Assistant.field(o, "name")?.properName() ?: run { _toast.value = L.s.noTextOnPhoto; return }
+        val plan = AiPlan(null, listOf(kotlinx.serialization.json.JsonObject(o.filterKeys { it in setOf("name", "about", "company", "phone", "email", "telegram", "address") } +
+            ("type" to kotlinx.serialization.json.JsonPrimitive("person")))), null, local = true)
+        store.replace(Assistant.apply(data.value, plan, text).data)
+        insertAttachment(owner, afterId, Attachment(kind = "contact", name = name,
+            contact = ContactInfo(name, Assistant.field(o, "phone"), Assistant.field(o, "email"))))
+        _toast.value = L.s.contactMade(name)
+    }
+
+    /** Words from a photo of a whiteboard or a paper list → tasks, linked to the note they came from. */
+    private suspend fun tasksFromText(owner: String, text: String) {
+        val s = settings.value
+        val noteId = owner.takeIf { it.startsWith("note:") }?.substringAfter(':')
+        val scope = if (owner.startsWith("task:")) Scope.InTask(owner.substringAfter(':')) else Scope.Main
+        val (plan, cost) = Processor.askPlan(s, Assistant.systemPrompt(data.value, s.copy(askWhenUnclear = false), scope, query = text),
+            listOf("user" to text + "\n[Text from a photo. Make a task of each actionable item${noteId?.let { " (note_id=$it)" } ?: ""}; in a task scope — subtasks. No notes.]"), complex = true)
+        prefs.addSpend(cost)
+        val before = data.value
+        val applied = Assistant.apply(before, plan.copy(question = null), text, strict = true, focus = (scope as? Scope.InTask)?.taskId)
+        store.replace(applied.data)
+        _toast.value = applied.caption ?: L.s.nothingFound
     }
 
     /** Addresses in a text block get their page title as a quiet line under it. */
