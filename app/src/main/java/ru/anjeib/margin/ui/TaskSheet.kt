@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.anjeib.margin.ai.Scope
 import ru.anjeib.margin.data.AppData
+import ru.anjeib.margin.data.contact
 import ru.anjeib.margin.data.Entry
 import ru.anjeib.margin.data.Subtask
 import ru.anjeib.margin.data.Task
@@ -200,10 +201,10 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     // Each property a badge of its own — they sit together nicely even when there is only one.
                     task.repeat?.let { MetaChip(Icons.Outlined.Repeat, it.label()) { dialog = "repeat" } }
                     task.people.filter { p -> p != task.waitingFor && p != task.promisedTo }.forEach { p ->
-                        PersonBadge(p, big = true) { data.person(p)?.let { onOpenPerson(it.id) } ?: run { dialog = "people" } }
+                        PersonBadge(p, big = true) { data.contact(p)?.let { onOpenPerson(it.id) } ?: vm.offerContact(p) }
                     }
                     if (task.waitingFor != null) PromiseBadge(task, big = true) { dialog = "waiting" }
-                    else task.promisedTo?.let { w -> PromiseBadge(task, big = true) { data.person(w)?.let { p -> onOpenPerson(p.id) } } }
+                    else task.promisedTo?.let { w -> PromiseBadge(task, big = true) { data.contact(w)?.let { p -> onOpenPerson(p.id) } ?: vm.offerContact(w) } }
                     // A place opens the map; to change it, hold.
                     task.place?.let { pl ->
                         Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).combinedClickable(onClick = {
@@ -353,6 +354,14 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
             // Scoped composer — everything about this task is said here.
             Column(Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
                 notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> NoticeLine(nt, vm) }
+                // A name here that isn't a contact was tapped: the same quiet offer as on the main screen.
+                val offer by vm.contactOffer.collectAsState()
+                offer?.let { n ->
+                    Row(Modifier.fillMaxWidth().padding(start = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(s.notAContact(n), style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
+                        QuietLink(s.addContact) { vm.keepContact(n) }
+                    }
+                }
                 val modeLabel = fill?.label() ?: when (mode) { "subtask" -> s.subtaskOne; "place" -> s.fieldPlace; "people" -> s.fieldPeople; "project" -> s.project; else -> null }
                 SmartComposer(
                     vm, modeLabel?.let { s.fillHint(it) } ?: s.addOrChange, busy == scopeKey,

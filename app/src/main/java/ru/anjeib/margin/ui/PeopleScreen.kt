@@ -72,7 +72,7 @@ private fun Task.involves(p: Person) = p.involvedIn(this)
 fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPadding: PaddingValues) {
     val c = M.c
     val s = M.s
-    val people = data.persons.filter { !it.archived }.sortedByDescending { p -> data.tasks.count { !it.done && it.involves(p) } }
+    val people = data.persons.filter { it.isContact }.sortedByDescending { p -> data.tasks.count { !it.done && it.involves(p) } }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item("h") { Text(s.peopleTitle, style = Type.display.copy(color = c.ink), modifier = Modifier.padding(top = 18.dp, bottom = 12.dp, start = 4.dp)) }
         if (people.isEmpty()) item("empty") { Empty(s.peopleTitle, s.emptyPeople) }
@@ -251,7 +251,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             title = { Text(s.mergeWith, style = Type.cardTitle.copy(color = c.ink)) },
             text = {
                 Column {
-                    data.persons.filter { it.id != person.id }.forEach { o ->
+                    data.persons.filter { it.id != person.id && it.isContact }.forEach { o ->
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { vm.mergePersons(person.id, o.id); dialog = null; onBack() }
                             .padding(vertical = 10.dp, horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Monogram(o.name, 26.dp); Spacer(Modifier.width(10.dp))

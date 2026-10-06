@@ -82,6 +82,7 @@ fun Tray(
     onHold: () -> Unit,
     onSeparate: () -> Unit = {},
     onAskWhen: (taskId: String, what: String) -> Unit = { _, _ -> },
+    onKeepContact: (String) -> Unit = {},
 ) {
     val c = M.c
     val s = M.s
@@ -119,13 +120,13 @@ fun Tray(
                         contentKey = { it?.id ?: "raw" },
                         label = "bubble",
                     ) { p ->
-                        if (p != null) ResultBubble(p, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen)
+                        if (p != null) ResultBubble(p, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen, onKeepContact)
                         else UserBubble(m, working = busy && m.id == lastUser)
                     }
                 } else AssistantMsg(m, canUndo(m.id), onUndo = { onUndo(m.id) }, onOpenTask = onOpenTask, onOption = onOption, onOpenSettings = onOpenSettings)
             }
             // A result without a user bubble (e.g. from a suggestion) still gets its own bubble.
-            if (pending != null && msgs.none { it.id == pending.userMsgId }) ResultBubble(pending, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen)
+            if (pending != null && msgs.none { it.id == pending.userMsgId }) ResultBubble(pending, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen, onKeepContact)
         }
     }
 }
@@ -161,7 +162,7 @@ private fun Dots(color: androidx.compose.ui.graphics.Color) {
 
 @Composable
 private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, onEdit: () -> Unit, onReject: () -> Unit, onHold: () -> Unit, onSeparate: () -> Unit = {},
-                         onAskWhen: (String, String) -> Unit = { _, _ -> }) {
+                         onAskWhen: (String, String) -> Unit = { _, _ -> }, onKeepContact: (String) -> Unit = {}) {
     val c = M.c
     val s = M.s
     val after = p.preview.data
@@ -177,15 +178,15 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
                     t.nextOccurrence()?.let { nx -> (nx.dueDate ?: nx.startDate)?.shortLabel()?.lowercase()?.let { s.nextOn(it) } }) }
                 old != null -> { changed++; listOfNotNull(
                     t.whenLabel()?.let { w -> if (old.whenLabel() != w) w + (old.whenLabel()?.let { " · " + s.was(it.lowercase()) } ?: "") else null },
-                    t.waitingFor?.takeIf { it != old.waitingFor }?.let { s.waitingFor(it) },
-                    t.promisedTo?.takeIf { it != old.promisedTo }?.let { s.promised(it) },
+                    t.waitingFor?.takeIf { it != old.waitingFor }?.let { s.promiseToYou(it) },
+                    t.promisedTo?.takeIf { it != old.promisedTo }?.let { s.promiseFromYou(it) },
                     t.repeat?.takeIf { it != old.repeat }?.label(),
                     t.place?.takeIf { it != old.place },
                     (t.subtasks.size - old.subtasks.size).takeIf { it > 0 }?.let { s.stepsCount(it) },
                 ).ifEmpty { listOfNotNull(t.whenLabel()) } }
                 else -> { created++; listOfNotNull(
-                    t.whenLabel(), t.place, t.repeat?.label(), t.waitingFor?.let { s.waitingFor(it) }, t.promisedTo?.let { s.promised(it) },
-                    t.people.filterNot { it.equals(t.waitingFor, true) }.takeIf { it.isNotEmpty() }?.joinToString(", "), if (n > 0) s.stepsCount(n) else null,
+                    t.waitingFor?.let { s.promiseToYou(it) } ?: t.promisedTo?.let { s.promiseFromYou(it) }, t.whenLabel()?.lowercase(), t.place, t.repeat?.label(),
+                    t.people.filterNot { it.equals(t.waitingFor, true) || it.equals(t.promisedTo, true) }.takeIf { it.isNotEmpty() }?.joinToString(", "), if (n > 0) s.stepsCount(n) else null,
                 ) }
             }
             add(t.title to meta.joinToString(" · "))
@@ -228,6 +229,11 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
                 if (p.smart) p.plan.reply?.takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(it, style = Type.small.copy(color = c.onBubble.copy(alpha = 0.75f)))
+                }
+                // Someone met for the first time: «+ контакт» once, here; not pressed — they stay just a name.
+                after.persons.filter { pr -> pr.draft && current.persons.none { it.matches(pr.name) } }.take(2).forEach { pr ->
+                    Text(s.addContact + ": " + pr.name, style = Type.small.copy(color = c.accent, fontSize = 14.sp),
+                        modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).clickable { onKeepContact(pr.name) }.padding(vertical = 2.dp))
                 }
                 if (kind.isNotBlank()) Text(kind, style = Type.label.copy(color = c.onBubble.copy(alpha = 0.55f), fontSize = 10.5.sp),
                     modifier = Modifier.align(Alignment.End).padding(top = 6.dp))

@@ -65,10 +65,15 @@ class MainActivity : ComponentActivity() {
                         isAppearanceLightNavigationBars = !dark
                     }
                 }
+                val d by vm.data.collectAsState()
+                androidx.compose.runtime.CompositionLocalProvider(ru.anjeib.margin.ui.LocalPeopleLinks provides ru.anjeib.margin.ui.PeopleLinks(
+                    isContact = { n -> d.persons.any { it.isContact && it.matches(n) } }, onName = vm::nameTapped,
+                )) {
                 App(vm, shared.value, onSharedConsumed = { shared.value = null },
                     copied = copied.value != null,
                     readCopied = { readCopied() },
                     onCopiedSeen = { copied.value?.let { seenClip(it) }; copied.value = null })
+                }
             }
         }
     }

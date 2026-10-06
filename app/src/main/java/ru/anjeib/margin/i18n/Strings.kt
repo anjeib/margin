@@ -71,9 +71,13 @@ interface Strings {
     fun waitingShort(n: String): String
     val promiseWord: String
     val addContact: String
+    fun notAContact(n: String): String
     val inContacts: String
     val promisesTitle: String
     fun promiseToYou(from: String): String
+    /** «Вам от » + «Марины» + «» — the name part becomes a link. */
+    fun promiseToYouParts(from: String): Triple<String, String, String>
+    fun promiseFromYouParts(to: String): Triple<String, String, String>
     fun promiseFromYou(to: String): String
     fun promisedShort(n: String): String
     fun forwardFrom(via: String): String
@@ -514,15 +518,15 @@ object Ru : Strings {
         HelpSection("Разделы", "", pairs = listOf(
             "Задачи" to "дела со сроком и без: Сегодня, Неделя, Все",
             "Заметки" to "мысли, идеи, фото, голосовые, списки",
-            "Контакты" to "люди и компании: телефон, почта, обещания, общие дела",
+            "Контакты" to "люди и компании, которых вы добавили: «+ контакт» в пузыре, нажатие на серое имя или «Добавить контакт: …»",
             "Проекты" to "всё по одной теме: задачи, заметки, люди",
             "Входящие" to "ещё не разобранное: без интернета и пересланное",
             "Календарь" to "месяц и число дел в каждом дне",
             "Архив" to "убранные заметки и контакты, можно вернуть",
         )),
         HelpSection("Обещания", "Margin отмечает, кто кому что должен. На главной — обещания на ближайшие три дня и просроченные.", pairs = listOf(
-            "«Марина пришлёт правки до среды»" to "Обещание · Вам от Марины",
-            "«Обещал Виктору оплату до 10-го»" to "Обещание · Виктору от Вас",
+            "«Марина пришлёт правки до среды»" to "под задачей: Вам от Марины · ср",
+            "«Обещал Виктору оплату до 10-го»" to "под задачей: Виктору от Вас · сб",
             "⧗ песочные часы" to "нажмите, когда получили",
         )),
         HelpSection("Внутри задачи", "Всё, что вы пишете в карточке, относится к этой задаче.",
@@ -548,7 +552,7 @@ object Ru : Strings {
             "вправо по заметке, контакту" to "удалить",
             "«Отменить»" to "есть под каждым изменением несколько секунд",
         )),
-        HelpSection("Связи", "Задача помнит, откуда пришла: «↳ из сообщения» или идея из заметки. В карточке — «Связи»: люди, их другие обещания, проект."),
+        HelpSection("Связи", "Задача помнит, откуда пришла: «↳ из сообщения» или идея из заметки. В карточке — «Связи»: люди, их другие обещания, проект. Под задачей ссылки выделены цветом: контакт открывает его страницу, адрес — карту."),
         HelpSection("Пересылка", "Настройки → «Пересылка в Margin».", pairs = listOf(
             "Telegram" to "свой бот: пересылайте ему сообщения",
             "Почта" to "перешлите письмо на свой же адрес",
@@ -615,9 +619,12 @@ object Ru : Strings {
     override fun promisedShort(n: String) = "обещание: ${n.dative()} от Вас"
     override val promiseWord = "Обещание"
     override val addContact = "+ контакт"
+    override fun notAContact(n: String) = "$n — нет в контактах"
     override val inContacts = "в контактах"
     override val promisesTitle = "Обещания"
     override fun promiseToYou(from: String) = "Вам от ${from.genitive()}"
+    override fun promiseToYouParts(from: String) = Triple("Вам от ", from.genitive(), "")
+    override fun promiseFromYouParts(to: String) = Triple("", to.dative(), " от Вас")
     override fun promiseFromYou(to: String) = "${to.dative()} от Вас"
     override fun forwardFrom(via: String) = "из $via"
     override fun forwardFiles(n: Int) = "📎 $n"
@@ -1055,15 +1062,15 @@ object En : Strings {
         HelpSection("Sections", "", pairs = listOf(
             "Tasks" to "with or without dates: Today, Week, All",
             "Notes" to "thoughts, ideas, photos, voice, lists",
-            "Contacts" to "people and companies: phone, email, promises, shared tasks",
+            "Contacts" to "people and companies you added: “+ contact” in the bubble, a tap on a grey name or “Add contact: …”",
             "Projects" to "everything on one topic: tasks, notes, people",
             "Inbox" to "not sorted yet: offline and forwarded",
             "Calendar" to "the month and how much each day holds",
             "Archive" to "notes and contacts put away, can come back",
         )),
         HelpSection("Promises", "Margin keeps track of who owes whom. The main screen shows promises due within three days and late ones.", pairs = listOf(
-            "“Marina sends the edits by Wednesday”" to "Promise · to you from Marina",
-            "“Promised Victor the payment by the 10th”" to "Promise · to Victor from you",
+            "“Marina sends the edits by Wednesday”" to "under the task: to you from Marina · Wed",
+            "“Promised Victor the payment by the 10th”" to "under the task: to Victor from you · Sat",
             "⧗ hourglass" to "tap when you got it",
         )),
         HelpSection("Inside a task", "Whatever you write in the card is about this task.",
@@ -1089,7 +1096,7 @@ object En : Strings {
             "right on a note, contact" to "delete",
             "“Undo”" to "under every change for a few seconds",
         )),
-        HelpSection("Links", "A task remembers where it came from: “↳ from a message” or an idea in a note. The card shows “Links”: people, their other promises, the project."),
+        HelpSection("Links", "A task remembers where it came from: “↳ from a message” or an idea in a note. The card shows “Links”: people, their other promises, the project. Under a task, links are in colour: a contact opens their page, an address opens the map."),
         HelpSection("Forwarding", "Settings → “Forwarding to Margin”.", pairs = listOf(
             "Telegram" to "your own bot: forward messages to it",
             "Mail" to "forward a letter to your own address",
@@ -1156,9 +1163,12 @@ object En : Strings {
     override fun promisedShort(n: String) = "promise to $n from you"
     override val promiseWord = "Promise"
     override val addContact = "+ contact"
+    override fun notAContact(n: String) = "$n isn’t in contacts"
     override val inContacts = "in contacts"
     override val promisesTitle = "Promises"
     override fun promiseToYou(from: String) = "to you from $from"
+    override fun promiseToYouParts(from: String) = Triple("to you from ", from, "")
+    override fun promiseFromYouParts(to: String) = Triple("to ", to, " from you")
     override fun promiseFromYou(to: String) = "to $to from you"
     override fun forwardFrom(via: String) = "from $via"
     override fun forwardFiles(n: Int) = "📎 $n"

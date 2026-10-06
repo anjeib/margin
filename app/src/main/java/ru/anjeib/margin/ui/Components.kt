@@ -30,6 +30,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -229,6 +231,52 @@ fun DatePill(text: String, late: Boolean, timed: Boolean) {
     }
 }
 
+/** Who is a contact and what a tap on a name does — given by the app, so rows anywhere can link names. */
+data class PeopleLinks(val isContact: (String) -> Boolean = { false }, val onName: (String) -> Unit = {})
+val LocalPeopleLinks = androidx.compose.runtime.compositionLocalOf { PeopleLinks() }
+
+/**
+ * The one quiet line under a task: «Вам от Марины · завтра · Ленина, 5 · #сайт».
+ * Links look like links (accent): a contact opens their page, the place opens the map; a name that isn't a contact
+ * stays grey and a tap offers «+ контакт». Late dates are accent too. No pills — they live in the card.
+ */
+@Composable
+fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: Boolean = false, today: java.time.LocalDate = java.time.LocalDate.now()) {
+    val c = M.c
+    val s = M.s
+    val links = LocalPeopleLinks.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val (d, n) = t.subtasks.progress()
+    val sep = "  ·  "
+    val text = androidx.compose.ui.text.buildAnnotatedString {
+        var first = true
+        fun next() { if (!first) append(sep); first = false }
+        fun link(tag: String, shown: String, color: Color, onClick: () -> Unit) =
+            withLink(androidx.compose.ui.text.LinkAnnotation.Clickable(tag, androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = color))) { onClick() }) { append(shown) }
+        fun name(n0: String, shown: String = n0) = link("p:$n0", shown, if (links.isContact(n0)) c.accent else c.graphite) { links.onName(n0) }
+        if (!t.done) {
+            val parts = t.waitingFor?.let { s.promiseToYouParts(it) to it } ?: t.promisedTo?.let { s.promiseFromYouParts(it) to it }
+            parts?.let { (p, who) -> next(); append(p.first); name(who, p.second); append(p.third) }
+        }
+        whenText?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = if (t.isOverdue(today)) c.accent else c.graphite)) { append(it) } }
+        t.people.filter { p -> p != t.waitingFor && p != t.promisedTo && p != s.me }.take(2).forEach { next(); name(it) }
+        t.place?.let { pl ->
+            next()
+            link("place", pl, c.accent) {
+                runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
+            }
+        }
+        if (n > 0) { next(); append("$d/$n") }
+        t.repeat?.let { next(); append("↻ " + it.label()) }
+        val files = t.entries.sumOf { it.attachments.size }
+        if (files > 0) { next(); append("📎 $files") }
+        if (showIdea && t.noteId != null) { next(); append("✎ " + s.ideaMark) }
+        if (showProject) t.project?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = c.accent)) { append("#" + projectLabel(it)) } }
+    }
+    if (text.isNotEmpty()) Text(text, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(top = 3.dp))
+}
+
 /** «Обещание · Виктору от вас» / «Обещание · вам от Марины»: who owes whom, in one badge. */
 @Composable
 fun PromiseBadge(t: Task, big: Boolean = false, onClick: (() -> Unit)? = null) {
@@ -255,31 +303,12 @@ fun PersonBadge(name: String, big: Boolean = false, onClick: (() -> Unit)? = nul
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** The task's line in a card: the same quiet line as in lists; [timed] — the time already stands on the left. */
 @Composable
-fun TaskMeta(t: Task, showProject: Boolean = true, showIdea: Boolean = false) {
-    val c = M.c
-    val s = M.s
-    val overdue = t.isOverdue()
-    val (d, n) = t.subtasks.progress()
-    val whenText = t.whenLabel()
-    if (whenText == null && t.place == null && t.project == null && t.people.isEmpty() && t.waitingFor == null && t.promisedTo == null && n == 0 && t.repeat == null && t.entries.none { it.attachments.isNotEmpty() } && !(showIdea && t.noteId != null)) return
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        itemVerticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (showProject) t.project?.let { Tag(it) }
-        if (whenText != null) DatePill(whenText, overdue, t.time != null)
-        if (!t.done) PromiseBadge(t)
-        t.place?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-        if (showIdea && t.noteId != null) Text("✎ " + s.ideaMark, style = Type.small.copy(color = c.graphite))
-        t.people.filter { p -> p != t.waitingFor && p != t.promisedTo }.take(3).forEach { PersonBadge(it) }
-        if (n > 0) Text("$d/$n", style = Type.small.copy(color = c.graphite))
-        t.repeat?.let { Text("↻ " + it.label(), style = Type.small.copy(color = c.graphite)) }
-        val files = t.entries.sumOf { it.attachments.size }
-        if (files > 0) Text("📎 $files", style = Type.small.copy(color = c.graphite))
-    }
+fun TaskMeta(t: Task, showProject: Boolean = true, showIdea: Boolean = false, timed: Boolean = false) {
+    // On «Сегодня» with the hour on the left, «сегодня 16:00» would only repeat it.
+    val whenText = if (timed && t.dueDate == java.time.LocalDate.now()) null else t.whenLabel()
+    TaskLine(t, whenText, showProject, showIdea)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -325,7 +354,7 @@ fun TaskCard(
                 }
                 if (!t.done) {
                     Spacer(Modifier.height(5.dp))
-                    TaskMeta(t, showProject, showIdea)
+                    TaskMeta(t, showProject, showIdea, timed = timeColumn != null)
                 }
             }
             if (t.subtasks.isNotEmpty() && !t.done) {

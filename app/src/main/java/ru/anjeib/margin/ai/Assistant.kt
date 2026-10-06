@@ -421,7 +421,7 @@ object Assistant {
         fun subs(l: List<Subtask>, names: List<String> = emptyList()): List<Subtask> = l.map { it.copy(title = it.title.withNames(names + d.persons.map { p -> p.name }), assignee = who(it.assignee), children = subs(it.children, names)) }
 
         fun learn(people: List<String>, project: String?) {
-            val newPeople = people.distinct().filter { it.lowercase() !in me && d.person(it) == null }.map { Person(name = it.properName()) }
+            val newPeople = people.distinct().filter { it.lowercase() !in me && d.person(it) == null }.map { Person(name = it.properName(), draft = true) }
             val newProject = project?.takeIf { p -> d.projects.none { it.equals(p, true) } }
             if (newPeople.isNotEmpty() || newProject != null)
                 d = d.copy(persons = d.persons + newPeople, projects = d.projects + listOfNotNull(newProject))
@@ -658,8 +658,12 @@ object Assistant {
                     val name = a.str("name")?.properName() ?: continue
                     if (name.lowercase() in me) continue
                     val existing = d.person(name)
-                    val p = (existing ?: Person(name = name)).let {
+                    // Learned in passing → a draft the bubble offers to keep; «Добавить контакт» (keep) → a contact at once.
+                    val keep = a.str("keep") == "true"
+                    val p = (existing ?: Person(name = name, draft = true)).let {
                         it.copy(
+                            draft = if (keep) false else it.draft,
+                            kept = it.kept || keep,
                             about = a.str("about") ?: it.about,
                             aboutFromUser = it.aboutFromUser || a.str("about") != null,
                             phone = a.str("phone") ?: it.phone,

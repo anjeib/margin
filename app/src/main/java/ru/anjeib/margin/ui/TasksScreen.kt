@@ -573,24 +573,10 @@ fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Uni
                 if (!t.done) t.entries.lastOrNull { it.text.isNotBlank() }?.let { e ->
                     Text(e.text, style = Type.small.copy(color = c.faint, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                // When it is, first and clearer; the place and the rest smaller.
                 if (!t.done) {
                     val whenText = t.rowLabel(today)
-                    val extra = listOfNotNull(t.place, if (n > 0) "$d/$n" else null)
-                    // Badges: when, whose promise, who — then the place and the rest, smaller.
-                    val promise = t.waitingFor != null || t.promisedTo != null
-                    val who = t.people.filter { p -> p != t.waitingFor && p != t.promisedTo && p != M.s.me }.take(2)
-                    if (whenText != null || promise || who.isNotEmpty() || extra.isNotEmpty() || (showProject && t.project != null)) androidx.compose.foundation.layout.FlowRow(
-                        Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
-                        itemVerticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        whenText?.let { DatePill(it, overdue, t.time != null) }
-                        PromiseBadge(t)
-                        who.forEach { PersonBadge(it) }
-                        if (extra.isNotEmpty()) Text(extra.joinToString("  ·  "),
-                            style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (showProject) t.project?.let { Tag(it) }
-                    }
+                    // One quiet line: whose promise, when, who, where — names and places are links.
+                    TaskLine(t, whenText, showProject, today = today)
                 }
             }
         }
@@ -663,11 +649,7 @@ private fun PromisesCard(list: List<Task>, today: LocalDate, quiet: Boolean, onO
               }
               Column(Modifier.weight(1f)) {
                 Text(t.title, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(t.waitingFor?.let { s.promiseToYou(it) } ?: s.promiseFromYou(t.promisedTo ?: ""),
-                        style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    t.rowLabel(today)?.let { Text("  ·  $it", style = Type.small.copy(color = if (late) c.accent else c.graphite, fontSize = 13.sp), maxLines = 1) }
-                }
+                TaskLine(t, t.rowLabel(today), showProject = false, today = today)
               }
             }
         }

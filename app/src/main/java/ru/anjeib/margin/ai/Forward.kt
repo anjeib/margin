@@ -145,16 +145,16 @@ object Forward {
         ru.anjeib.margin.data.Store.get(ctx).update { d ->
             val known = d.persons.find { it.matches(name) || (mail != null && it.email.equals(mail, true)) }
             if (known != null) d.copy(persons = d.persons.map {
-                if (it.id != known.id) it else it.copy(email = it.email ?: mail, telegram = it.telegram ?: tg, company = it.company ?: s.company?.takeIf { c -> c != name }, archived = false)
+                if (it.id != known.id) it else it.copy(draft = false, kept = true, email = it.email ?: mail, telegram = it.telegram ?: tg, company = it.company ?: s.company?.takeIf { c -> c != name }, archived = false)
             })
-            else d.copy(persons = d.persons + ru.anjeib.margin.data.Person(name = name, email = mail, telegram = tg, company = s.company?.takeIf { it != name }))
+            else d.copy(persons = d.persons + ru.anjeib.margin.data.Person(name = name, email = mail, telegram = tg, company = s.company?.takeIf { it != name }, kept = true))
         }
     }
 
     fun isContact(d: AppData, s: Sender?): Boolean {
         if (s == null) return false
         val name = s.name ?: s.company ?: s.address ?: return false
-        return d.persons.any { !it.archived && (it.matches(name) || (s.address != null && it.email.equals(s.address, true))) }
+        return d.persons.any { it.isContact && (it.matches(name) || (s.address != null && it.email.equals(s.address, true))) }
     }
 
     /** Where it came from, in words: «Telegram», «почта», «MAX». */

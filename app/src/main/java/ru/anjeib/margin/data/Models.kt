@@ -81,9 +81,21 @@ data class Person(
     val archived: Boolean = false,
     /** «Личная информация»: short facts the user told about them (birthday, family, what they like). */
     val personal: List<String> = emptyList(),
+    /** Only mentioned so far: known by name (and what the AI learned), but not in «Контакты» until the user adds them. */
+    val draft: Boolean = false,
+    /** Added by the user («+ контакт», «Добавить контакт», a card, a phone contact) — never turned back into a draft. */
+    val kept: Boolean = false,
 ) {
     fun matches(n: String) = name.equals(n, true) || aliases.any { it.equals(n, true) }
+    /** Anything beyond a name: worth keeping in «Контакты» even if nobody pressed «+ контакт». */
+    val hasInfo get() = phone != null || email != null || telegram != null || max != null || company != null || address != null ||
+        personal.isNotEmpty() || (aboutFromUser && about != null) || aliases.isNotEmpty()
+    /** Shown in «Контакты». */
+    val isContact get() = !draft && !archived
 }
+
+/** The user's contact by this name (not a draft, not archived). */
+fun AppData.contact(n: String): Person? = persons.find { it.isContact && it.matches(n) }
 
 /** How a task comes back: every [interval] days/weeks/months/years; weekly may pin weekdays (1=Mon…7=Sun). */
 @Serializable
@@ -270,11 +282,14 @@ data class AppData(
     /** Brings files written by older versions to the current shape. */
     fun migrated(): AppData {
         var d = this
+        // 3.20: contacts only when the user adds them — the ones made by mere mention (a name, nothing else) become drafts.
+        if (d.persons.any { !it.kept && !it.draft && !it.hasInfo })
+            d = d.copy(persons = d.persons.map { if (!it.kept && !it.draft && !it.hasInfo) it.copy(draft = true) else it })
         // A task from an idea that says only «Посмотреть» gets what it is about from its note: «Посмотреть «Одиссея»».
         if (d.tasks.any { it.bareFromNote(d) != null })
             d = d.copy(tasks = d.tasks.map { t -> t.bareFromNote(d)?.let { t.copy(title = it) } ?: t })
         if (d.people.isNotEmpty()) {
-            val extra = d.people.distinctBy { it.lowercase() }.filter { n -> d.persons.none { it.matches(n) } }.map { Person(name = it) }
+            val extra = d.people.distinctBy { it.lowercase() }.filter { n -> d.persons.none { it.matches(n) } }.map { Person(name = it, draft = true) }
             d = d.copy(persons = d.persons + extra, people = emptyList())
         }
         // Short descriptions saved before AI summaries existed came from the user's words («наш дизайнер»): keep them.

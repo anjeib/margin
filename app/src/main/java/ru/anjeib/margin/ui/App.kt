@@ -102,6 +102,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     val toast by vm.toast.collectAsState()
     val events by vm.events.collectAsState()
     val undoBar by vm.undoBarState.collectAsState()
+    val contactOffer by vm.contactOffer.collectAsState()
+    val personReq by vm.openPersonReq.collectAsState()
 
     var screen by rememberSaveable { mutableStateOf(TASKS) }
     var view by rememberSaveable { mutableStateOf(Views.TODAY) }
@@ -119,6 +121,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     LaunchedEffect(shared) { if (!shared.isNullOrBlank()) { prefill = shared; screen = TASKS; onSharedConsumed() } }
     // The assistant tray is for the latest exchange — moving elsewhere tucks it away.
     LaunchedEffect(view, screen) { if (pending == null && busy == null) vm.dismissTray() }
+    LaunchedEffect(personReq) { personReq?.let { openTask = null; openPerson = it; vm.personOpened() } }
     LaunchedEffect(toast) { toast?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.toastShown() } }
 
     fun go(newScreen: String, newView: String? = null) {
@@ -197,6 +200,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             onReject = vm::rejectPending,
                             onHold = vm::holdPending,
                             onSeparate = vm::pendingAsNewNote,
+                            onKeepContact = { vm.keepContact(it) },
                             onAskWhen = { _, what ->
                                 // The preview's ids are not the saved ones: take the new task without a time from what was saved.
                                 val ids = vm.confirm()
@@ -239,6 +243,16 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 val note = data.notes.find { it.id == id }
                 if (note == null) openNote = null
                 else NoteEditor(note, data, vm, onBack = { openNote = null }, onOpenTask = { openTask = it })
+            }
+            // A name that isn't a contact was tapped: «Марина · + контакт», quietly, for a few seconds.
+            AnimatedVisibility(contactOffer != null && undoBar == null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 84.dp)) {
+                val n = contactOffer
+                if (n != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.bubble)
+                    .padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(s.notAContact(n), style = Type.small.copy(color = c.onBubble, fontSize = 14.sp), modifier = Modifier.weight(1f))
+                    Text(s.addContact, style = Type.small.copy(color = c.accent, fontSize = 14.sp),
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.keepContact(n) }.padding(12.dp))
+                }
             }
             // «Удалено · Отменить» for a few seconds after a swipe — above whatever screen is open.
             AnimatedVisibility(undoBar != null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 84.dp)) {

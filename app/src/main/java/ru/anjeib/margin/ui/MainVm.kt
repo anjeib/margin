@@ -33,6 +33,7 @@ import ru.anjeib.margin.data.Entry
 import ru.anjeib.margin.data.Files
 import ru.anjeib.margin.data.Note
 import ru.anjeib.margin.data.Person
+import ru.anjeib.margin.data.contact
 import ru.anjeib.margin.data.Prefs
 import ru.anjeib.margin.data.Settings
 import ru.anjeib.margin.data.Store
@@ -298,7 +299,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 )
                 prefs.addSpend(cost)
                 // «Исправить …» changes what exists — whatever the model thought, nothing new is made.
-                val plan = if (cmd?.what == "fix") plan0.copy(actions = plan0.actions.filterNot { a -> a["type"]?.toString()?.trim('"')?.startsWith("create_") == true }) else plan0
+                val plan = when (cmd?.what) {
+                    "fix" -> plan0.copy(actions = plan0.actions.filterNot { a -> a["type"]?.toString()?.trim('"')?.startsWith("create_") == true })
+                    // Asked for in so many words: a contact at once, not a draft.
+                    "contact" -> plan0.copy(actions = plan0.actions.map { a -> if (a["type"]?.toString()?.trim('"') == "person") kotlinx.serialization.json.JsonObject(a + ("keep" to kotlinx.serialization.json.JsonPrimitive("true"))) else a })
+                    else -> plan0
+                }
                 when {
                     scope != Scope.Main -> applyScoped(plan, scope, files, source)
                     plan.actions.isEmpty() -> { applyPlan(plan, files, source = source, strict = !smart); }
@@ -494,7 +500,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val o = Assistant.parseObject(r.content) ?: run { _toast.value = L.s.errEmpty; return }
         val name = Assistant.field(o, "name")?.properName() ?: run { _toast.value = L.s.noTextOnPhoto; return }
         val plan = AiPlan(null, listOf(kotlinx.serialization.json.JsonObject(o.filterKeys { it in setOf("name", "about", "company", "phone", "email", "telegram", "address") } +
-            ("type" to kotlinx.serialization.json.JsonPrimitive("person")))), null, local = true)
+            ("type" to kotlinx.serialization.json.JsonPrimitive("person")) + ("keep" to kotlinx.serialization.json.JsonPrimitive("true")))), null, local = true)
         store.replace(Assistant.apply(data.value, plan, text).data)
         insertAttachment(owner, afterId, Attachment(kind = "contact", name = name,
             contact = ContactInfo(name, Assistant.field(o, "phone"), Assistant.field(o, "email"))))
@@ -939,7 +945,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             waitingFor = t0.waitingFor?.let { data.value.person(it)?.name ?: it.properName() }, promisedTo = t0.promisedTo?.let { data.value.person(it)?.name ?: it.properName() })
         updateTask(t.id) { Assistant.withAutoReminder(t) }
         store.update { d ->
-            val newPeople = (t.people + listOfNotNull(t.waitingFor, t.promisedTo)).filter { p -> p != L.s.me && d.person(p) == null }.distinct().map { Person(name = it) }
+            val newPeople = (t.people + listOfNotNull(t.waitingFor, t.promisedTo)).filter { p -> p != L.s.me && d.person(p) == null }.distinct().map { Person(name = it, draft = true) }
             val newProject = t.project?.takeIf { p -> d.projects.none { it.equals(p, true) } }
             d.copy(persons = d.persons + newPeople, projects = d.projects + listOfNotNull(newProject))
         }
@@ -1065,6 +1071,34 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val before = data.value
         store.update { d -> d.copy(notes = d.notes.map { if (it.id == id) it.copy(archived = on) else it }) }
         offerUndo(before, if (on) L.s.archivedOne else L.s.restoredOne)
+    }
+
+    /** «+ контакт»: a draft (or a bare name) becomes a contact. */
+    fun keepContact(name: String) {
+        store.update { d ->
+            val known = d.person(name)
+            if (known != null) d.copy(persons = d.persons.map { if (it.id == known.id) it.copy(draft = false, kept = true, archived = false) else it })
+            else d.copy(persons = d.persons + Person(name = name.properName(), kept = true))
+        }
+        _contactOffer.value = null
+        _toast.value = L.s.contactMade(name)
+    }
+
+    private val _openPerson = MutableStateFlow<String?>(null)
+    /** A contact's name was tapped somewhere: the app opens their page. */
+    val openPersonReq: StateFlow<String?> = _openPerson
+    fun personOpened() { _openPerson.value = null }
+    fun nameTapped(name: String) {
+        val p = data.value.contact(name)
+        if (p != null) _openPerson.value = p.id else offerContact(name)
+    }
+
+    private val _contactOffer = MutableStateFlow<String?>(null)
+    /** A name that isn't a contact was tapped: a quiet bar offers «+ контакт». */
+    val contactOffer: StateFlow<String?> = _contactOffer
+    fun offerContact(name: String?) {
+        _contactOffer.value = name
+        if (name != null) viewModelScope.launch { kotlinx.coroutines.delay(6000); if (_contactOffer.value == name) _contactOffer.value = null }
     }
 
     fun archivePerson(id: String, on: Boolean = true) {
@@ -1293,9 +1327,9 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             val first = c.name.substringBefore(' ')
             val existing = d.person(c.name) ?: d.person(first)
             if (existing != null) d.copy(persons = d.persons.map {
-                if (it.id == existing.id) it.copy(phone = it.phone ?: c.phone, email = it.email ?: c.email, aliases = (it.aliases + c.name).distinct().filterNot { a -> a.equals(it.name, true) }) else it
+                if (it.id == existing.id) it.copy(draft = false, kept = true, phone = it.phone ?: c.phone, email = it.email ?: c.email, aliases = (it.aliases + c.name).distinct().filterNot { a -> a.equals(it.name, true) }) else it
             })
-            else d.copy(persons = d.persons + Person(name = c.name, phone = c.phone, email = c.email))
+            else d.copy(persons = d.persons + Person(name = c.name, phone = c.phone, email = c.email, kept = true))
         }
         return Attachment(kind = "contact", name = c.name, contact = c)
     }
