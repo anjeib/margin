@@ -1,6 +1,7 @@
 package ru.anjeib.margin.ai
 
 import android.content.Context
+import kotlinx.coroutines.sync.withLock
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.work.Constraints
@@ -109,12 +110,17 @@ object Processor {
         )
     }
 
-    /** Sorts everything typed offline, oldest first. Returns how many items were processed. */
-    suspend fun drain(ctx: Context): Int {
+    /** Sorts everything typed offline or forwarded in, oldest first. Returns one line per item: what it became. */
+    private val draining = kotlinx.coroutines.sync.Mutex()
+
+    /** The app (forward while open) and the worker may both start sorting: one at a time, never the same item twice. */
+    suspend fun drain(ctx: Context): List<String> = draining.withLock { drainNow(ctx) }
+
+    private suspend fun drainNow(ctx: Context): List<String> {
         val store = Store.get(ctx)
         val prefs = Prefs.get(ctx)
         L.lang = resolveLang(prefs.settings.value.lang)
-        var done = 0
+        val done = mutableListOf<String>()
         while (true) {
             val q = store.data.value.queue.firstOrNull() ?: break
             val s = prefs.settings.value
@@ -122,14 +128,24 @@ object Processor {
             val scope = scopeFrom(q.scope)
             val before = store.data.value
             val images = q.files.filter { it.kind == "photo" }.take(3).mapNotNull { Files.imageDataUrl(ctx, it) }
-            val (plan, cost) = askPlan(s, Assistant.systemPrompt(before, s.copy(askWhenUnclear = false), scope, query = q.text),
-                listOf("user" to Assistant.userMessage(q.text)), complex = Assistant.isComplex(q.text, scope), images = images)
+            // Forwarded words are someone else's: the AI sees who wrote them; the task keeps who said it.
+            val forwarded = q.via != null
+            val said = if (forwarded) Forward.prompt(q) else q.text
+            val source = if (forwarded) Forward.source(q) else q.text
+            val (plan, cost) = askPlan(s, Assistant.systemPrompt(before, s.copy(askWhenUnclear = false), scope, query = q.text + " " + (q.from ?: "") + " " + (q.comment ?: "")),
+                listOf("user" to Assistant.userMessage(said)), complex = forwarded || Assistant.isComplex(q.text, scope), images = images)
             prefs.addSpend(cost)
             val current = store.data.value
-            val applied = Assistant.apply(current, plan.copy(question = null), q.text, strict = true)
-            val next = attachTo(applied, scope, q.files, current)
+            val applied = Assistant.apply(current, plan.copy(question = null), source, strict = true)
+            // Nothing came of a forward with files → keep the files in «Входящие» rather than lose them.
+            // (When the AI answered why nothing changed — «такая задача уже есть» — its answer is enough.)
+            val next = if (applied.touchedTasks.isEmpty() && applied.touchedNotes.isEmpty() && (q.files.isNotEmpty() || (forwarded && plan.reply.isNullOrBlank())))
+                inbox(applied.data, Entry(text = source.take(4000), attachments = q.files))
+            else attachTo(applied, scope, q.files, current)
             store.replace(next.copy(queue = next.queue.filterNot { it.id == q.id }))
-            done++
+            val said2 = Forward.summary(current, applied, plan)
+            q.reply?.let { Forward.reply(ctx, it, said2) }
+            done += said2
         }
         return done
     }
@@ -137,8 +153,8 @@ object Processor {
 
 class QueueWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result = try {
-        val n = Processor.drain(applicationContext)
-        if (n > 0) Reminders.show(applicationContext, 4242, L.s.queueDoneTitle, L.s.queueDoneText(n))
+        val done = Processor.drain(applicationContext)
+        if (done.isNotEmpty()) Reminders.show(applicationContext, 4242, L.s.queueDoneText(done.size), done.joinToString("\n").take(600))
         Result.success()
     } catch (e: Exception) {
         if (runAttemptCount < 5) Result.retry() else Result.failure()

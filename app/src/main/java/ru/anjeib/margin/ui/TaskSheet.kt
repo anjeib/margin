@@ -519,7 +519,7 @@ fun NoticeLine(nt: Notice, vm: MainVm) {
     val s = M.s
     Row(Modifier.fillMaxWidth().padding(start = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Spark(12.dp); Spacer(Modifier.width(8.dp))
-        Text(nt.text, style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(nt.text, style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f), maxLines = 4, overflow = TextOverflow.Ellipsis)
         nt.undoId?.takeIf { vm.canUndo(it) }?.let { id -> QuietLink(s.undo) { vm.undo(id) } }
     }
 }

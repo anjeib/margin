@@ -128,6 +128,18 @@ data class Queued(
     val scope: String = "main", // main | notes | task:<id>
     val files: List<Attachment> = emptyList(),
     val at: String = nowStamp(),
+    /** Forwarded from elsewhere: telegram | mail | max | share — the words are someone else's, see [Forwarded]. */
+    val via: String? = null,
+    /** Who wrote the forwarded words (null — unknown or the user). */
+    val from: String? = null,
+    /** When they wrote them, yyyy-MM-ddTHH:mm. */
+    val sentAt: String? = null,
+    /** The user's own words sent along with the forward («это к пятнице»). */
+    val comment: String? = null,
+    /** Mail subject. */
+    val subject: String? = null,
+    /** Where to say what came of it: «tg:<chat id>» — the user's own Telegram bot chat. */
+    val reply: String? = null,
 )
 
 @Serializable

@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.PeopleOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.TaskAlt
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalDrawerSheet
@@ -51,6 +52,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -83,7 +85,8 @@ private const val CALENDAR = "calendar"
 private const val ARCHIVE = "archive"
 
 @Composable
-fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
+fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
+        copied: Boolean = false, readCopied: () -> String? = { null }, onCopiedSeen: () -> Unit = {}) {
     val c = M.c
     val s = M.s
     val ctx = LocalContext.current
@@ -107,6 +110,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
     var searching by rememberSaveable { mutableStateOf(false) }
     var typing by rememberSaveable { mutableStateOf(false) }
     var prefill by rememberSaveable { mutableStateOf<String?>(null) }
+    var copiedText by remember { mutableStateOf<String?>(null) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -202,6 +206,15 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
                         notice?.takeIf { it.scopeKey == "notes" }?.let { NoticeLine(it, vm) }
                     }
                     Spacer(Modifier.height(8.dp))
+                    // Copied a message in MAX or Telegram a moment ago → one tap hands it in, with who and what.
+                    if (copied && !typing && busy == null && pending == null && (screen == TASKS || screen == NOTES)) {
+                        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Pill(s.pasteCopied, accent = true, onClick = { copiedText = readCopied(); if (copiedText == null) onCopiedSeen() })
+                            Box(Modifier.size(32.dp).clip(CircleShape).clickable { onCopiedSeen() }, contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Close, s.dismiss, tint = c.faint, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
                     SmartComposer(
                         vm,
                         hint = if (screen == NOTES) s.notesHint else s.composerHint,
@@ -235,6 +248,15 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
                 }
             }
         }
+    }
+
+    copiedText?.let { t ->
+        BackHandler { copiedText = null; onCopiedSeen() }
+        ForwardSheet(
+            from = s.forwardFrom(s.viaCopy), text = t, files = 0, loading = false,
+            onSend = { comment -> vm.forwardIn(t, "copy", comment); copiedText = null; onCopiedSeen() },
+            onDismiss = { copiedText = null; onCopiedSeen() },
+        )
     }
 
     if (!settings.onboarded) Onboarding(vm, onDone = { vm.updateSettings { it.copy(onboarded = true) }; vm.startSetup() })

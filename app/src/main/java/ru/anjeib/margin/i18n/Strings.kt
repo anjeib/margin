@@ -7,6 +7,48 @@ enum class Lang { Ru, En }
 
 /** All user-facing text. One instance per language; the UI never mixes them. */
 interface Strings {
+    // forwarding
+    val close: String
+    val connect: String
+    val disconnect: String
+    val viaMail: String
+    val viaOther: String
+    val viaCopy: String
+    val viaMailTitle: String
+    val forwardKept: String
+    val tgBadToken: String
+    val tgWelcome: String
+    val tgNotYours: String
+    val mailBadLogin: String
+    val forwardTitle: String
+    val forwardCommentHint: String
+    val forwardHint: String
+    val forwardSend: String
+    val forwardDone: String
+    val pasteCopied: String
+    val forwardSection: String
+    val tgHint: String
+    val mailHint: String
+    val maxHint: String
+    val tgOpenBot: String
+    val tgWhy: String
+    val tgStep1: String
+    val tgOpenBotFather: String
+    val tgStep2: String
+    val tgTokenHint: String
+    val tgStep3: String
+    val mailWhy: String
+    val mailAddressHint: String
+    val mailPasswordHint: String
+    val mailPasswordHow: String
+    fun waitingShort(n: String): String
+    fun promisedShort(n: String): String
+    fun forwardFrom(via: String): String
+    fun forwardFiles(n: Int): String
+    fun tgOn(bot: String): String
+    fun mailOn(a: String): String
+    fun tgConnectedText(bot: String): String
+    fun mailConnectedText(a: String): String
     // tabs & screens
     val today: String
     val thisWeek: String
@@ -431,6 +473,47 @@ interface Strings {
 }
 
 object Ru : Strings {
+    override val close = "Закрыть"
+    override val connect = "Подключить"
+    override val disconnect = "Отключить"
+    override val viaMail = "почты"
+    override val viaOther = "другого приложения"
+    override val viaCopy = "буфера обмена"
+    override val viaMailTitle = "Почта"
+    override val forwardKept = "Сохранено во «Входящие»"
+    override val tgBadToken = "Токен не подошёл — скопируйте его из @BotFather целиком"
+    override val tgWelcome = "Готово, это ваш бот Margin. Пересылайте сюда сообщения — из чатов, каналов, от кого угодно. Margin разберёт: задачи, обещания, заметки — и ответит, что получилось. Можно и просто написать, что нужно сделать."
+    override val tgNotYours = "Это личный бот, он принимает сообщения только от владельца."
+    override val mailBadLogin = "Почта не пустила: проверьте адрес и пароль приложения (обычный пароль не подойдёт)"
+    override val forwardTitle = "В Margin"
+    override val forwardCommentHint = "Кто написал, что сделать — если нужно"
+    override val forwardHint = "Margin разберёт: задачи, обещания, заметки"
+    override val forwardSend = "Отправить"
+    override val forwardDone = "Отправлено в Margin"
+    override val pasteCopied = "Вставить скопированное"
+    override val forwardSection = "Пересылка в Margin"
+    override val tgHint = "Свой бот: пересылайте ему сообщения"
+    override val mailHint = "Пересылайте письма себе — Margin их заберёт"
+    override val maxHint = "Своих ботов MAX не даёт. Нажмите «Копировать» на сообщении и откройте Margin — появится «Вставить скопированное». Или выделите текст → «В Margin»."
+    override val tgOpenBot = "Открыть бота"
+    override val tgWhy = "Бот будет только вашим: пересылаете ему сообщение — Margin разбирает и отвечает, что получилось. Сообщения идут через Telegram прямо в телефон."
+    override val tgStep1 = "Откройте @BotFather, отправьте /\u2060newbot, придумайте имя и адрес бота."
+    override val tgOpenBotFather = "Открыть @BotFather"
+    override val tgStep2 = "Скопируйте токен из его ответа и вставьте сюда:"
+    override val tgTokenHint = "123456:ABC…"
+    override val tgStep3 = "Нажмите «Подключить», затем «Старт» в своём боте — он запомнит вас как владельца."
+    override val mailWhy = "Перешлите письмо на свой же адрес (или на адрес с «+margin»: ivan+margin@yandex.ru) — Margin заберёт его. В почте ничего не помечается и не удаляется."
+    override val mailAddressHint = "Адрес почты"
+    override val mailPasswordHint = "Пароль приложения"
+    override val mailPasswordHow = "Пароль приложения создаётся в настройках почты, обычный не подойдёт. Яндекс: id.yandex.ru → Безопасность → Пароли приложений → Почта (и включите IMAP в настройках почты). Gmail: myaccount.google.com/apppasswords. Mail.ru: Настройки → Безопасность → Пароли для внешних приложений."
+    override fun waitingShort(n: String) = "ждём: $n"
+    override fun promisedShort(n: String) = "обещано: $n"
+    override fun forwardFrom(via: String) = "из $via"
+    override fun forwardFiles(n: Int) = "📎 $n"
+    override fun tgOn(bot: String) = "@$bot — пересылайте ему сообщения"
+    override fun mailOn(a: String) = "Пересылайте письма на $a"
+    override fun tgConnectedText(bot: String) = "Подключён @$bot. Пересылайте ему сообщения: Margin разберёт их и ответит, что получилось. Пока Margin открыт — сразу, иначе в течение 15 минут."
+    override fun mailConnectedText(a: String) = "Пересылайте письма на $a — Margin заберёт их. Пока Margin открыт — каждые две минуты, иначе в течение 15 минут."
     override val today = "Сегодня"
     override val thisWeek = "Неделя"
     override val all = "Все"
@@ -853,6 +936,47 @@ object Ru : Strings {
 }
 
 object En : Strings {
+    override val close = "Close"
+    override val connect = "Connect"
+    override val disconnect = "Disconnect"
+    override val viaMail = "mail"
+    override val viaOther = "another app"
+    override val viaCopy = "clipboard"
+    override val viaMailTitle = "Mail"
+    override val forwardKept = "Saved to Inbox"
+    override val tgBadToken = "The token didn’t work — copy all of it from @BotFather"
+    override val tgWelcome = "Done, this is your Margin bot. Forward messages here — from chats, channels, anyone. Margin sorts them into tasks, promises and notes and replies with what it made. You can also just write what needs doing."
+    override val tgNotYours = "This is a personal bot; it only takes messages from its owner."
+    override val mailBadLogin = "Mail refused: check the address and the app password (the usual password won’t do)"
+    override val forwardTitle = "To Margin"
+    override val forwardCommentHint = "Who wrote it, what to do — if needed"
+    override val forwardHint = "Margin will sort it: tasks, promises, notes"
+    override val forwardSend = "Send"
+    override val forwardDone = "Sent to Margin"
+    override val pasteCopied = "Paste what you copied"
+    override val forwardSection = "Forwarding to Margin"
+    override val tgHint = "Your own bot: forward messages to it"
+    override val mailHint = "Forward letters to yourself — Margin picks them up"
+    override val maxHint = "MAX gives no personal bots. Tap “Copy” on a message and open Margin — “Paste what you copied” appears. Or select text → “To Margin”."
+    override val tgOpenBot = "Open the bot"
+    override val tgWhy = "The bot is yours alone: forward a message to it — Margin sorts it and replies with what it made. Messages go through Telegram straight to your phone."
+    override val tgStep1 = "Open @BotFather, send /\u2060newbot, choose a name and an address."
+    override val tgOpenBotFather = "Open @BotFather"
+    override val tgStep2 = "Copy the token from its reply and paste it here:"
+    override val tgTokenHint = "123456:ABC…"
+    override val tgStep3 = "Tap “Connect”, then “Start” in your bot — it remembers you as the owner."
+    override val mailWhy = "Forward a letter to your own address (or to a “+margin” one: ivan+margin@gmail.com) — Margin picks it up. Nothing is marked or deleted in your mail."
+    override val mailAddressHint = "Email address"
+    override val mailPasswordHint = "App password"
+    override val mailPasswordHow = "An app password is made in your mail settings; the usual one won’t do. Gmail: myaccount.google.com/apppasswords. Yandex: id.yandex.ru → Security → App passwords → Mail (and turn on IMAP). Mail.ru: Settings → Security → Passwords for external apps."
+    override fun waitingShort(n: String) = "waiting: $n"
+    override fun promisedShort(n: String) = "promised: $n"
+    override fun forwardFrom(via: String) = "from $via"
+    override fun forwardFiles(n: Int) = "📎 $n"
+    override fun tgOn(bot: String) = "@$bot — forward messages to it"
+    override fun mailOn(a: String) = "Forward letters to $a"
+    override fun tgConnectedText(bot: String) = "@$bot is connected. Forward messages to it: Margin sorts them and replies with what it made — at once while Margin is open, otherwise within 15 minutes."
+    override fun mailConnectedText(a: String) = "Forward letters to $a — Margin picks them up: every two minutes while it’s open, otherwise within 15 minutes."
     override val today = "Today"
     override val thisWeek = "This week"
     override val all = "All"

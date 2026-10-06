@@ -132,6 +132,62 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---------------- forwarding: Telegram bot, mail, «В Margin», a copied message ----------------
+
+    val forward = ru.anjeib.margin.ai.Forward.state
+    private var forwardJob: kotlinx.coroutines.Job? = null
+
+    /** While the app is open the bot is asked continuously (a forward shows up in seconds), mail every two minutes. */
+    fun foreground(on: Boolean) {
+        forwardJob?.cancel()
+        if (!on) return
+        val F = ru.anjeib.margin.ai.Forward
+        F.load(ctx)
+        forwardJob = viewModelScope.launch {
+            var mailAt = 0L
+            while (true) {
+                val st = F.state.value
+                if (!st.telegram && !st.mail) break
+                var n = 0
+                if (st.mail && System.currentTimeMillis() - mailAt > 120_000) { mailAt = System.currentTimeMillis(); n += F.pollMail(ctx) }
+                n += if (st.telegram && Processor.online(ctx)) F.pollTelegram(ctx, waitSec = 25) else { kotlinx.coroutines.delay(30_000); 0 }
+                if (n > 0) sortForwarded()
+                if (F.state.value.error != null) kotlinx.coroutines.delay(30_000)
+            }
+        }
+    }
+
+    /** Sorts what came in right here, and says what it became under the field instead of a notification. */
+    private fun sortForwarded() {
+        if (!Processor.ready(settings.value) || !Processor.online(ctx)) return
+        viewModelScope.launch {
+            val lines = runCatching { Processor.drain(ctx) }.getOrDefault(emptyList())
+            if (lines.isNotEmpty()) _notice.value = Notice("main", lines.joinToString("\n"), null)
+        }
+    }
+
+    /** A copied message (MAX, Telegram «Копировать») or anything else handed in while the app is open. */
+    fun forwardIn(text: String, via: String, comment: String?) {
+        if (text.isBlank()) return
+        Processor.enqueue(ctx, ru.anjeib.margin.data.Queued(text = text, via = via, comment = comment?.ifBlank { null }))
+        sortForwarded()
+    }
+
+    fun connectTelegram(token: String, done: (String?) -> Unit) = viewModelScope.launch {
+        val err = ru.anjeib.margin.ai.Forward.connectTelegram(ctx, token)
+        done(err)
+        if (err == null) foreground(true)
+    }
+
+    fun connectMail(address: String, password: String, done: (String?) -> Unit) = viewModelScope.launch {
+        val err = ru.anjeib.margin.ai.Forward.connectMail(ctx, address, password)
+        done(err)
+        if (err == null) foreground(true)
+    }
+
+    fun disconnectTelegram() { ru.anjeib.margin.ai.Forward.disconnectTelegram(ctx); ru.anjeib.margin.ai.Forward.schedule(ctx) }
+    fun disconnectMail() { ru.anjeib.margin.ai.Forward.disconnectMail(ctx); ru.anjeib.margin.ai.Forward.schedule(ctx) }
+
     fun toastShown() { _toast.value = null }
     fun dismissTray() { _trayFrom.value = null }
     fun clearNotice() { _notice.value = null }

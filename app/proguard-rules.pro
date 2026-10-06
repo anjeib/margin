@@ -3,3 +3,13 @@
 -keepclasseswithmembers class ru.anjeib.margin.** { kotlinx.serialization.KSerializer serializer(...); }
 -keep,includedescriptorclasses class ru.anjeib.margin.**$$serializer { *; }
 -keep class ru.anjeib.margin.voice.WhisperNative { native <methods>; }
+# JavaMail (IMAP for forwarded letters) finds its providers and handlers by name.
+-keep class com.sun.mail.** { *; }
+-keep class javax.mail.** { *; }
+-keep class javax.activation.** { *; }
+-keep class myjava.awt.datatransfer.** { *; }
+-dontwarn java.awt.**
+-dontwarn javax.security.**
+-dontwarn java.beans.**
+-dontwarn com.sun.mail.**
+-dontwarn javax.activation.**

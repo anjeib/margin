@@ -122,6 +122,8 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             }
         }
 
+        Group(s.forwardSection) { ForwardSettings(vm) }
+
         Group(s.appearance) {
             Segmented(
                 listOf(s.themeLight, s.themeDark, s.themeAuto),
@@ -363,3 +365,122 @@ private fun ModelPicker(current: String, vm: MainVm, audioOnly: Boolean = false,
 }
 
 private fun fmt(v: Double) = if (v < 0.1) "%.3f".format(java.util.Locale.US, v) else if (v < 10) "%.2f".format(java.util.Locale.US, v) else "%.0f".format(java.util.Locale.US, v)
+
+/** «Пересылка»: the user's own Telegram bot, their mailbox, and how MAX gets in (a copy — MAX has no personal bots). */
+@Composable
+private fun ForwardSettings(vm: MainVm) {
+    val c = M.c
+    val s = M.s
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val st by vm.forward.collectAsState()
+    var dialog by remember { mutableStateOf<String?>(null) } // "tg" | "mail"
+    fun open(url: String) = runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+
+    ValueRow("Telegram", if (st.telegram) s.tgOn(st.tgBot) else s.tgHint, if (st.telegram) s.connected else "") { dialog = "tg" }
+    Divider()
+    ValueRow(s.viaMailTitle, if (st.mail) s.mailOn(st.mailAddress) else s.mailHint, if (st.mail) s.connected else "") { dialog = "mail" }
+    Divider()
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text("MAX", style = Type.body.copy(color = c.ink))
+        Spacer(Modifier.height(2.dp))
+        Text(s.maxHint, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
+    }
+    st.error?.let {
+        Divider()
+        Text(it, style = Type.small.copy(color = c.accent, fontSize = 12.5.sp), modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+    }
+
+    @Composable
+    fun Field(value: String, hint: String, secret: Boolean = false, onChange: (String) -> Unit) {
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.chip).padding(14.dp)) {
+            if (value.isEmpty()) Text(hint, style = Type.body.copy(color = c.graphite))
+            BasicTextField(value, onChange, singleLine = true, textStyle = Type.body.copy(color = c.ink),
+                visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+                cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+        }
+    }
+    @Composable
+    fun Step(n: Int, text: String, link: String? = null, url: String? = null) {
+        Row(Modifier.padding(vertical = 4.dp)) {
+            Text("$n.", style = Type.small.copy(color = c.accent, fontSize = 14.sp), modifier = Modifier.width(20.dp))
+            Column {
+                Text(text, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
+                if (link != null && url != null) Text(link, style = Type.small.copy(color = c.accent, fontSize = 14.sp),
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { open(url) }.padding(vertical = 4.dp))
+            }
+        }
+    }
+
+    when (dialog) {
+        "tg" -> {
+            var token by remember { mutableStateOf("") }
+            var busy by remember { mutableStateOf(false) }
+            var err by remember { mutableStateOf<String?>(null) }
+            AlertDialog(
+                onDismissRequest = { dialog = null },
+                containerColor = c.card,
+                title = { Text("Telegram", style = Type.cardTitle.copy(color = c.ink)) },
+                text = {
+                    Column {
+                        if (st.telegram) {
+                            Text(s.tgConnectedText(st.tgBot), style = Type.body.copy(color = c.ink))
+                            Spacer(Modifier.height(10.dp))
+                            Text(s.tgOpenBot, style = Type.body.copy(color = c.accent),
+                                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { open("https://t.me/${st.tgBot}") }.padding(vertical = 6.dp))
+                        } else {
+                            Text(s.tgWhy, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+                            Spacer(Modifier.height(10.dp))
+                            Step(1, s.tgStep1, s.tgOpenBotFather, "https://t.me/BotFather")
+                            Step(2, s.tgStep2)
+                            Spacer(Modifier.height(6.dp))
+                            Field(token, s.tgTokenHint, secret = true) { token = it.trim(); err = null }
+                            Spacer(Modifier.height(6.dp))
+                            Step(3, s.tgStep3)
+                            err?.let { Text(it, style = Type.small.copy(color = c.accent)) }
+                        }
+                    }
+                },
+                confirmButton = {
+                    if (st.telegram) TextButton({ vm.disconnectTelegram(); dialog = null }) { Text(s.disconnect, color = c.accent) }
+                    else TextButton({
+                        if (!busy && token.isNotBlank()) { busy = true; vm.connectTelegram(token) { e -> busy = false; err = e; if (e == null) open("https://t.me/${vm.forward.value.tgBot}?start=margin") } }
+                    }) { if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp)) else Text(s.connect, color = c.accent) }
+                },
+                dismissButton = { TextButton({ dialog = null }) { Text(if (st.telegram) s.close else s.cancel, color = c.graphite) } },
+            )
+        }
+        "mail" -> {
+            var address by remember { mutableStateOf(st.mailAddress) }
+            var password by remember { mutableStateOf("") }
+            var busy by remember { mutableStateOf(false) }
+            var err by remember { mutableStateOf<String?>(null) }
+            AlertDialog(
+                onDismissRequest = { dialog = null },
+                containerColor = c.card,
+                title = { Text(s.viaMailTitle, style = Type.cardTitle.copy(color = c.ink)) },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        if (st.mail) Text(s.mailConnectedText(st.mailAddress), style = Type.body.copy(color = c.ink))
+                        else {
+                            Text(s.mailWhy, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+                            Spacer(Modifier.height(12.dp))
+                            Field(address, s.mailAddressHint) { address = it.trim(); err = null }
+                            Spacer(Modifier.height(8.dp))
+                            Field(password, s.mailPasswordHint, secret = true) { password = it; err = null }
+                            Spacer(Modifier.height(10.dp))
+                            Text(s.mailPasswordHow, style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
+                            err?.let { Spacer(Modifier.height(6.dp)); Text(it, style = Type.small.copy(color = c.accent)) }
+                        }
+                    }
+                },
+                confirmButton = {
+                    if (st.mail) TextButton({ vm.disconnectMail(); dialog = null }) { Text(s.disconnect, color = c.accent) }
+                    else TextButton({
+                        if (!busy && address.contains('@') && password.isNotBlank()) { busy = true; vm.connectMail(address, password) { e -> busy = false; err = e; if (e == null) dialog = null } }
+                    }) { if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp)) else Text(s.connect, color = c.accent) }
+                },
+                dismissButton = { TextButton({ dialog = null }) { Text(if (st.mail) s.close else s.cancel, color = c.graphite) } },
+            )
+        }
+    }
+}
