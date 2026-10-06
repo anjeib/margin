@@ -23,7 +23,7 @@ data class ContactInfo(val name: String, val phone: String? = null, val email: S
 @Serializable
 data class Attachment(
     val id: String = newId(),
-    /** photo | video | file | audio | contact */
+    /** photo | video | file | audio | contact | link */
     val kind: String,
     /** File name inside filesDir/att (null for contacts). */
     val file: String? = null,
@@ -34,6 +34,12 @@ data class Attachment(
     val duration: Int = 0,
     val transcript: String? = null,
     val contact: ContactInfo? = null,
+    /** The user's words under a photo or video. */
+    val caption: String? = null,
+    /** Text recognised on a photo (a business card, a receipt, a whiteboard) — searchable, seen by the AI. */
+    val ocr: String? = null,
+    /** For «link»: the address; [name] holds the page title. */
+    val url: String? = null,
 )
 
 /** A dated record: a line of a note's stream or of a task's log, with optional attachments. */
@@ -275,7 +281,17 @@ data class AppData(
 }
 
 /** Plain text of a note: all entries, for search and AI context. */
-val Note.text: String get() = entries.joinToString("\n") { it.text }
+val Note.text: String get() = entries.joinToString("\n") { it.fullText }
+
+/**
+ * Everything an entry says, not only its typed words: list items, captions, voice transcripts, text on photos,
+ * link titles, contact names. Search and the AI read this, so a decision on a whiteboard photo is found too.
+ */
+val Entry.fullText: String get() = listOfNotNull(
+    text.takeIf { it.isNotBlank() },
+    items.takeIf { it.isNotEmpty() }?.joinToString("; ") { it.title },
+    *attachments.flatMap { a -> listOfNotNull(a.caption, a.transcript, a.ocr, if (a.kind == "link") a.name else null, a.contact?.let { c -> listOfNotNull(c.name, c.phone).joinToString(" ") }) }.toTypedArray(),
+).joinToString(" · ")
 
 // ---- subtask tree helpers ----
 

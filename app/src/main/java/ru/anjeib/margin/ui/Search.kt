@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.anjeib.margin.data.AppData
+import ru.anjeib.margin.data.fullText
 import ru.anjeib.margin.data.Subtask
 import ru.anjeib.margin.data.text
 import java.time.LocalDate
@@ -55,7 +56,7 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
     val words = q.lowercase().split(' ').filter { it.isNotBlank() }
     fun hit(hay: String) = words.isNotEmpty() && words.all { it in hay.lowercase() }
     fun subs(l: List<Subtask>): String = l.joinToString(" ") { it.title + " " + (it.assignee ?: "") + " " + subs(it.children) }
-    val tasks = data.tasks.filter { t -> hit(listOf(t.title, t.project.orEmpty(), t.people.joinToString(" "), t.waitingFor.orEmpty(), subs(t.subtasks), t.entries.joinToString(" ") { it.text }).joinToString(" ")) }
+    val tasks = data.tasks.filter { t -> hit(listOf(t.title, t.project.orEmpty(), t.people.joinToString(" "), t.waitingFor.orEmpty(), subs(t.subtasks), t.entries.joinToString(" ") { it.fullText }).joinToString(" ")) }
         .sortedBy { it.done }
     val notes = data.notes.filter { hit(it.title + " " + it.text + " " + it.project.orEmpty() + " " + it.aiSummary.orEmpty()) }
     val people = data.persons.filter { hit(it.name + " " + it.aliases.joinToString(" ") + " " + it.about.orEmpty() + " " + it.phone.orEmpty()) }

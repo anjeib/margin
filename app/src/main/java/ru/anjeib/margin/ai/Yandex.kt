@@ -91,6 +91,34 @@ object Yandex {
         } finally { c.disconnect() }
     }
 
+    /**
+     * Text on a photo: Yandex Vision OCR (Russian and English). Needs the «ai.vision.user» role on the service account;
+     * without it the call fails and the photo simply stays without recognised text.
+     */
+    suspend fun ocr(apiKey: String, folder: String, jpeg: ByteArray): LlmReply = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            put("mimeType", "JPEG"); put("model", "page")
+            put("languageCodes", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive("ru")); add(kotlinx.serialization.json.JsonPrimitive("en")) })
+            put("content", android.util.Base64.encodeToString(jpeg, android.util.Base64.NO_WRAP))
+        }.toString()
+        val c = (URL("https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"; doOutput = true; connectTimeout = 20_000; readTimeout = 60_000
+            setRequestProperty("Authorization", "Api-Key $apiKey"); setRequestProperty("x-folder-id", folder)
+            setRequestProperty("Content-Type", "application/json")
+        }
+        try {
+            c.outputStream.use { it.write(body.toByteArray()) }
+            val code = c.responseCode
+            val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+            if (code !in 200..299) throw AiException("Vision $code")
+            val full = AppJson.parseToJsonElement(text).jsonObject["result"]?.jsonObject?.get("textAnnotation")?.jsonObject
+                ?.get("fullText")?.jsonPrimitive?.contentOrNull.orEmpty()
+            LlmReply(full.trim(), 0.13)
+        } catch (e: java.io.IOException) {
+            throw AiException(ru.anjeib.margin.i18n.L.s.errNet)
+        } finally { c.disconnect() }
+    }
+
     /** Key check: the model list is free. */
     suspend fun check(apiKey: String, folder: String): String = withContext(Dispatchers.IO) {
         val c = (URL("$BASE/models").openConnection() as HttpURLConnection).apply {

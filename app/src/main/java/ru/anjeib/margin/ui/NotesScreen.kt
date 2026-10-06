@@ -62,6 +62,7 @@ import kotlinx.coroutines.delay
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.Entry
 import ru.anjeib.margin.data.Note
+import ru.anjeib.margin.data.fullText
 import ru.anjeib.margin.data.dayMonth
 import ru.anjeib.margin.data.text
 import java.time.LocalDate
@@ -130,7 +131,7 @@ fun NoteCard(n: Note, data: AppData, onClick: () -> Unit, modifier: Modifier = M
                     style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
             }
         }
-        val preview = n.entries.lastOrNull { it.text.isNotBlank() }?.text.orEmpty().trim().takeIf { it != n.title.trim() }.orEmpty()
+        val preview = n.entries.lastOrNull { it.fullText.isNotBlank() }?.fullText.orEmpty().trim().takeIf { it != n.title.trim() }.orEmpty()
         if (preview.isNotEmpty()) {
             Spacer(Modifier.height(6.dp))
             Text(preview, style = Type.small.copy(color = c.graphite, fontSize = 14.5.sp, lineHeight = 20.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -147,13 +148,12 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
     var title by remember(note.id) { mutableStateOf(note.title) }
     var menu by remember { mutableStateOf(false) }
     var projectDialog by remember { mutableStateOf(false) }
-    var entryMenu by remember { mutableStateOf<Entry?>(null) }
-    var editEntry by remember { mutableStateOf<Entry?>(null) }
     // The field below fills one thing — a list item, people, a place, the project — like in a task.
     var mode by remember(note.id) { mutableStateOf<String?>(null) }
+    var fill by remember(note.id) { mutableStateOf<Fill?>(null) }
     var modeTick by remember { mutableStateOf(0) }
     var remindDialog by remember { mutableStateOf(false) }
-    fun fill(what: String) { mode = what; modeTick++ }
+    fun fill(what: String) { mode = what; fill = null; modeTick++ }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(title) { delay(400); vm.renameNote(note.id, title) }
     val close = { vm.renameNote(note.id, title); vm.dropEmptyNote(note.id); onBack() }
@@ -224,39 +224,34 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 }
             }
             Spacer(Modifier.height(18.dp))
-            Box {
-                Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                    // Each idea says for itself whether it is already a task, or becomes one with a tap.
-                    note.entries.forEach { e ->
-                        EntryView(e, onLong = { entryMenu = e }, trailing = if (e.text.isBlank() || e.isList) null else ({
-                            IdeaTaskButton(tasksOfEntry(note, e, data), "idea:${e.id}" in working, onOpenTask = onOpenTask, onMake = { vm.ideaToTask(note.id, e.id) })
-                        }), onToggleItem = { item -> vm.toggleNoteItem(note.id, e.id, item) })
-                    }
-                }
-                DropdownMenu(entryMenu != null, { entryMenu = null }, containerColor = c.card) {
-                    entryMenu?.let { e ->
-                        DropdownMenuItem(text = { Text(s.edit, style = Type.body) }, onClick = { editEntry = e; entryMenu = null })
-                        DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { vm.deleteNoteEntry(note.id, e.id); entryMenu = null })
-                    }
-                }
-            }
+            // The note as blocks: tap one for its «+» (insert right after it), hold for edit / caption / move / delete.
+            BlockStream("note:${note.id}", note.entries, vm, onFill = { fill = it; modeTick++ }, trailing = { e ->
+                if (e.text.isBlank() || e.isList) null else ({
+                    IdeaTaskButton(tasksOfEntry(note, e, data), "idea:${e.id}" in working, onOpenTask = onOpenTask, onMake = { vm.ideaToTask(note.id, e.id) })
+                })
+            })
             if (note.entries.isEmpty()) Text(s.noteBodyHint, style = Type.body.copy(color = c.faint, fontSize = 17.sp))
             Spacer(Modifier.height(24.dp))
         }
-        val modeLabel = when (mode) { "item" -> s.listItem; "people" -> s.fieldPeople; "place" -> s.fieldPlace; "project" -> s.project; else -> null }
+        val modeLabel = fill?.label() ?: when (mode) { "item" -> s.listItem; "people" -> s.fieldPeople; "place" -> s.fieldPlace; "project" -> s.project; else -> null }
         SmartComposer(
             vm, modeLabel?.let { s.fillHint(it) } ?: s.appendHint, busy = false,
-            onSend = { t, f -> vm.writeInNote(note.id, t, f, mode); if (mode != "item") mode = null },
+            onSend = { t, f ->
+                val fl = fill
+                // Filling a block: list items keep coming, anything else is one go.
+                if (fl != null) { if (t.isNotBlank()) vm.fillBlock("note:${note.id}", fl, t); f.forEach { a -> vm.insertAttachment("note:${note.id}", fl.entryId, a) }; if (fl.kind != "items") fill = null }
+                else { vm.writeInNote(note.id, t, f, mode); if (mode != "item") mode = null }
+            },
             keepAudio = true,
             modifier = Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp),
-            modeLabel = modeLabel, onModeClose = { mode = null }, focusKey = modeTick.takeIf { it > 0 },
+            prefill = fill?.prefill, onPrefillUsed = {},
+            modeLabel = modeLabel, onModeClose = { mode = null; fill = null }, focusKey = modeTick.takeIf { it > 0 },
         )
     }
     if (projectDialog) TextDialog(s.project, note.project.orEmpty(), "vuzburo", onDismiss = { projectDialog = false }) { v ->
         vm.setNoteProject(note.id, v); projectDialog = false
     }
     if (remindDialog) RemindDialog(note.remindAt, onDismiss = { remindDialog = false }) { v -> vm.setNoteField(note.id, "remind", v); remindDialog = false }
-    editEntry?.let { e -> TextDialog(s.edit, e.text, "", onDismiss = { editEntry = null }) { v -> vm.editNoteEntry(note.id, e.id, v); editEntry = null } }
 }
 
 /** «Напомнить»: a day, then a time; «Убрать» clears it. */

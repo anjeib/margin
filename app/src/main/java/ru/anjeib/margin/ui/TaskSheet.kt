@@ -105,13 +105,12 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     androidx.compose.runtime.LaunchedEffect(task.id, startDialog) { if (startDialog != null) { dialog = startDialog; onStartDialogUsed() } }
     // «+ подзадача», «+ место»…: the field below fills that one thing — typed or said, no little windows.
     var mode by remember(task.id) { mutableStateOf<String?>(null) }
+    var fill by remember(task.id) { mutableStateOf<Fill?>(null) }
     var modeTick by remember { mutableStateOf(0) }
-    fun fill(what: String) { mode = what; modeTick++ }
+    fun fill(what: String) { mode = what; fill = null; modeTick++ }
     var menu by remember { mutableStateOf(false) }
     var subMenu by remember { mutableStateOf<Subtask?>(null) }
     var renameSub by remember { mutableStateOf<Subtask?>(null) }
-    var entryMenu by remember { mutableStateOf<Entry?>(null) }
-    var editEntry by remember { mutableStateOf<Entry?>(null) }
     var showDone by remember { mutableStateOf(false) }
     var showAllSubs by remember { mutableStateOf(false) }
     var showAllEntries by remember { mutableStateOf(false) }
@@ -335,17 +334,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     Spacer(Modifier.height(6.dp))
                     val shown = if (showAllEntries) task.entries else task.entries.takeLast(3)
                     if (shown.size < task.entries.size) QuietLink(s.allRecords(task.entries.size)) { showAllEntries = true }
-                    Box {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            shown.forEach { e -> EntryView(e, onLong = { entryMenu = e }) }
-                        }
-                        DropdownMenu(entryMenu != null, { entryMenu = null }, containerColor = c.card) {
-                            entryMenu?.let { e ->
-                                DropdownMenuItem(text = { Text(s.edit, style = Type.body) }, onClick = { editEntry = e; entryMenu = null })
-                                DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { vm.deleteTaskEntry(task.id, e.id); entryMenu = null })
-                            }
-                        }
-                    }
+                    // Records as blocks: a photo of the receipt, a voice note after the call, the contract — each right where it belongs.
+                    BlockStream("task:${task.id}", shown, vm, onFill = { fill = it; mode = null; modeTick++ })
                 }
                 // «История»: what changed and who changed it — folded, it is there for when something looks off.
                 if (task.history.size > 1) {
@@ -370,15 +360,20 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
             // Scoped composer — everything about this task is said here.
             Column(Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
                 notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> NoticeLine(nt, vm) }
-                val modeLabel = when (mode) { "subtask" -> s.subtaskOne; "place" -> s.fieldPlace; "people" -> s.fieldPeople; "project" -> s.project; else -> null }
+                val modeLabel = fill?.label() ?: when (mode) { "subtask" -> s.subtaskOne; "place" -> s.fieldPlace; "people" -> s.fieldPeople; "project" -> s.project; else -> null }
                 SmartComposer(
                     vm, modeLabel?.let { s.fillHint(it) } ?: s.addOrChange, busy == scopeKey,
                     onSend = { t, f ->
                         val m = mode
-                        if (m != null) { vm.sendAs(m, t, Scope.InTask(task.id), f); if (m != "subtask") mode = null }
-                        else vm.send(t, scope = Scope.InTask(task.id), files = f)
+                        val fl = fill
+                        when {
+                            fl != null -> { if (t.isNotBlank()) vm.fillBlock("task:${task.id}", fl, t); f.forEach { a -> vm.insertAttachment("task:${task.id}", fl.entryId, a) }; if (fl.kind != "items") fill = null }
+                            m != null -> { vm.sendAs(m, t, Scope.InTask(task.id), f); if (m != "subtask") mode = null }
+                            else -> vm.send(t, scope = Scope.InTask(task.id), files = f)
+                        }
                     },
-                    modeLabel = modeLabel, onModeClose = { mode = null }, focusKey = modeTick.takeIf { it > 0 },
+                    prefill = fill?.prefill, onPrefillUsed = {},
+                    modeLabel = modeLabel, onModeClose = { mode = null; fill = null }, focusKey = modeTick.takeIf { it > 0 },
                 )
             }
         }
@@ -413,9 +408,6 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     }
     renameSub?.let { sub ->
         TextDialog(s.edit, sub.title, "", onDismiss = { renameSub = null }) { v -> vm.renameSubtask(task.id, sub.id, v); renameSub = null }
-    }
-    editEntry?.let { e ->
-        TextDialog(s.edit, e.text, "", onDismiss = { editEntry = null }) { v -> vm.editTaskEntry(task.id, e.id, v); editEntry = null }
     }
 }
 

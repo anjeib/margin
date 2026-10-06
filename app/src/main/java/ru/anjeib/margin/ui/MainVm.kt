@@ -295,6 +295,128 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    // ---------------- blocks: a note's stream or a task's records, edited anywhere ----------------
+
+    /** Where a block lives: «note:<id>» or «task:<id>». */
+    private fun editEntries(owner: String, f: (List<Entry>) -> List<Entry>) {
+        val id = owner.substringAfter(':')
+        if (owner.startsWith("note:")) updateNote(id) { it.copy(entries = f(it.entries), updatedAt = nowStamp()) }
+        else updateTask(id) { it.copy(entries = f(it.entries)) }
+    }
+
+    private fun entriesOf(owner: String): List<Entry> {
+        val id = owner.substringAfter(':')
+        return if (owner.startsWith("note:")) data.value.notes.find { it.id == id }?.entries.orEmpty() else data.value.tasks.find { it.id == id }?.entries.orEmpty()
+    }
+
+    /** Puts [e] right after [afterId] (at the end when null or gone). */
+    fun insertEntry(owner: String, afterId: String?, e: Entry) = editEntries(owner) { l ->
+        val i = l.indexOfFirst { it.id == afterId }
+        if (i < 0) l + e else l.take(i + 1) + e + l.drop(i + 1)
+    }
+
+    fun moveEntry(owner: String, id: String, delta: Int) = editEntries(owner) { l ->
+        val i = l.indexOfFirst { it.id == id }
+        val j = i + delta
+        if (i < 0 || j !in l.indices) l else l.toMutableList().apply { add(j, removeAt(i)) }
+    }
+
+    fun deleteEntry(owner: String, id: String) {
+        entriesOf(owner).find { it.id == id }?.attachments?.forEach { Files.delete(ctx, it) }
+        editEntries(owner) { l -> l.filterNot { it.id == id } }
+    }
+
+    fun editEntryText(owner: String, id: String, text: String) {
+        editEntries(owner) { l -> l.mapNotNull { if (it.id != id) it else if (text.isBlank() && it.attachments.isEmpty() && !it.isList) null else it.copy(text = text.sentence()) } }
+        linkTitles(owner, id)
+    }
+
+    private fun updateAttachment(owner: String, entryId: String, attId: String, f: (Attachment) -> Attachment) = editEntries(owner) { l ->
+        l.map { e -> if (e.id != entryId) e else e.copy(attachments = e.attachments.map { if (it.id == attId) f(it) else it }) }
+    }
+
+    fun setCaption(owner: String, entryId: String, attId: String, text: String) =
+        updateAttachment(owner, entryId, attId) { it.copy(caption = text.trim().ifBlank { null }?.sentence()) }
+
+    /** A text block after [afterId]: a written thought in the middle of the stream. */
+    fun insertText(owner: String, afterId: String?, text: String) {
+        val t = text.trim().ifBlank { return }
+        val e = Entry(text = t.sentence())
+        insertEntry(owner, afterId, e)
+        linkTitles(owner, e.id)
+    }
+
+    fun insertList(owner: String, afterId: String?): String = Entry(isList = true).also { insertEntry(owner, afterId, it) }.id
+
+    fun addListItems(owner: String, entryId: String, text: String) = editEntries(owner) { l ->
+        val items = Commands.items(text).ifEmpty { listOf(text.trim()) }.filter { it.isNotBlank() }.map { Subtask(title = it.sentence()) }
+        l.map { if (it.id == entryId) it.copy(items = it.items + items) else it }
+    }
+
+    fun toggleItem(owner: String, entryId: String, itemId: String) = editEntries(owner) { l ->
+        l.map { e -> if (e.id != entryId) e else e.copy(items = e.items.map { if (it.id == itemId) it.copy(done = !it.done) else it }) }
+    }
+
+    /**
+     * A photo, video, voice note, file or contact as its own block after [afterId] — then made meaningful:
+     * a voice note gets its transcript, a photo the text written on it.
+     */
+    fun insertAttachment(owner: String, afterId: String?, a: Attachment) {
+        val e = Entry(attachments = listOf(a))
+        insertEntry(owner, afterId, e)
+        enrich(owner, e.id, a)
+    }
+
+    /** Once per open per session: photos still without their text get another try (say, once the OCR role is granted). */
+    private val enriched = mutableSetOf<String>()
+    fun enrichMissing(owner: String) {
+        entriesOf(owner).forEach { e -> e.attachments.filter { it.kind == "photo" && it.ocr == null && enriched.add(it.id) }.forEach { enrich(owner, e.id, it) } }
+    }
+
+    private fun enrich(owner: String, entryId: String, a: Attachment) {
+        val s = settings.value
+        when (a.kind) {
+            "audio" -> if (a.transcript.isNullOrBlank()) transcribe(a) { text -> updateAttachment(owner, entryId, a.id) { it.copy(transcript = text.sentence()) } }
+            "photo" -> if (a.ocr == null && Processor.ready(s) && Processor.online(ctx)) viewModelScope.launch {
+                _working.value += "ocr:${a.id}"
+                try {
+                    val jpeg = Files.jpeg(ctx, a) ?: return@launch
+                    val url = Files.imageDataUrl(ctx, a) ?: return@launch
+                    val r = ru.anjeib.margin.ai.Llm.ocr(s, jpeg, url)
+                    prefs.addSpend(r.rub)
+                    // An empty result is remembered too — «no text here» is an answer, not a reason to ask again.
+                    updateAttachment(owner, entryId, a.id) { it.copy(ocr = r.content.trim()) }
+                } catch (e: Exception) {
+                    android.util.Log.w("Margin", "ocr: ${e.message}")
+                } finally {
+                    _working.value -= "ocr:${a.id}"
+                }
+            }
+        }
+    }
+
+    /** Addresses in a text block get their page title as a quiet line under it. */
+    fun linkTitles(owner: String, entryId: String) {
+        val e = entriesOf(owner).find { it.id == entryId } ?: return
+        val urls = Regex("https?://[^\\s)>\\]]+").findAll(e.text).map { it.value.trimEnd('.', ',') }.filter { u -> e.attachments.none { it.url == u } }.toList().take(3)
+        if (urls.isEmpty() || !Processor.online(ctx)) return
+        viewModelScope.launch {
+            urls.forEach { u ->
+                val title = withContext(Dispatchers.IO) { pageTitle(u) } ?: android.net.Uri.parse(u).host ?: u
+                editEntries(owner) { l -> l.map { x -> if (x.id == entryId && x.attachments.none { it.url == u }) x.copy(attachments = x.attachments + Attachment(kind = "link", name = title, url = u)) else x } }
+            }
+        }
+    }
+
+    private fun pageTitle(u: String): String? = runCatching {
+        val c = (java.net.URL(u).openConnection() as java.net.HttpURLConnection).apply { connectTimeout = 8000; readTimeout = 8000; setRequestProperty("User-Agent", "Mozilla/5.0 Margin") }
+        try {
+            val head = c.inputStream.bufferedReader().use { r -> CharArray(64_000).let { buf -> String(buf, 0, r.read(buf).coerceAtLeast(0)) } }
+            Regex("<title[^>]*>([^<]{1,200})</title>", RegexOption.IGNORE_CASE).find(head)?.groupValues?.get(1)?.trim()
+                ?.let { android.text.Html.fromHtml(it, android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim() }?.ifBlank { null }
+        } finally { c.disconnect() }
+    }.getOrNull()
+
     // ---------------- notes: properties and lists ----------------
 
     /** People / place / project / reminder of a note, set by hand or by a command. */
@@ -774,9 +896,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         if (text.isBlank() && files.isEmpty()) return
         store.update { d ->
             val n = d.notes.find { it.id == id } ?: return@update d
-            val upd = n.copy(entries = n.entries + Entry(text = text.sentence(), attachments = files), updatedAt = nowStamp())
+            val e = Entry(text = text.sentence(), attachments = files)
+            val upd = n.copy(entries = n.entries + e, updatedAt = nowStamp())
             d.copy(notes = listOf(upd) + d.notes.filterNot { it.id == id })
         }
+        // The new block is the last one: give its links titles, its photos and voice notes their text.
+        data.value.notes.find { it.id == id }?.entries?.lastOrNull()?.let { e -> linkTitles("note:$id", e.id); e.attachments.forEach { enrich("note:$id", e.id, it) } }
     }
 
     fun editNoteEntry(noteId: String, entryId: String, text: String) = updateNote(noteId) { n ->

@@ -82,6 +82,15 @@ interface Strings {
     fun undatedCount(n: Int): String
     val subtaskOne: String
     val freeDay: String
+    val insertBelow: String
+    val captionWord: String
+    val moveUp: String
+    val moveDown: String
+    val readingPhoto: String
+    val textOnPhoto: String
+    val textWord: String
+    val photoWord: String
+    val textAfter: String
     val moveToToday: String
     val skipOnce: String
     val droppedDone: String
@@ -461,6 +470,15 @@ object Ru : Strings {
     override fun undatedCount(n: Int) = "Ещё без срока: " + tasksCount(n)
     override val subtaskOne = "Подзадача"
     override val freeDay = "Свободный день"
+    override val insertBelow = "Вставить ниже"
+    override val captionWord = "Подпись"
+    override val moveUp = "Выше"
+    override val moveDown = "Ниже"
+    override val readingPhoto = "Читаю текст на фото…"
+    override val textOnPhoto = "Текст на фото"
+    override val textWord = "Текст"
+    override val photoWord = "Фото"
+    override val textAfter = "Текст после блока"
     override val moveToToday = "Перенести на сегодня"
     override val skipOnce = "Пропустить один раз"
     override val droppedDone = "Не будете делать"
@@ -844,6 +862,15 @@ object En : Strings {
     override fun undatedCount(n: Int) = "Also without a date: " + tasksCount(n)
     override val subtaskOne = "Subtask"
     override val freeDay = "A free day"
+    override val insertBelow = "Insert below"
+    override val captionWord = "Caption"
+    override val moveUp = "Move up"
+    override val moveDown = "Move down"
+    override val readingPhoto = "Reading the text on the photo…"
+    override val textOnPhoto = "Text on the photo"
+    override val textWord = "Text"
+    override val photoWord = "Photo"
+    override val textAfter = "Text after the block"
     override val moveToToday = "Move to today"
     override val skipOnce = "Skip once"
     override val droppedDone = "Won’t do"

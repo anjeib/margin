@@ -123,6 +123,12 @@ object Files {
         "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }
 
+    /** A photo as JPEG bytes, scaled so text stays readable but the upload stays small. */
+    suspend fun jpeg(ctx: Context, a: Attachment, px: Int = 1600): ByteArray? = withContext(Dispatchers.IO) {
+        val b = thumb(ctx, a, px) ?: return@withContext null
+        ByteArrayOutputStream().also { b.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
+    }
+
     fun openIntent(ctx: Context, a: Attachment): Intent? {
         val f = file(ctx, a) ?: return null
         val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)

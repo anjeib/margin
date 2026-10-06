@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonObject
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.AppJson
 import ru.anjeib.margin.data.Entry
+import ru.anjeib.margin.data.fullText
 import ru.anjeib.margin.data.Note
 import ru.anjeib.margin.data.Person
 import ru.anjeib.margin.data.Repeat
@@ -132,7 +133,7 @@ object Assistant {
         val low = text.lowercase()
         if (t.project != null && low.contains(t.project)) sc += 5
         (t.people + listOfNotNull(t.waitingFor)).forEach { p -> if (p.length >= 3 && low.contains(p.lowercase().take(p.length - 1))) sc += 3 }
-        sc += 2 * (stems(t.title + " " + t.subtasks.joinToString(" ") { it.allText() } + " " + t.entries.takeLast(3).joinToString(" ") { it.text }) intersect q).size
+        sc += 2 * (stems(t.title + " " + t.subtasks.joinToString(" ") { it.allText() } + " " + t.entries.takeLast(3).joinToString(" ") { it.fullText }) intersect q).size
         if (t.id in recent) sc += 3
         return sc
     }
@@ -148,7 +149,7 @@ object Assistant {
 
     private fun StringBuilder.taskDetail(t: Task, entries: Int) {
         taskLine(t)
-        t.entries.takeLast(entries).forEach { e -> if (e.text.isNotBlank()) appendLine("    · ${e.at.take(10)}: ${e.text.replace('\n', ' ').take(160)}") }
+        t.entries.takeLast(entries).forEach { e -> e.fullText.takeIf { it.isNotBlank() }?.let { x -> appendLine("    · ${e.at.take(10)}: ${x.replace('\n', ' ').take(160)}") } }
         fun sub(list: List<Subtask>, depth: Int) {
             list.forEach { st ->
                 append("  ".repeat(depth + 1) + "- [subtask_id=${st.id}] ${st.title}")
@@ -202,7 +203,7 @@ object Assistant {
             if (d.notes.isNotEmpty()) {
                 appendLine("Notes:")
                 if (query == null) d.notes.take(25).forEach { n ->
-                    val gist = (n.aiSummary ?: n.entries.takeLast(4).joinToString(" / ") { it.text }).replace('\n', ' ').take(260)
+                    val gist = (n.aiSummary ?: n.entries.takeLast(4).joinToString(" / ") { it.fullText }).replace('\n', ' ').take(260)
                     appendLine("[note_id=${n.id}] ${n.title.ifBlank { "—" }}${n.project?.let { " #$it" } ?: ""}: $gist")
                 } else {
                     val q = stems(query)
@@ -210,7 +211,7 @@ object Assistant {
                         .filter { it.second >= 2 }.sortedByDescending { it.second }.take(3).map { it.first }
                     related.forEach { n ->
                         appendLine("[note_id=${n.id}] ${n.title.ifBlank { "—" }}${n.project?.let { " #$it" } ?: ""}: " +
-                            (n.aiSummary ?: n.entries.takeLast(3).joinToString(" / ") { it.text }).replace('\n', ' ').take(200))
+                            (n.aiSummary ?: n.entries.takeLast(3).joinToString(" / ") { it.fullText }).replace('\n', ' ').take(200))
                     }
                     (d.notes - related.toSet()).take(15).forEach { n -> appendLine("[note_id=${n.id}] ${n.title.ifBlank { "—" }}${n.project?.let { " #$it" } ?: ""}") }
                 }
@@ -283,7 +284,7 @@ object Assistant {
             Tasks:
             ${tasks.take(40).joinToString("\n") { t -> "- ${t.title}${if (t.dropped) " [dropped, not done]" else if (t.done) " [done ${t.doneAt}]" else ""}${t.due?.let { " due $it" } ?: ""}${t.waitingFor?.let { " (waiting for $it)" } ?: ""}${t.promisedTo?.let { " (promised to $it)" } ?: ""}" }}
             Ideas (note entries):
-            ${notes.flatMap { it.entries }.filter { e -> d.tasks.none { it.sourceEntryId == e.id } }.takeLast(20).joinToString("\n") { "- " + it.text.take(140) }}
+            ${notes.flatMap { it.entries }.filter { e -> d.tasks.none { it.sourceEntryId == e.id } }.takeLast(20).joinToString("\n") { "- " + it.fullText.take(140) }}
             Reply with JSON only: {"summary": string}
         """.trimIndent()
     }

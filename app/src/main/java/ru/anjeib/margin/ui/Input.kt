@@ -119,7 +119,10 @@ fun SmartComposer(
     var cameraFile by remember { mutableStateOf<File?>(null) }
     val transcribing = "voice" in working
 
-    LaunchedEffect(prefill) { if (!prefill.isNullOrBlank()) { text = prefill; onPrefillUsed() } }
+    // Text put in for a mode (a caption to edit) leaves with the mode, unless the user changed it into something else.
+    var fromMode by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(prefill) { if (!prefill.isNullOrBlank()) { text = prefill; if (modeLabel != null) fromMode = prefill; onPrefillUsed() } }
+    LaunchedEffect(modeLabel) { if (modeLabel == null) { if (fromMode != null && text == fromMode) text = ""; fromMode = null } }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(focusKey) { if (focusKey != null) { delay(150); runCatching { focus.requestFocus() } } }
     LaunchedEffect(text, files.size, recorder) { onTyping(text.isNotEmpty() || files.isNotEmpty() || recorder != null) }

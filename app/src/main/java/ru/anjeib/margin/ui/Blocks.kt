@@ -1,0 +1,438 @@
+package ru.anjeib.margin.ui
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.media.MediaPlayer
+import android.net.Uri
+import android.provider.ContactsContract
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Message
+import androidx.compose.material.icons.automirrored.outlined.Notes
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import ru.anjeib.margin.data.Attachment
+import ru.anjeib.margin.data.Entry
+import ru.anjeib.margin.data.Files
+import ru.anjeib.margin.data.WavRecorder
+import ru.anjeib.margin.data.dayMonth
+import ru.anjeib.margin.data.durationLabel
+import java.io.File
+import java.time.LocalDateTime
+
+/**
+ * What the composer under a stream is filling right now, set from a block:
+ * «after» — a text block after [entryId]; «items» — items of the list [entryId];
+ * «caption» — the caption of [attId] in [entryId]; «edit» — new words for [entryId].
+ */
+data class Fill(val kind: String, val entryId: String, val attId: String? = null, val prefill: String? = null)
+
+/**
+ * A note's stream or a task's records as blocks: text, list, photo, video, voice note, contact, file, link.
+ * A tap makes a block active; its quiet «+» opens a row of things to put right after it.
+ * Hold for: edit, caption, move up / down, delete.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun BlockStream(
+    owner: String,
+    entries: List<Entry>,
+    vm: MainVm,
+    onFill: (Fill) -> Unit,
+    trailing: (Entry) -> (@Composable () -> Unit)? = { null },
+) {
+    val c = M.c
+    val s = M.s
+    var active by remember(owner) { mutableStateOf<String?>(null) }
+    var inserting by remember(owner) { mutableStateOf<String?>(null) }
+    var menuFor by remember(owner) { mutableStateOf<String?>(null) }
+    LaunchedEffect(owner) { vm.enrichMissing(owner) }
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        entries.forEachIndexed { i, e ->
+            val on = active == e.id
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                    .background(if (on) c.chip.copy(alpha = 0.45f) else Color.Transparent)
+                    .combinedClickable(onClick = { active = if (on) null else e.id; if (!on) inserting = null }, onLongClick = { active = e.id; menuFor = e.id })
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            ) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Box(Modifier.weight(1f)) { Block(owner, e, vm, onFill, on) { active = e.id; inserting = null } }
+                    trailing(e)?.let { t -> Spacer(Modifier.width(4.dp)); Box(Modifier.padding(top = 6.dp)) { t() } }
+                    // The quiet «+» of the active block: things to put right after it.
+                    if (on) Box(Modifier.padding(top = 2.dp).size(36.dp).clip(CircleShape).background(if (inserting == e.id) c.accent else c.accentSoft)
+                        .clickable { inserting = if (inserting == e.id) null else e.id }, contentAlignment = Alignment.Center) {
+                        Icon(if (inserting == e.id) Icons.Rounded.Close else Icons.Rounded.Add, s.insertBelow, tint = if (inserting == e.id) c.bg else c.accent, modifier = Modifier.size(18.dp))
+                    }
+                }
+                if (inserting == e.id) InsertRow(
+                    vm,
+                    onText = { inserting = null; onFill(Fill("after", e.id)) },
+                    onList = { inserting = null; onFill(Fill("items", vm.insertList(owner, e.id))) },
+                    onAttachment = { a -> inserting = null; vm.insertAttachment(owner, e.id, a) },
+                )
+                DropdownMenu(menuFor == e.id, { menuFor = null }, containerColor = c.card) {
+                    if (e.text.isNotBlank() || (!e.isList && e.attachments.isEmpty()))
+                        DropdownMenuItem(text = { Text(s.edit, style = Type.body) }, onClick = { menuFor = null; onFill(Fill("edit", e.id, prefill = e.text)) })
+                    if (e.isList) DropdownMenuItem(text = { Text(s.listItem, style = Type.body) }, onClick = { menuFor = null; onFill(Fill("items", e.id)) })
+                    e.attachments.firstOrNull { it.kind == "photo" || it.kind == "video" }?.let { a ->
+                        DropdownMenuItem(text = { Text(s.captionWord, style = Type.body) }, onClick = { menuFor = null; onFill(Fill("caption", e.id, a.id, a.caption)) })
+                    }
+                    DropdownMenuItem(text = { Text(s.insertBelow, style = Type.body) }, onClick = { menuFor = null; active = e.id; inserting = e.id })
+                    if (i > 0) DropdownMenuItem(text = { Text(s.moveUp, style = Type.body) }, onClick = { menuFor = null; vm.moveEntry(owner, e.id, -1) })
+                    if (i < entries.lastIndex) DropdownMenuItem(text = { Text(s.moveDown, style = Type.body) }, onClick = { menuFor = null; vm.moveEntry(owner, e.id, 1) })
+                    DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menuFor = null; active = null; vm.deleteEntry(owner, e.id) })
+                }
+            }
+        }
+    }
+}
+
+/** One block: its date, its words, its list, its attachments — each shown for what it is. */
+@Composable
+private fun Block(owner: String, e: Entry, vm: MainVm, onFill: (Fill) -> Unit, active: Boolean, onActivate: () -> Unit) {
+    val c = M.c
+    val at = runCatching { LocalDateTime.parse(e.at) }.getOrNull()
+    Column {
+        Text(at?.let { it.toLocalDate().dayMonth() + " · " + it.toLocalTime().toString().take(5) }?.uppercase() ?: "",
+            style = Type.label.copy(color = c.faint, fontSize = 10.5.sp))
+        if (e.text.isNotBlank()) {
+            Spacer(Modifier.height(3.dp))
+            Text(e.text, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp))
+        }
+        if (e.isList) {
+            Spacer(Modifier.height(4.dp))
+            if (e.items.isEmpty()) Text("—", style = Type.body.copy(color = c.faint))
+            e.items.forEach { it0 ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CheckCircle(it0.done, size = 18.dp) { vm.toggleItem(owner, e.id, it0.id) }
+                    Text(it0.title, style = Type.body.copy(fontSize = 15.5.sp, color = if (it0.done) c.graphite else c.ink,
+                        textDecoration = if (it0.done) TextDecoration.LineThrough else null), modifier = Modifier.padding(vertical = 3.dp))
+                }
+            }
+        }
+        e.attachments.forEach { a ->
+            Spacer(Modifier.height(8.dp))
+            when (a.kind) {
+                "photo" -> PhotoBlock(a, vm, active, onActivate, onCaption = { onFill(Fill("caption", e.id, a.id, a.caption)) })
+                "video" -> VideoBlock(a, active, onActivate, onCaption = { onFill(Fill("caption", e.id, a.id, a.caption)) })
+                "audio" -> VoiceBlock(a, vm)
+                "contact" -> ContactBlock(a)
+                "link" -> LinkBlock(a)
+                else -> AttachmentsView(listOf(a))
+            }
+        }
+    }
+}
+
+private fun open(ctx: android.content.Context, a: Attachment) { Files.openIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } } }
+
+/** A photo wide, its caption, and — when there is text on it — that text, folded to three lines. */
+@Composable
+private fun PhotoBlock(a: Attachment, vm: MainVm, active: Boolean, onActivate: () -> Unit, onCaption: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    val ctx = LocalContext.current
+    val working by vm.working.collectAsState()
+    val bmp by produceState<Bitmap?>(null, a.id) { value = Files.thumb(ctx, a, 1080) }
+    Column {
+        Box(Modifier.fillMaxWidth().heightIn(max = 280.dp).clip(RoundedCornerShape(14.dp)).background(c.chip).clickable { if (active) open(ctx, a) else onActivate() }) {
+            bmp?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth()) }
+                ?: Box(Modifier.fillMaxWidth().height(160.dp))
+        }
+        Caption(a.caption, onCaption)
+        when {
+            "ocr:${a.id}" in working -> Text(s.readingPhoto, style = Type.small.copy(color = c.faint, fontSize = 12.5.sp), modifier = Modifier.padding(top = 4.dp))
+            !a.ocr.isNullOrBlank() -> FoldedText(s.textOnPhoto, a.ocr)
+        }
+    }
+}
+
+@Composable
+private fun VideoBlock(a: Attachment, active: Boolean, onActivate: () -> Unit, onCaption: () -> Unit) {
+    val c = M.c
+    val ctx = LocalContext.current
+    val bmp by produceState<Bitmap?>(null, a.id) { value = Files.thumb(ctx, a, 1080) }
+    Column {
+        Box(Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(14.dp)).background(c.chip).clickable { if (active) open(ctx, a) else onActivate() }, contentAlignment = Alignment.Center) {
+            bmp?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().height(200.dp)) }
+            Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp))
+            }
+            Text(a.durationLabel(), style = Type.small.copy(color = Color.White, fontSize = 12.5.sp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 6.dp, vertical = 2.dp))
+        }
+        Caption(a.caption, onCaption)
+    }
+}
+
+@Composable
+private fun Caption(text: String?, onEdit: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    if (text != null) Text(text, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.padding(top = 6.dp).clickable(onClick = onEdit))
+    else Text("+ " + s.captionWord.lowercase(), style = Type.small.copy(color = c.faint, fontSize = 13.sp), modifier = Modifier.padding(top = 4.dp).clickable(onClick = onEdit))
+}
+
+/** Recognised or transcribed words: a faint label, three lines, a tap shows all. */
+@Composable
+private fun FoldedText(label: String, text: String) {
+    val c = M.c
+    var all by remember { mutableStateOf(false) }
+    Column(Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.chip.copy(alpha = 0.55f)).clickable { all = !all }.padding(10.dp)) {
+        Text(label.uppercase(), style = Type.label.copy(color = c.faint, fontSize = 10.sp))
+        Spacer(Modifier.height(3.dp))
+        Text(text, style = Type.small.copy(color = c.ink, fontSize = 14.sp), maxLines = if (all) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** A voice note that plays in place, with what was said written under it. */
+@Composable
+private fun VoiceBlock(a: Attachment, vm: MainVm) {
+    val c = M.c
+    val s = M.s
+    val ctx = LocalContext.current
+    val working by vm.working.collectAsState()
+    var player by remember(a.id) { mutableStateOf<MediaPlayer?>(null) }
+    var playing by remember(a.id) { mutableStateOf(false) }
+    var progress by remember(a.id) { mutableFloatStateOf(0f) }
+    DisposableEffect(a.id) { onDispose { player?.release(); player = null } }
+    LaunchedEffect(playing) {
+        while (playing) {
+            player?.let { p -> progress = if (p.duration > 0) p.currentPosition / p.duration.toFloat() else 0f }
+            delay(200)
+        }
+    }
+    fun toggle() {
+        val p = player ?: run {
+            val f = Files.file(ctx, a) ?: return
+            runCatching { MediaPlayer().apply { setDataSource(f.absolutePath); prepare(); setOnCompletionListener { playing = false; progress = 0f } } }.getOrNull()
+                ?.also { player = it } ?: return
+        }
+        if (p.isPlaying) { p.pause(); playing = false } else { p.start(); playing = true }
+    }
+    Column {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.chip).padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(c.accent).clickable { toggle() }, contentAlignment = Alignment.Center) {
+                Icon(if (playing) Icons.Outlined.Pause else Icons.Outlined.PlayArrow, s.voiceNote, tint = c.bg, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            LinearProgressIndicator(progress = { progress }, color = c.accent, trackColor = c.hairline, modifier = Modifier.weight(1f).height(3.dp), drawStopIndicator = {}, gapSize = 0.dp)
+            Spacer(Modifier.width(12.dp))
+            Text(a.durationLabel(), style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
+        }
+        when {
+            !a.transcript.isNullOrBlank() -> Text(a.transcript, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.padding(top = 6.dp, start = 4.dp))
+            "voice" in working -> Text(s.transcribing, style = Type.small.copy(color = c.faint, fontSize = 12.5.sp), modifier = Modifier.padding(top = 4.dp, start = 4.dp))
+        }
+    }
+}
+
+/** A contact as a small card: name, phone, and the two things one does with it. */
+@Composable
+private fun ContactBlock(a: Attachment) {
+    val c = M.c
+    val ctx = LocalContext.current
+    val ci = a.contact
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.chip).padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Monogram(ci?.name ?: a.name, 36.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(ci?.name ?: a.name, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            listOfNotNull(ci?.phone, ci?.email).joinToString(" · ").takeIf { it.isNotBlank() }?.let {
+                Text(it, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        ci?.phone?.let { ph ->
+            RoundAction(Icons.Outlined.Call) { runCatching { ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$ph"))) } }
+            RoundAction(Icons.AutoMirrored.Outlined.Message) { runCatching { ctx.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + ph.filter { it.isDigit() || it == '+' }))) } }
+        }
+    }
+}
+
+@Composable
+private fun RoundAction(icon: ImageVector, onClick: () -> Unit) {
+    Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, null, tint = M.c.graphite, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun LinkBlock(a: Attachment) {
+    val c = M.c
+    val ctx = LocalContext.current
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.chip.copy(alpha = 0.6f))
+        .clickable { a.url?.let { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) } } }.padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.Link, null, tint = c.graphite, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(a.name, style = Type.body.copy(color = c.ink, fontSize = 14.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            a.url?.let { Uri.parse(it).host }?.let { Text(it.removePrefix("www."), style = Type.small.copy(color = c.faint, fontSize = 12.sp)) }
+        }
+    }
+}
+
+/**
+ * What can go after a block: text, a list, a photo (gallery or camera), a video, a voice note recorded right here,
+ * a file, a contact. Each lands right after the block it was opened from.
+ */
+@Composable
+private fun InsertRow(vm: MainVm, onText: () -> Unit, onList: () -> Unit, onAttachment: (Attachment) -> Unit) {
+    val c = M.c
+    val s = M.s
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var cameraFile by remember { mutableStateOf<File?>(null) }
+    var recorder by remember { mutableStateOf<WavRecorder?>(null) }
+    var level by remember { mutableFloatStateOf(0f) }
+    var seconds by remember { mutableStateOf(0) }
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u -> if (u != null) scope.launch { Files.import(ctx, u)?.let(onAttachment) } }
+    val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u -> if (u != null) scope.launch { Files.import(ctx, u, "video")?.let(onAttachment) } }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val f = cameraFile
+        if (ok && f != null && f.length() > 0) onAttachment(Files.fromCamera(f)) else f?.delete()
+    }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u: Uri? -> if (u != null) scope.launch { Files.import(ctx, u)?.let(onAttachment) } }
+    val pickContact = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        r.data?.data?.let { u -> Files.readContact(ctx, u)?.let { onAttachment(vm.contactAttachment(it)) } }
+    }
+    fun record() {
+        val r = WavRecorder(ctx)
+        if (!r.start()) { Toast.makeText(ctx, s.voiceUnavailable, Toast.LENGTH_SHORT).show(); return }
+        recorder = r; seconds = 0
+        scope.launch { while (recorder === r) { delay(100); level = r.level } }
+        scope.launch { while (recorder === r) { delay(1000); seconds++ } }
+    }
+    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) record() else Toast.makeText(ctx, s.micPermission, Toast.LENGTH_SHORT).show()
+    }
+
+    val rec = recorder
+    if (rec != null) {
+        // Recording in place: a breathing dot, the time, done or cancel.
+        Row(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(50)).background(c.accentSoft).padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Close, s.cancel, tint = c.graphite, modifier = Modifier.size(20.dp))
+            }
+            Box(Modifier.size(10.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
+            Spacer(Modifier.width(10.dp))
+            Text("%d:%02d".format(seconds / 60, seconds % 60), style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.weight(1f))
+            Box(Modifier.size(40.dp).clip(CircleShape).background(c.accent).clickable { recorder = null; rec.stop()?.let(onAttachment) }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Check, s.save, tint = c.bg, modifier = Modifier.size(20.dp))
+            }
+        }
+        return
+    }
+    Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        InsertIcon(Icons.AutoMirrored.Outlined.Notes, s.textWord, onText)
+        InsertIcon(Icons.Outlined.Checklist, s.listBlock, onList)
+        InsertIcon(Icons.Outlined.PhotoLibrary, s.photoWord) { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+        InsertIcon(Icons.Outlined.PhotoCamera, s.attachCamera) { val (f, uri) = Files.newPhotoFile(ctx); cameraFile = f; runCatching { takePhoto.launch(uri) } }
+        InsertIcon(Icons.Outlined.Videocam, s.video) { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }
+        InsertIcon(Icons.Outlined.Mic, s.voiceNote) {
+            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) record() else askMic.launch(Manifest.permission.RECORD_AUDIO)
+        }
+        InsertIcon(Icons.Outlined.AttachFile, s.attachFile) { pickFile.launch(arrayOf("*/*")) }
+        InsertIcon(Icons.Outlined.PersonOutline, s.attachContact) { runCatching { pickContact.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)) } }
+    }
+}
+
+@Composable
+private fun InsertIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
+    val c = M.c
+    Column(Modifier.width(62.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(40.dp).clip(CircleShape).background(c.card), contentAlignment = Alignment.Center) {
+            Icon(icon, label, tint = c.ink, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(label, style = Type.small.copy(color = c.graphite, fontSize = 11.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** The composer's label for what a [Fill] is filling. */
+fun Fill.label(): String = ru.anjeib.margin.i18n.L.s.let { s -> when (kind) { "after" -> s.textAfter; "items" -> s.listItem; "caption" -> s.captionWord; "edit" -> s.edit; else -> "" } }
+
+/** Sends what was typed into the block the [Fill] points at. True when it was handled. */
+fun MainVm.fillBlock(owner: String, f: Fill, text: String): Boolean {
+    when (f.kind) {
+        "after" -> insertText(owner, f.entryId, text)
+        "items" -> addListItems(owner, f.entryId, text)
+        "caption" -> f.attId?.let { setCaption(owner, f.entryId, it, text) }
+        "edit" -> editEntryText(owner, f.entryId, text)
+        else -> return false
+    }
+    return true
+}

@@ -52,6 +52,12 @@ object Llm {
         if (yandex(s)) Yandex.stt(s.yaKey, s.yaFolder, wav, if (ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.Ru) "ru-RU" else "en-US")
         else OpenRouter.transcribe(s.apiKey, s.voiceModel, wav, hints).let { LlmReply(it.content, it.costUsd * USD_RUB) }
 
+    /** Text on a photo: Yandex Vision, or a vision model on OpenRouter. Empty when there is no text. */
+    suspend fun ocr(s: Settings, jpeg: ByteArray, dataUrl: String): LlmReply =
+        if (yandex(s)) Yandex.ocr(s.yaKey, s.yaFolder, jpeg)
+        else OpenRouter.chat(s.apiKey, s.fastModel, "Copy all readable text from the image verbatim, line by line. No comments. If there is no text, reply with nothing.",
+            listOf("user" to "text?"), json = false, quick = true, images = listOf(dataUrl)).let { LlmReply(it.content.trim(), it.costUsd * USD_RUB) }
+
     suspend fun checkKey(s: Settings): String =
         if (yandex(s)) Yandex.check(s.yaKey, s.yaFolder) else OpenRouter.checkKey(s.apiKey)
 }
