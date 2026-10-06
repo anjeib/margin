@@ -10,6 +10,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.anjeib.margin.ai.AiException
 import ru.anjeib.margin.ai.AiPlan
+import ru.anjeib.margin.ai.Command
+import ru.anjeib.margin.ai.Commands
 import ru.anjeib.margin.ai.Applied
 import ru.anjeib.margin.ai.Assistant
 import ru.anjeib.margin.ai.ModelInfo
@@ -17,6 +19,7 @@ import ru.anjeib.margin.ai.OpenRouter
 import ru.anjeib.margin.ai.Processor
 import ru.anjeib.margin.ai.Scope
 import ru.anjeib.margin.data.AppData
+import ru.anjeib.margin.data.logged
 import ru.anjeib.margin.data.properName
 import ru.anjeib.margin.data.sentence
 import ru.anjeib.margin.data.withNames
@@ -112,7 +115,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     init {
-        viewModelScope.launch { store.data.collect { Reminders.syncTasks(getApplication(), it.tasks); watchBrief(it) } }
+        viewModelScope.launch { store.data.collect { Reminders.syncTasks(getApplication(), it.tasks, it.notes); watchBrief(it) } }
         refreshCalendar()
         Processor.schedule(ctx)
         ru.anjeib.margin.voice.LocalWhisper.refresh(ctx)
@@ -192,6 +195,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         // Files without words need no AI: they just get filed.
         if (t.isEmpty()) { fileAway(scope, files, data.value, null); return }
 
+        // An answer to a question («В четверг в 14:00») belongs with what was asked about — the task keeps both.
+        val chatBefore = data.value.chat
+        val asked = scope == Scope.Main && chatBefore.lastOrNull()?.let { !it.fromUser && it.options.isNotEmpty() } == true
+        val source = if (asked) chatBefore.dropLast(1).lastOrNull { it.fromUser }?.text?.let { "$it — $t" } ?: t else t
+        val cmd = if (smart) null else Commands.parse(t)
+
         var userId: String? = null
         if (scope == Scope.Main) {
             val user = ChatMsg(fromUser = true, text = (label ?: t) + if (files.isNotEmpty()) "  📎${files.size}" else "")
@@ -199,6 +208,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             _trayFrom.value = user.id
             userId = user.id
         }
+        // Said in so many words («добавь подзадачу …», «место: …») — done here, no AI, works offline too.
+        if (cmd != null && runCommand(cmd, scope, files, userId)) return
         if (!Processor.ready(s)) {
             if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = L.s.noKey, error = true)) else _toast.value = L.s.noKey
             return
@@ -220,14 +231,14 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 val (plan, cost) = Processor.askPlan(
                     s,
                     Assistant.systemPrompt(before, s, scope, query = if (smart) null else t + " " + history.joinToString(" ") { it.second }, recent = recent),
-                    history + ("user" to Assistant.userMessage(t)),
+                    history + ("user" to Assistant.userMessage(t) + (cmd?.let { Commands.hint(it) }?.let { "\n$it" } ?: "")),
                     smart = smart, complex = Assistant.isComplex(t, scope), images = images,
                 )
                 prefs.addSpend(cost)
                 when {
-                    scope != Scope.Main -> applyScoped(plan, scope, files, t)
-                    plan.actions.isEmpty() -> { applyPlan(plan, files, source = t, strict = !smart); }
-                    else -> propose(plan, files, userId, smart, t)
+                    scope != Scope.Main -> applyScoped(plan, scope, files, source)
+                    plan.actions.isEmpty() -> { applyPlan(plan, files, source = source, strict = !smart); }
+                    else -> propose(plan, files, userId, smart, source)
                 }
             } catch (e: Exception) {
                 val msg = (e as? AiException)?.message ?: e.message ?: e.toString()
@@ -241,6 +252,102 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 _busy.value = null
             }
         }
+    }
+
+    /**
+     * Runs a command locally when its value says everything; false → it needs the AI (dates, «which task»), which then gets a hint.
+     * Goes through the same plan → apply → bubble/undo path as the AI, so nothing looks different.
+     */
+    private fun runCommand(c: Command, scope: Scope, files: List<Attachment>, userId: String?): Boolean {
+        if (c.value.isBlank()) return false
+        fun o(vararg p: Pair<String, Any>) = kotlinx.serialization.json.JsonObject(p.associate { (k, v) ->
+            k to when (v) {
+                is List<*> -> kotlinx.serialization.json.JsonArray(v.map { x -> if (x is kotlinx.serialization.json.JsonObject) x else kotlinx.serialization.json.JsonPrimitive(x.toString()) })
+                else -> kotlinx.serialization.json.JsonPrimitive(v.toString())
+            }
+        })
+        val d = data.value
+        val actions: List<kotlinx.serialization.json.JsonObject> = when (scope) {
+            is Scope.InTask -> {
+                val task = d.tasks.find { it.id == scope.taskId } ?: return false
+                val id = task.id
+                // A contact said inside a task goes to its one person; with nobody (or several) it stays as a record.
+                val who = (task.people + listOfNotNull(task.waitingFor, task.promisedTo)).distinct().singleOrNull()
+                when (c.what) {
+                    "subtask" -> listOf(o("type" to "add_subtasks", "task_id" to id, "subtasks" to Commands.items(c.value).map { o("title" to it) }))
+                    "place" -> listOf(o("type" to "update_task", "task_id" to id, "place" to c.value))
+                    "people" -> listOf(o("type" to "update_task", "task_id" to id, "people" to (task.people + Commands.items(c.value)).distinct()))
+                    "project" -> listOf(o("type" to "update_task", "task_id" to id, "project" to c.value))
+                    "entry" -> listOf(o("type" to "add_entry", "task_id" to id, "text" to c.value))
+                    "time" -> Commands.time(c.value)?.let { listOf(o("type" to "update_task", "task_id" to id, "time" to it)) } ?: return false
+                    "phone", "email", "telegram" -> if (who != null) listOf(o("type" to "person", "name" to who, c.what to c.value))
+                        else listOf(o("type" to "add_entry", "task_id" to id, "text" to (if (c.what == "phone") L.s.fieldPhone else if (c.what == "email") L.s.fieldEmail else "Telegram") + ": " + c.value))
+                    else -> return false
+                }
+            }
+            else -> when (c.what) {
+                "note" -> listOf(o("type" to "create_note", "text" to c.value))
+                else -> return false
+            }
+        }
+        val plan = AiPlan(null, actions, null, local = true)
+        if (scope == Scope.Main) propose(plan, files, userId, false, c.value) else applyScoped(plan, scope, files, c.value)
+        return true
+    }
+
+    // ---------------- notes: properties and lists ----------------
+
+    /** People / place / project / reminder of a note, set by hand or by a command. */
+    fun setNoteField(id: String, what: String, value: String?) = updateNote(id) { n ->
+        val v = value?.trim()?.ifBlank { null }
+        when (what) {
+            "people" -> n.copy(people = (n.people + Commands.items(v.orEmpty()).map { it.properName() }).distinct())
+            "place" -> n.copy(place = v)
+            "project" -> n.copy(project = v?.removePrefix("#")?.lowercase())
+            "remind" -> n.copy(remindAt = v)
+            else -> n
+        }
+    }
+
+    fun clearNotePeople(id: String) = updateNote(id) { it.copy(people = emptyList()) }
+
+    /** «Список»: a new list block at the end of the note; [items] — what was already said («молоко, хлеб»). */
+    fun addNoteList(id: String, items: List<String> = emptyList()) = updateNote(id) { n ->
+        n.copy(entries = n.entries + Entry(isList = true, items = items.map { Subtask(title = it.sentence()) }), updatedAt = nowStamp())
+    }
+
+    /** Items go to the last list of the note (a new one if there is none). */
+    fun addNoteItems(id: String, text: String) = updateNote(id) { n ->
+        val items = Commands.items(text).ifEmpty { listOf(text.trim()) }.filter { it.isNotBlank() }.map { Subtask(title = it.sentence()) }
+        val last = n.entries.lastOrNull()
+        if (last?.isList == true) n.copy(entries = n.entries.dropLast(1) + last.copy(items = last.items + items), updatedAt = nowStamp())
+        else n.copy(entries = n.entries + Entry(isList = true, items = items), updatedAt = nowStamp())
+    }
+
+    fun toggleNoteItem(noteId: String, entryId: String, itemId: String) = updateNote(noteId) { n ->
+        n.copy(entries = n.entries.map { e -> if (e.id != entryId) e else e.copy(items = e.items.map { if (it.id == itemId) it.copy(done = !it.done) else it }) })
+    }
+
+    /**
+     * What is typed in a note: a fill mode («Список», «Место»…) or a command («добавь список: …») is done here;
+     * anything else is a new entry, as before.
+     */
+    fun writeInNote(id: String, text: String, files: List<Attachment>, mode: String?) {
+        val t = text.trim()
+        val c = mode?.let { Command(it, t) } ?: Commands.parse(t)
+        when (c?.what) {
+            "item", "list" -> if (c.value.isBlank()) addNoteList(id) else addNoteItems(id, c.value)
+            "people", "place", "project" -> if (c.value.isNotBlank()) setNoteField(id, c.what, c.value) else appendToNote(id, t, files)
+            else -> appendToNote(id, t, files)
+        }
+        if (files.isNotEmpty() && c?.what in setOf("item", "list", "people", "place", "project")) appendToNote(id, "", files)
+    }
+
+    /** The composer is filling one thing («Подзадача», «Место»…): done locally, else it goes to the AI as a command. */
+    fun sendAs(what: String, text: String, scope: Scope, files: List<Attachment> = emptyList()) {
+        val t = text.trim()
+        if (t.isEmpty() && files.isEmpty()) return
+        if (!runCommand(Command(what, t), scope, files, null)) send(t, scope = scope, files = files)
     }
 
     /** Offline: park the input in the queue (shown as «Входящие») and sort it once the network is back. */
@@ -352,6 +459,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         ).let { if (plan.reply != null && plan.question != null) it.copy(text = plan.reply + "\n" + plan.question.text) else it }
         if (applied.caption != null) snapshots[msg.id] = current
         store.replace(withFiles.copy(chat = (withFiles.chat + msg).takeLast(60)))
+        tidyNewNotes(applied, current)
         if (silentUser) _trayFrom.value = msg.id
         return applied.touchedTasks
     }
@@ -364,6 +472,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val undoId = newId()
         snapshots[undoId] = current
         store.replace(next)
+        tidyNewNotes(applied, current)
         val text = listOfNotNull(applied.caption, plan.reply, plan.question?.text).joinToString(" · ").ifBlank { L.s.saved }
         _notice.value = Notice(key(scope), text, undoId)
     }
@@ -444,9 +553,11 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val b = d.brief?.takeIf { it.date == LocalDate.now().toString() && it.lang == L.lang.name } ?: return
         val t = b.mainTaskId?.let { main -> d.tasks.find { it.id == main } }
         val stillOn = b.mainTaskId == null || (t != null && !t.done && (isToday(t) || isRunning(t) || t.dueDate == LocalDate.now().plusDays(1)))
-        // The day changed under the brief: rebuild it quietly instead of saying «есть изменения».
+        // The day changed under the brief: rebuild it quietly — at once when «главное» is gone,
+        // otherwise at most every half hour, so a busy morning doesn't burn the day's rebuilds in minutes.
         val changed = b.fingerprint != null && b.fingerprint != briefFingerprint(d)
-        if ((!stillOn || changed) && b.revisions < 4 && d.tasks.any { !it.done }) {
+        val age = runCatching { java.time.Duration.between(java.time.LocalTime.parse(b.at), java.time.LocalTime.now()).toMinutes() }.getOrDefault(999)
+        if ((!stillOn || (changed && age >= 30)) && b.revisions < 8 && d.tasks.any { !it.done }) {
             briefJob?.cancel()
             briefJob = viewModelScope.launch { kotlinx.coroutines.delay(4000); makeBrief(force = true) }
         }
@@ -500,17 +611,50 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     // ---------------- tasks ----------------
 
-    private fun updateTask(id: String, f: (Task) -> Task) =
-        store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) f(it) else it }) }
+    private fun updateTask(id: String, by: String = "you", f: (Task) -> Task) =
+        store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) f(it).logged(it, by) else it }) }
 
     fun toggleTask(id: String) = store.update { d ->
         val t = d.tasks.find { it.id == id } ?: return@update d
-        if (t.done) d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = false, doneAt = null) else it })
+        if (t.done) d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = false, doneAt = null, dropped = false).logged(it, "you") else it })
         else {
             // A repeating task leaves its next occurrence behind.
             val next = t.nextOccurrence()
-            d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, doneAt = LocalDate.now().toString()) else it } + listOfNotNull(next))
+            d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, doneAt = LocalDate.now().toString()).logged(it, "you") else it } + listOfNotNull(next))
         }
+    }
+
+    /** «Не буду делать»: closed without doing it — off the lists, honest in the history and reviews. A repeating one comes back as usual. */
+    fun dropTask(id: String) {
+        val before = data.value
+        val t = before.tasks.find { it.id == id && !it.done } ?: return
+        store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, dropped = true, doneAt = LocalDate.now().toString()).logged(it, "you") else it } + listOfNotNull(t.nextOccurrence())) }
+        offerUndo(before, L.s.droppedDone)
+    }
+
+    /**
+     * «Сделать заметкой»: the reverse of «идея → задача» — for a thought the AI took for a task.
+     * It joins its project's ideas note when there is one, else becomes a note of its own; the task goes away (with undo).
+     */
+    fun taskToNote(id: String): String? {
+        val before = data.value
+        val t = before.tasks.find { it.id == id } ?: return null
+        val text = (listOf(t.title) + t.entries.map { it.text }.filter { it.isNotBlank() }).joinToString("\n")
+        val ideas = if (L.s.aiLanguage == "English") "ideas" else "идеи"
+        val home = t.project?.let { p -> before.notes.find { it.project == p && it.title.endsWith(ideas) } } ?: t.noteId?.let { nid -> before.notes.find { it.id == nid } }
+        // Its steps stay with it, as a list.
+        fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it.copy(children = emptyList())) + flat(it.children) }
+        val steps = flat(t.subtasks).takeIf { it.isNotEmpty() }?.let { Entry(isList = true, items = it) }
+        val fresh = Note(title = t.title, project = t.project, people = t.people, place = t.place,
+            entries = t.entries.filter { it.text.isNotBlank() || it.attachments.isNotEmpty() } + listOfNotNull(steps))
+        store.update { d ->
+            val rest = d.tasks.filterNot { it.id == id }
+            if (home != null) d.copy(tasks = rest, notes = d.notes.map { if (it.id == home.id) it.copy(entries = it.entries + Entry(text = text) + listOfNotNull(steps), updatedAt = nowStamp()) else it })
+            else d.copy(tasks = rest, notes = listOf(fresh) + d.notes)
+        }
+        val noteId = home?.id ?: fresh.id
+        offerUndo(before, L.s.madeNote)
+        return noteId
     }
 
     fun toggleSubtask(taskId: String, subId: String) = updateTask(taskId) { t ->
@@ -600,7 +744,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         store.update { d ->
             d.copy(tasks = d.tasks.map { t ->
                 if (!t.done && t.dueDate?.isBefore(today) == true)
-                    Assistant.withAutoReminder(t.copy(due = today.toString(), start = null, remindAt = null, postponed = t.postponed + 1))
+                    Assistant.withAutoReminder(t.copy(due = today.toString(), start = null, remindAt = null, postponed = t.postponed + 1)).logged(t, "you")
                 else t
             })
         }
@@ -676,6 +820,30 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     fun say(text: String) { _toast.value = text }
+
+    private fun tidyNewNotes(applied: Applied, before: AppData) =
+        applied.touchedNotes.filter { id -> before.notes.none { it.id == id } }.forEach { tidyNote(it) }
+
+    /** A note that is all title gets its spelling and capitals fixed once, by the quick model. */
+    fun tidyNote(id: String) {
+        val s = settings.value
+        val n = data.value.notes.find { it.id == id } ?: return
+        if (n.titleFixed || n.entries.isNotEmpty() || n.title.isBlank() || !Processor.ready(s) || !Processor.online(ctx) || "tidy:$id" in _working.value) return
+        _working.value += "tidy:$id"
+        viewModelScope.launch {
+            try {
+                val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.tidyPrompt(), listOf("user" to n.title))
+                prefs.addSpend(r.rub)
+                val clean = (Assistant.field(Assistant.parseObject(r.content), "text") ?: r.content).trim().trim('"').trim()
+                val ok = clean.length in (n.title.length * 8 / 10)..(n.title.length * 13 / 10 + 8) && !clean.contains('{')
+                updateNote(id) { it.copy(title = if (ok) clean else it.title, titleFixed = true) }
+            } catch (e: Exception) {
+                android.util.Log.w("Margin", "tidy note failed: ${e.message}")
+            } finally {
+                _working.value -= "tidy:$id"
+            }
+        }
+    }
 
     /** «Вы написали» in the card: spelling and capitals fixed once, by the quick model; the words stay the user's. */
     fun tidySource(id: String) {

@@ -218,7 +218,7 @@ fun TaskMeta(t: Task, showProject: Boolean = true, showIdea: Boolean = false) {
     val overdue = t.isOverdue()
     val (d, n) = t.subtasks.progress()
     val whenText = t.whenLabel()
-    if (whenText == null && t.project == null && t.people.isEmpty() && t.waitingFor == null && t.promisedTo == null && n == 0 && t.repeat == null && t.entries.none { it.attachments.isNotEmpty() } && !(showIdea && t.noteId != null)) return
+    if (whenText == null && t.place == null && t.project == null && t.people.isEmpty() && t.waitingFor == null && t.promisedTo == null && n == 0 && t.repeat == null && t.entries.none { it.attachments.isNotEmpty() } && !(showIdea && t.noteId != null)) return
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -228,9 +228,10 @@ fun TaskMeta(t: Task, showProject: Boolean = true, showIdea: Boolean = false) {
         if (whenText != null) Row(verticalAlignment = Alignment.CenterVertically) {
             MetaIcon(if (t.time != null) Icons.Outlined.Notifications else Icons.Outlined.CalendarToday, if (overdue) c.accent else c.graphite)
             Spacer(Modifier.width(5.dp))
-            Text(whenText, style = Type.small.copy(color = if (overdue) c.accent else c.graphite))
+            Text(whenText, style = Type.small.copy(color = if (overdue) c.accent else c.ink, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
         }
         t.promisedTo?.let { Text(s.promised(it), style = Type.small.copy(color = c.graphite)) }
+        t.place?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
         if (showIdea && t.noteId != null) Text("✎ " + s.ideaMark, style = Type.small.copy(color = c.graphite))
         t.waitingFor?.let {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -286,6 +287,10 @@ fun TaskCard(
                     ),
                     maxLines = 3, overflow = TextOverflow.Ellipsis,
                 )
+                // The last thing written about it, faint — no need to open the card to remember.
+                if (!t.done) t.entries.lastOrNull { it.text.isNotBlank() }?.let { e ->
+                    Text(e.text, style = Type.small.copy(color = c.faint, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 if (!t.done) {
                     Spacer(Modifier.height(5.dp))
                     TaskMeta(t, showProject, showIdea)

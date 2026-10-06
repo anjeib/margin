@@ -50,10 +50,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -157,6 +159,7 @@ fun TaskList(
     val s = M.s
     val today = LocalDate.now()
     var byProject by rememberSaveable { mutableStateOf(false) }
+    var weekDay by rememberSaveable { mutableStateOf<String?>(null) }
     val collapsed = rememberSaveable(saver = setSaver) { mutableStateOf(setOf("s-done", "s-pdone")) }
     fun toggle(k: String) { collapsed.value = if (k in collapsed.value) collapsed.value - k else collapsed.value + k }
     fun isOpen(k: String) = k !in collapsed.value
@@ -201,7 +204,7 @@ fun TaskList(
         }
 
         /** Small-caps section header with a count; tap folds it. */
-        fun LazyListScope.section(label: String, key: String, count: Int? = null, collapsible: Boolean = false) {
+        fun LazyListScope.section(label: String, key: String, count: Int? = null, collapsible: Boolean = false, action: Pair<String, () -> Unit>? = null) {
             item(key) {
                 val rot by animateFloatAsState(if (isOpen(key)) 0f else -90f, label = "sec")
                 Row(
@@ -213,6 +216,9 @@ fun TaskList(
                     SectionLabel(label)
                     if (count != null) Text("  $count", style = Type.label.copy(color = c.faint))
                     Spacer(Modifier.weight(1f))
+                    // «Просрочено · Перенести»: the action sits with what it acts on, not over the list.
+                    action?.let { (text, act) -> Text(text, style = Type.small.copy(color = c.accent, fontSize = 13.5.sp),
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = act).padding(horizontal = 8.dp, vertical = 2.dp)) }
                     if (collapsible) Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.faint, modifier = Modifier.size(18.dp).rotate(rot))
                 }
             }
@@ -240,7 +246,10 @@ fun TaskList(
                 val timed = list.filter { it.time != null && it.dueDate?.let { d -> !d.isBefore(today) } != false }.sortedBy { it.time }
                 val rest = (list - timed.toSet()).sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) }))
                 val todays = events.filter { it.start.toLocalDate() == today || (it.allDay && !it.start.toLocalDate().isAfter(today) && it.end.toLocalDate().isAfter(today)) }
-                if (list.isEmpty() && running.isEmpty() && doneToday.isEmpty() && todays.isEmpty()) item("empty") { Empty(s.emptyToday, s.emptyHint) }
+                if (list.isEmpty() && running.isEmpty() && doneToday.isEmpty() && todays.isEmpty()) item("empty") {
+                    // A day with nothing in it is a free day; the how-to text only while the app is still empty.
+                    Empty(s.freeDay, if (data.tasks.none { !it.done }) s.emptyHint else s.freeDayHint)
+                }
                 todays.filter { it.allDay }.forEach { e -> item("ev-all" + e.title + e.start) { EventRow(e) } }
                 // One timeline: meetings and timed tasks interleaved by time.
                 val timeline = (todays.filter { !it.allDay }.map { it.start.toLocalTime().toString().take(5) to (it as Any) } + timed.map { it.time!! to (it as Any) })
@@ -249,7 +258,13 @@ fun TaskList(
                     if (x is CalEvent) item("ev$i" + x.title) { EventRow(x) }
                     else cards(listOf(x as Task), timeColumn = true)
                 }
-                cards(rest)
+                val late = rest.filter { it.dueDate?.isBefore(today) == true }
+                if (late.isNotEmpty()) {
+                    section(s.overdue, "s-late", late.size, action = s.moveToToday to vm::moveOverdue)
+                    cards(late)
+                    if (rest.size > late.size) section(s.today, "s-today-rest", rest.size - late.size)
+                }
+                cards(rest - late.toSet())
                 if (running.isNotEmpty()) {
                     val k = "s-running"
                     // Busy days fold the week away by default.
@@ -262,15 +277,16 @@ fun TaskList(
                     if (isOpen("s-done-today")) rows(doneToday, "dt")
                 }
                 // Undated tasks live in «Все» — one quiet line keeps them from being forgotten.
-                val undated = data.tasks.count { !it.done && it.dueDate == null && it.startDate == null && it.waitingFor == null }
-                if (undated > 0) item("undated") {
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(14.dp)).clickable { onView(Views.ALL) }.padding(horizontal = 10.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("○", style = Type.body.copy(color = c.graphite))
-                        Spacer(Modifier.width(10.dp))
-                        Text(s.undatedCount(undated) + " →", style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+                val undated = data.tasks.filter { !it.done && it.dueDate == null && it.startDate == null && it.waitingFor == null }.sortedByDescending { it.createdAt }
+                if (undated.isNotEmpty()) {
+                    // Undated tasks live here too, so they aren't forgotten; swipe left puts one off to tomorrow.
+                    section(s.noDates, "s-undated", undated.size, collapsible = true)
+                    if (isOpen("s-undated")) {
+                        rows(undated.take(5), "ud")
+                        if (undated.size > 5) item("ud-more") {
+                            Text(s.more(undated.size - 5) + " →", style = Type.small.copy(color = c.graphite),
+                                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onView(Views.ALL) }.padding(8.dp))
+                        }
                     }
                 }
                 // Notes never mix into task lists — one quiet line says what was written today.
@@ -291,9 +307,13 @@ fun TaskList(
             }
 
             view == Views.WEEK -> {
-                val list = data.tasks.filter { isThisWeek(it, today) }.sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) }))
+                val week = data.tasks.filter { isThisWeek(it, today) }.sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) }))
+                // The strip of seven days: a dot where something is planned; a tap shows that day, a second tap the whole week.
+                val picked = weekDay?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.takeIf { !it.isBefore(today.weekStart()) && !it.isAfter(today.weekEnd()) }
+                val list = if (picked == null) week else week.filter { onDay(it, picked, today) }
                 val done = data.tasks.filter { it.done && it.doneAt?.let { d -> !LocalDate.parse(d).isBefore(today.weekStart()) } == true }
-                header(s.thisWeekSoft, rangeLabel(today.weekStart(), today.weekEnd()) + " · " + s.tasksCount(list.size))
+                header(s.thisWeekSoft, (picked?.shortLabel(today) ?: rangeLabel(today.weekStart(), today.weekEnd())) + " · " + s.tasksCount(list.size))
+                item("strip") { WeekStrip(today, picked, week) { d -> weekDay = if (d == picked) null else d.toString() } }
                 if (list.isEmpty() && done.isEmpty()) item("empty") { Empty(s.emptyWeek, s.emptyHint) }
                 cards(list)
                 if (done.isNotEmpty()) {
@@ -329,7 +349,7 @@ fun TaskList(
                     (0..6).forEach { g ->
                         val l = groups[g] ?: return@forEach
                         val k = "s-$g"
-                        section(names[g], k, l.size, collapsible = true)
+                        section(names[g], k, l.size, collapsible = true, action = if (g == 0) s.moveToToday to vm::moveOverdue else null)
                         if (isOpen(k)) rows(l.sortedBy { sortKey(it) }, k)
                     }
                 } else {
@@ -430,6 +450,35 @@ private fun IdeaRow(ch: Chain, busy: Boolean, onOpen: () -> Unit, onMake: () -> 
     }
 }
 
+/** Is [t] on [day]: within its window, or — when late — on today. */
+private fun onDay(t: Task, day: LocalDate, today: LocalDate): Boolean {
+    if (t.isOverdue(today) && t.dueDate?.isBefore(today) == true) return day == today
+    val (s, e) = t.span() ?: return false
+    return !day.isBefore(s) && !day.isAfter(e)
+}
+
+/** Seven days of this week: weekday, number, a dot when something is planned; today in accent, the picked day filled. */
+@Composable
+private fun WeekStrip(today: LocalDate, picked: LocalDate?, tasks: List<Task>, onPick: (LocalDate) -> Unit) {
+    val c = M.c
+    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+        (0L..6L).map { today.weekStart().plusDays(it) }.forEach { d ->
+            val on = d == picked
+            val busy = tasks.any { onDay(it, d, today) }
+            Column(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable { onPick(d) }.padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(d.dowShort().lowercase(), style = Type.small.copy(color = if (d.isBefore(today)) c.faint else c.graphite, fontSize = 12.5.sp))
+                Spacer(Modifier.height(4.dp))
+                Box(Modifier.size(34.dp).clip(CircleShape).background(if (on) c.accent else Color.Transparent)
+                    .then(if (d == today && !on) Modifier.border(1.dp, c.accent, CircleShape) else Modifier), contentAlignment = Alignment.Center) {
+                    Text(d.dayOfMonth.toString(), style = Type.body.copy(color = when { on -> c.bg; d == today -> c.accent; d.isBefore(today) -> c.faint; else -> c.ink }, fontSize = 16.sp))
+                }
+                Spacer(Modifier.height(4.dp))
+                Box(Modifier.size(4.dp).clip(CircleShape).background(if (busy) (if (d.isBefore(today)) c.faint else c.accent) else Color.Transparent))
+            }
+        }
+    }
+}
+
 /** A soft accent glow that fades out — "this just arrived here". */
 @Composable
 fun Modifier.landing(active: Boolean, radius: Int): Modifier {
@@ -484,23 +533,38 @@ fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Uni
     val overdue = t.isOverdue(today)
     val (d, n) = t.subtasks.progress()
     Column(Modifier.fillMaxWidth().background(c.bg).clickable(onClick = onOpen)) {
-        Row(Modifier.fillMaxWidth().padding(end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(end = 6.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
             // Waiting on someone: the hourglass closes it too («получено»), like the circle does for the user's own tasks.
-            if (t.waitingFor != null && !t.done) Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
+            if (t.waitingFor != null && !t.done) Box(Modifier.size(40.dp, 26.dp).clip(CircleShape).clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.HourglassEmpty, null, tint = c.graphite, modifier = Modifier.size(18.dp))
-            } else CheckCircle(t.done, size = 20.dp, onToggle = onToggle)
-            Text(
-                // «Договор от Саши» already says who — don't add «— Саша».
-                t.title + (t.waitingFor?.takeIf { w -> !t.done && !t.title.contains(w.take(3), true) }?.let { " — $it" } ?: "") +
-                    (t.promisedTo?.takeIf { p -> !t.done && !t.title.contains(p.take(3), true) }?.let { " · " + M.s.promised(it).replaceFirstChar { c -> c.lowercase() } } ?: ""),
-                style = Type.body.copy(fontSize = 15.5.sp, color = if (t.done) c.graphite else c.ink,
-                    textDecoration = if (t.done) TextDecoration.LineThrough else null),
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(vertical = 11.dp),
-            )
-            if (showProject && !t.done) t.project?.let { Spacer(Modifier.width(6.dp)); Tag(it) }
-            if (n > 0 && !t.done) Text("  $d/$n", style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
-            if (!t.done) t.rowLabel(today)?.let {
-                Text("  $it", style = Type.small.copy(color = if (overdue) c.accent else c.graphite, fontSize = 13.sp), maxLines = 1)
+            } else Box(Modifier.height(26.dp), contentAlignment = Alignment.Center) { CheckCircle(t.done, size = 20.dp, onToggle = onToggle) }
+            Column(Modifier.weight(1f)) {
+                // The whole title — what the task is, not its first words.
+                Text(
+                    // «Договор от Саши» already says who — don't add «— Саша».
+                    t.title + (t.waitingFor?.takeIf { w -> !t.done && !t.title.contains(w.take(3), true) }?.let { " — $it" } ?: "") +
+                        (t.promisedTo?.takeIf { p -> !t.done && !t.title.contains(p.take(3), true) }?.let { " · " + M.s.promised(it).replaceFirstChar { c -> c.lowercase() } } ?: "") +
+                        (if (t.dropped) " · " + M.s.droppedMark else ""),
+                    // «Не делали» is not crossed out — it wasn't done, it was let go.
+                    style = Type.body.copy(fontSize = 15.5.sp, color = if (t.done) c.graphite else c.ink,
+                        textDecoration = if (t.done && !t.dropped) TextDecoration.LineThrough else null),
+                    maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
+                )
+                // The last thing written about it, faint — no need to open the card to remember.
+                if (!t.done) t.entries.lastOrNull { it.text.isNotBlank() }?.let { e ->
+                    Text(e.text, style = Type.small.copy(color = c.faint, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                // When it is, first and clearer; the place and the rest smaller.
+                if (!t.done) {
+                    val whenText = t.rowLabel(today)
+                    val extra = listOfNotNull(t.place, if (n > 0) "$d/$n" else null)
+                    if (whenText != null || extra.isNotEmpty() || (showProject && t.project != null)) Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        whenText?.let { Text(it, style = Type.small.copy(color = if (overdue) c.accent else c.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
+                        if (extra.isNotEmpty()) Text((if (whenText != null) "  ·  " else "") + extra.joinToString("  ·  "),
+                            style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        if (showProject) t.project?.let { Spacer(Modifier.width(8.dp)); Tag(it) }
+                    }
+                }
             }
         }
         Hairline(Modifier.padding(start = 40.dp))
@@ -558,13 +622,17 @@ private fun BriefCard(data: AppData, settings: Settings, loading: Boolean, quiet
     val folded = brief != null && (quiet || (autoFold && !userOpen))
     LaunchedEffect(quiet) { if (quiet) { userOpen = false; vm.collapseBrief() } }
 
+    run {
+        val openNow = data.tasks.any { isToday(it) || isRunning(it) }
+        val late = (brief?.at ?: LocalTime.now().toString().take(5)) >= "18:00"
+        if (!openNow && !late && data.tasks.none { it.done && it.doneAt == today }) return
+    }
     Column(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(18.dp)).background(c.accentSoft)) {
         // Nothing left for today → say so without asking the AI.
         val openToday = data.tasks.any { isToday(it) || isRunning(it) }
         val evening = (brief?.at ?: LocalTime.now().toString().take(5)) >= "18:00"
         val live = openToday || evening
         // Rebuilt by itself when the day changes; only after the daily limit does it say so.
-        val stale = brief?.fingerprint != null && brief.fingerprint != vm.briefFingerprint(data) && brief.revisions >= 4
         if (folded || (brief != null && !live)) {
             Row(
                 Modifier.fillMaxWidth().clickable { userOpen = true }.padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
@@ -579,13 +647,13 @@ private fun BriefCard(data: AppData, settings: Settings, loading: Boolean, quiet
                         style = Type.small.copy(color = c.ink, fontSize = 14.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     if (live) Text(
-                        listOfNotNull(brief?.at?.let { s.briefAt(it) }, if (stale) s.briefStale else null).joinToString(" · "),
-                        style = Type.small.copy(color = if (stale) c.accent else c.graphite, fontSize = 11.5.sp),
+                        brief?.at?.let { s.briefAt(it) }.orEmpty(),
+                        style = Type.small.copy(color = c.graphite, fontSize = 11.5.sp),
                     )
                 }
                 if (live) Box(Modifier.size(40.dp).clip(CircleShape).clickable(enabled = !loading) { vm.makeBrief(force = true) }, contentAlignment = Alignment.Center) {
                     if (loading) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
-                    else Icon(Icons.Outlined.Refresh, s.refresh, tint = if (stale) c.accent else c.graphite, modifier = Modifier.size(18.dp))
+                    else Icon(Icons.Outlined.Refresh, s.refresh, tint = c.graphite, modifier = Modifier.size(18.dp))
                 }
             }
             return@Column

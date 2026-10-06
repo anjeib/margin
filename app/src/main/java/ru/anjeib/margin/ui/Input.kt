@@ -61,6 +61,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -98,6 +99,11 @@ fun SmartComposer(
     prefill: String? = null,
     onPrefillUsed: () -> Unit = {},
     onTyping: (Boolean) -> Unit = {},
+    /** «Подзадача», «Место»…: the field is filling one thing; × goes back to free text. */
+    modeLabel: String? = null,
+    onModeClose: () -> Unit = {},
+    /** Changes when the field should take focus (and the keyboard come up) by itself. */
+    focusKey: Any? = null,
 ) {
     val c = M.c
     val s = M.s
@@ -114,6 +120,8 @@ fun SmartComposer(
     val transcribing = "voice" in working
 
     LaunchedEffect(prefill) { if (!prefill.isNullOrBlank()) { text = prefill; onPrefillUsed() } }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(focusKey) { if (focusKey != null) { delay(150); runCatching { focus.requestFocus() } } }
     LaunchedEffect(text, files.size, recorder) { onTyping(text.isNotEmpty() || files.isNotEmpty() || recorder != null) }
 
     fun add(a: Attachment?) { if (a != null) files += a }
@@ -163,6 +171,12 @@ fun SmartComposer(
     }
 
     Column(modifier.fillMaxWidth()) {
+        if (modeLabel != null) Row(Modifier.padding(start = 6.dp, bottom = 6.dp).clip(RoundedCornerShape(50)).background(c.accentSoft)
+            .clickable(onClick = onModeClose).padding(start = 12.dp, end = 8.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(modeLabel, style = Type.small.copy(color = c.accent, fontSize = 13.5.sp))
+            Spacer(Modifier.width(6.dp))
+            Icon(Icons.Rounded.Close, s.dismiss, tint = c.accent, modifier = Modifier.size(14.dp))
+        }
         if (files.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 files.toList().forEach { a -> AttachmentChip(a, onRemove = { files.remove(a); if (a.file != null) Files.delete(ctx, a) }) }
@@ -214,7 +228,7 @@ fun SmartComposer(
                 BasicTextField(
                     value = text, onValueChange = { text = it },
                     textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.accent), maxLines = 6,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 )
             }
             if (text.isBlank() && !busy) {

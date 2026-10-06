@@ -95,6 +95,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
     var screen by rememberSaveable { mutableStateOf(TASKS) }
     var view by rememberSaveable { mutableStateOf(Views.TODAY) }
     var openTask by rememberSaveable { mutableStateOf<String?>(null) }
+    var openTaskDialog by rememberSaveable { mutableStateOf<String?>(null) }
     var openNote by rememberSaveable { mutableStateOf<String?>(null) }
     var openPerson by rememberSaveable { mutableStateOf<String?>(null) }
     var searching by rememberSaveable { mutableStateOf(false) }
@@ -177,9 +178,14 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
                             onReject = vm::rejectPending,
                             onHold = vm::holdPending,
                             onSeparate = vm::pendingAsNewNote,
+                            onAskWhen = { _, what ->
+                                // The preview's ids are not the saved ones: take the new task without a time from what was saved.
+                                val ids = vm.confirm()
+                                val id = ids.firstOrNull { i -> vm.data.value.tasks.find { it.id == i }?.let { it.time == null && it.waitingFor == null } == true } ?: ids.firstOrNull()
+                                if (id != null) { openTaskDialog = what; openTask = id }
+                            },
                         )
                         }
-                        AnimatedVisibility(!typing && pending == null && busy == null, enter = fadeIn(), exit = fadeOut()) { SuggestionChips(data, vm) }
                     } else {
                         notice?.takeIf { it.scopeKey == "notes" }?.let { NoticeLine(it, vm) }
                     }
@@ -226,7 +232,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
         val t = data.tasks.find { it.id == id }
         if (t == null) openTask = null
         else TaskSheet(
-            t, data, vm, onClose = { openTask = null },
+            t, data, vm, onClose = { openTask = null; openTaskDialog = null },
+            startDialog = openTaskDialog, onStartDialogUsed = { openTaskDialog = null },
             onOpenNote = { openTask = null; openNote = it },
             onOpenPerson = { openTask = null; openPerson = it },
             onOpenTask = { openTask = it },
@@ -253,16 +260,6 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
                 counts = listOf(t, w, a), alertFirst = data.tasks.any { it.isOverdue() },
             )
         }
-    }
-}
-
-/** Only appears when something is overdue: one tap moves it to today. */
-@Composable
-private fun SuggestionChips(data: AppData, vm: MainVm) {
-    val s = M.s
-    if (data.tasks.none { it.isOverdue(LocalDate.now()) }) return
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-        Pill(s.chipMoveOverdue, onClick = vm::moveOverdue)
     }
 }
 

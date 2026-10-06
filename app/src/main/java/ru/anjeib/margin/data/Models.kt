@@ -43,6 +43,9 @@ data class Entry(
     val at: String = nowStamp(),
     val text: String = "",
     val attachments: List<Attachment> = emptyList(),
+    /** A «Список» block in a note: items with ticks (the same shape as subtasks). */
+    val items: List<Subtask> = emptyList(),
+    val isList: Boolean = false,
 )
 
 @Serializable
@@ -80,6 +83,33 @@ data class Repeat(
     val interval: Int = 1,
     val days: List<Int> = emptyList(),
 )
+
+/**
+ * One line of a task's history. Stored as data, not text, so it reads in whatever language the app is in.
+ * [kind]: created, date, time, repeat, waiting, promised, place, done, reopened, dropped. [by]: you, ai, swipe.
+ */
+@Serializable
+data class Change(
+    val at: String = nowStamp(),
+    val kind: String,
+    val value: String? = null,
+    val by: String = "you",
+)
+
+/** [this] after an edit of [old]: the history gains a line per thing that really changed. */
+fun Task.logged(old: Task?, by: String): Task {
+    if (old == null) return if (history.isEmpty()) copy(history = listOf(Change(kind = "created", value = if (noteId != null) "idea" else if (source != null) "chat" else null, by = by))) else this
+    val lines = buildList {
+        if (due != old.due || start != old.start) add(Change(kind = "date", value = due ?: start, by = by))
+        if (time != old.time) add(Change(kind = "time", value = time, by = by))
+        if (repeat != old.repeat) add(Change(kind = "repeat", value = repeat?.let { r -> r.freq + ":" + r.interval + ":" + r.days.joinToString(",") }, by = by))
+        if (waitingFor != old.waitingFor) add(Change(kind = "waiting", value = waitingFor, by = by))
+        if (promisedTo != old.promisedTo) add(Change(kind = "promised", value = promisedTo, by = by))
+        if (place != old.place) add(Change(kind = "place", value = place, by = by))
+        if (done != old.done) add(Change(kind = if (!done) "reopened" else if (dropped) "dropped" else "done", by = by))
+    }
+    return if (lines.isEmpty()) this else copy(history = (old.history + lines).takeLast(40))
+}
 
 /** Something typed while offline, waiting to be sorted by the AI. */
 @Serializable
@@ -127,6 +157,10 @@ data class Task(
     val postponed: Int = 0,
     val done: Boolean = false,
     val doneAt: String? = null,
+    /** Closed without doing it («Не буду делать»): done for the lists, but honest in reviews. */
+    val dropped: Boolean = false,
+    /** What changed and who changed it — shown folded in the card, so an AI edit is never a mystery. */
+    val history: List<Change> = emptyList(),
     val createdAt: String = LocalDate.now().toString(),
 ) {
     val startDate: LocalDate? get() = start?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
@@ -144,6 +178,12 @@ data class Note(
     val entries: List<Entry> = emptyList(),
     val project: String? = null,
     val aiSummary: String? = null,
+    /** The same properties a task has, minus «done»: who, where, and a reminder. */
+    val people: List<String> = emptyList(),
+    val place: String? = null,
+    val remindAt: String? = null,
+    /** A note that is all title had its spelling and capitals tidied once («Посмотреть «Одиссею» Нолана»). */
+    val titleFixed: Boolean = false,
     val extractedTasks: Int = 0,
     val updatedAt: String = java.time.LocalDateTime.now().withNano(0).toString(),
 )

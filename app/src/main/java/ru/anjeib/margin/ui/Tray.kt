@@ -81,6 +81,7 @@ fun Tray(
     onReject: () -> Unit,
     onHold: () -> Unit,
     onSeparate: () -> Unit = {},
+    onAskWhen: (taskId: String, what: String) -> Unit = { _, _ -> },
 ) {
     val c = M.c
     val s = M.s
@@ -118,13 +119,13 @@ fun Tray(
                         contentKey = { it?.id ?: "raw" },
                         label = "bubble",
                     ) { p ->
-                        if (p != null) ResultBubble(p, data, onConfirm, onEdit, onReject, onHold, onSeparate)
+                        if (p != null) ResultBubble(p, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen)
                         else UserBubble(m, working = busy && m.id == lastUser)
                     }
                 } else AssistantMsg(m, canUndo(m.id), onUndo = { onUndo(m.id) }, onOpenTask = onOpenTask, onOption = onOption, onOpenSettings = onOpenSettings)
             }
             // A result without a user bubble (e.g. from a suggestion) still gets its own bubble.
-            if (pending != null && msgs.none { it.id == pending.userMsgId }) ResultBubble(pending, data, onConfirm, onEdit, onReject, onHold, onSeparate)
+            if (pending != null && msgs.none { it.id == pending.userMsgId }) ResultBubble(pending, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen)
         }
     }
 }
@@ -159,7 +160,8 @@ private fun Dots(color: androidx.compose.ui.graphics.Color) {
 }
 
 @Composable
-private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, onEdit: () -> Unit, onReject: () -> Unit, onHold: () -> Unit, onSeparate: () -> Unit = {}) {
+private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, onEdit: () -> Unit, onReject: () -> Unit, onHold: () -> Unit, onSeparate: () -> Unit = {},
+                         onAskWhen: (String, String) -> Unit = { _, _ -> }) {
     val c = M.c
     val s = M.s
     val after = p.preview.data
@@ -233,6 +235,11 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
             if (p.auto) Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)) { BubbleCountdown(p.id) }
         }
         Row(Modifier.padding(top = 4.dp, end = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            // A new task without a time: offer the clock instead of asking in words; ignored, it leaves with the bubble.
+            p.preview.touchedTasks.firstNotNullOfOrNull { id -> after.tasks.find { it.id == id && current.tasks.none { o -> o.id == id } && it.time == null && it.waitingFor == null } }?.let { nt ->
+                val what = if (nt.dueDate == null && nt.startDate == null) "dates" else "time"
+                QuietLink(if (what == "dates") s.askWhen else s.askTime) { onAskWhen(nt.id, what) }
+            }
             if (!p.auto) QuietLink(s.create, onConfirm)
             if (appended) QuietLink(s.toSeparateNote, onSeparate)
             QuietLink(s.edit, onEdit)

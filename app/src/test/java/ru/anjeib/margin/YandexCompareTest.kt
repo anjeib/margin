@@ -23,12 +23,22 @@ class YandexCompareTest {
     private val orKey = System.getenv("OPENROUTER_KEY") ?: ""
     private val folder = runCatching { File("$home/.yc_margin_folder").readText().trim() }.getOrDefault("")
 
+    private val today = java.time.LocalDate.now()
+    private fun next(d: java.time.DayOfWeek) = today.with(java.time.temporal.TemporalAdjusters.nextOrSame(d)).toString()
+    private val tomorrow = today.plusDays(1).toString()
+    private val dayAfter = today.plusDays(2).toString()
+    private val sunday = next(java.time.DayOfWeek.SUNDAY)
+    private val wednesday = next(java.time.DayOfWeek.WEDNESDAY)
+    private val friday = next(java.time.DayOfWeek.FRIDAY)
+    private val firstOfMonth = (if (today.dayOfMonth == 1) today else today.withDayOfMonth(1).plusMonths(1)).toString()
+    private val tenth = (if (today.dayOfMonth <= 10) today.withDayOfMonth(10) else today.withDayOfMonth(10).plusMonths(1)).toString()
+
     data class Step(val text: String, val scopeTask: String? = null, val check: (AppData, AppData) -> Boolean)
 
     private val steps = listOf(
         Step("На этой неделе разобраться с vuzburo и запустить. Дима сделает дизайн, на мне тексты и оплата.") { _, d ->
             val t = d.tasks.firstOrNull { it.project == "vuzburo" }
-            t != null && t.due == "2026-10-11" && t.subtasks.size >= 2 && t.people.any { it.contains("Дим") }
+            t != null && t.due == sunday && t.subtasks.size >= 2 && t.people.any { it.contains("Дим") }
         },
         Step("для vuzburo ещё купить домен и настроить почту") { b, d ->
             d.tasks.size == b.tasks.size && d.tasks.first { it.project == "vuzburo" }.subtasks.size >= b.tasks.first { it.project == "vuzburo" }.subtasks.size + 2
@@ -38,10 +48,10 @@ class YandexCompareTest {
             new.size >= 3 && new.any { it.waitingFor?.contains("Саш") == true } && d.notes.any { it.project == "vuzburo" }
         },
         Step("созвониться с Анной по договору") { b, d -> d.tasks.size == b.tasks.size + 1 && d.tasks.last().let { t -> t.people.any { it.contains("Анн") } || t.title.contains("Анн") } },
-        Step("завтра в 18:00 стоматолог") { _, d -> d.tasks.any { it.title.contains("томатолог", true) && it.due == "2026-10-06" && it.time == "18:00" } },
+        Step("завтра в 18:00 стоматолог") { _, d -> d.tasks.any { it.title.contains("томатолог", true) && it.due == tomorrow && it.time == "18:00" } },
         Step("Дима должен прислать макет в среду") { b, d ->
             val new = d.tasks.filter { t -> b.tasks.none { it.id == t.id } }
-            new.any { it.waitingFor?.contains("Дим") == true && it.due == "2026-10-07" } && d.tasks.none { it.project == "vuzburo" && it.subtasks.size >= 2 && it.waitingFor != null }
+            new.any { it.waitingFor?.contains("Дим") == true && it.due == wednesday } && d.tasks.none { it.project == "vuzburo" && it.subtasks.size >= 2 && it.waitingFor != null }
         },
         Step("Дима — наш дизайнер, его телефон +7 999 123-45-67") { _, d -> d.persons.any { it.name.contains("Дим") && it.phone?.contains("999") == true && it.about != null } },
         Step("идея: на главной vuzburo сделать блок с ценами без «от»") { b, d ->
@@ -51,16 +61,16 @@ class YandexCompareTest {
             d.notes.any { n -> n.project != "vuzburo" && (n.title + n.entries.joinToString { it.text }).contains("Бахчисара", true) }
         },
         Step("Обещал Анне показать калькулятор до пятницы") { _, d ->
-            d.tasks.any { it.promisedTo?.contains("Анн") == true && it.due == "2026-10-09" && it.waitingFor == null }
+            d.tasks.any { it.promisedTo?.contains("Анн") == true && it.due == friday && it.waitingFor == null }
         },
         Step("Каждый вторник в 10:00 планёрка по vuzburo") { _, d ->
             d.tasks.any { it.repeat?.freq == "weekly" && it.repeat.days == listOf(2) && it.time == "10:00" }
         },
         Step("это у доктора Иванова на Ленина 5, не забыть полис", scopeTask = "томатолог") { _, d ->
-            d.tasks.first { it.title.contains("томатолог", true) }.let { t -> (t.entries.any { it.text.contains("Ленина") } || t.place?.contains("Ленина") == true) && t.entries.any { it.text.contains("полис", true) } }
+            d.tasks.first { it.title.contains("томатолог", true) }.let { t -> (t.entries.any { it.text.contains("Ленина") } || t.place?.contains("Ленина") == true) && (t.entries.any { it.text.contains("полис", true) } || t.subtasks.any { it.title.contains("полис", true) }) }
         },
         Step("перенеси на пятницу в 15:00", scopeTask = "томатолог") { _, d ->
-            d.tasks.first { it.title.contains("томатолог", true) }.let { it.due == "2026-10-09" && it.time == "15:00" }
+            d.tasks.first { it.title.contains("томатолог", true) }.let { it.due == friday && it.time == "15:00" }
         },
         Step("разбей на шаги: позвонить подтвердить, взять полис, доехать", scopeTask = "томатолог") { _, d ->
             val subs = d.tasks.first { it.title.contains("томатолог", true) }.subtasks.map { it.title.lowercase() }
@@ -156,18 +166,18 @@ class YandexCompareTest {
         },
         Case("аренда: первое число — в будущем", "аренда первого числа каждый месяц", emptyList()) { _, d ->
             val t = d.tasks.firstOrNull { it.title.contains("аренд", true) }
-            t != null && t.repeat?.freq == "monthly" && t.due == "2026-11-01"
+            t != null && t.repeat?.freq == "monthly" && t.due == firstOfMonth
         },
         Case("надиктовка: не сливать с арендой",
             "лена до пятницы сдаёт график смен я жду ещё обещал виктору арендодателю оплату до десятого сломалась тестомесилка на садовой вызвать мастера завтра утром купить кассовую ленту",
-            listOf(task("Оплатить аренду", due = "2026-11-01", repeat = ru.anjeib.margin.data.Repeat("monthly", days = listOf(1))))) { b, d ->
-            untouched(b, d) && d.tasks.any { it.promisedTo?.contains("Виктор", true) == true && it.due == "2026-10-10" } &&
-                d.tasks.any { it.waitingFor?.contains("Лен", true) == true && it.due == "2026-10-09" } &&
-                d.tasks.any { it.title.contains("мастер", true) && it.due == "2026-10-06" }
+            listOf(task("Оплатить аренду", due = firstOfMonth, repeat = ru.anjeib.margin.data.Repeat("monthly", days = listOf(1))))) { b, d ->
+            untouched(b, d) && d.tasks.any { it.promisedTo?.contains("Виктор", true) == true && it.due == tenth } &&
+                d.tasks.any { it.waitingFor?.contains("Лен", true) == true && it.due == friday } &&
+                d.tasks.any { it.title.contains("мастер", true) && it.due == tomorrow }
         },
         Case("перенос: время сохраняется", "перенеси мастера на послезавтра",
-            listOf(task("Вызвать мастера по тестомесилке", due = "2026-10-06", time = "09:00", project = "садовая"), task("Купить кассовую ленту", due = "2026-10-06"))) { b, d ->
-            untouched(b, d, "мастер") && d.tasks.first { it.title.contains("мастер", true) }.let { it.due == "2026-10-07" && it.time == "09:00" }
+            listOf(task("Вызвать мастера по тестомесилке", due = tomorrow, time = "09:00", project = "садовая"), task("Купить кассовую ленту", due = tomorrow))) { b, d ->
+            untouched(b, d, "мастер") && d.tasks.first { it.title.contains("мастер", true) }.let { it.due == dayAfter && it.time == "09:00" }
         },
         Case("подзадачи в открытой карточке", "подзадачи: собрать мудборд, 3 варианта эскизов, финальная презентация", olga(), scopeTask = "логотип") { b, d ->
             untouched(b, d, "логотип") && d.tasks.size == b.tasks.size && d.tasks.first { it.title.contains("логотип", true) }.subtasks.size == 3
@@ -177,18 +187,18 @@ class YandexCompareTest {
         },
         Case("срок у дела человека", "Дента+: Катя делает макеты главной к четвергу, Артём верстает после макетов, Ирина должна прислать тексты до среды", emptyList()) { _, d ->
             // Katya's deadline must survive somewhere: as a task (subtasks have no dates).
-            d.tasks.any { (it.title.contains("макет", true) || it.people.any { p -> p.contains("Кат") }) && it.due == "2026-10-08" } &&
-                d.tasks.any { it.waitingFor?.contains("Ирин") == true && it.due == "2026-10-07" }
+            d.tasks.any { (it.title.contains("макет", true) || it.people.any { p -> p.contains("Кат") }) && it.due == next(java.time.DayOfWeek.THURSDAY) } &&
+                d.tasks.any { it.waitingFor?.contains("Ирин") == true && it.due == wednesday }
         },
         Case("заказ у поставщика — не ожидание", "заказать упаковку у ПакетПро до среды", emptyList()) { _, d ->
-            d.tasks.any { it.title.contains("упаков", true) && it.waitingFor == null && it.due == "2026-10-07" }
+            d.tasks.any { it.title.contains("упаков", true) && it.waitingFor == null && it.due == wednesday }
         },
     )
 
     private fun olga() = listOf(
-        task("Логотип для кофейни «Зерно»", due = "2026-10-09", project = "зерно"),
-        task("Ответить Игорю по эскизам", due = "2026-10-06"),
-        task("Созвон с Мариной", due = "2026-10-06", time = "11:00", people = listOf("Марина")),
+        task("Логотип для кофейни «Зерно»", due = friday, project = "зерно"),
+        task("Ответить Игорю по эскизам", due = tomorrow),
+        task("Созвон с Мариной", due = tomorrow, time = "11:00", people = listOf("Марина")),
         task("Отправить Марине мудборд", project = "портфолио"),
     )
 

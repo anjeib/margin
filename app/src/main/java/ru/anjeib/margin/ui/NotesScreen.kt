@@ -27,6 +27,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import ru.anjeib.margin.data.shortLabel
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.outlined.AddTask
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -133,6 +138,7 @@ fun NoteCard(n: Note, data: AppData, onClick: () -> Unit, modifier: Modifier = M
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpenTask: (String) -> Unit) {
     val c = M.c
@@ -143,6 +149,12 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
     var projectDialog by remember { mutableStateOf(false) }
     var entryMenu by remember { mutableStateOf<Entry?>(null) }
     var editEntry by remember { mutableStateOf<Entry?>(null) }
+    // The field below fills one thing — a list item, people, a place, the project — like in a task.
+    var mode by remember(note.id) { mutableStateOf<String?>(null) }
+    var modeTick by remember { mutableStateOf(0) }
+    var remindDialog by remember { mutableStateOf(false) }
+    fun fill(what: String) { mode = what; modeTick++ }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(title) { delay(400); vm.renameNote(note.id, title) }
     val close = { vm.renameNote(note.id, title); vm.dropEmptyNote(note.id); onBack() }
     BackHandler(onBack = close)
@@ -160,6 +172,7 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                     Icon(Icons.Outlined.MoreHoriz, null, tint = c.graphite)
                 }
                 DropdownMenu(menu, { menu = false }, containerColor = c.card) {
+                    DropdownMenuItem(text = { Text(s.listBlock, style = Type.body) }, onClick = { menu = false; vm.addNoteList(note.id); fill("item") })
                     DropdownMenuItem(text = { Text(s.project, style = Type.body) }, onClick = { menu = false; projectDialog = true })
                     DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menu = false; vm.deleteNote(note.id); onBack() })
                 }
@@ -179,19 +192,45 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 }
             }
             Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.clickable { projectDialog = true }) { if (note.project != null) Tag(note.project) else Text("+ " + s.project.lowercase(), style = Type.small.copy(color = c.graphite)) }
+            // The same properties a task has — what is filled in one quiet line, «+ …» for the rest.
+            val remind = note.remindAt?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+                remind?.let { r -> Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable { remindDialog = true }, verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Notifications, null, tint = c.graphite, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp))
+                    Text(r.toLocalDate().shortLabel().replaceFirstChar { it.uppercase() } + " " + r.toLocalTime().toString().take(5), style = Type.small.copy(color = c.ink, fontSize = 14.sp))
+                } }
+                note.people.forEach { p -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Monogram(p, 22.dp); Spacer(Modifier.width(5.dp)); Text(p, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
+                } }
+                note.place?.let { pl -> Row(Modifier.clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = {
+                    runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
+                }, onLongClick = { fill("place") }), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Place, null, tint = c.graphite, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp))
+                    Text(pl, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
+                } }
+                note.project?.let { Box(Modifier.clickable { projectDialog = true }) { Tag(it) } }
                 val upd = runCatching { LocalDateTime.parse(note.updatedAt).toLocalDate().dayMonth() }.getOrNull()
-                if (upd != null) Text("   " + s.updated(upd), style = Type.small.copy(color = c.graphite))
+                if (upd != null) Text(s.updated(upd), style = Type.small.copy(color = c.graphite))
+            }
+            val missing = listOfNotNull(
+                (s.project to "project").takeIf { note.project == null }, (s.fieldPeople to "people").takeIf { note.people.isEmpty() },
+                (s.fieldPlace to "place").takeIf { note.place == null }, (s.remindWord to "remind").takeIf { note.remindAt == null },
+            )
+            if (missing.isNotEmpty()) FlowRow(Modifier.padding(top = 6.dp)) {
+                missing.forEachIndexed { i, (label, d) ->
+                    if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.faint))
+                    Text("+ " + label.lowercase(), style = Type.small.copy(color = c.graphite),
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { if (d == "remind") remindDialog = true else fill(d) }.padding(2.dp))
+                }
             }
             Spacer(Modifier.height(18.dp))
             Box {
                 Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     // Each idea says for itself whether it is already a task, or becomes one with a tap.
                     note.entries.forEach { e ->
-                        EntryView(e, onLong = { entryMenu = e }, trailing = if (e.text.isBlank()) null else ({
+                        EntryView(e, onLong = { entryMenu = e }, trailing = if (e.text.isBlank() || e.isList) null else ({
                             IdeaTaskButton(tasksOfEntry(note, e, data), "idea:${e.id}" in working, onOpenTask = onOpenTask, onMake = { vm.ideaToTask(note.id, e.id) })
-                        }))
+                        }), onToggleItem = { item -> vm.toggleNoteItem(note.id, e.id, item) })
                     }
                 }
                 DropdownMenu(entryMenu != null, { entryMenu = null }, containerColor = c.card) {
@@ -204,17 +243,48 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
             if (note.entries.isEmpty()) Text(s.noteBodyHint, style = Type.body.copy(color = c.faint, fontSize = 17.sp))
             Spacer(Modifier.height(24.dp))
         }
+        val modeLabel = when (mode) { "item" -> s.listItem; "people" -> s.fieldPeople; "place" -> s.fieldPlace; "project" -> s.project; else -> null }
         SmartComposer(
-            vm, s.appendHint, busy = false,
-            onSend = { t, f -> vm.appendToNote(note.id, t, f) },
+            vm, modeLabel?.let { s.fillHint(it) } ?: s.appendHint, busy = false,
+            onSend = { t, f -> vm.writeInNote(note.id, t, f, mode); if (mode != "item") mode = null },
             keepAudio = true,
             modifier = Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp),
+            modeLabel = modeLabel, onModeClose = { mode = null }, focusKey = modeTick.takeIf { it > 0 },
         )
     }
     if (projectDialog) TextDialog(s.project, note.project.orEmpty(), "vuzburo", onDismiss = { projectDialog = false }) { v ->
         vm.setNoteProject(note.id, v); projectDialog = false
     }
+    if (remindDialog) RemindDialog(note.remindAt, onDismiss = { remindDialog = false }) { v -> vm.setNoteField(note.id, "remind", v); remindDialog = false }
     editEntry?.let { e -> TextDialog(s.edit, e.text, "", onDismiss = { editEntry = null }) { v -> vm.editNoteEntry(note.id, e.id, v); editEntry = null } }
+}
+
+/** «Напомнить»: a day, then a time; «Убрать» clears it. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun RemindDialog(initial: String?, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
+    val c = M.c
+    val s = M.s
+    val start = initial?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } ?: LocalDateTime.now().plusHours(1).withMinute(0)
+    var day by remember { mutableStateOf<LocalDate?>(null) }
+    if (day == null) {
+        val st = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = start.toLocalDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli())
+        androidx.compose.material3.DatePickerDialog(
+            onDismissRequest = onDismiss,
+            confirmButton = { androidx.compose.material3.TextButton({ day = st.selectedDateMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() } ?: start.toLocalDate() }) { Text(s.next, color = c.accent) } },
+            dismissButton = { androidx.compose.material3.TextButton({ if (initial != null) onSave(null) else onDismiss() }) { Text(if (initial != null) s.removeWord else s.cancel, color = c.graphite) } },
+            colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card),
+        ) { androidx.compose.material3.DatePicker(st, colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card, selectedDayContainerColor = c.accent, todayDateBorderColor = c.accent)) }
+    } else {
+        val tp = androidx.compose.material3.rememberTimePickerState(start.hour, start.minute, is24Hour = true)
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = onDismiss, containerColor = c.card,
+            text = { androidx.compose.material3.TimePicker(tp, colors = androidx.compose.material3.TimePickerDefaults.colors(clockDialColor = c.chip, selectorColor = c.accent,
+                timeSelectorSelectedContainerColor = c.accentSoft, timeSelectorUnselectedContainerColor = c.chip)) },
+            confirmButton = { androidx.compose.material3.TextButton({ onSave(day!!.atTime(tp.hour, tp.minute).toString().take(16)) }) { Text(s.save, color = c.accent) } },
+            dismissButton = { androidx.compose.material3.TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
+        )
+    }
 }
 
 /** Next to an idea: «make a task» when it is still just an idea, a quiet check that opens the task when it already is one. */

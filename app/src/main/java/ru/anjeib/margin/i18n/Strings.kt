@@ -1,6 +1,7 @@
 package ru.anjeib.margin.i18n
 
 import ru.anjeib.margin.data.pluralRu
+import ru.anjeib.margin.data.shortLabel
 
 enum class Lang { Ru, En }
 
@@ -42,7 +43,6 @@ interface Strings {
     val noteHint: String
     val chipNext: String
     val chipPlanDay: String
-    val chipMoveOverdue: String
     val thinking: String
     val voiceUnavailable: String
 
@@ -81,6 +81,24 @@ interface Strings {
     fun doneNext(date: String): String
     fun undatedCount(n: Int): String
     val subtaskOne: String
+    val freeDay: String
+    val moveToToday: String
+    val skipOnce: String
+    val droppedDone: String
+    val madeNote: String
+    val toNote: String
+    val wontDo: String
+    val droppedMark: String
+    val historyWord: String
+    fun change(kind: String, value: String?, by: String): String
+    val listBlock: String
+    val listItem: String
+    val remindWord: String
+    val removeWord: String
+    fun fillHint(what: String): String
+    val freeDayHint: String
+    val askTime: String
+    val askWhen: String
     fun ideaBecameTask(title: String): String
     val granted: String
     val youWrote: String
@@ -253,7 +271,6 @@ interface Strings {
     val reopened: String
     val markedDone: String
     val allDoneToday: String
-    val briefStale: String
     val quickToday: String
     val quickTomorrow: String
     val quickNextWeek: String
@@ -408,7 +425,6 @@ object Ru : Strings {
     override val noteHint = "Новая заметка…"
     override val chipNext = "Что дальше?"
     override val chipPlanDay = "План на день"
-    override val chipMoveOverdue = "Перенести просроченное"
     override val thinking = "Думаю…"
     override val voiceUnavailable = "Голосовой ввод недоступен на этом телефоне"
 
@@ -430,7 +446,7 @@ object Ru : Strings {
     override val emptyToday = "На сегодня ничего"
     override val emptyWeek = "Неделя свободна"
     override val emptyAll = "Задач пока нет"
-    override val emptyHint = "Напишите внизу, что нужно сделать, — обычными словами. Например: «завтра в 11 созвон с Мариной» или «каждый понедельник заказать муку»."
+    override val emptyHint = "Просто скажите или напишите, что нужно: создать задачу, заметку или что-то изменить. Например: «Завтра встреча с Мариной в 15» или «Посмотреть „Одиссею“ Нолана»."
     override val noTime = "Без времени"
     override val done = "Выполнено"
     override val doneLower = "выполнено"
@@ -444,6 +460,39 @@ object Ru : Strings {
     override fun doneNext(date: String) = "Готово · следующий раз $date"
     override fun undatedCount(n: Int) = "Ещё без срока: " + tasksCount(n)
     override val subtaskOne = "Подзадача"
+    override val freeDay = "Свободный день"
+    override val moveToToday = "Перенести на сегодня"
+    override val skipOnce = "Пропустить один раз"
+    override val droppedDone = "Не будете делать"
+    override val madeNote = "Теперь это заметка"
+    override val toNote = "Сделать заметкой"
+    override val wontDo = "Не буду делать"
+    override val droppedMark = "не делали"
+    override val historyWord = "История"
+    override fun change(kind: String, value: String?, by: String): String {
+        val what = when (kind) {
+            "created" -> when (value) { "chat" -> "создано из разговора"; "idea" -> "создано из идеи"; "repeat" -> "повтор"; else -> "создано" }
+            "date" -> if (value == null) "срок убран" else "срок: " + (runCatching { java.time.LocalDate.parse(value).shortLabel().lowercase() }.getOrNull() ?: value)
+            "time" -> if (value == null) "время убрано" else "время: $value"
+            "repeat" -> if (value == null) "повтор убран" else "повтор изменён"
+            "waiting" -> if (value == null) "больше не ждём" else "ждём: $value"
+            "promised" -> if (value == null) "обещание снято" else "вы обещали: $value"
+            "place" -> if (value == null) "место убрано" else "место: $value"
+            "done" -> "готово"
+            "dropped" -> "не будете делать"
+            "reopened" -> "снова открыто"
+            else -> kind
+        }
+        return what + when (by) { "ai" -> " · ИИ"; "swipe" -> " · свайп"; else -> "" }
+    }
+    override val listBlock = "Список"
+    override val listItem = "Пункт списка"
+    override val remindWord = "Напомнить"
+    override val removeWord = "Убрать"
+    override fun fillHint(what: String) = "$what — напишите или скажите"
+    override val freeDayHint = "На сегодня ничего не запланировано. Можно отдохнуть — или взять что-то из «Недели»."
+    override val askTime = "Уточнить время?"
+    override val askWhen = "Уточнить срок?"
     override fun ideaBecameTask(title: String) = "Теперь это задача: $title"
     override val granted = "разрешено"
     override val youWrote = "Вы написали"
@@ -647,7 +696,6 @@ object Ru : Strings {
     override val reopened = "Задача снова открыта"
     override val markedDone = "Готово"
     override val allDoneToday = "Главное на сегодня сделано"
-    override val briefStale = "есть изменения"
     override val quickToday = "Сегодня"
     override val quickTomorrow = "Завтра"
     override val quickNextWeek = "След. неделя"
@@ -760,7 +808,6 @@ object En : Strings {
     override val noteHint = "New note…"
     override val chipNext = "What's next?"
     override val chipPlanDay = "Plan my day"
-    override val chipMoveOverdue = "Move overdue"
     override val thinking = "Thinking…"
     override val voiceUnavailable = "Voice input isn't available on this phone"
 
@@ -782,7 +829,7 @@ object En : Strings {
     override val emptyToday = "Nothing for today"
     override val emptyWeek = "Your week is clear"
     override val emptyAll = "No tasks yet"
-    override val emptyHint = "Type below what needs doing — in plain words. For example: “call Marina tomorrow at 11” or “order flour every Monday”."
+    override val emptyHint = "Just say or type what you need: a task, a note or a change. For example: “Meeting with Marina tomorrow at 3” or “Watch Nolan’s Odyssey”."
     override val noTime = "Anytime"
     override val done = "Done"
     override val doneLower = "done"
@@ -796,6 +843,39 @@ object En : Strings {
     override fun doneNext(date: String) = "Done · next on $date"
     override fun undatedCount(n: Int) = "Also without a date: " + tasksCount(n)
     override val subtaskOne = "Subtask"
+    override val freeDay = "A free day"
+    override val moveToToday = "Move to today"
+    override val skipOnce = "Skip once"
+    override val droppedDone = "Won’t do"
+    override val madeNote = "Now it’s a note"
+    override val toNote = "Make it a note"
+    override val wontDo = "Won’t do"
+    override val droppedMark = "not done"
+    override val historyWord = "History"
+    override fun change(kind: String, value: String?, by: String): String {
+        val what = when (kind) {
+            "created" -> when (value) { "chat" -> "created from a conversation"; "idea" -> "created from an idea"; "repeat" -> "repeats"; else -> "created" }
+            "date" -> if (value == null) "date removed" else "date: " + (runCatching { java.time.LocalDate.parse(value).shortLabel() }.getOrNull() ?: value)
+            "time" -> if (value == null) "time removed" else "time: $value"
+            "repeat" -> if (value == null) "repeat removed" else "repeat changed"
+            "waiting" -> if (value == null) "no longer waiting" else "waiting: $value"
+            "promised" -> if (value == null) "promise removed" else "you promised: $value"
+            "place" -> if (value == null) "place removed" else "place: $value"
+            "done" -> "done"
+            "dropped" -> "won’t do"
+            "reopened" -> "reopened"
+            else -> kind
+        }
+        return what + when (by) { "ai" -> " · AI"; "swipe" -> " · swipe"; else -> "" }
+    }
+    override val listBlock = "List"
+    override val listItem = "List item"
+    override val remindWord = "Remind"
+    override val removeWord = "Remove"
+    override fun fillHint(what: String) = "$what — type or say it"
+    override val freeDayHint = "Nothing planned for today. Rest — or take something from “Week”."
+    override val askTime = "Set a time?"
+    override val askWhen = "Set a date?"
     override fun ideaBecameTask(title: String) = "Now a task: $title"
     override val granted = "allowed"
     override val youWrote = "You wrote"
@@ -999,7 +1079,6 @@ object En : Strings {
     override val reopened = "Task reopened"
     override val markedDone = "Done"
     override val allDoneToday = "Today's main things are done"
-    override val briefStale = "things changed"
     override val quickToday = "Today"
     override val quickTomorrow = "Tomorrow"
     override val quickNextWeek = "Next week"

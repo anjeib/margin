@@ -19,6 +19,7 @@ import ru.anjeib.margin.R
 import ru.anjeib.margin.data.Prefs
 import ru.anjeib.margin.data.Store
 import ru.anjeib.margin.data.Task
+import ru.anjeib.margin.data.logged
 import ru.anjeib.margin.data.nextOccurrence
 import ru.anjeib.margin.data.whenLabel
 import ru.anjeib.margin.i18n.L
@@ -55,13 +56,16 @@ object Reminders {
 
     private fun LocalDateTime.millis() = atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-    /** Schedules a reminder for every open task with a future remindAt; cancels the rest. */
-    fun syncTasks(ctx: Context, tasks: List<Task>) {
+    /** Schedules a reminder for every open task (and note) with a future remindAt; cancels the rest. Notes go as «note:<id>». */
+    fun syncTasks(ctx: Context, tasks: List<Task>, notes: List<ru.anjeib.margin.data.Note> = Store.get(ctx).data.value.notes) {
         val now = LocalDateTime.now()
-        val wanted = tasks.mapNotNull { t ->
+        val wanted = (tasks.mapNotNull { t ->
             val at = t.remindAt?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } ?: return@mapNotNull null
             if (t.done || at.isBefore(now)) null else t.id to at
-        }.toMap()
+        } + notes.mapNotNull { n ->
+            val at = n.remindAt?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } ?: return@mapNotNull null
+            if (at.isBefore(now)) null else "note:${n.id}" to at
+        }).toMap()
         val sp = scheduledPrefs(ctx)
         val before = sp.all.mapValues { it.value as? String }
         // cancel removed / changed
@@ -134,7 +138,14 @@ object Reminders {
         val today = LocalDate.now()
         when (i.getStringExtra(KIND)) {
             "task" -> {
-                val t = data.tasks.find { it.id == i.getStringExtra(TASK) } ?: return
+                val key = i.getStringExtra(TASK) ?: return
+                // A note's reminder: its title and the last thing written in it.
+                if (key.startsWith("note:")) {
+                    val n = data.notes.find { it.id == key.removePrefix("note:") } ?: return
+                    show(ctx, key.hashCode(), n.title.ifBlank { L.s.untitled }, n.entries.lastOrNull { it.text.isNotBlank() }?.text?.take(120).orEmpty())
+                    return
+                }
+                val t = data.tasks.find { it.id == key } ?: return
                 if (t.done) return
                 show(ctx, t.id.hashCode(), t.title, listOfNotNull(t.whenLabel(), t.waitingFor?.let { L.s.waitingFor(it) }).joinToString(" · "), t.id)
             }
@@ -142,7 +153,7 @@ object Reminders {
                 val id = i.getStringExtra(TASK) ?: return
                 Store.get(ctx).update { d ->
                     val t = d.tasks.find { it.id == id && !it.done } ?: return@update d
-                    d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, doneAt = today.toString()) else it } + listOfNotNull(t.nextOccurrence()))
+                    d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, doneAt = today.toString()).logged(it, "you") else it } + listOfNotNull(t.nextOccurrence()))
                 }
                 NotificationManagerCompat.from(ctx).cancel(id.hashCode())
                 syncTasks(ctx, Store.get(ctx).data.value.tasks)
@@ -150,7 +161,7 @@ object Reminders {
             "snooze" -> {
                 val id = i.getStringExtra(TASK) ?: return
                 val at = LocalDateTime.now().plusHours(1).withSecond(0).withNano(0)
-                Store.get(ctx).update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(remindAt = at.toString().take(16)) else it }) }
+                Store.get(ctx).update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(remindAt = at.toString().take(16)).logged(it, "you") else it }) }
                 NotificationManagerCompat.from(ctx).cancel(id.hashCode())
                 syncTasks(ctx, Store.get(ctx).data.value.tasks)
             }

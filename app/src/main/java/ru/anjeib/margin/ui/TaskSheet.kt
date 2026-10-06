@@ -27,6 +27,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import ru.anjeib.margin.data.dayMonthShort
+import androidx.compose.ui.draw.rotate
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CalendarToday
@@ -79,6 +82,7 @@ import ru.anjeib.margin.data.dayMonth
 import ru.anjeib.margin.data.dowShort
 import ru.anjeib.margin.data.isOverdue
 import ru.anjeib.margin.data.label
+import ru.anjeib.margin.data.next
 import ru.anjeib.margin.data.progress
 import ru.anjeib.margin.data.text
 import ru.anjeib.margin.data.whenLabel
@@ -90,12 +94,19 @@ import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpenNote: (String) -> Unit, onOpenPerson: (String) -> Unit, onOpenTask: (String) -> Unit = {}) {
+fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpenNote: (String) -> Unit, onOpenPerson: (String) -> Unit, onOpenTask: (String) -> Unit = {},
+              startDialog: String? = null, onStartDialogUsed: () -> Unit = {}) {
     val c = M.c
     val s = M.s
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var title by remember(task.id) { mutableStateOf(task.title) }
-    var dialog by remember { mutableStateOf<String?>(null) }
+    var dialog by remember(task.id) { mutableStateOf<String?>(null) }
+    // Opened from «Уточнить срок / время?» — straight to the picker.
+    androidx.compose.runtime.LaunchedEffect(task.id, startDialog) { if (startDialog != null) { dialog = startDialog; onStartDialogUsed() } }
+    // «+ подзадача», «+ место»…: the field below fills that one thing — typed or said, no little windows.
+    var mode by remember(task.id) { mutableStateOf<String?>(null) }
+    var modeTick by remember { mutableStateOf(0) }
+    fun fill(what: String) { mode = what; modeTick++ }
     var menu by remember { mutableStateOf(false) }
     var subMenu by remember { mutableStateOf<Subtask?>(null) }
     var renameSub by remember { mutableStateOf<Subtask?>(null) }
@@ -104,6 +115,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     var showDone by remember { mutableStateOf(false) }
     var showAllSubs by remember { mutableStateOf(false) }
     var showAllEntries by remember { mutableStateOf(false) }
+    var showHistory by remember(task.id) { mutableStateOf(false) }
     val busy by vm.busy.collectAsState()
     val notice by vm.notice.collectAsState()
     val scopeKey = MainVm.key(Scope.InTask(task.id))
@@ -149,7 +161,9 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             if (!task.done) {
                                 DropdownMenuItem(text = { Text(s.swipeTomorrow, style = Type.body) }, onClick = { menu = false; vm.postpone(task.id, 1) })
                                 DropdownMenuItem(text = { Text(s.plusWeek, style = Type.body) }, onClick = { menu = false; vm.postpone(task.id, 7) })
+                                DropdownMenuItem(text = { Text(s.wontDo, style = Type.body) }, onClick = { menu = false; commitTitle(); vm.dropTask(task.id); onClose() })
                             }
+                            DropdownMenuItem(text = { Text(s.toNote, style = Type.body) }, onClick = { menu = false; commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) })
                             DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menu = false; dialog = "delete" })
                         }
                     }
@@ -200,13 +214,14 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     task.place?.let { pl -> sep()
                         Row(Modifier.clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = {
                             runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
-                        }, onLongClick = { dialog = "place" }).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        }, onLongClick = { fill("place") }).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Outlined.Place, null, tint = c.graphite, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp))
                             Text(pl, style = Type.small.copy(color = c.ink, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                     task.project?.let { sep(); Box(Modifier.clickable { dialog = "project" }) { Tag(it) } }
                 }
+                val typed = setOf("subtask", "place", "people", "project")
                 val missing = buildList {
                     if (task.dueDate == null && task.startDate == null) add(s.fieldDue to "dates")
                     if (task.time == null) add(s.fieldTime to "time")
@@ -220,7 +235,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     missing.forEachIndexed { i, (label, d) ->
                         if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.faint))
                         Text("+ " + label.lowercase(), style = Type.small.copy(color = c.graphite),
-                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { dialog = d }.padding(2.dp))
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { if (d in typed) fill(d) else dialog = d }.padding(2.dp))
                     }
                 }
                 // «Вы написали»: the words the task was born from, tidied up — when no idea in «Связи» already says where it came from.
@@ -332,15 +347,38 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         }
                     }
                 }
+                // «История»: what changed and who changed it — folded, it is there for when something looks off.
+                if (task.history.size > 1) {
+                    Spacer(Modifier.height(18.dp))
+                    Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable { showHistory = !showHistory }.padding(horizontal = 6.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        SectionLabel(s.historyWord.uppercase() + "  " + task.history.size)
+                        Spacer(Modifier.width(4.dp))
+                        Icon(androidx.compose.material.icons.Icons.Rounded.KeyboardArrowDown, null, tint = c.faint,
+                            modifier = Modifier.size(18.dp).rotate(if (showHistory) 0f else -90f))
+                    }
+                    if (showHistory) task.history.reversed().forEach { h ->
+                        Row(Modifier.fillMaxWidth().padding(start = 6.dp, top = 4.dp, bottom = 4.dp)) {
+                            Text(dateOf(h.at)?.dayMonthShort() ?: "", style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.width(56.dp))
+                            Text(s.change(h.kind, h.value, h.by), style = Type.small.copy(color = c.ink, fontSize = 13.5.sp))
+                        }
+                    }
+                }
                 Spacer(Modifier.height(16.dp))
             }
 
             // Scoped composer — everything about this task is said here.
             Column(Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
                 notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> NoticeLine(nt, vm) }
+                val modeLabel = when (mode) { "subtask" -> s.subtaskOne; "place" -> s.fieldPlace; "people" -> s.fieldPeople; "project" -> s.project; else -> null }
                 SmartComposer(
-                    vm, s.addOrChange, busy == scopeKey,
-                    onSend = { t, f -> vm.send(t, scope = Scope.InTask(task.id), files = f) },
+                    vm, modeLabel?.let { s.fillHint(it) } ?: s.addOrChange, busy == scopeKey,
+                    onSend = { t, f ->
+                        val m = mode
+                        if (m != null) { vm.sendAs(m, t, Scope.InTask(task.id), f); if (m != "subtask") mode = null }
+                        else vm.send(t, scope = Scope.InTask(task.id), files = f)
+                    },
+                    modeLabel = modeLabel, onModeClose = { mode = null }, focusKey = modeTick.takeIf { it > 0 },
                 )
             }
         }
@@ -361,8 +399,6 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
         "waiting" -> TextDialog(s.waiting, task.waitingFor.orEmpty(), "", onDismiss = { dialog = null }) { v ->
             save(task.copy(waitingFor = v.trim().ifBlank { null })); dialog = null
         }
-        "place" -> TextDialog(s.fieldPlace, task.place.orEmpty(), s.placeHint, onDismiss = { dialog = null }) { v -> save(task.copy(place = v.trim().ifBlank { null })); dialog = null }
-        "subtask" -> TextDialog(s.subtaskOne, "", "", onDismiss = { dialog = null }) { v -> if (v.isNotBlank()) vm.addSubtask(task.id, v.trim()); dialog = null }
         "repeat" -> RepeatDialog(task, onDismiss = { dialog = null }) { r ->
             val due = task.due ?: if (r != null) LocalDate.now().toString() else null
             save(task.copy(repeat = r, due = due)); dialog = null
@@ -449,7 +485,7 @@ fun QuietLink(text: String, onClick: () -> Unit) {
 /** «5 ОКТ» over the text, attachments under it. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun EntryView(e: Entry, onLong: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
+fun EntryView(e: Entry, onLong: () -> Unit, trailing: (@Composable () -> Unit)? = null, onToggleItem: ((String) -> Unit)? = null) {
     val c = M.c
     val at = runCatching { LocalDateTime.parse(e.at) }.getOrNull()
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -459,6 +495,18 @@ fun EntryView(e: Entry, onLong: () -> Unit, trailing: (@Composable () -> Unit)? 
         if (e.text.isNotBlank()) {
             Spacer(Modifier.height(3.dp))
             Text(e.text, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp))
+        }
+        // «Список»: items with ticks; a tap on the circle ticks one off.
+        if (e.isList) {
+            Spacer(Modifier.height(4.dp))
+            if (e.items.isEmpty()) Text("—", style = Type.body.copy(color = c.faint))
+            e.items.forEach { it0 ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CheckCircle(it0.done, size = 18.dp) { onToggleItem?.invoke(it0.id) }
+                    Text(it0.title, style = Type.body.copy(fontSize = 15.5.sp, color = if (it0.done) c.graphite else c.ink,
+                        textDecoration = if (it0.done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null), modifier = Modifier.padding(vertical = 3.dp))
+                }
+            }
         }
         if (e.attachments.isNotEmpty()) {
             Spacer(Modifier.height(6.dp))
@@ -520,7 +568,10 @@ private fun DatesDialog(task: Task, onDismiss: () -> Unit, onSave: (String?, Str
                 Pill(s.quickToday, onClick = { onSave(null, today.toString()) })
                 Pill(s.quickTomorrow, onClick = { onSave(null, today.plusDays(1).toString()) })
                 Pill(friday.dowShort(), onClick = { onSave(null, friday.toString()) })
+                Pill(nextMonday.dowShort(), onClick = { onSave(null, nextMonday.toString()) })
                 Pill(s.quickNextWeek, onClick = { onSave(nextMonday.toString(), nextMonday.plusDays(6).toString()) })
+                // A repeating task: skip this one and go straight to the next time.
+                task.repeat?.let { r -> val cur = task.dueDate ?: today; Pill(s.skipOnce, onClick = { onSave(null, r.next(cur).let { n -> if (n.isBefore(today)) r.next(today) else n }.toString()) }) }
                 Pill(s.quickNone, onClick = { onSave(null, null) })
                 Pill(if (range) s.singleLink else s.rangeLink, accent = true, onClick = { range = !range })
             }
