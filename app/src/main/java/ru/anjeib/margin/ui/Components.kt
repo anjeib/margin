@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.CalendarToday
@@ -228,6 +229,32 @@ fun DatePill(text: String, late: Boolean, timed: Boolean) {
     }
 }
 
+/** «Обещание · Виктору от вас» / «Обещание · вам от Марины»: who owes whom, in one badge. */
+@Composable
+fun PromiseBadge(t: Task, big: Boolean = false, onClick: (() -> Unit)? = null) {
+    val c = M.c
+    val s = M.s
+    val text = t.waitingFor?.let { s.promiseToYou(it) } ?: t.promisedTo?.let { s.promiseFromYou(it) } ?: return
+    Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .padding(horizontal = if (big) 12.dp else 9.dp, vertical = if (big) 6.dp else 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(s.promiseWord, style = Type.small.copy(color = c.accent, fontSize = if (big) 14.sp else 12.5.sp))
+        Text("  " + text, style = Type.small.copy(color = c.ink, fontSize = if (big) 14.sp else 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** A person as a badge with the whole name — «Марина Петрова», not «М». */
+@Composable
+fun PersonBadge(name: String, big: Boolean = false, onClick: (() -> Unit)? = null) {
+    val c = M.c
+    Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .padding(start = if (big) 10.dp else 7.dp, end = if (big) 12.dp else 9.dp, top = if (big) 6.dp else 3.dp, bottom = if (big) 6.dp else 3.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.Person, null, tint = c.graphite, modifier = Modifier.size(if (big) 15.dp else 13.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(name, style = Type.small.copy(color = c.ink, fontSize = if (big) 14.sp else 13.sp), maxLines = 1)
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TaskMeta(t: Task, showProject: Boolean = true, showIdea: Boolean = false) {
@@ -244,19 +271,10 @@ fun TaskMeta(t: Task, showProject: Boolean = true, showIdea: Boolean = false) {
     ) {
         if (showProject) t.project?.let { Tag(it) }
         if (whenText != null) DatePill(whenText, overdue, t.time != null)
-        t.promisedTo?.let { Text(s.promised(it), style = Type.small.copy(color = c.graphite)) }
+        if (!t.done) PromiseBadge(t)
         t.place?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
         if (showIdea && t.noteId != null) Text("✎ " + s.ideaMark, style = Type.small.copy(color = c.graphite))
-        t.waitingFor?.let {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                MetaIcon(Icons.Outlined.HourglassEmpty)
-                Spacer(Modifier.width(4.dp))
-                Text(s.waitingFor(it), style = Type.small.copy(color = c.graphite))
-            }
-        }
-        if (t.people.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy((-5).dp)) {
-            t.people.take(3).forEach { Monogram(it, 20.dp) }
-        }
+        t.people.filter { p -> p != t.waitingFor && p != t.promisedTo }.take(3).forEach { PersonBadge(it) }
         if (n > 0) Text("$d/$n", style = Type.small.copy(color = c.graphite))
         t.repeat?.let { Text("↻ " + it.label(), style = Type.small.copy(color = c.graphite)) }
         val files = t.entries.sumOf { it.attachments.size }

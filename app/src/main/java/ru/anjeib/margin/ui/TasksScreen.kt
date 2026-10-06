@@ -234,10 +234,12 @@ fun TaskList(
                 val running = data.tasks.filter { isRunning(it, today) }.sortedBy { sortKey(it) }
                 val doneToday = data.tasks.filter { it.done && it.doneAt == today.toString() }
                 header(today.longTitle(), s.tasksCount(list.size))
-                if (settings.apiKey.isNotBlank() && settings.morningBrief && settings.briefHidden != today.toString() && data.tasks.any { !it.done }) item("brief") {
-                    LaunchedEffect(today, L.lang) { vm.makeBrief() }
-                    BriefCard(data, settings, "brief" in working, briefQuiet, vm, onFocus = { vm.send(s.promptNext, smart = true, label = s.startFocus) })
-                }
+                // Instead of an AI retelling of the list below: whose promises fall due now — built here, free and exact.
+                val promises = data.tasks.filter { t -> !t.done && (t.waitingFor != null || t.promisedTo != null) && t.anchor?.let { !it.isAfter(today.plusDays(3)) } == true }
+                    .sortedWith(compareBy({ it.anchor }, { it.time ?: "99" }))
+                if (promises.isNotEmpty()) item("promises") { PromisesCard(promises, today, briefQuiet, onOpen, onToggle = { vm.completeWithUndo(it) }) }
+                // One fact once: what the card shows isn't repeated in the lists below (a timed one stays in the day's timeline).
+                val shown = promises.map { it.id }.toSet()
                 // Written without internet: one quiet line here, the items themselves live in «Входящие».
                 if (data.queue.isNotEmpty()) item("queue") {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onOpenInbox).padding(horizontal = 10.dp, vertical = 10.dp),
@@ -248,7 +250,7 @@ fun TaskList(
                     }
                 }
                 val timed = list.filter { it.time != null && it.dueDate?.let { d -> !d.isBefore(today) } != false }.sortedBy { it.time }
-                val rest = (list - timed.toSet()).sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) }))
+                val rest = (list - timed.toSet()).filter { it.id !in shown }.sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) }))
                 val todays = events.filter { it.start.toLocalDate() == today || (it.allDay && !it.start.toLocalDate().isAfter(today) && it.end.toLocalDate().isAfter(today)) }
                 if (list.isEmpty() && running.isEmpty() && doneToday.isEmpty() && todays.isEmpty()) item("empty") {
                     // A day with nothing in it is a free day; the how-to text only while the app is still empty.
@@ -269,12 +271,13 @@ fun TaskList(
                     if (rest.size > late.size) section(s.today, "s-today-rest", rest.size - late.size)
                 }
                 cards(rest - late.toSet())
-                if (running.isNotEmpty()) {
+                val runningRest = running.filter { it.id !in shown }
+                if (runningRest.isNotEmpty()) {
                     val k = "s-running"
                     // Busy days fold the week away by default.
                     item("auto-fold") { LaunchedEffect(list.size > 5) { if (list.size > 5 && isOpen(k)) toggle(k) } }
-                    section(s.inWorkThisWeek, k, running.size, collapsible = true)
-                    if (isOpen(k)) rows(running, k)
+                    section(s.inWorkThisWeek, k, runningRest.size, collapsible = true)
+                    if (isOpen(k)) rows(runningRest, k)
                 }
                 if (doneToday.isNotEmpty()) {
                     section(s.done, "s-done-today", doneToday.size, collapsible = true)
@@ -560,9 +563,7 @@ fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Uni
                 // The whole title — what the task is, not its first words.
                 Text(
                     // «Договор от Саши» already says who — don't add «— Саша».
-                    t.title + (t.waitingFor?.takeIf { w -> !t.done && !t.title.contains(w.take(3), true) }?.let { " — $it" } ?: "") +
-                        (t.promisedTo?.takeIf { p -> !t.done && !t.title.contains(p.take(3), true) }?.let { " · " + M.s.promised(it).replaceFirstChar { c -> c.lowercase() } } ?: "") +
-                        (if (t.dropped) " · " + M.s.droppedMark else ""),
+                    t.title + (if (t.dropped) " · " + M.s.droppedMark else ""),
                     // «Не делали» is not crossed out — it wasn't done, it was let go.
                     style = Type.body.copy(fontSize = 15.5.sp, color = if (t.done) c.graphite else c.ink,
                         textDecoration = if (t.done && !t.dropped) TextDecoration.LineThrough else null),
@@ -576,11 +577,19 @@ fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Uni
                 if (!t.done) {
                     val whenText = t.rowLabel(today)
                     val extra = listOfNotNull(t.place, if (n > 0) "$d/$n" else null)
-                    if (whenText != null || extra.isNotEmpty() || (showProject && t.project != null)) Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Badges: when, whose promise, who — then the place and the rest, smaller.
+                    val promise = t.waitingFor != null || t.promisedTo != null
+                    val who = t.people.filter { p -> p != t.waitingFor && p != t.promisedTo && p != M.s.me }.take(2)
+                    if (whenText != null || promise || who.isNotEmpty() || extra.isNotEmpty() || (showProject && t.project != null)) androidx.compose.foundation.layout.FlowRow(
+                        Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+                        itemVerticalAlignment = Alignment.CenterVertically,
+                    ) {
                         whenText?.let { DatePill(it, overdue, t.time != null) }
-                        if (extra.isNotEmpty()) Text((if (whenText != null) "  ·  " else "") + extra.joinToString("  ·  "),
-                            style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                        if (showProject) t.project?.let { Spacer(Modifier.width(8.dp)); Tag(it) }
+                        PromiseBadge(t)
+                        who.forEach { PersonBadge(it) }
+                        if (extra.isNotEmpty()) Text(extra.joinToString("  ·  "),
+                            style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (showProject) t.project?.let { Tag(it) }
                     }
                 }
             }
@@ -623,6 +632,48 @@ private fun SwipeTask(t: Task, onDone: () -> Unit, onLater: () -> Unit, modifier
             }
         },
     ) { content() }
+}
+
+/**
+ * «Обещания» on the main screen: what others promised you and what you promised them, due within three days or late.
+ * Folds to one line while the user types.
+ */
+@Composable
+private fun PromisesCard(list: List<Task>, today: LocalDate, quiet: Boolean, onOpen: (String) -> Unit, onToggle: (String) -> Unit) {
+    val c = M.c
+    val s = M.s
+    var all by rememberSaveable { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(18.dp)).background(c.accentSoft)
+        .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = if (quiet) 12.dp else 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Spark(); Spacer(Modifier.width(8.dp))
+            Text(s.promisesTitle, style = Type.small.copy(color = c.accent, fontSize = 14.sp))
+            Text("  " + list.size, style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
+        }
+        if (quiet) return@Column
+        Spacer(Modifier.height(4.dp))
+        val shown = if (all) list else list.take(5)
+        shown.forEach { t ->
+            val late = t.isOverdue(today)
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onOpen(t.id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
+              // Closed right here: the hourglass — «получено», the circle — «сделано».
+              Box(Modifier.size(32.dp, 24.dp).clip(CircleShape).clickable { onToggle(t.id) }, contentAlignment = Alignment.CenterStart) {
+                  if (t.waitingFor != null) Icon(Icons.Outlined.HourglassEmpty, null, tint = c.graphite, modifier = Modifier.size(18.dp))
+                  else CheckCircle(false, size = 18.dp, onToggle = { onToggle(t.id) })
+              }
+              Column(Modifier.weight(1f)) {
+                Text(t.title, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(t.waitingFor?.let { s.promiseToYou(it) } ?: s.promiseFromYou(t.promisedTo ?: ""),
+                        style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    t.rowLabel(today)?.let { Text("  ·  $it", style = Type.small.copy(color = if (late) c.accent else c.graphite, fontSize = 13.sp), maxLines = 1) }
+                }
+              }
+            }
+        }
+        if (list.size > 5 && !all) Text(s.more(list.size - 5), style = Type.small.copy(color = c.accent, fontSize = 13.5.sp),
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { all = true }.padding(vertical = 6.dp))
+    }
 }
 
 /**

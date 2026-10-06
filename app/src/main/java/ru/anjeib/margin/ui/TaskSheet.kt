@@ -199,15 +199,11 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 ) {
                     // Each property a badge of its own — they sit together nicely even when there is only one.
                     task.repeat?.let { MetaChip(Icons.Outlined.Repeat, it.label()) { dialog = "repeat" } }
-                                        task.people.forEach { p ->
-                        Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).clickable { data.person(p)?.let { onOpenPerson(it.id) } ?: run { dialog = "people" } }
-                            .padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Monogram(p, 22.dp); Spacer(Modifier.width(6.dp))
-                            Text(p, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
-                        }
+                    task.people.filter { p -> p != task.waitingFor && p != task.promisedTo }.forEach { p ->
+                        PersonBadge(p, big = true) { data.person(p)?.let { onOpenPerson(it.id) } ?: run { dialog = "people" } }
                     }
-                    task.waitingFor?.let { MetaChip(Icons.Outlined.HourglassEmpty, s.waitingFor(it)) { dialog = "waiting" } }
-                    task.promisedTo?.let { w -> MetaChip(Icons.AutoMirrored.Outlined.ArrowForward, s.promised(w)) { data.person(w)?.let { p -> onOpenPerson(p.id) } } }
+                    if (task.waitingFor != null) PromiseBadge(task, big = true) { dialog = "waiting" }
+                    else task.promisedTo?.let { w -> PromiseBadge(task, big = true) { data.person(w)?.let { p -> onOpenPerson(p.id) } } }
                     // A place opens the map; to change it, hold.
                     task.place?.let { pl ->
                         Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).combinedClickable(onClick = {

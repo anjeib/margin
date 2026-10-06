@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -32,6 +33,7 @@ import ru.anjeib.margin.ui.MarginTheme
  * (Telegram, MAX, mail, a browser). The words go to «Входящие» to be sorted; the user stays where they were.
  */
 class ForwardActivity : ComponentActivity() {
+    private val vm: ru.anjeib.margin.ui.MainVm by viewModels()
     private val files = mutableStateListOf<Attachment>()
     private val loading = mutableStateOf(false)
 
@@ -45,7 +47,12 @@ class ForwardActivity : ComponentActivity() {
             else -> i.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
         }.orEmpty()
         val subject = i.getStringExtra(Intent.EXTRA_SUBJECT)?.takeIf { it.isNotBlank() && !text.startsWith(it) }
-        val via = Forward.viaOf(sourcePackage())
+        val pkg = sourcePackage()
+        val via = Forward.viaOf(pkg)
+        val app = (if (BuildConfig.DEBUG) i.getStringExtra("margin.app") else null) ?: Forward.appName(this, pkg)?.takeIf { pkg != "com.android.shell" }
+        // Debug builds can show a sender for screenshots; real ones read it from the words.
+        val sender = (if (BuildConfig.DEBUG) i.getStringExtra("margin.from")?.let { Forward.Sender(it, i.getStringExtra("margin.address"), i.getStringExtra("margin.company")) } else null)
+            ?: Forward.sender(listOfNotNull(subject, text).joinToString("\n"))
         val uris: List<Uri> = when (i.action) {
             Intent.ACTION_SEND -> listOfNotNull(stream(i))
             Intent.ACTION_SEND_MULTIPLE -> streams(i)
@@ -67,14 +74,20 @@ class ForwardActivity : ComponentActivity() {
             L.lang = lang
             val strings = remember(lang) { stringsFor(lang) }
             MarginTheme(settings.theme, strings) {
+                val data by vm.data.collectAsState()
                 ForwardSheet(
-                    from = strings.forwardFrom(Forward.viaName(via)),
+                    vm = vm,
+                    from = strings.forwardFrom(app ?: Forward.viaName(via)).let { if (app != null) app else it },
+                    sender = sender,
+                    isContact = Forward.isContact(data, sender),
                     text = listOfNotNull(subject, text).joinToString("\n"),
                     files = files.size,
                     loading = loading.value,
-                    onSend = { comment ->
+                    onAddContact = { sender?.let { Forward.addContact(this, it) } },
+                    onSend = { comment, extra ->
                         Processor.enqueue(this, Queued(
-                            text = text, files = files.toList(), via = via, comment = comment.ifBlank { null }, subject = subject,
+                            text = text, files = files.toList() + extra, via = via, comment = comment.ifBlank { null }, subject = subject,
+                            from = sender?.let { it.name ?: it.company ?: it.address },
                         ))
                         Toast.makeText(this, strings.forwardDone, Toast.LENGTH_SHORT).show()
                         finish()

@@ -102,6 +102,8 @@ fun SmartComposer(
     onModeClose: () -> Unit = {},
     /** Changes when the field should take focus (and the keyboard come up) by itself. */
     focusKey: Any? = null,
+    /** The send button works with nothing typed (forwarding: the words are already there). */
+    sendEmpty: Boolean = false,
 ) {
     val c = M.c
     val s = M.s
@@ -246,7 +248,7 @@ fun SmartComposer(
                 } else RoundIcon(Icons.Outlined.Mic, c.graphite, s.a11yMic, onClick = ::mic)
             }
             Spacer(Modifier.width(4.dp))
-            val enabled = (text.isNotBlank() || files.isNotEmpty()) && !busy
+            val enabled = (text.isNotBlank() || files.isNotEmpty() || sendEmpty) && !busy
             Box(
                 Modifier.size(44.dp).clip(CircleShape)
                     .background(if (enabled || busy) c.accent else c.accent.copy(alpha = 0.35f))

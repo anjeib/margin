@@ -3,57 +3,58 @@ package ru.anjeib.margin.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.anjeib.margin.ai.Forward
+import ru.anjeib.margin.data.Attachment
 
 /**
- * «В Margin»: what came from Telegram, MAX, mail or a copy — shown as a quote, with room for the user's
- * own words («это Марина, к пятнице»). Sending puts it in «Входящие»; Margin sorts it and says what it became.
+ * «В Margin»: where it came from (Gmail, Telegram…), who wrote it with «+ контакт», the words as a quote —
+ * and the usual live field below for what to do with it (typed, dictated, with files). Sending puts it in «Входящие».
  */
 @Composable
 fun ForwardSheet(
+    vm: MainVm,
     from: String,
+    sender: Forward.Sender?,
+    isContact: Boolean,
     text: String,
     files: Int,
     loading: Boolean,
-    onSend: (comment: String) -> Unit,
+    onAddContact: () -> Unit,
+    onSend: (comment: String, files: List<Attachment>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val c = M.c
     val s = M.s
-    var comment by remember { mutableStateOf("") }
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { kotlinx.coroutines.delay(250); runCatching { focus.requestFocus() } }
     Box(
         Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.32f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
@@ -65,36 +66,56 @@ fun ForwardSheet(
                 .background(c.bg)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
                 .imePadding().navigationBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 14.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp)) {
                 Spark(); Spacer(Modifier.width(8.dp))
-                Text(s.forwardTitle, style = Type.cardTitle.copy(color = c.ink))
-                Spacer(Modifier.width(8.dp))
-                Text(from, style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
-                Box(Modifier.width(2.dp).fillMaxHeight().background(c.accent))
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    if (text.isNotBlank()) Text(text.trim(), style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 7, overflow = TextOverflow.Ellipsis)
-                    if (files > 0 || loading) Text(if (loading) s.thinking else s.forwardFiles(files), style = Type.small.copy(color = c.graphite))
+                Text(s.forwardTitle, style = Type.cardTitle.copy(color = c.ink), modifier = Modifier.weight(1f))
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Close, s.cancel, tint = c.graphite, modifier = Modifier.size(20.dp))
                 }
             }
-            Spacer(Modifier.height(14.dp))
-            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.chip).padding(horizontal = 14.dp, vertical = 12.dp)) {
-                if (comment.isEmpty()) Text(s.forwardCommentHint, style = Type.body.copy(color = c.graphite, fontSize = 15.sp))
-                BasicTextField(comment, { comment = it }, textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp),
-                    cursorBrush = SolidColor(c.accent), maxLines = 4, modifier = Modifier.fillMaxWidth().focusRequester(focus))
-            }
             Spacer(Modifier.height(8.dp))
-            Text(s.forwardHint, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
-            Spacer(Modifier.height(14.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Pill(s.cancel, onClick = onDismiss)
-                Pill(s.forwardSend, filled = true, onClick = { if (!loading) onSend(comment.trim()) })
+            // Where from and who: the app by name, the sender with their address — and a way to keep them.
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 12.dp)) {
+                Text(from.uppercase(), style = Type.label.copy(color = c.accent))
+                if (sender != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(36.dp).clip(CircleShape).background(c.chip), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Outlined.Person, null, tint = c.graphite, modifier = Modifier.size(19.dp))
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(sender.title, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val line = listOfNotNull(sender.company?.takeIf { sender.name != null }, sender.address?.takeIf { it != sender.title })
+                            if (line.isNotEmpty()) Text(line.joinToString(" · "), style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        if (isContact) Text("✓ " + s.inContacts, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp))
+                        else Pill(s.addContact, accent = true, onClick = onAddContact)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    Box(Modifier.width(2.dp).fillMaxHeight().background(c.accent))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        if (text.isNotBlank()) Text(text.trim(), style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 7, overflow = TextOverflow.Ellipsis)
+                        if (files > 0 || loading) Text(if (loading) s.thinking else s.forwardFiles(files), style = Type.small.copy(color = c.graphite))
+                    }
+                }
             }
+            Text(s.forwardHint, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp))
+            // The same live field as everywhere: words, voice, «+» — what to do with it, or just send.
+            SmartComposer(
+                vm,
+                hint = s.forwardCommentHint,
+                busy = loading,
+                onSend = { t, f -> onSend(t.trim(), f) },
+                focusKey = Unit,
+                sendEmpty = true,
+            )
         }
     }
 }

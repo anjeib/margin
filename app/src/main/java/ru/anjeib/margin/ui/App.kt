@@ -252,9 +252,12 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
 
     copiedText?.let { t ->
         BackHandler { copiedText = null; onCopiedSeen() }
+        val sender = remember(t) { ru.anjeib.margin.ai.Forward.sender(t) }
         ForwardSheet(
-            from = s.forwardFrom(s.viaCopy), text = t, files = 0, loading = false,
-            onSend = { comment -> vm.forwardIn(t, "copy", comment); copiedText = null; onCopiedSeen() },
+            vm, from = s.forwardFrom(s.viaCopy).replaceFirstChar { it.uppercase() }, sender = sender,
+            isContact = ru.anjeib.margin.ai.Forward.isContact(data, sender), text = t, files = 0, loading = false,
+            onAddContact = { sender?.let { ru.anjeib.margin.ai.Forward.addContact(ctx, it) } },
+            onSend = { comment, f -> vm.forwardIn(t, "copy", comment, f, sender?.let { it.name ?: it.company ?: it.address }); copiedText = null; onCopiedSeen() },
             onDismiss = { copiedText = null; onCopiedSeen() },
         )
     }

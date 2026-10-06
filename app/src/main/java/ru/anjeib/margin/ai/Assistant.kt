@@ -303,8 +303,10 @@ object Assistant {
         "do not add anything, keep the language. Reply with JSON only: {\"text\": string}"
 
     /** One idea → exactly one task linked to its note. */
-    fun ideaPrompt(noteId: String, text: String) =
-        "Turn this idea into exactly ONE concrete task (create_task with note_id=$noteId; add subtasks only if obvious, people/dates only if stated). Do not create notes.\n\nIdea: $text"
+    fun ideaPrompt(noteId: String, text: String, noteTitle: String? = null) =
+        "Turn this idea into exactly ONE concrete task (create_task with note_id=$noteId; add subtasks only if obvious, people/dates only if stated). Do not create notes. " +
+            "The title must make sense on its own: when the idea doesn't name its subject, take it from the note title, in the right case (idea «Посмотреть» in the note «Одиссея» → «Посмотреть «Одиссею»»)." +
+            "\n\n" + (noteTitle?.let { "Note: $it\n" } ?: "") + "Idea: $text"
 
     // ---------------- parsing ----------------
 

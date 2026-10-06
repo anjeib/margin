@@ -192,6 +192,16 @@ data class Task(
     val anchor: LocalDate? get() = dueDate ?: startDate
 }
 
+/** «Посмотреть» born from the note «Одиссея» → «Посмотреть «Одиссея»»; null when the title already says enough. */
+fun Task.bareFromNote(d: AppData): String? {
+    val n = d.notes.find { it.id == noteId } ?: return null
+    val about = n.title.trim().takeIf { it.isNotBlank() && it.length <= 60 } ?: return null
+    // 3.17 debug builds wrote «Посмотреть «Одиссея»» — redo those in the right case too.
+    val verb = title.trim().removeSuffix(" «$about»").takeIf { it != title.trim() || !title.trim().contains(' ') } ?: return null
+    if (verb.contains(' ') || verb.equals(about, true)) return null
+    return if (about.contains(' ')) "$verb «$about»" else "$verb ${about.accusative()}"
+}
+
 @Serializable
 data class Note(
     val id: String = newId(),
@@ -260,6 +270,9 @@ data class AppData(
     /** Brings files written by older versions to the current shape. */
     fun migrated(): AppData {
         var d = this
+        // A task from an idea that says only «Посмотреть» gets what it is about from its note: «Посмотреть «Одиссея»».
+        if (d.tasks.any { it.bareFromNote(d) != null })
+            d = d.copy(tasks = d.tasks.map { t -> t.bareFromNote(d)?.let { t.copy(title = it) } ?: t })
         if (d.people.isNotEmpty()) {
             val extra = d.people.distinctBy { it.lowercase() }.filter { n -> d.persons.none { it.matches(n) } }.map { Person(name = it) }
             d = d.copy(persons = d.persons + extra, people = emptyList())

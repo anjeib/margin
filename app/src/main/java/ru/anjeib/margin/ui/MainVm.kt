@@ -20,6 +20,7 @@ import ru.anjeib.margin.ai.Processor
 import ru.anjeib.margin.ai.Scope
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.logged
+import ru.anjeib.margin.data.bareFromNote
 import ru.anjeib.margin.data.address
 import ru.anjeib.margin.data.properName
 import ru.anjeib.margin.data.sentence
@@ -167,9 +168,9 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     /** A copied message (MAX, Telegram «Копировать») or anything else handed in while the app is open. */
-    fun forwardIn(text: String, via: String, comment: String?) {
+    fun forwardIn(text: String, via: String, comment: String?, files: List<Attachment> = emptyList(), from: String? = null) {
         if (text.isBlank()) return
-        Processor.enqueue(ctx, ru.anjeib.margin.data.Queued(text = text, via = via, comment = comment?.ifBlank { null }))
+        Processor.enqueue(ctx, ru.anjeib.margin.data.Queued(text = text, via = via, comment = comment?.ifBlank { null }, files = files, from = from))
         sortForwarded()
     }
 
@@ -1251,13 +1252,13 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val (plan, cost) = Processor.askPlan(s, Assistant.systemPrompt(data.value, s.copy(askWhenUnclear = false), query = e.text),
-                    listOf("user" to Assistant.ideaPrompt(noteId, e.text)))
+                    listOf("user" to Assistant.ideaPrompt(noteId, e.text, note.title.takeIf { entryId != null })))
                 prefs.addSpend(cost)
                 val current = data.value
                 val applied = Assistant.apply(current, plan.copy(question = null), e.text)
                 val created = applied.touchedTasks.filter { tid -> current.tasks.none { it.id == tid } }
                 store.replace(applied.data.copy(tasks = applied.data.tasks.map {
-                    if (it.id in created) it.copy(noteId = noteId, sourceEntryId = entryId, source = e.text.take(240)) else it
+                    if (it.id in created) it.copy(noteId = noteId, sourceEntryId = entryId, source = e.text.take(240)).let { t -> t.bareFromNote(applied.data)?.let { b -> t.copy(title = b) } ?: t } else it
                 }))
                 land(created)
                 // The note screen has no list to light up — say it in words.

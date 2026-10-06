@@ -26,8 +26,8 @@ android {
         applicationId = "ru.anjeib.margin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "3.17"
+        versionCode = 21
+        versionName = "3.18"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild { cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_static") } }

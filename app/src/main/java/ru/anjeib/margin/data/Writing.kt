@@ -40,3 +40,58 @@ fun String.address(): String {
         if (m.range.first > 0 && s[m.range.first - 1] == ',') m.value else "$word, ${m.groupValues[2]}${m.groupValues[3]}"
     }.replace(",,", ",").sentence()
 }
+
+// ---------------- names in cases: «Виктору от вас», «вам от Марины» ----------------
+
+private val maleOnA = setOf("никита", "илья", "кузьма", "фома", "лука", "савва", "даня", "ваня", "саша", "женя", "миша", "дима", "паша", "петя", "вова", "коля", "толя", "лёша", "леша", "серёжа", "сережа", "гоша", "юра", "слава", "костя", "витя", "боря", "гриша", "федя", "стёпа", "степа", "тёма", "тема", "лёва", "лева")
+private val hush = "гкхжшчщ"
+
+/** One Russian word in the dative (кому) or genitive (кого); [female] — for surnames and soft-sign names. */
+private fun word(w: String, dative: Boolean, female: Boolean, surname: Boolean): String {
+    if (w.length < 2 || !w.first().isLetter() || w.any { it.isDigit() } || w.all { it.isUpperCase() }) return w
+    val low = w.lowercase()
+    fun cut(n: Int, end: String) = w.dropLast(n) + end
+    // Names that lose a vowel: Пётр → Петру, Павел → Павла, Лев → Льву.
+    mapOf("пётр" to "Петр", "петр" to "Петр", "павел" to "Павл", "лев" to "Льв")[low]?.let { if (!surname) return it + if (dative) "у" else "а" }
+    return when {
+        surname && (low.endsWith("ова") || low.endsWith("ева") || low.endsWith("ёва") || low.endsWith("ина") || low.endsWith("ына")) -> cut(1, "ой")
+        surname && (low.endsWith("ая")) -> cut(2, "ой")
+        surname && (low.endsWith("ий") || low.endsWith("ой")) && !female -> cut(2, if (dative) "ому" else "ого")
+        surname && (low.endsWith("ов") || low.endsWith("ев") || low.endsWith("ёв") || low.endsWith("ин") || low.endsWith("ын")) && !female -> w + (if (dative) "у" else "а")
+        surname && female -> w
+        low.endsWith("ия") -> cut(1, "и")
+        low.endsWith("а") -> cut(1, if (dative) "е" else if (low.dropLast(1).last() in hush) "и" else "ы")
+        low.endsWith("я") -> cut(1, if (dative) "е" else "и")
+        low.endsWith("й") -> cut(1, if (dative) "ю" else "я")
+        low.endsWith("ь") -> if (female) cut(1, "и") else cut(1, if (dative) "ю" else "я")
+        low.last() in "бвгджзклмнпрстфхцчшщ" && !female -> w + (if (dative) "у" else "а")
+        else -> w // «Мари», «Кармен», foreign and indeclinable names stay as they are
+    }
+}
+
+/** A person's name in a case. Companies («ООО ПакетПро», «Дента+»), handles and English names are left alone. */
+private fun inCase(name: String, dative: Boolean): String {
+    val n = name.trim()
+    if (n.isEmpty() || n.any { it in "«»\"+@&0123456789" } || n.split(' ').size > 3 || !n.first().let { it in 'А'..'Я' || it == 'Ё' } ||
+        Regex("(?i)^(ооо|оао|зао|ао|ип|пао)\\b").containsMatchIn(n)) return n
+    val parts = n.split(' ')
+    val first = parts.first().lowercase()
+    val female = ((first.endsWith("а") || first.endsWith("я")) && first !in maleOnA) || first in setOf("любовь", "нинель", "адель", "рахиль", "эсфирь")
+    return parts.mapIndexed { i, p -> word(p, dative, female, surname = i > 0) }.joinToString(" ")
+}
+
+fun String.dative(): String = inCase(this, dative = true)
+fun String.genitive(): String = inCase(this, dative = false)
+
+/** A thing named after a verb («Посмотреть …»): «Одиссея» → «Одиссею»; other words stay as they are. */
+fun String.accusative(): String {
+    val w = trim()
+    if (w.contains(' ') || w.length < 3 || !w.first().isLetter()) return w
+    val low = w.lowercase()
+    return when {
+        low.endsWith("ия") -> w.dropLast(1) + "ю"
+        low.endsWith("а") -> w.dropLast(1) + "у"
+        low.endsWith("я") -> w.dropLast(1) + "ю"
+        else -> w
+    }
+}

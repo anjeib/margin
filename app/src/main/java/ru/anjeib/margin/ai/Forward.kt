@@ -108,6 +108,55 @@ object Forward {
         }
     }
 
+    /** Who wrote it, as far as the words tell: a letter's «От: Марина <m@x.ru>», a Telegram copy's «Марина Петрова, [6 окт. в 17:42]». */
+    data class Sender(val name: String?, val address: String?, val company: String? = null) {
+        val title get() = name ?: company ?: address ?: ""
+    }
+
+    private val mailHeader = Regex("(?im)^\\s*(?:From|От|От кого)\\s*:\\s*\"?([^\"<\\n]*?)\"?\\s*<([^>\\s]+@[^>\\s]+)>")
+    private val mailBare = Regex("(?im)^\\s*(?:From|От|От кого)\\s*:\\s*([^\\s<]+@[^\\s>]+)")
+    private val yandexHeader = Regex("(?m)^\\s*\\d{2}\\.\\d{2}\\.\\d{4},\\s*\\d{1,2}:\\d{2},\\s*\"([^\"]+)\"\\s*<([^>]+)>")
+    private val tgAndroid = Regex("(?m)^([^\\n,\\[]{2,40}),\\s*\\[[^\\]]{4,40}\\]:?\\s*$")
+    private val tgDesktop = Regex("(?m)^\\[\\d{1,2}\\.\\d{1,2}\\.\\d{2,4},?\\s+\\d{1,2}:\\d{2}(?::\\d{2})?\\]\\s*([^:\\n]{2,40}):")
+    private val company = Regex("(?m)((?:ООО|АО|ПАО|ЗАО|ИП)\\s+«?[^\\n»,]{2,40}»?)")
+    private val email = Regex("[\\w.+-]+@[\\w-]+\\.[\\w.-]+")
+
+    fun sender(text: String): Sender? {
+        mailHeader.find(text)?.let { m -> return Sender(m.groupValues[1].trim().ifBlank { null }, m.groupValues[2], company.find(text)?.value?.trim()) }
+        yandexHeader.find(text)?.let { m -> return Sender(m.groupValues[1].trim(), m.groupValues[2], company.find(text)?.value?.trim()) }
+        mailBare.find(text)?.let { m -> return Sender(null, m.groupValues[1], company.find(text)?.value?.trim()) }
+        (tgAndroid.find(text) ?: tgDesktop.find(text))?.let { m -> return Sender(m.groupValues[1].trim(), null) }
+        val co = company.find(text)?.value?.trim()
+        val mail = email.find(text)?.value
+        return if (co != null || mail != null) Sender(null, mail, co) else null
+    }
+
+    /** The app a share came from, by its own name («Gmail», «Telegram», «MAX»); null for the system chooser. */
+    fun appName(ctx: Context, pkg: String?): String? {
+        if (pkg == null || pkg == "android") return null
+        return runCatching { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrNull()
+    }
+
+    /** «+ контакт»: the sender into «Контакты» — new, or the known one filled in where it was empty. */
+    fun addContact(ctx: Context, s: Sender) {
+        val name = s.name ?: s.company ?: s.address ?: return
+        val tg = s.address?.takeIf { it.startsWith("@") }
+        val mail = s.address?.takeIf { it.contains('@') && !it.startsWith("@") }
+        ru.anjeib.margin.data.Store.get(ctx).update { d ->
+            val known = d.persons.find { it.matches(name) || (mail != null && it.email.equals(mail, true)) }
+            if (known != null) d.copy(persons = d.persons.map {
+                if (it.id != known.id) it else it.copy(email = it.email ?: mail, telegram = it.telegram ?: tg, company = it.company ?: s.company?.takeIf { c -> c != name }, archived = false)
+            })
+            else d.copy(persons = d.persons + ru.anjeib.margin.data.Person(name = name, email = mail, telegram = tg, company = s.company?.takeIf { it != name }))
+        }
+    }
+
+    fun isContact(d: AppData, s: Sender?): Boolean {
+        if (s == null) return false
+        val name = s.name ?: s.company ?: s.address ?: return false
+        return d.persons.any { !it.archived && (it.matches(name) || (s.address != null && it.email.equals(s.address, true))) }
+    }
+
     /** Where it came from, in words: «Telegram», «почта», «MAX». */
     fun viaName(via: String?): String = when (via) {
         "telegram" -> "Telegram"

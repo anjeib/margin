@@ -1,5 +1,8 @@
 package ru.anjeib.margin.i18n
 
+import ru.anjeib.margin.data.dative
+import ru.anjeib.margin.data.genitive
+
 import ru.anjeib.margin.data.pluralRu
 import ru.anjeib.margin.data.shortLabel
 
@@ -42,6 +45,12 @@ interface Strings {
     val mailPasswordHint: String
     val mailPasswordHow: String
     fun waitingShort(n: String): String
+    val promiseWord: String
+    val addContact: String
+    val inContacts: String
+    val promisesTitle: String
+    fun promiseToYou(from: String): String
+    fun promiseFromYou(to: String): String
     fun promisedShort(n: String): String
     fun forwardFrom(via: String): String
     fun forwardFiles(n: Int): String
@@ -486,7 +495,7 @@ object Ru : Strings {
     override val tgNotYours = "Это личный бот, он принимает сообщения только от владельца."
     override val mailBadLogin = "Почта не пустила: проверьте адрес и пароль приложения (обычный пароль не подойдёт)"
     override val forwardTitle = "В Margin"
-    override val forwardCommentHint = "Кто написал, что сделать — если нужно"
+    override val forwardCommentHint = "Что с этим сделать — или просто отправьте"
     override val forwardHint = "Margin разберёт: задачи, обещания, заметки"
     override val forwardSend = "Отправить"
     override val forwardDone = "Отправлено в Margin"
@@ -506,8 +515,14 @@ object Ru : Strings {
     override val mailAddressHint = "Адрес почты"
     override val mailPasswordHint = "Пароль приложения"
     override val mailPasswordHow = "Пароль приложения создаётся в настройках почты, обычный не подойдёт. Яндекс: id.yandex.ru → Безопасность → Пароли приложений → Почта (и включите IMAP в настройках почты). Gmail: myaccount.google.com/apppasswords. Mail.ru: Настройки → Безопасность → Пароли для внешних приложений."
-    override fun waitingShort(n: String) = "ждём: $n"
-    override fun promisedShort(n: String) = "обещано: $n"
+    override fun waitingShort(n: String) = "обещание: Вам от ${n.genitive()}"
+    override fun promisedShort(n: String) = "обещание: ${n.dative()} от Вас"
+    override val promiseWord = "Обещание"
+    override val addContact = "+ контакт"
+    override val inContacts = "в контактах"
+    override val promisesTitle = "Обещания"
+    override fun promiseToYou(from: String) = "Вам от ${from.genitive()}"
+    override fun promiseFromYou(to: String) = "${to.dative()} от Вас"
     override fun forwardFrom(via: String) = "из $via"
     override fun forwardFiles(n: Int) = "📎 $n"
     override fun tgOn(bot: String) = "@$bot — пересылайте ему сообщения"
@@ -527,7 +542,7 @@ object Ru : Strings {
     override val nextWeekSoft = "След. неделя"
     override val later = "Позже"
     override val waiting = "Ожидание"
-    override fun waitingFor(who: String) = "Ждём: $who"
+    override fun waitingFor(who: String) = "Обещание: Вам от ${who.genitive()}"
     override val create = "Создать"
     override fun stepsCount(n: Int) = "$n " + pluralRu(n, "шаг", "шага", "шагов")
     override val chipEvening = "Итоги дня"
@@ -540,7 +555,7 @@ object Ru : Strings {
     override val overdue = "Просрочено"
     override val completed = "Выполнено"
     override val projects = "ПРОЕКТЫ"
-    override val people = "ЛЮДИ"
+    override val people = "КОНТАКТЫ"
     override val allTasks = "Все задачи"
 
     override val composerHint = "Напишите задачу или мысль…"
@@ -589,7 +604,7 @@ object Ru : Strings {
     override val deletedOne = "Удалено"
     override val toArchive = "В архив"
     override val archiveTitle = "Архив"
-    override val archiveEmpty = "Свайп влево по заметке или человеку убирает их сюда. Отсюда их можно вернуть."
+    override val archiveEmpty = "Свайп влево по заметке или контакту убирает их сюда. Отсюда их можно вернуть."
     override val restoreWord = "Вернуть"
     override val calendarTitle = "Календарь"
     override val projectsEmpty = "Проектов пока нет"
@@ -618,7 +633,7 @@ object Ru : Strings {
     override val makeContact = "Создать контакт"
     override val makeTasks = "Сделать задачи"
     override val noTextOnPhoto = "На фото не нашлось текста"
-    override fun contactMade(name: String) = "В «Людях»: $name"
+    override fun contactMade(name: String) = "В «Контактах»: $name"
     override val textWord = "Текст"
     override val photoWord = "Фото"
     override val textAfter = "Текст после блока"
@@ -770,8 +785,8 @@ object Ru : Strings {
     override val allFilter = "Все"
     override fun entriesCount(n: Int) = "$n " + pluralRu(n, "запись", "записи", "записей")
     override fun updated(d: String) = "обновлено $d"
-    override val peopleTitle = "Люди"
-    override val emptyPeople = "Люди появятся сами, когда вы упомянете их в задачах или заметках."
+    override val peopleTitle = "Контакты"
+    override val emptyPeople = "Контакты появятся сами, когда вы упомянете человека или компанию в задачах или заметках."
     override val rename = "Переименовать"
     override val mergeWith = "Объединить с…"
     override val aboutHint = "ИИ опишет, кто это и чем вы заняты вместе"
@@ -797,7 +812,7 @@ object Ru : Strings {
     override val everyYear = "Каждый год"
     override val overdueWaiting = "Срок прошёл"
     override val search = "Поиск"
-    override val searchHint = "Задачи, заметки, люди…"
+    override val searchHint = "Задачи, заметки, контакты…"
     override val nothing = "Ничего не найдено"
     override val calendarSection = "КАЛЕНДАРЬ"
     override val calendarRead = "Учитывать календарь телефона"
@@ -832,7 +847,7 @@ object Ru : Strings {
     override val fieldDue = "Срок"
     override val fieldTime = "Время"
     override val fieldRepeat = "Повтор"
-    override val fieldPeople = "Люди"
+    override val fieldPeople = "Контакты"
     override val fieldPlace = "Место"
     override val fieldRole = "Должность"
     override val fieldCompany = "Компания"
@@ -852,7 +867,7 @@ object Ru : Strings {
     override val makeSummary = "Собрать сводку"
     override fun fromNote(title: String, date: String) = "из заметки «$title» · $date"
     override fun fromChat(date: String) = "из разговора · $date"
-    override fun promised(who: String) = "Вы обещали: $who"
+    override fun promised(who: String) = "Обещание: ${who.dative()} от Вас"
     override fun summaryAt(t: String) = "обновлено $t"
     override val reopened = "Задача снова открыта"
     override val markedDone = "Готово"
@@ -896,7 +911,7 @@ object Ru : Strings {
     override val ob2Title = "Жесты"
     override val ob2Text = "Свайп вправо — готово. Свайп влево — перенести на день. Меню — кнопка ☰ слева вверху. Нажатие на задачу открывает её карточку."
     override val ob3Title = "Голос, фото, файлы"
-    override val ob3Text = "Микрофон распознаёт речь с помощью ИИ, «+» прикрепляет фото, файлы и контакты. Мысли и идеи попадают в заметки, люди — в раздел «Люди»."
+    override val ob3Text = "Микрофон распознаёт речь с помощью ИИ, «+» прикрепляет фото, файлы и контакты. Мысли и идеи попадают в заметки, люди и компании — в «Контакты»."
     override val ob4Title = "Пара разрешений"
     override val ob4Text = "Уведомления — для напоминаний. Календарь — чтобы ИИ планировал вокруг ваших встреч. Всё можно поменять в настройках."
     override val notifications = "Уведомления"
@@ -949,7 +964,7 @@ object En : Strings {
     override val tgNotYours = "This is a personal bot; it only takes messages from its owner."
     override val mailBadLogin = "Mail refused: check the address and the app password (the usual password won’t do)"
     override val forwardTitle = "To Margin"
-    override val forwardCommentHint = "Who wrote it, what to do — if needed"
+    override val forwardCommentHint = "What to do with it — or just send"
     override val forwardHint = "Margin will sort it: tasks, promises, notes"
     override val forwardSend = "Send"
     override val forwardDone = "Sent to Margin"
@@ -969,8 +984,14 @@ object En : Strings {
     override val mailAddressHint = "Email address"
     override val mailPasswordHint = "App password"
     override val mailPasswordHow = "An app password is made in your mail settings; the usual one won’t do. Gmail: myaccount.google.com/apppasswords. Yandex: id.yandex.ru → Security → App passwords → Mail (and turn on IMAP). Mail.ru: Settings → Security → Passwords for external apps."
-    override fun waitingShort(n: String) = "waiting: $n"
-    override fun promisedShort(n: String) = "promised: $n"
+    override fun waitingShort(n: String) = "promise to you from $n"
+    override fun promisedShort(n: String) = "promise to $n from you"
+    override val promiseWord = "Promise"
+    override val addContact = "+ contact"
+    override val inContacts = "in contacts"
+    override val promisesTitle = "Promises"
+    override fun promiseToYou(from: String) = "to you from $from"
+    override fun promiseFromYou(to: String) = "to $to from you"
     override fun forwardFrom(via: String) = "from $via"
     override fun forwardFiles(n: Int) = "📎 $n"
     override fun tgOn(bot: String) = "@$bot — forward messages to it"
@@ -990,7 +1011,7 @@ object En : Strings {
     override val nextWeekSoft = "Next week"
     override val later = "Later"
     override val waiting = "Waiting"
-    override fun waitingFor(who: String) = "Waiting: $who"
+    override fun waitingFor(who: String) = "Promise: to you from $who"
     override val create = "Create"
     override fun stepsCount(n: Int) = "$n " + if (n == 1) "step" else "steps"
     override val chipEvening = "Wrap up the day"
@@ -1003,7 +1024,7 @@ object En : Strings {
     override val overdue = "Overdue"
     override val completed = "Completed"
     override val projects = "PROJECTS"
-    override val people = "PEOPLE"
+    override val people = "CONTACTS"
     override val allTasks = "All tasks"
 
     override val composerHint = "Write a task or a thought…"
@@ -1052,7 +1073,7 @@ object En : Strings {
     override val deletedOne = "Deleted"
     override val toArchive = "Archive"
     override val archiveTitle = "Archive"
-    override val archiveEmpty = "Swipe a note or a person left to put it here. You can bring it back from here."
+    override val archiveEmpty = "Swipe a note or a contact left to put it here. You can bring it back from here."
     override val restoreWord = "Restore"
     override val calendarTitle = "Calendar"
     override val projectsEmpty = "No projects yet"
@@ -1081,7 +1102,7 @@ object En : Strings {
     override val makeContact = "Create a contact"
     override val makeTasks = "Make tasks"
     override val noTextOnPhoto = "No text found on the photo"
-    override fun contactMade(name: String) = "Added to People: $name"
+    override fun contactMade(name: String) = "Added to Contacts: $name"
     override val textWord = "Text"
     override val photoWord = "Photo"
     override val textAfter = "Text after the block"
@@ -1233,8 +1254,8 @@ object En : Strings {
     override val allFilter = "All"
     override fun entriesCount(n: Int) = "$n " + if (n == 1) "entry" else "entries"
     override fun updated(d: String) = "updated $d"
-    override val peopleTitle = "People"
-    override val emptyPeople = "People appear by themselves once you mention them in tasks or notes."
+    override val peopleTitle = "Contacts"
+    override val emptyPeople = "Contacts appear by themselves once you mention a person or a company in tasks or notes."
     override val rename = "Rename"
     override val mergeWith = "Merge with…"
     override val aboutHint = "AI will describe who this is and what you do together"
@@ -1260,7 +1281,7 @@ object En : Strings {
     override val everyYear = "Every year"
     override val overdueWaiting = "It's overdue"
     override val search = "Search"
-    override val searchHint = "Tasks, notes, people…"
+    override val searchHint = "Tasks, notes, contacts…"
     override val nothing = "Nothing found"
     override val calendarSection = "CALENDAR"
     override val calendarRead = "Use the phone calendar"
@@ -1295,7 +1316,7 @@ object En : Strings {
     override val fieldDue = "Date"
     override val fieldTime = "Time"
     override val fieldRepeat = "Repeat"
-    override val fieldPeople = "People"
+    override val fieldPeople = "Contacts"
     override val fieldPlace = "Place"
     override val fieldRole = "Role"
     override val fieldCompany = "Company"
@@ -1315,7 +1336,7 @@ object En : Strings {
     override val makeSummary = "Make a summary"
     override fun fromNote(title: String, date: String) = "from note “$title” · $date"
     override fun fromChat(date: String) = "from a conversation · $date"
-    override fun promised(who: String) = "You promised: $who"
+    override fun promised(who: String) = "Promise: to $who from you"
     override fun summaryAt(t: String) = "updated $t"
     override val reopened = "Task reopened"
     override val markedDone = "Done"
@@ -1359,7 +1380,7 @@ object En : Strings {
     override val ob2Title = "Gestures"
     override val ob2Text = "Swipe right — done. Swipe left — move a day later. Menu — the ☰ button at the top left. Tap a task to open it."
     override val ob3Title = "Voice, photos, files"
-    override val ob3Text = "The mic transcribes with AI, “+” attaches photos, files and contacts. Thoughts go to notes, people to People."
+    override val ob3Text = "The mic transcribes with AI, “+” attaches photos, files and contacts. Thoughts go to notes, people and companies to Contacts."
     override val ob4Title = "A couple of permissions"
     override val ob4Text = "Notifications — for reminders. Calendar — so AI plans around your meetings. You can change this in Settings."
     override val notifications = "Notifications"
