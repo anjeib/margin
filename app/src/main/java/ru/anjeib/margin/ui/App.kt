@@ -205,7 +205,6 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
                         hint = if (screen == NOTES) s.notesHint else s.composerHint,
                         busy = busy == (if (screen == NOTES) "notes" else "main"),
                         onSend = { t, f -> vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f) },
-                        keepAudio = screen == NOTES,
                         prefill = prefill, onPrefillUsed = { prefill = null },
                         onTyping = { typing = it },
                     )

@@ -82,6 +82,19 @@ interface Strings {
     fun undatedCount(n: Int): String
     val subtaskOne: String
     val freeDay: String
+    val postponeTitle: String
+    val inAWeek: String
+    val inAMonth: String
+    val pickDay: String
+    fun fromMessage(stamp: String): String
+    val saveToPhone: String
+    val savedToPhone: String
+    val saveFailed: String
+    val shareWord: String
+    val closeWord2: String
+    val contactInNote: String
+    fun noSubtask(n: Int): String
+    fun dayPart(p: String): String
     val insertBelow: String
     val captionWord: String
     val moveUp: String
@@ -475,6 +488,19 @@ object Ru : Strings {
     override fun undatedCount(n: Int) = "Ещё без срока: " + tasksCount(n)
     override val subtaskOne = "Подзадача"
     override val freeDay = "Свободный день"
+    override val postponeTitle = "Отложить"
+    override val inAWeek = "Через неделю"
+    override val inAMonth = "Через месяц"
+    override val pickDay = "Свой срок…"
+    override fun fromMessage(stamp: String) = "из сообщения $stamp"
+    override val saveToPhone = "Сохранить на телефон"
+    override val savedToPhone = "Сохранено в папку Margin"
+    override val saveFailed = "Не получилось сохранить — попробуйте «Переслать»"
+    override val shareWord = "Переслать"
+    override val closeWord2 = "Закрыть"
+    override val contactInNote = "контакт в заметке"
+    override fun noSubtask(n: Int) = "Подзадачи $n нет"
+    override fun dayPart(p: String) = when (p) { "morning" -> "утром"; "afternoon" -> "после обеда"; "evening" -> "вечером"; "night" -> "ночью"; else -> "днём" }
     override val insertBelow = "Вставить ниже"
     override val captionWord = "Подпись"
     override val moveUp = "Выше"
@@ -695,7 +721,7 @@ object Ru : Strings {
     override val ideaMark = "из идеи"
     override val linksTitle = "СВЯЗИ"
     override val linkIdea = "Идея"
-    override val inTasks = "Уже в задачах"
+    override val inTasks = "В задачах"
     override val fieldDue = "Срок"
     override val fieldTime = "Время"
     override val fieldRepeat = "Повтор"
@@ -872,6 +898,19 @@ object En : Strings {
     override fun undatedCount(n: Int) = "Also without a date: " + tasksCount(n)
     override val subtaskOne = "Subtask"
     override val freeDay = "A free day"
+    override val postponeTitle = "Postpone"
+    override val inAWeek = "In a week"
+    override val inAMonth = "In a month"
+    override val pickDay = "Pick a day…"
+    override fun fromMessage(stamp: String) = "from a message, $stamp"
+    override val saveToPhone = "Save to phone"
+    override val savedToPhone = "Saved to the Margin folder"
+    override val saveFailed = "Couldn’t save — try “Share”"
+    override val shareWord = "Share"
+    override val closeWord2 = "Close"
+    override val contactInNote = "contact card in the note"
+    override fun noSubtask(n: Int) = "There is no subtask $n"
+    override fun dayPart(p: String) = when (p) { "morning" -> "in the morning"; "afternoon" -> "in the afternoon"; "evening" -> "in the evening"; "night" -> "at night"; else -> "during the day" }
     override val insertBelow = "Insert below"
     override val captionWord = "Caption"
     override val moveUp = "Move up"

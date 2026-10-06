@@ -53,6 +53,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,7 +115,7 @@ fun NotesList(data: AppData, onOpen: (String) -> Unit, contentPadding: PaddingVa
 }
 
 @Composable
-fun NoteCard(n: Note, data: AppData, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun NoteCard(n: Note, data: AppData, onClick: () -> Unit, modifier: Modifier = Modifier, why: String? = null) {
     val c = M.c
     val s = M.s
     val date = runCatching { LocalDateTime.parse(n.updatedAt).toLocalDate().dayMonth() }.getOrDefault("")
@@ -127,14 +128,12 @@ fun NoteCard(n: Note, data: AppData, onClick: () -> Unit, modifier: Modifier = M
             Column(Modifier.weight(1f)) {
                 Text(n.title.ifBlank { s.untitled }, style = Type.cardTitle.copy(color = c.ink), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(3.dp))
-                Text(listOfNotNull(n.entries.size.takeIf { it > 1 }?.let { s.entriesCount(it) }, date, attachmentsSummary(files)).joinToString(" · "),
+                // How much is inside (one visit = one record), not its last line.
+                val records = n.entries.map { it.session ?: it.id }.distinct().size
+                Text(listOfNotNull(records.takeIf { it > 0 }?.let { s.entriesCount(it) }, date, attachmentsSummary(files)).joinToString(" · "),
                     style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
+                why?.let { Text(it, style = Type.small.copy(color = c.faint, fontSize = 12.5.sp), modifier = Modifier.padding(top = 2.dp)) }
             }
-        }
-        val preview = n.entries.lastOrNull { it.fullText.isNotBlank() }?.fullText.orEmpty().trim().takeIf { it != n.title.trim() }.orEmpty()
-        if (preview.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            Text(preview, style = Type.small.copy(color = c.graphite, fontSize = 14.5.sp, lineHeight = 20.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -156,6 +155,8 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
     fun fill(what: String) { mode = what; fill = null; modeTick++ }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(title) { delay(400); vm.renameNote(note.id, title) }
+    // Everything written in this visit is one record under one date line.
+    LaunchedEffect(note.id) { vm.startSession("note:${note.id}"); vm.tidyNote(note.id) }
     val close = { vm.renameNote(note.id, title); vm.dropEmptyNote(note.id); onBack() }
     BackHandler(onBack = close)
     val scroll = rememberScrollState()
@@ -242,7 +243,6 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 if (fl != null) { if (t.isNotBlank()) vm.fillBlock("note:${note.id}", fl, t); f.forEach { a -> vm.insertAttachment("note:${note.id}", fl.entryId, a) }; if (fl.kind != "items") fill = null }
                 else { vm.writeInNote(note.id, t, f, mode); if (mode != "item") mode = null }
             },
-            keepAudio = true,
             modifier = Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp),
             prefill = fill?.prefill, onPrefillUsed = {},
             modeLabel = modeLabel, onModeClose = { mode = null; fill = null }, focusKey = modeTick.takeIf { it > 0 },
@@ -287,12 +287,14 @@ private fun RemindDialog(initial: String?, onDismiss: () -> Unit, onSave: (Strin
 fun IdeaTaskButton(made: List<ru.anjeib.margin.data.Task>, busy: Boolean, onOpenTask: (String) -> Unit, onMake: () -> Unit) {
     val c = M.c
     val s = M.s
-    Box(Modifier.size(40.dp).clip(CircleShape).clickable(enabled = !busy) { made.firstOrNull()?.let { onOpenTask(it.id) } ?: onMake() },
-        contentAlignment = Alignment.Center) {
+    // In words, not an icon nobody reads: «В задачу», or «В задачах» once it is one.
+    Row(Modifier.clip(RoundedCornerShape(50)).background(if (made.isEmpty()) c.accentSoft else Color.Transparent)
+        .clickable(enabled = !busy) { made.firstOrNull()?.let { onOpenTask(it.id) } ?: onMake() }.padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
         when {
-            busy -> CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
-            made.isNotEmpty() -> Icon(Icons.Outlined.TaskAlt, s.inTasks, tint = c.graphite, modifier = Modifier.size(20.dp))
-            else -> Icon(Icons.Outlined.AddTask, s.toTaskPill, tint = c.accent, modifier = Modifier.size(20.dp))
+            busy -> CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
+            made.isNotEmpty() -> Text("✓ " + s.inTasks, style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
+            else -> Text(s.toTaskPill, style = Type.small.copy(color = c.accent, fontSize = 13.sp))
         }
     }
 }

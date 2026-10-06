@@ -112,13 +112,6 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
     var dialog by remember { mutableStateOf<String?>(null) }
     BackHandler(onBack = onBack)
     // A fresh summary when there's none for today and the person shows up in things.
-    // Rewritten once a day — and as soon as their tasks changed since the last summary.
-    val fp = vm.personFingerprint(person, data)
-    LaunchedEffect(person.id, fp) {
-        val fresh = person.summaryAt?.startsWith(LocalDate.now().toString()) == true && (person.summaryFp == null || person.summaryFp == fp)
-        if (!fresh && data.tasks.any { it.involves(person) }) vm.refreshPerson(person.id)
-    }
-
     val tasks = data.tasks.filter { it.involves(person) }
     // One list: the hourglass and «вы обещали» on the row already say which way it goes.
     val open = tasks.filter { !it.done }.sortedWith(compareBy({ !it.isOverdue() }, { it.dueDate ?: LocalDate.MAX }))
@@ -201,20 +194,6 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 else person.personal.forEach { Text(it, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)) }
             }
             Spacer(Modifier.height(18.dp))
-            // «Свежая сводка»: what's going on with this person now.
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.accentSoft).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spark(12.dp); Spacer(Modifier.width(6.dp))
-                    SectionLabel(s.freshSummary + (person.summaryAt?.let { " · " + (dateOf(it)?.let { d -> if (d == LocalDate.now()) it.drop(11).take(5) else d.dayMonthShort() } ?: "") } ?: ""), Modifier.weight(1f))
-                    val busy = "person:${person.id}" in working
-                    Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !busy) { vm.refreshPerson(person.id) }, contentAlignment = Alignment.Center) {
-                        if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
-                        else Icon(Icons.Outlined.Refresh, s.refresh, tint = c.graphite, modifier = Modifier.size(17.dp))
-                    }
-                }
-                Text(person.summary ?: person.about ?: s.aboutHint, style = Type.body.copy(color = if (person.summary != null) c.ink else c.graphite, fontSize = 15.5.sp),
-                    modifier = Modifier.padding(end = 10.dp))
-            }
             val today = LocalDate.now()
             if (open.isNotEmpty()) {
                 SectionLabel(s.tasksCaps, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 4.dp))
@@ -235,7 +214,12 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             }
             if (notes.isNotEmpty()) {
                 SectionLabel(s.notes, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 8.dp))
-                notes.forEach { n -> NoteCard(n, data, onClick = { onOpenNote(n.id) }, modifier = Modifier.padding(bottom = 8.dp)) }
+                // Say why a note is here when the name isn't in its words — only their contact card is.
+                notes.forEach { n ->
+                    val byCard = n.entries.any { e -> e.attachments.any { a -> a.contact?.name?.let { person.matches(it) || it.equals(person.name, true) } == true } } &&
+                        listOf(person.name).plus(person.aliases).none { n.title.contains(it, true) || n.entries.any { e -> e.text.contains(it, true) } }
+                    NoteCard(n, data, onClick = { onOpenNote(n.id) }, modifier = Modifier.padding(bottom = 8.dp), why = if (byCard) s.contactInNote else null)
+                }
             }
             if (done.isNotEmpty()) {
                 SectionLabel(s.done, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 4.dp))

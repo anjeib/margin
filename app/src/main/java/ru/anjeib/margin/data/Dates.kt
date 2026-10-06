@@ -65,7 +65,7 @@ fun Task.whenLabel(today: LocalDate = LocalDate.now()): String? {
         s != null -> L.s.fromDate(s.shortLabel(today))
         else -> null
     }
-    return listOfNotNull(dates, time).joinToString(" · ").ifEmpty { null }
+    return listOfNotNull(dates, time ?: dayPart?.let { L.s.dayPart(it) }).joinToString(" · ").ifEmpty { null }
 }
 
 /** Past its day — or today, past its time (a 14:00 call at 21:00 is late too). */

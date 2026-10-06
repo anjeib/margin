@@ -38,6 +38,20 @@ object Commands {
         what to Regex("^(?:$words)\\s*:\\s*(.*)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
     }
 
+    /**
+     * A numbered step in an open task: «измени подзадачу 2 на …», «подзадача 2: …», «удали подзадачу 3», «подзадача 1 готова».
+     * [what]: sub_edit / sub_delete / sub_done; [value] = "<n>|<new words>".
+     */
+    fun numbered(text: String): Command? {
+        val t = text.trim()
+        val n = "(?:подзадач\\p{L}*|шаг\\p{L}*|пункт\\p{L}*|subtask|step)\\s*(?:№|номер|#)?\\s*(\\d{1,2})"
+        Regex("^(?:удали\\p{L}*|убери\\p{L}*|delete|remove)\\s+$n\\s*$", RegexOption.IGNORE_CASE).find(t)?.let { return Command("sub_delete", it.groupValues[1] + "|") }
+        Regex("^(?:отметь\\p{L}*|закрой\\p{L}*|выполни\\p{L}*|mark|tick)?\\s*$n\\s*(?:готова|сделана|выполнена|done|готово)\\s*$", RegexOption.IGNORE_CASE).find(t)?.let { return Command("sub_done", it.groupValues[1] + "|") }
+        Regex("^(?:измени\\p{L}*|поменяй\\p{L}*|исправь\\p{L}*|переименуй\\p{L}*|замени\\p{L}*|change|rename|edit)?\\s*(?:в\\s+)?$n\\s*(?:на|в|:|—|–|-|to)\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(t)
+            ?.let { return Command("sub_edit", it.groupValues[1] + "|" + it.groupValues[2].trim().trim('«', '»', '"')) }
+        return null
+    }
+
     fun parse(text: String): Command? {
         val t = text.trim()
         for ((what, r) in withVerb + withColon) {

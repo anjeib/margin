@@ -68,6 +68,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import ru.anjeib.margin.data.fullText
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -116,9 +125,15 @@ fun BlockStream(
     var active by remember(owner) { mutableStateOf<String?>(null) }
     var inserting by remember(owner) { mutableStateOf<String?>(null) }
     var menuFor by remember(owner) { mutableStateOf<String?>(null) }
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    var viewing by remember(owner) { mutableStateOf<Attachment?>(null) }
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         entries.forEachIndexed { i, e ->
             val on = active == e.id
+            // One visit — one record: a hairline and the date only where a new visit starts.
+            val newSession = i == 0 || e.session == null || e.session != entries[i - 1].session
+            if (newSession && i > 0) Hairline(Modifier.padding(top = 6.dp, bottom = 2.dp))
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                     .background(if (on) c.chip.copy(alpha = 0.45f) else Color.Transparent)
@@ -126,7 +141,7 @@ fun BlockStream(
                     .padding(horizontal = 6.dp, vertical = 4.dp),
             ) {
                 Row(verticalAlignment = Alignment.Top) {
-                    Box(Modifier.weight(1f)) { Block(owner, e, vm, onFill, on) { active = e.id; inserting = null } }
+                    Box(Modifier.weight(1f)) { Block(owner, e, vm, onFill, on, newSession, onView = { viewing = it }) }
                     trailing(e)?.let { t -> Spacer(Modifier.width(4.dp)); Box(Modifier.padding(top = 6.dp)) { t() } }
                     // The quiet «+» of the active block: things to put right after it.
                     if (on) Box(Modifier.padding(top = 2.dp).size(36.dp).clip(CircleShape).background(if (inserting == e.id) c.accent else c.accentSoft)
@@ -147,6 +162,17 @@ fun BlockStream(
                     e.attachments.firstOrNull { it.kind == "photo" || it.kind == "video" }?.let { a ->
                         DropdownMenuItem(text = { Text(s.captionWord, style = Type.body) }, onClick = { menuFor = null; onFill(Fill("caption", e.id, a.id, a.caption)) })
                     }
+                    // «Сохранить / Переслать»: the file, or the words of the block.
+                    val file = e.attachments.firstOrNull { it.file != null }
+                    if (file != null) DropdownMenuItem(text = { Text(s.saveToPhone, style = Type.body) }, onClick = {
+                        menuFor = null; scope.launch { vm.say(if (Files.saveToPhone(ctx, file)) s.savedToPhone else s.saveFailed) }
+                    })
+                    DropdownMenuItem(text = { Text(s.shareWord, style = Type.body) }, onClick = {
+                        menuFor = null
+                        val i0 = file?.let { Files.shareIntent(ctx, it) } ?: Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(Intent.EXTRA_TEXT, e.fullText), null)
+                        runCatching { ctx.startActivity(i0) }
+                    })
                     DropdownMenuItem(text = { Text(s.insertBelow, style = Type.body) }, onClick = { menuFor = null; active = e.id; inserting = e.id })
                     if (i > 0) DropdownMenuItem(text = { Text(s.moveUp, style = Type.body) }, onClick = { menuFor = null; vm.moveEntry(owner, e.id, -1) })
                     if (i < entries.lastIndex) DropdownMenuItem(text = { Text(s.moveDown, style = Type.body) }, onClick = { menuFor = null; vm.moveEntry(owner, e.id, 1) })
@@ -155,15 +181,17 @@ fun BlockStream(
             }
         }
     }
+    viewing?.let { a -> Viewer(a, vm, onClose = { viewing = null }) }
 }
 
 /** One block: its date, its words, its list, its attachments — each shown for what it is. */
 @Composable
-private fun Block(owner: String, e: Entry, vm: MainVm, onFill: (Fill) -> Unit, active: Boolean, onActivate: () -> Unit) {
+private fun Block(owner: String, e: Entry, vm: MainVm, onFill: (Fill) -> Unit, active: Boolean, showDate: Boolean, onView: (Attachment) -> Unit) {
     val c = M.c
+    val s = M.s
     val at = runCatching { LocalDateTime.parse(e.at) }.getOrNull()
     Column {
-        Text(at?.let { it.toLocalDate().dayMonth() + " · " + it.toLocalTime().toString().take(5) }?.uppercase() ?: "",
+        if (showDate) Text(at?.let { it.toLocalDate().dayMonth() + " · " + it.toLocalTime().toString().take(5) }?.uppercase() ?: "",
             style = Type.label.copy(color = c.faint, fontSize = 10.5.sp))
         if (e.text.isNotBlank()) {
             Spacer(Modifier.height(3.dp))
@@ -182,13 +210,17 @@ private fun Block(owner: String, e: Entry, vm: MainVm, onFill: (Fill) -> Unit, a
         }
         e.attachments.forEach { a ->
             Spacer(Modifier.height(8.dp))
+            // A quiet word over media says what it is, the thing itself is a thumbnail that opens on a tap.
+            when (a.kind) { "photo" -> s.photoWord; "video" -> s.video; "file" -> s.attachFile; else -> null }?.let {
+                Text(it.uppercase(), style = Type.label.copy(color = c.faint, fontSize = 10.sp), modifier = Modifier.padding(bottom = 4.dp))
+            }
             when (a.kind) {
-                "photo" -> PhotoBlock(a, vm, active, onActivate, onCaption = { onFill(Fill("caption", e.id, a.id, a.caption)) }, onText = { act -> vm.photoText(owner, e.id, a, act) })
-                "video" -> VideoBlock(a, active, onActivate, onCaption = { onFill(Fill("caption", e.id, a.id, a.caption)) })
+                "photo" -> PhotoBlock(a, vm, active, onView = { onView(a) }, onCaption = { onFill(Fill("caption", e.id, a.id, a.caption)) }, onText = { act -> vm.photoText(owner, e.id, a, act) })
+                "video" -> VideoBlock(a, onView = { onView(a) }, onCaption = { onFill(Fill("caption", e.id, a.id, a.caption)) })
                 "audio" -> VoiceBlock(a, vm)
                 "contact" -> ContactBlock(a)
                 "link" -> LinkBlock(a)
-                else -> AttachmentsView(listOf(a))
+                else -> FileBlock(a, onView = { onView(a) })
             }
         }
     }
@@ -196,18 +228,95 @@ private fun Block(owner: String, e: Entry, vm: MainVm, onFill: (Fill) -> Unit, a
 
 private fun open(ctx: android.content.Context, a: Attachment) { Files.openIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } } }
 
+/** A document as a small card: what it is, how big; a tap opens the quick look. */
+@Composable
+private fun FileBlock(a: Attachment, onView: () -> Unit) {
+    val c = M.c
+    val ext = a.name.substringAfterLast('.', "").uppercase().take(4)
+    Row(Modifier.clip(RoundedCornerShape(14.dp)).background(c.chip).clickable(onClick = onView).padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(width = 52.dp, height = 64.dp).clip(RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp)).background(c.accentSoft), contentAlignment = Alignment.Center) {
+            Text(ext.ifBlank { "•" }, style = Type.label.copy(color = c.accent, fontSize = 11.sp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.widthIn(max = 220.dp)) {
+            Text(a.name.ifBlank { M.s.attachFile }, style = Type.body.copy(color = c.ink, fontSize = 14.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (a.size > 0) Text(android.text.format.Formatter.formatShortFileSize(LocalContext.current, a.size), style = Type.small.copy(color = c.graphite, fontSize = 12.sp))
+        }
+    }
+}
+
+/**
+ * The quick look over the screen: a photo (pinch to zoom), a video that plays here, a text file or a PDF read here.
+ * Anything else opens in the app that knows it. Save and share from the top bar.
+ */
+@Composable
+private fun Viewer(a: Attachment, vm: MainVm, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    val s = M.s
+    val scope = rememberCoroutineScope()
+    if (a.kind == "file" && !Files.isText(a) && !Files.isPdf(a)) { LaunchedEffect(a.id) { open(ctx, a); onClose() }; return }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            when {
+                a.kind == "photo" -> {
+                    val bmp by produceState<Bitmap?>(null, a.id) { value = Files.thumb(ctx, a, 2400) }
+                    var zoom by remember { mutableFloatStateOf(1f) }
+                    var pan by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+                    bmp?.let {
+                        Image(it.asImageBitmap(), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()
+                            .pointerInput(Unit) { detectTransformGestures { _, p, z, _ -> zoom = (zoom * z).coerceIn(1f, 5f); pan = if (zoom == 1f) androidx.compose.ui.geometry.Offset.Zero else pan + p } }
+                            .graphicsLayer(scaleX = zoom, scaleY = zoom, translationX = pan.x, translationY = pan.y))
+                    }
+                }
+                a.kind == "video" -> {
+                    val f = Files.file(ctx, a)
+                    if (f != null) androidx.compose.ui.viewinterop.AndroidView(factory = { c0 ->
+                        android.widget.VideoView(c0).apply {
+                            setVideoPath(f.absolutePath)
+                            setMediaController(android.widget.MediaController(c0).also { it.setAnchorView(this) })
+                            setOnPreparedListener { start() }
+                        }
+                    }, modifier = Modifier.fillMaxSize().padding(vertical = 56.dp))
+                }
+                Files.isPdf(a) -> {
+                    val pages by produceState<List<Bitmap>?>(null, a.id) { value = Files.pdfPages(ctx, a) }
+                    Column(Modifier.fillMaxSize().padding(top = 56.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        pages?.forEach { Image(it.asImageBitmap(), null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth()) }
+                    }
+                }
+                else -> {
+                    val text by produceState<String?>(null, a.id) { value = Files.text(ctx, a) }
+                    Text(text.orEmpty(), style = Type.small.copy(color = Color.White, fontSize = 14.sp), modifier = Modifier.fillMaxSize().padding(top = 64.dp, start = 16.dp, end = 16.dp).verticalScroll(rememberScrollState()))
+                }
+            }
+            Row(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                ViewerAction(Icons.Rounded.Close, s.closeWord2, onClose)
+                Spacer(Modifier.weight(1f))
+                if (a.file != null) ViewerAction(Icons.Outlined.Download, s.saveToPhone) { scope.launch { vm.say(if (Files.saveToPhone(ctx, a)) s.savedToPhone else s.saveFailed) } }
+                ViewerAction(Icons.Outlined.Share, s.shareWord) { Files.shareIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } } }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ViewerAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, label, tint = Color.White, modifier = Modifier.size(22.dp))
+    }
+}
+
 /** A photo wide, its caption, and — when there is text on it — that text, folded to three lines. */
 @Composable
-private fun PhotoBlock(a: Attachment, vm: MainVm, active: Boolean, onActivate: () -> Unit, onCaption: () -> Unit, onText: (String) -> Unit) {
+private fun PhotoBlock(a: Attachment, vm: MainVm, active: Boolean, onView: () -> Unit, onCaption: () -> Unit, onText: (String) -> Unit) {
     val c = M.c
     val s = M.s
     val ctx = LocalContext.current
     val working by vm.working.collectAsState()
-    val bmp by produceState<Bitmap?>(null, a.id) { value = Files.thumb(ctx, a, 1080) }
+    val bmp by produceState<Bitmap?>(null, a.id) { value = Files.thumb(ctx, a, 600) }
     Column {
-        Box(Modifier.fillMaxWidth().heightIn(max = 280.dp).clip(RoundedCornerShape(14.dp)).background(c.chip).clickable { if (active) open(ctx, a) else onActivate() }) {
-            bmp?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth()) }
-                ?: Box(Modifier.fillMaxWidth().height(160.dp))
+        Box(Modifier.size(width = 200.dp, height = 150.dp).clip(RoundedCornerShape(14.dp)).background(c.chip).clickable(onClick = onView)) {
+            bmp?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.size(width = 200.dp, height = 150.dp)) }
         }
         Caption(a.caption, onCaption)
         // The text on a photo only on request: what to do with it decides whether it is worth reading.
@@ -230,13 +339,13 @@ private fun PhotoBlock(a: Attachment, vm: MainVm, active: Boolean, onActivate: (
 }
 
 @Composable
-private fun VideoBlock(a: Attachment, active: Boolean, onActivate: () -> Unit, onCaption: () -> Unit) {
+private fun VideoBlock(a: Attachment, onView: () -> Unit, onCaption: () -> Unit) {
     val c = M.c
     val ctx = LocalContext.current
-    val bmp by produceState<Bitmap?>(null, a.id) { value = Files.thumb(ctx, a, 1080) }
+    val bmp by produceState<Bitmap?>(null, a.id) { value = Files.thumb(ctx, a, 600) }
     Column {
-        Box(Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(14.dp)).background(c.chip).clickable { if (active) open(ctx, a) else onActivate() }, contentAlignment = Alignment.Center) {
-            bmp?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().height(200.dp)) }
+        Box(Modifier.size(width = 200.dp, height = 150.dp).clip(RoundedCornerShape(14.dp)).background(c.chip).clickable(onClick = onView), contentAlignment = Alignment.Center) {
+            bmp?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.size(width = 200.dp, height = 150.dp)) }
             Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp))
             }

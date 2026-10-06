@@ -124,4 +124,30 @@ class GuardsTest {
         assertEquals("Марина", d.persons[0].name)
         assertEquals(listOf("Марина"), d.tasks[0].people)
     }
+
+    @Test fun morningStaysAWord() {
+        val d = run(AppData(), """{"actions":[{"type":"create_task","title":"Позвонить Наталье","due":"${today.plusDays(1)}","time":"09:00"}]}""", "завтра утром позвонить наталье")
+        assertNull(d.tasks[0].time)
+        assertEquals("morning", d.tasks[0].dayPart)
+        val e = run(AppData(), """{"actions":[{"type":"create_task","title":"Позвонить","due":"${today.plusDays(1)}","time":"09:00"}]}""", "завтра в 9 утра позвонить")
+        assertEquals("09:00", e.tasks[0].time)
+        assertNull(e.tasks[0].dayPart)
+    }
+
+    @Test fun stepTalkDoesNotRenameTheTask() {
+        val t = Task(id = "x", title = "Сайт", subtasks = listOf(ru.anjeib.margin.data.Subtask(id = "s1", title = "Тексты"), ru.anjeib.margin.data.Subtask(id = "s2", title = "Макет")))
+        val d = run(AppData(tasks = listOf(t)), """{"actions":[{"type":"update_task","task_id":"x","title":"Макет главной"},{"type":"update_subtask","task_id":"x","subtask_id":"s2","title":"макет главной"}]}""",
+            "измени вторую подзадачу на макет главной", focus = "x")
+        assertEquals("Сайт", d.tasks[0].title)
+        assertEquals("Макет главной", d.tasks[0].subtasks[1].title)
+        assertEquals("sub_edit", ru.anjeib.margin.ai.Commands.numbered("измени подзадачу 2 на макет главной")?.what)
+        assertEquals("sub_delete", ru.anjeib.margin.ai.Commands.numbered("удали подзадачу 3")?.what)
+        assertEquals("sub_done", ru.anjeib.margin.ai.Commands.numbered("подзадача 1 готова")?.what)
+    }
+
+    @Test fun saidWeekdayWins() {
+        val wed = today.with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.WEDNESDAY))
+        val d = run(AppData(), """{"actions":[{"type":"create_task","title":"Заказать упаковку","due":"${wed.plusDays(2)}"}]}""", "заказать упаковку до среды")
+        assertEquals(wed.toString(), d.tasks[0].due)
+    }
 }

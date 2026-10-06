@@ -44,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -129,7 +130,7 @@ private fun Task.rowLabel(today: LocalDate): String? {
         s != null -> s.shortLabel(today).lowercase()
         else -> null
     }
-    return listOfNotNull(day, time).joinToString(" ").ifEmpty { null }
+    return listOfNotNull(day, time ?: dayPart?.let { L.s.dayPart(it) }).joinToString(" ").ifEmpty { null }
 }
 
 private val setSaver = Saver<MutableState<Set<String>>, ArrayList<String>>(
@@ -160,6 +161,9 @@ fun TaskList(
     val today = LocalDate.now()
     var byProject by rememberSaveable { mutableStateOf(false) }
     var weekDay by rememberSaveable { mutableStateOf<String?>(null) }
+    // Swipe left asks «на когда?» instead of quietly moving a day.
+    var postponing by remember { mutableStateOf<String?>(null) }
+    postponing?.let { id -> PostponeDialog(onDismiss = { postponing = null }) { day -> vm.postponeTo(id, day); postponing = null } }
     val collapsed = rememberSaveable(saver = setSaver) { mutableStateOf(setOf("s-done", "s-pdone")) }
     fun toggle(k: String) { collapsed.value = if (k in collapsed.value) collapsed.value - k else collapsed.value + k }
     fun isOpen(k: String) = k !in collapsed.value
@@ -184,7 +188,7 @@ fun TaskList(
 
         fun LazyListScope.cards(list: List<Task>, timeColumn: Boolean = false, showProject: Boolean = true, showIdea: Boolean = false) {
             items(list, key = { it.id }) { t ->
-                SwipeTask(t, onDone = { vm.completeWithUndo(t.id) }, onLater = { vm.postpone(t.id, 1) }, modifier = Modifier.animateItem().landing(t.id in landed, 18)) {
+                SwipeTask(t, onDone = { vm.completeWithUndo(t.id) }, onLater = { postponing = t.id }, modifier = Modifier.animateItem().landing(t.id in landed, 18)) {
                     TaskCard(
                         t, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) },
                         onToggleSub = { vm.toggleSubtask(t.id, it) },
@@ -197,7 +201,7 @@ fun TaskList(
 
         fun LazyListScope.rows(list: List<Task>, key: String, showProject: Boolean = true) {
             items(list, key = { key + it.id }) { t ->
-                SwipeTask(t, onDone = { vm.completeWithUndo(t.id) }, onLater = { vm.postpone(t.id, 1) }, modifier = Modifier.animateItem().landing(t.id in landed, 0), radius = 0) {
+                SwipeTask(t, onDone = { vm.completeWithUndo(t.id) }, onLater = { postponing = t.id }, modifier = Modifier.animateItem().landing(t.id in landed, 0), radius = 0) {
                     TaskRow(t, today, showProject, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) })
                 }
             }
@@ -391,25 +395,6 @@ fun TaskList(
                 val chains = ideaChains(p, data)
                 val ideas = chains.filter { it.tasks.isEmpty() }
                 header(projectLabel(p), s.tasksCount(openTasks.size))
-                // «Сводка недели»: written once a day on first visit, ↻ to rewrite.
-                item("p-summary") {
-                    val sum = data.projectSummaries[p]
-                    val fp = vm.projectFingerprint(p, data)
-                    LaunchedEffect(p, fp) { if ((sum?.at?.startsWith(today.toString()) != true || (sum.fp != null && sum.fp != fp)) && (openTasks.isNotEmpty() || chains.isNotEmpty())) vm.refreshProject(p) }
-                    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(RoundedCornerShape(18.dp)).background(c.accentSoft)
-                        .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Spark(12.dp); Spacer(Modifier.width(6.dp))
-                            SectionLabel(s.weekSummary + (sum?.at?.let { " · " + s.summaryAt(it.drop(11).take(5)) } ?: ""), Modifier.weight(1f))
-                            val busy = "project:$p" in working
-                            Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !busy) { vm.refreshProject(p) }, contentAlignment = Alignment.Center) {
-                                if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
-                                else Icon(Icons.Outlined.Refresh, s.refresh, tint = c.graphite, modifier = Modifier.size(17.dp))
-                            }
-                        }
-                        Text(sum?.text ?: s.makeSummary, style = Type.body.copy(color = if (sum != null) c.ink else c.graphite, fontSize = 15.5.sp), modifier = Modifier.padding(end = 10.dp))
-                    }
-                }
                 // One fact once: who we wait for is in the summary and on the task row, the idea a task came from is a quiet «✎».
                 if (openTasks.isNotEmpty()) { section(s.tasksCaps, "s-ptasks", openTasks.size); cards(openTasks, showProject = false, showIdea = true) }
                 if (ideas.isNotEmpty()) {
@@ -448,6 +433,39 @@ private fun IdeaRow(ch: Chain, busy: Boolean, onOpen: () -> Unit, onMake: () -> 
         }
         Hairline(Modifier.padding(start = 36.dp, top = 4.dp))
     }
+}
+
+/** «Отложить»: tomorrow, in a week, in a month — or a day from the calendar. */
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun PostponeDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
+    val c = M.c
+    val s = M.s
+    val today = LocalDate.now()
+    var custom by remember { mutableStateOf(false) }
+    if (custom) {
+        val st = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = today.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli())
+        androidx.compose.material3.DatePickerDialog(onDismissRequest = onDismiss,
+            confirmButton = { androidx.compose.material3.TextButton({ st.selectedDateMillis?.let { onPick(java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate()) } ?: onDismiss() }) { Text(s.save, color = c.accent) } },
+            dismissButton = { androidx.compose.material3.TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
+            colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card),
+        ) { androidx.compose.material3.DatePicker(st, colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card, selectedDayContainerColor = c.accent, todayDateBorderColor = c.accent)) }
+        return
+    }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss, containerColor = c.card,
+        title = { Text(s.postponeTitle, style = Type.cardTitle.copy(color = c.ink)) },
+        text = {
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Pill(s.quickTomorrow, onClick = { onPick(today.plusDays(1)) })
+                Pill(s.inAWeek, onClick = { onPick(today.plusWeeks(1)) })
+                Pill(s.inAMonth, onClick = { onPick(today.plusMonths(1)) })
+                Pill(s.pickDay, accent = true, onClick = { custom = true })
+            }
+        },
+        confirmButton = {},
+        dismissButton = { androidx.compose.material3.TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
+    )
 }
 
 /** Is [t] on [day]: within its window, or — when late — on today. */
@@ -559,7 +577,7 @@ fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Uni
                     val whenText = t.rowLabel(today)
                     val extra = listOfNotNull(t.place, if (n > 0) "$d/$n" else null)
                     if (whenText != null || extra.isNotEmpty() || (showProject && t.project != null)) Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        whenText?.let { Text(it, style = Type.small.copy(color = if (overdue) c.accent else c.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1) }
+                        whenText?.let { DatePill(it, overdue, t.time != null) }
                         if (extra.isNotEmpty()) Text((if (whenText != null) "  ·  " else "") + extra.joinToString("  ·  "),
                             style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         if (showProject) t.project?.let { Spacer(Modifier.width(8.dp)); Tag(it) }
@@ -600,7 +618,7 @@ private fun SwipeTask(t: Task, onDone: () -> Unit, onLater: () -> Unit, modifier
                 if (dir != SwipeToDismissBoxValue.Settled)
                     // Show where the task will land, not an abstract «tomorrow».
                     Text(if (toEnd) (if (t.done) s.undo else s.markDone)
-                        else "→ " + (ru.anjeib.margin.data.postponed(t, 1).let { it.dueDate ?: it.startDate }?.shortLabel()?.lowercase() ?: ""),
+                        else s.postponeTitle + " →",
                         style = Type.tab.copy(color = c.bg))
             }
         },

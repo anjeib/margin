@@ -116,6 +116,10 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch { store.data.collect { Reminders.syncTasks(getApplication(), it.tasks, it.notes); watchBrief(it) } }
+        // A quiet line under the field says what happened — and then leaves.
+        viewModelScope.launch {
+            _notice.collect { n -> if (n != null) { kotlinx.coroutines.delay(7000); if (_notice.value == n) _notice.value = null } }
+        }
         refreshCalendar()
         Processor.schedule(ctx)
         ru.anjeib.margin.voice.LocalWhisper.refresh(ctx)
@@ -199,7 +203,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val chatBefore = data.value.chat
         val asked = scope == Scope.Main && chatBefore.lastOrNull()?.let { !it.fromUser && it.options.isNotEmpty() } == true
         val source = if (asked) chatBefore.dropLast(1).lastOrNull { it.fromUser }?.text?.let { "$it — $t" } ?: t else t
-        val cmd = if (smart) null else Commands.parse(t)
+        val cmd = if (smart) null else (if (scope is Scope.InTask) Commands.numbered(t) else null) ?: Commands.parse(t)
 
         var userId: String? = null
         if (scope == Scope.Main) {
@@ -280,6 +284,17 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                     "project" -> listOf(o("type" to "update_task", "task_id" to id, "project" to c.value))
                     "entry" -> listOf(o("type" to "add_entry", "task_id" to id, "text" to c.value))
                     "time" -> Commands.time(c.value)?.let { listOf(o("type" to "update_task", "task_id" to id, "time" to it)) } ?: return false
+                    // «подзадача 2 …»: by the number shown in the card.
+                    "sub_edit", "sub_delete", "sub_done" -> {
+                        val n = c.value.substringBefore('|').toIntOrNull() ?: return false
+                        val sub = task.subtasks.getOrNull(n - 1) ?: run { _notice.value = Notice(key(scope), L.s.noSubtask(n), null); return true }
+                        val rest = c.value.substringAfter('|').trim()
+                        when (c.what) {
+                            "sub_edit" -> if (rest.isBlank()) return false else listOf(o("type" to "update_subtask", "task_id" to id, "subtask_id" to sub.id, "title" to rest))
+                            "sub_delete" -> listOf(o("type" to "delete_subtask", "task_id" to id, "subtask_id" to sub.id))
+                            else -> listOf(o("type" to "complete_subtask", "task_id" to id, "subtask_id" to sub.id))
+                        }
+                    }
                     "phone", "email", "telegram" -> if (who != null) listOf(o("type" to "person", "name" to who, c.what to c.value))
                         else listOf(o("type" to "add_entry", "task_id" to id, "text" to (if (c.what == "phone") L.s.fieldPhone else if (c.what == "email") L.s.fieldEmail else "Telegram") + ": " + c.value))
                     else -> return false
@@ -309,11 +324,16 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         return if (owner.startsWith("note:")) data.value.notes.find { it.id == id }?.entries.orEmpty() else data.value.tasks.find { it.id == id }?.entries.orEmpty()
     }
 
+    /** The visit going on in a note or a task card: what is written now groups under one date line. */
+    private val sessions = mutableMapOf<String, String>()
+    fun startSession(owner: String) { sessions[owner] = newId() }
+    private fun stamp(owner: String, e: Entry) = if (e.session == null) e.copy(session = sessions[owner]) else e
+
     /** Puts [e] right after [afterId] (at the end when null or gone). */
-    fun insertEntry(owner: String, afterId: String?, e: Entry) = editEntries(owner) { l ->
+    fun insertEntry(owner: String, afterId: String?, e0: Entry) = stamp(owner, e0).let { e -> editEntries(owner) { l ->
         val i = l.indexOfFirst { it.id == afterId }
         if (i < 0) l + e else l.take(i + 1) + e + l.drop(i + 1)
-    }
+    } }
 
     fun moveEntry(owner: String, id: String, delta: Int) = editEntries(owner) { l ->
         val i = l.indexOfFirst { it.id == id }
@@ -863,6 +883,18 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     /** Moves a task [days] later; overdue and undated tasks count from today. Ranges keep their length. */
+    /** «Отложить» to a chosen day: the task moves there whole (a range keeps its length). */
+    fun postponeTo(id: String, day: LocalDate) {
+        val before = data.value
+        val t = before.tasks.find { it.id == id } ?: return
+        val base = t.dueDate ?: t.startDate ?: LocalDate.now()
+        val shift = java.time.temporal.ChronoUnit.DAYS.between(base, day)
+        val moved = t.copy(due = (t.dueDate?.plusDays(shift) ?: day).toString(), start = t.startDate?.plusDays(shift)?.toString()?.takeIf { t.dueDate != null },
+            remindAt = t.time?.let { "${day}T$it" }, postponed = t.postponed + 1)
+        updateTask(id) { moved }
+        offerUndo(before, L.s.movedTo(day.shortLabel().lowercase()))
+    }
+
     fun postpone(id: String, days: Long) {
         val before = data.value
         val t = before.tasks.find { it.id == id } ?: return
@@ -936,7 +968,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         if (text.isBlank() && files.isEmpty()) return
         store.update { d ->
             val n = d.notes.find { it.id == id } ?: return@update d
-            val e = Entry(text = text.sentence(), attachments = files)
+            val e = stamp("note:$id", Entry(text = text.sentence(), attachments = files))
             val upd = n.copy(entries = n.entries + e, updatedAt = nowStamp())
             d.copy(notes = listOf(upd) + d.notes.filterNot { it.id == id })
         }
@@ -993,7 +1025,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun tidyNote(id: String) {
         val s = settings.value
         val n = data.value.notes.find { it.id == id } ?: return
-        if (n.titleFixed || n.entries.isNotEmpty() || n.title.isBlank() || !Processor.ready(s) || !Processor.online(ctx) || "tidy:$id" in _working.value) return
+        if (n.titleFixed || n.title.isBlank() || n.title.length > 60 || !Processor.ready(s) || !Processor.online(ctx) || "tidy:$id" in _working.value) return
         _working.value += "tidy:$id"
         viewModelScope.launch {
             try {

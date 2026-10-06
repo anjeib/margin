@@ -103,6 +103,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     var dialog by remember(task.id) { mutableStateOf<String?>(null) }
     // Opened from «Уточнить срок / время?» — straight to the picker.
     androidx.compose.runtime.LaunchedEffect(task.id, startDialog) { if (startDialog != null) { dialog = startDialog; onStartDialogUsed() } }
+    androidx.compose.runtime.LaunchedEffect(task.id) { vm.startSession("task:${task.id}") }
     // «+ подзадача», «+ место»…: the field below fills that one thing — typed or said, no little windows.
     var mode by remember(task.id) { mutableStateOf<String?>(null) }
     var fill by remember(task.id) { mutableStateOf<Fill?>(null) }
@@ -196,29 +197,27 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
                     itemVerticalAlignment = Alignment.CenterVertically,
                 ) {
-                    var first = true
-                    @Composable fun sep() { if (!first) Box(Modifier.size(1.dp, 14.dp).background(c.hairline)); first = false }
-                    task.repeat?.let { sep(); MetaChip(Icons.Outlined.Repeat, it.label()) { dialog = "repeat" } }
-                    if (task.people.isNotEmpty()) sep()
-                    task.people.forEach { p ->
-                        Row(Modifier.clip(RoundedCornerShape(50)).clickable { data.person(p)?.let { onOpenPerson(it.id) } ?: run { dialog = "people" } },
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Monogram(p, 22.dp); Spacer(Modifier.width(5.dp))
+                    // Each property a badge of its own — they sit together nicely even when there is only one.
+                    task.repeat?.let { MetaChip(Icons.Outlined.Repeat, it.label()) { dialog = "repeat" } }
+                                        task.people.forEach { p ->
+                        Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).clickable { data.person(p)?.let { onOpenPerson(it.id) } ?: run { dialog = "people" } }
+                            .padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Monogram(p, 22.dp); Spacer(Modifier.width(6.dp))
                             Text(p, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
                         }
                     }
-                    task.waitingFor?.let { sep(); MetaChip(Icons.Outlined.HourglassEmpty, s.waitingFor(it)) { dialog = "waiting" } }
-                    task.promisedTo?.let { w -> sep(); MetaChip(Icons.AutoMirrored.Outlined.ArrowForward, s.promised(w)) { data.person(w)?.let { p -> onOpenPerson(p.id) } } }
+                    task.waitingFor?.let { MetaChip(Icons.Outlined.HourglassEmpty, s.waitingFor(it)) { dialog = "waiting" } }
+                    task.promisedTo?.let { w -> MetaChip(Icons.AutoMirrored.Outlined.ArrowForward, s.promised(w)) { data.person(w)?.let { p -> onOpenPerson(p.id) } } }
                     // A place opens the map; to change it, hold.
-                    task.place?.let { pl -> sep()
-                        Row(Modifier.clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = {
+                    task.place?.let { pl ->
+                        Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).combinedClickable(onClick = {
                             runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
-                        }, onLongClick = { fill("place") }).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        }, onLongClick = { fill("place") }).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Outlined.Place, null, tint = c.graphite, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp))
                             Text(pl, style = Type.small.copy(color = c.ink, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    task.project?.let { sep(); Box(Modifier.clickable { dialog = "project" }) { Tag(it) } }
+                    task.project?.let { Box(Modifier.clickable { dialog = "project" }) { Tag(it) } }
                 }
                 val typed = setOf("subtask", "place", "people", "project")
                 val missing = buildList {
@@ -237,15 +236,13 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { if (d in typed) fill(d) else dialog = d }.padding(2.dp))
                     }
                 }
-                // «Вы написали»: the words the task was born from, tidied up — when no idea in «Связи» already says where it came from.
+                // Where it came from, as one quiet line: «↳ из сообщения 6 окт, 17:42» — the words open on a tap.
                 if (task.source != null && task.noteId == null) {
                     androidx.compose.runtime.LaunchedEffect(task.id) { vm.tidySource(task.id) }
-                    Column(Modifier.padding(start = 48.dp, top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.chip.copy(alpha = 0.55f))
-                        .padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        Text(s.youWrote.uppercase() + " · " + LocalDate.parse(task.createdAt).dayMonth().uppercase(), style = Type.label.copy(color = c.faint, fontSize = 10.5.sp))
-                        Spacer(Modifier.height(4.dp))
-                        Text(task.source.sentence(), style = Type.body.copy(color = c.ink, fontSize = 15.sp))
-                    }
+                    val born = task.history.firstOrNull { it.kind == "created" }?.at?.let { runCatching { java.time.LocalDateTime.parse(it.take(16)) }.getOrNull() }
+                    val stamp = born?.let { it.toLocalDate().dayMonthShort() + ", " + it.toLocalTime().toString().take(5) } ?: LocalDate.parse(task.createdAt).dayMonthShort()
+                    Text("↳ " + s.fromMessage(stamp), style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp),
+                        modifier = Modifier.padding(start = 46.dp, top = 12.dp).clip(RoundedCornerShape(6.dp)).clickable { dialog = "source" }.padding(2.dp))
                 }
                 Hairline(Modifier.padding(top = 14.dp))
 
@@ -312,7 +309,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     val done = task.subtasks.filter { it.done }
                     val visible = if (showAllSubs || open.size <= 7) open else open.take(7)
                     Box {
-                        Column { SubtaskTree(visible, 0, onToggle = { vm.toggleSubtask(task.id, it) }, onLong = { subMenu = it }) }
+                        Column { SubtaskTree(visible, 0, onToggle = { vm.toggleSubtask(task.id, it) }, onLong = { subMenu = it }, number = { s0 -> task.subtasks.indexOfFirst { it.id == s0.id }.takeIf { it >= 0 }?.plus(1) }) }
                         DropdownMenu(subMenu != null, { subMenu = null }, containerColor = c.card) {
                             subMenu?.let { sub ->
                                 DropdownMenuItem(text = { Text(s.edit, style = Type.body) }, onClick = { renameSub = sub; subMenu = null })
@@ -323,7 +320,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     if (open.size > visible.size) QuietLink(s.more(open.size - visible.size)) { showAllSubs = true }
                     if (done.isNotEmpty()) {
                         QuietLink(s.doneCount(done.size) + if (showDone) " ▾" else " ▸") { showDone = !showDone }
-                        if (showDone) SubtaskTree(done, 0, onToggle = { vm.toggleSubtask(task.id, it) }, onLong = { subMenu = it })
+                        if (showDone) SubtaskTree(done, 0, onToggle = { vm.toggleSubtask(task.id, it) }, onLong = { subMenu = it }, number = { s0 -> task.subtasks.indexOfFirst { it.id == s0.id }.takeIf { it >= 0 }?.plus(1) })
                     }
                 }
 
@@ -394,6 +391,12 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
         "waiting" -> TextDialog(s.waiting, task.waitingFor.orEmpty(), "", onDismiss = { dialog = null }) { v ->
             save(task.copy(waitingFor = v.trim().ifBlank { null })); dialog = null
         }
+        "source" -> AlertDialog(
+            onDismissRequest = { dialog = null }, containerColor = c.card,
+            title = { Text(s.youWrote, style = Type.cardTitle.copy(color = c.ink)) },
+            text = { Text(task.source.orEmpty().sentence(), style = Type.body.copy(color = c.ink)) },
+            confirmButton = { TextButton({ dialog = null }) { Text(s.closeWord2, color = c.graphite) } },
+        )
         "repeat" -> RepeatDialog(task, onDismiss = { dialog = null }) { r ->
             val due = task.due ?: if (r != null) LocalDate.now().toString() else null
             save(task.copy(repeat = r, due = due)); dialog = null
@@ -449,7 +452,8 @@ private fun RepeatDialog(task: Task, onDismiss: () -> Unit, onPick: (ru.anjeib.m
 private fun MetaChip(icon: ImageVector, text: String?, alert: Boolean = false, onClick: () -> Unit) {
     val c = M.c
     if (text == null) return
-    Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.clip(RoundedCornerShape(50)).background(if (alert) c.accentSoft else c.chip).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = if (alert) c.accent else c.graphite, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
         Text(text, style = Type.small.copy(color = if (alert) c.accent else c.ink, fontSize = 14.sp))

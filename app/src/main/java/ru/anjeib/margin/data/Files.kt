@@ -103,7 +103,15 @@ object Files {
                     BitmapFactory.decodeFile(f.absolutePath, o)
                     var sample = 1
                     while (o.outWidth / (sample * 2) >= px && o.outHeight / (sample * 2) >= px) sample *= 2
-                    BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
+                    val b = BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
+                    // Phones store the turn in EXIF; without it a portrait shot lies on its side.
+                    val deg = when (runCatching { android.media.ExifInterface(f.absolutePath).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1) }.getOrDefault(1)) {
+                        android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                        android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                        android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                        else -> 0f
+                    }
+                    if (b == null || deg == 0f) b else Bitmap.createBitmap(b, 0, 0, b.width, b.height, android.graphics.Matrix().apply { postRotate(deg) }, true)
                 }
                 else -> null
             }
@@ -136,6 +144,69 @@ object Files {
     }
 
     fun delete(ctx: Context, a: Attachment) { file(ctx, a)?.delete() }
+
+    /** «Переслать»: the file itself through the share sheet. */
+    fun shareIntent(ctx: Context, a: Attachment): Intent? {
+        val f = file(ctx, a) ?: return null
+        val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+        return Intent.createChooser(Intent(Intent.ACTION_SEND).setType(a.mime ?: "*/*").putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null)
+    }
+
+    /** «Сохранить»: a copy into the phone's Pictures / Movies / Music / Download. True when it worked. */
+    suspend fun saveToPhone(ctx: Context, a: Attachment): Boolean = withContext(Dispatchers.IO) {
+        val f = file(ctx, a) ?: return@withContext false
+        // Before Android 10 saving to shared folders needs a storage permission — the share sheet covers those phones.
+        if (android.os.Build.VERSION.SDK_INT < 29) return@withContext false
+        runCatching {
+            val (collection, dir) = when (a.kind) {
+                "photo" -> android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI to android.os.Environment.DIRECTORY_PICTURES
+                "video" -> android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI to android.os.Environment.DIRECTORY_MOVIES
+                "audio" -> android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI to android.os.Environment.DIRECTORY_MUSIC
+                else -> android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI to android.os.Environment.DIRECTORY_DOWNLOADS
+            }
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, a.name.ifBlank { f.name })
+                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, a.mime ?: "application/octet-stream")
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "$dir/Margin")
+            }
+            val uri = ctx.contentResolver.insert(collection, values) ?: return@runCatching false
+            ctx.contentResolver.openOutputStream(uri)?.use { out -> f.inputStream().use { it.copyTo(out) } }
+            true
+        }.getOrDefault(false)
+    }
+
+    /** First pages of a PDF as pictures, for the quick look. */
+    suspend fun pdfPages(ctx: Context, a: Attachment, max: Int = 10, px: Int = 1200): List<Bitmap> = withContext(Dispatchers.IO) {
+        val f = file(ctx, a) ?: return@withContext emptyList()
+        runCatching {
+            android.graphics.pdf.PdfRenderer(android.os.ParcelFileDescriptor.open(f, android.os.ParcelFileDescriptor.MODE_READ_ONLY)).use { r ->
+                (0 until minOf(r.pageCount, max)).map { i ->
+                    r.openPage(i).use { p ->
+                        val k = px.toFloat() / p.width
+                        Bitmap.createBitmap(px, (p.height * k).toInt(), Bitmap.Config.ARGB_8888).also { b ->
+                            b.eraseColor(android.graphics.Color.WHITE); p.render(b, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        }
+                    }
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    /** Plain text files read for the quick look (up to ~200 KB). */
+    suspend fun text(ctx: Context, a: Attachment): String? = withContext(Dispatchers.IO) {
+        val f = file(ctx, a) ?: return@withContext null
+        runCatching { f.inputStream().use { String(it.readNBytesCompat(200_000)) } }.getOrNull()
+    }
+
+    private fun java.io.InputStream.readNBytesCompat(n: Int): ByteArray {
+        val buf = java.io.ByteArrayOutputStream(); val chunk = ByteArray(8192); var left = n
+        while (left > 0) { val r = read(chunk, 0, minOf(chunk.size, left)); if (r < 0) break; buf.write(chunk, 0, r); left -= r }
+        return buf.toByteArray()
+    }
+
+    fun isText(a: Attachment) = (a.mime?.startsWith("text/") == true) || a.name.substringAfterLast('.', "").lowercase() in setOf("txt", "md", "csv", "json", "log", "xml", "html")
+    fun isPdf(a: Attachment) = a.mime == "application/pdf" || a.name.endsWith(".pdf", true)
 }
 
 /** Records 16 kHz mono PCM into a WAV file — the format every audio model accepts. */

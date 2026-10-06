@@ -72,7 +72,6 @@ fun personHistory(p: Person, d: AppData): List<Triple<LocalDate, String, String>
     val out = mutableListOf<Triple<LocalDate, String, String>>()
     d.tasks.filter { p.involvedIn(it) }.forEach { t ->
         t.entries.filter { mentions(it.text) || p.involvedIn(t) }.takeLast(2).forEach { e -> dateOf(e.at)?.let { out += Triple(it, e.text.take(80), L.s.srcTaskEntry) } }
-        t.source?.takeIf { mentions(it) }?.let { out += Triple(LocalDate.parse(t.createdAt), it.take(80), L.s.srcChat) }
     }
     d.notes.forEach { n -> n.entries.filter { mentions(it.text) }.forEach { e -> dateOf(e.at)?.let { out += Triple(it, e.text.take(80), L.s.srcNote + " «${n.title}»") } } }
     return out.distinctBy { it.second }.sortedByDescending { it.first }.take(8)

@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.HourglassEmpty
@@ -210,6 +211,18 @@ fun QuietTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, coun
 
 // ---------------- task card ----------------
 
+/** When a task is: on its own soft ground with an icon, so the eye tells it from the title at once. Late — in accent. */
+@Composable
+fun DatePill(text: String, late: Boolean, timed: Boolean) {
+    val c = M.c
+    Row(Modifier.clip(RoundedCornerShape(50)).background(if (late) c.accentSoft else c.chip).padding(start = 8.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(if (timed) Icons.Outlined.Schedule else Icons.Outlined.CalendarToday, null, tint = if (late) c.accent else c.graphite, modifier = Modifier.size(13.dp))
+        Spacer(Modifier.width(5.dp))
+        Text(text, style = Type.small.copy(color = if (late) c.accent else c.ink, fontSize = 13.5.sp), maxLines = 1)
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TaskMeta(t: Task, showProject: Boolean = true, showIdea: Boolean = false) {
@@ -225,11 +238,7 @@ fun TaskMeta(t: Task, showProject: Boolean = true, showIdea: Boolean = false) {
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
         if (showProject) t.project?.let { Tag(it) }
-        if (whenText != null) Row(verticalAlignment = Alignment.CenterVertically) {
-            MetaIcon(if (t.time != null) Icons.Outlined.Notifications else Icons.Outlined.CalendarToday, if (overdue) c.accent else c.graphite)
-            Spacer(Modifier.width(5.dp))
-            Text(whenText, style = Type.small.copy(color = if (overdue) c.accent else c.ink, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
-        }
+        if (whenText != null) DatePill(whenText, overdue, t.time != null)
         t.promisedTo?.let { Text(s.promised(it), style = Type.small.copy(color = c.graphite)) }
         t.place?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
         if (showIdea && t.noteId != null) Text("✎ " + s.ideaMark, style = Type.small.copy(color = c.graphite))
@@ -312,16 +321,16 @@ fun TaskCard(
 }
 
 @Composable
-fun SubtaskTree(list: List<Subtask>, depth: Int, onToggle: (String) -> Unit, onLong: ((Subtask) -> Unit)? = null) {
+fun SubtaskTree(list: List<Subtask>, depth: Int, onToggle: (String) -> Unit, onLong: ((Subtask) -> Unit)? = null, number: (Subtask) -> Int? = { null }) {
     list.forEach { s ->
-        SubtaskRow(s, depth, { onToggle(s.id) }, onLong?.let { { it(s) } })
+        SubtaskRow(s, depth, { onToggle(s.id) }, onLong?.let { { it(s) } }, if (depth == 0) number(s) else null)
         if (s.children.isNotEmpty()) SubtaskTree(s.children, depth + 1, onToggle, onLong)
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SubtaskRow(s: Subtask, depth: Int, onToggle: () -> Unit, onLong: (() -> Unit)? = null) {
+fun SubtaskRow(s: Subtask, depth: Int, onToggle: () -> Unit, onLong: (() -> Unit)? = null, number: Int? = null) {
     val c = M.c
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -331,6 +340,8 @@ fun SubtaskRow(s: Subtask, depth: Int, onToggle: () -> Unit, onLong: (() -> Unit
             .padding(start = (8 + depth * 22).dp),
     ) {
         CheckCircle(s.done, size = 18.dp, onToggle = onToggle)
+        // The number lets one say «подзадача 2» to the field below.
+        number?.let { Text("$it.", style = Type.small.copy(color = c.faint, fontSize = 13.sp), modifier = Modifier.width(22.dp)) }
         Text(
             s.title + (s.assignee?.let { " — $it" } ?: ""),
             style = Type.body.copy(

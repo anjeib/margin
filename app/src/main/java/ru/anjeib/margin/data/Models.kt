@@ -49,6 +49,8 @@ data class Entry(
     val at: String = nowStamp(),
     val text: String = "",
     val attachments: List<Attachment> = emptyList(),
+    /** One visit to the note: blocks written in the same visit sit under one date line. */
+    val session: String? = null,
     /** A «Список» block in a note: items with ticks (the same shape as subtasks). */
     val items: List<Subtask> = emptyList(),
     val isList: Boolean = false,
@@ -153,6 +155,8 @@ data class Task(
     val source: String? = null,
     /** The note entry (idea) this task grew from, when it came from one. */
     val sourceEntryId: String? = null,
+    /** «утром / днём / вечером» said instead of a time: kept as words (morning, day, afternoon, evening), never turned into 09:00. */
+    val dayPart: String? = null,
     /** [source] was already tidied up (spelling, capitals) for the card. */
     val sourceFixed: Boolean = false,
     /** Where it happens: an address or a place («Ленина 5», «кафе Зерно»). */

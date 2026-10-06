@@ -86,7 +86,6 @@ import java.io.File
 
 /**
  * The one input of the app: text, voice (AI transcription), and attachments behind "+".
- * [keepAudio] keeps the recording itself as an attachment (voice notes); otherwise only its text is used.
  */
 @Composable
 fun SmartComposer(
@@ -95,7 +94,6 @@ fun SmartComposer(
     busy: Boolean,
     onSend: (text: String, files: List<Attachment>) -> Unit,
     modifier: Modifier = Modifier,
-    keepAudio: Boolean = false,
     prefill: String? = null,
     onPrefillUsed: () -> Unit = {},
     onTyping: (Boolean) -> Unit = {},
@@ -145,10 +143,18 @@ fun SmartComposer(
         r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { text = (text.trimEnd() + " " + it).trim() }
     }
 
+    // Dictation is words, not a recording. The recording stays only when asked for: «голосовое: …» / «voice note …».
+    val voiceWord = remember { Regex("^\\s*(голосов\\p{L}*|аудио|voice\\s*note|voice\\s*message)\\s*[:,.—-]?\\s*", RegexOption.IGNORE_CASE) }
     fun gotSpeech(t: String, audio: Attachment) {
-        if (keepAudio) files += audio.copy(transcript = t) else Files.delete(ctx, audio)
+        if (voiceWord.containsMatchIn(t)) {
+            // One block: the player with what was said under it — not the same words twice.
+            val said = t.replace(voiceWord, "").trim().replaceFirstChar { it.uppercaseChar() }
+            onSend(text.trim(), files.toList() + audio.copy(transcript = said.ifBlank { null })); text = ""; files.clear()
+            return
+        }
+        Files.delete(ctx, audio)
         val full = (text.trimEnd() + " " + t).trim()
-        if (settings.voiceSendNow && !keepAudio) { onSend(full, files.toList()); text = ""; files.clear() } else text = full
+        if (settings.voiceSendNow) { onSend(full, files.toList()); text = ""; files.clear() } else text = full
     }
 
     fun startRecording() {

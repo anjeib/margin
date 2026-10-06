@@ -70,11 +70,11 @@ object Assistant {
         Reply with ONE JSON object only: {"reply":"…","actions":[…],"question":{"text":"…","options":["…"]}}
         Leave out every field you don't know or that is empty — never write null, [] or "". reply and question are optional too.
         Each action is an object with "type". Shapes (all fields except type/ids/title/text are optional):
-        {"type":"create_task","title":"…","start":"YYYY-MM-DD","due":"YYYY-MM-DD","time":"HH:MM","remind_at":"YYYY-MM-DDTHH:MM","people":["…"],"project":"…","entry":"…","waiting_for":"…","promised_to":"…","place":"…","note_id":"…","repeat":{"freq":"weekly","interval":1,"days":[2]},"subtasks":[{"title":"…","assignee":"…","children":[…]}]}
+        {"type":"create_task","title":"…","start":"YYYY-MM-DD","due":"YYYY-MM-DD","time":"HH:MM","part":"morning|day|afternoon|evening","remind_at":"YYYY-MM-DDTHH:MM","people":["…"],"project":"…","entry":"…","waiting_for":"…","promised_to":"…","place":"…","note_id":"…","repeat":{"freq":"weekly","interval":1,"days":[2]},"subtasks":[{"title":"…","assignee":"…","children":[…]}]}
         {"type":"add_subtasks","task_id":"…","parent_subtask_id":"…","subtasks":[{"title":"…"}]}
         {"type":"update_task","task_id":"…", + only the changed fields of create_task}
         {"type":"add_entry","task_id":"…","text":"…"}   — a dated record on a task
-        {"type":"complete_task","task_id":"…"}  {"type":"complete_subtask","task_id":"…","subtask_id":"…"}  {"type":"delete_task","task_id":"…"}
+        {"type":"complete_task","task_id":"…"}  {"type":"complete_subtask","task_id":"…","subtask_id":"…"}  {"type":"update_subtask","task_id":"…","subtask_id":"…","title":"…"}  {"type":"delete_subtask","task_id":"…","subtask_id":"…"}  {"type":"delete_task","task_id":"…"}
         {"type":"create_note","title":"…","text":"…","project":"…"}  {"type":"append_note","note_id":"…","text":"…"}  {"type":"update_note","note_id":"…","title":"…","project":"…"}
         {"type":"person","name":"…","about":"…","company":"…","phone":"…","email":"…","telegram":"…","address":"…","personal":"…"}
         {"type":"settings","name":"…","morning":"HH:MM|off","evening":"HH:MM|off"}  — only when the user asks about the app itself
@@ -85,7 +85,7 @@ object Assistant {
         val ideas = if (L.s.aiLanguage == "English") "ideas" else "идеи"
         appendLine("Rules:")
         appendLine("- Turn the user's free text into actions. Titles in the user's language: short, imperative, no final period.")
-        appendLine("- Dates: take exact dates from the Calendar line. \"на этой неделе\" → start=today, due=this Sunday; \"next week\" → next Mon..Sun; \"this month\" → due=month end; \"к пятнице\" → due=that Friday; a weekday = its nearest future date. Times: \"в 15:00\" → time; утром≈09:00, после обеда≈14:00, вечером≈19:00. Never invent precise deadlines; \"когда будет время\" = no dates.")
+        appendLine("- Dates: take exact dates from the Calendar line. \"на этой неделе\" → start=today, due=this Sunday; \"next week\" → next Mon..Sun; \"this month\" → due=month end; \"к пятнице\" → due=that Friday; a weekday = its nearest future date. Times: \"в 15:00\" → time; \"утром / днём / после обеда / вечером\" without a clock time → part (morning/day/afternoon/evening), never a made-up time. Never invent precise deadlines; \"когда будет время\" = no dates.")
         appendLine("- Recurring (\"каждый вторник\", \"по будням\"=days 1–5) → repeat, due = first occurrence.")
         appendLine("- Phone calendar entries are busy time: never plan tasks over them.")
         appendLine("- remind_at only when the user asks to be reminded.")
@@ -109,7 +109,7 @@ object Assistant {
     }
 
     private fun scopeRule(scope: Scope) = when (scope) {
-        is Scope.InTask -> "SCOPE: the user is inside task_id=${scope.taskId}. Everything is about THIS task: changes → update_task; steps → add_subtasks (their steps verbatim; \"разбей на шаги\" alone → 3–6 concrete steps); done → complete; any other info → add_entry, keeping facts (places, addresses, names, numbers) verbatim even if you also add a subtask. No other tasks unless asked."
+        is Scope.InTask -> "SCOPE: the user is inside task_id=${scope.taskId}. Everything is about THIS task: changes → update_task; a change to a step («подзадача 2», «второй шаг») → update_subtask / delete_subtask / complete_subtask with that subtask_id, never the task's own title; steps → add_subtasks (their steps verbatim; \"разбей на шаги\" alone → 3–6 concrete steps); done → complete; any other info → add_entry, keeping facts (places, addresses, names, numbers) verbatim even if you also add a subtask. No other tasks unless asked."
         Scope.Notes -> "SCOPE: Notes section. The text is a note: append_note to the related listed note or create_note with a fitting title and project. A task only if explicitly asked."
         Scope.Main -> ""
     }
@@ -151,8 +151,9 @@ object Assistant {
         taskLine(t)
         t.entries.takeLast(entries).forEach { e -> e.fullText.takeIf { it.isNotBlank() }?.let { x -> appendLine("    · ${e.at.take(10)}: ${x.replace('\n', ' ').take(160)}") } }
         fun sub(list: List<Subtask>, depth: Int) {
-            list.forEach { st ->
-                append("  ".repeat(depth + 1) + "- [subtask_id=${st.id}] ${st.title}")
+            list.forEachIndexed { i, st ->
+                // Top-level steps carry the number the user sees in the card («подзадача 2»).
+                append("  ".repeat(depth + 1) + "- [subtask_id=${st.id}] " + (if (depth == 0) "${i + 1}. " else "") + st.title)
                 st.assignee?.let { append(" ($it)") }
                 if (st.done) append(" [done]")
                 appendLine()
@@ -329,7 +330,7 @@ object Assistant {
         return null
     }
 
-    private val actionTypes = setOf("create_task", "add_subtasks", "update_task", "add_entry", "complete_task", "complete_subtask",
+    private val actionTypes = setOf("create_task", "add_subtasks", "update_task", "add_entry", "complete_task", "complete_subtask", "update_subtask", "delete_subtask",
         "delete_task", "create_note", "append_note", "update_note", "person", "settings")
 
     /** Actions in the shapes small models actually produce: a proper list, one bare action, or {"create_note": {...}}. */
@@ -389,12 +390,16 @@ object Assistant {
         val prefs = mutableMapOf<String, String>()
         // Who did it, for the task's history: a typed command is the user's own hand; the rest is the AI.
         val by = if (plan.local) "you" else "ai"
+        // The weekday check only makes sense when one dated thing was said; several things share the words.
+        val oneDate = plan.actions.count { it.str("due") != null || it.str("start") != null } == 1
         val noteActs = plan.actions.count { it.str("type") == "create_note" || it.str("type") == "append_note" }
         val me = setOf("я", "me", L.s.me.lowercase())
         val said = stems(source)
         val low = source.lowercase()
         val saysWhen = strict.not() || whenCue.containsMatchIn(low)
         val saysTime = strict.not() || timeCue.containsMatchIn(low)
+        // A clock time was said («в 15», «15:30», «в 9 утра») — not only «утром».
+        val saysClock = strict.not() || clockCue.containsMatchIn(low)
         val saysRepeat = strict.not() || repeatCue.containsMatchIn(low)
         val saysOwe = strict.not() || oweCue.containsMatchIn(low)
         val bulk = strict.not() || bulkCue.containsMatchIn(low)
@@ -430,7 +435,7 @@ object Assistant {
                         Task(
                             title = title,
                             start = a.date("start"),
-                            due = a.date("due"),
+                            due = if (strict && oneDate) onSaidWeekday(a.date("due"), source.lowercase()) else a.date("due"),
                             time = a.time("time"),
                             remindAt = a.dateTime("remind_at"),
                             people = a.strList("people"),
@@ -452,7 +457,8 @@ object Assistant {
                     val involved = (raw.people + listOfNotNull(raw.waitingFor, raw.promisedTo)).mapNotNull { who(it) }
                     val t = raw.copy(
                         title = raw.title.withNames(involved),
-                        time = raw.time?.takeIf { saysTime }, remindAt = raw.remindAt?.takeIf { raw.time == null || saysTime || "remind_at" in a },
+                        time = raw.time?.takeIf { saysTime && saysClock }, remindAt = raw.remindAt?.takeIf { raw.time == null || (saysTime && saysClock) || "remind_at" in a },
+                        dayPart = if (saysClock) null else (a.str("part")?.takeIf { it in dayParts } ?: partOf(low)),
                         people = ((raw.people + listOfNotNull(raw.waitingFor.takeIf { errand })).mapNotNull { who(it) }).distinct(),
                         waitingFor = if (errand) null else who(raw.waitingFor), promisedTo = who(raw.promisedTo), subtasks = subs(raw.subtasks, involved),
                     ).onSchedule(source).let { if (it.time == null && raw.time != null) it.copy(remindAt = null) else it }
@@ -488,13 +494,16 @@ object Assistant {
                     val newWait = if (has("waiting_for", saysOwe || a.str("waiting_for") == null)) who(a.str("waiting_for")) else old.waitingFor
                     val newPromise = if (has("promised_to", saysOwe || a.str("promised_to") == null)) who(a.str("promised_to")) else old.promisedTo
                     val dated = has("due", saysWhen) || has("start", saysWhen)
-                    val timed = has("time", saysTime)
+                    val timed = has("time", saysTime && saysClock)
+                    val parted = !saysClock && (a.str("part") in dayParts || partOf(low) != null) && saysTime
                     var next = withAutoReminder(
                         old.copy(
-                            title = if ("title" in a) a.str("title")?.trim()?.trimEnd('.')?.sentence()?.withNames(old.people + listOfNotNull(old.waitingFor, old.promisedTo)) ?: old.title else old.title,
+                            // «измени подзадачу…» is about a step: the task keeps its name.
+                            title = if ("title" in a && !(strict && stepTalk.containsMatchIn(low))) a.str("title")?.trim()?.trimEnd('.')?.sentence()?.withNames(old.people + listOfNotNull(old.waitingFor, old.promisedTo)) ?: old.title else old.title,
                             start = if (has("start", saysWhen)) a.date("start") else old.start,
-                            due = if (has("due", saysWhen)) a.date("due") else old.due,
-                            time = if (timed) a.time("time") else old.time,
+                            due = if (has("due", saysWhen)) (if (strict && oneDate) onSaidWeekday(a.date("due"), low) else a.date("due")) else old.due,
+                            time = if (timed) a.time("time") else if (parted) null else old.time,
+                            dayPart = if (timed) null else if (parted) (a.str("part")?.takeIf { it in dayParts } ?: partOf(low)) else old.dayPart,
                             remindAt = if ("remind_at" in a) a.dateTime("remind_at") else if (dated || timed) null else old.remindAt,
                             people = if ("people" in a) a.strList("people").mapNotNull { who(it) }.distinct() else old.people,
                             project = if ("project" in a) a.project() else old.project,
@@ -544,6 +553,16 @@ object Assistant {
                     val next = target.nextOccurrence()
                     d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, doneAt = LocalDate.now().toString()).logged(it, by) else it } + listOfNotNull(next?.copy(history = emptyList())?.logged(null, by)))
                     touched += id; completed++
+                }
+                "update_subtask", "delete_subtask" -> {
+                    val id = a.str("task_id") ?: continue
+                    val sid = a.str("subtask_id") ?: continue
+                    val target = d.tasks.find { it.id == id } ?: continue
+                    if (target.subtasks.findSub(sid) == null || (strict && !asked(target))) continue
+                    val title = a.str("title")?.trim()?.trimEnd('.')?.sentence()
+                    if (a.str("type") == "update_subtask" && title == null) continue
+                    d = d.copy(tasks = d.tasks.map { t0 -> if (t0.id != id) t0 else t0.copy(subtasks = t0.subtasks.mapTree(sid) { s -> if (title != null) s.copy(title = title) else null }) })
+                    touched += id; updated++
                 }
                 "complete_subtask" -> {
                     val id = a.str("task_id") ?: continue
@@ -667,6 +686,31 @@ object Assistant {
 
     // What the user's words are about — so the model can't quietly change what wasn't mentioned.
     private val whenCue = Regex("сегодн|завтра|вчера|понедельн|вторник|сред[аеуы]|четверг|пятниц|суббот|воскресен|\\b(пн|вт|ср|чт|пт|сб|вс)\\b|числ|недел|месяц|январ|феврал|март|апрел|ма[йя]\\b|июн|июл|август|сентябр|октябр|ноябр|декабр|через|после|\\bдо\\b|\\bк\\s|перенес|отлож|сдвин|срок|дат|\\d{1,2}[./]\\d{1,2}|\\d{1,2}\\s*-?\\s*(го|е|ого)\\b|\\d{1,2}\\s+(янв|фев|мар|апр|мая|июн|июл|авг|сен|окт|ноя|дек)|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|week|month|next|until|\\bby\\b|move|postpone|date|deadline")
+    private val clockCue = Regex("\\d{1,2}[:.]\\d{2}|\\bв\\s?\\d{1,2}\\b|\\b\\d{1,2}\\s*(ч|час)|полдень|полноч|\\b\\d{1,2}\\s?(am|pm)\\b|\\bat\\s?\\d|o'clock")
+    /** The one weekday named in the words («до среды», «в пятницу», «by Friday»), if exactly one is. */
+    private val weekdayWords = listOf("понедельник|monday" to 1, "вторник|tuesday" to 2, "сред[аеуы]|wednesday" to 3, "четверг|thursday" to 4,
+        "пятниц|friday" to 5, "суббот|saturday" to 6, "воскресен|sunday" to 7).map { (r, d) -> Regex(r) to d }
+    private fun weekdayOf(low: String): Int? {
+        if (Regex("следующ|через\\s+недел|next\\s+week|каждый|кажд|по\\s+(понедельн|вторник|сред|четверг|пятниц|суббот|воскресен)").containsMatchIn(low)) return null
+        return weekdayWords.filter { it.first.containsMatchIn(low) }.map { it.second }.distinct().singleOrNull()
+    }
+    /** Small models miscount weekdays: the date has to fall on the weekday the user said. */
+    private fun onSaidWeekday(date: String?, low: String): String? {
+        val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return date
+        val wd = weekdayOf(low) ?: return date
+        if (d.dayOfWeek.value == wd) return date
+        return LocalDate.now().with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.of(wd))).toString()
+    }
+    private val stepTalk = Regex("подзадач|шаг[аеиу]?\\b|пункт|subtask|step")
+    private val dayParts = setOf("morning", "day", "afternoon", "evening", "night")
+    private fun partOf(low: String): String? = when {
+        Regex("утр|morning").containsMatchIn(low) -> "morning"
+        Regex("после обеда|после обед|afternoon").containsMatchIn(low) -> "afternoon"
+        Regex("вечер|evening").containsMatchIn(low) -> "evening"
+        Regex("ночь|ночью|night").containsMatchIn(low) -> "night"
+        Regex("днём|днем|during the day").containsMatchIn(low) -> "day"
+        else -> null
+    }
     private val timeCue = Regex("\\d{1,2}[:.]\\d{2}|\\bв\\s?\\d{1,2}\\b|утр|вечер|днём|днем|обед|ночь|ночи|полдень|полноч|час|время|\\bam\\b|\\bpm\\b|morning|evening|noon|night|o'clock|time|\\bat\\s?\\d")
     private val repeatCue = Regex("кажд|ежедн|еженед|ежемес|ежегод|по будн|по выходн|по (понедельн|вторн|сред|четверг|пятниц|суббот|воскресен)|раз в|повтор|every|daily|weekly|monthly|yearly|repeat")
     private val oweCue = Regex("жд[уёеа]|ждать|пришл|пришлёт|пришлет|должен|должна|должны|обещал|вернёт|вернет|ответит|сдаст|сдаёт|сдает|скинет|подготовит|сделает|отправит|привез|оплатит|wait|will send|owes?\\b|promis|expect")
