@@ -290,13 +290,15 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 val recent = before.chat.takeLast(4).flatMap { it.taskIds }.toSet()
                 val images = files.filter { it.kind == "photo" }.take(3).mapNotNull { Files.imageDataUrl(ctx, it) }
                 // Smart requests (reviews, "what next") need the overview; everything else gets focused context.
-                val (plan, cost) = Processor.askPlan(
+                val (plan0, cost) = Processor.askPlan(
                     s,
                     Assistant.systemPrompt(before, s, scope, query = if (smart) null else t + " " + history.joinToString(" ") { it.second }, recent = recent),
                     history + ("user" to Assistant.userMessage(t) + (cmd?.let { Commands.hint(it) }?.let { "\n$it" } ?: "")),
                     smart = smart, complex = Assistant.isComplex(t, scope), images = images,
                 )
                 prefs.addSpend(cost)
+                // «Исправить …» changes what exists — whatever the model thought, nothing new is made.
+                val plan = if (cmd?.what == "fix") plan0.copy(actions = plan0.actions.filterNot { a -> a["type"]?.toString()?.trim('"')?.startsWith("create_") == true }) else plan0
                 when {
                     scope != Scope.Main -> applyScoped(plan, scope, files, source)
                     plan.actions.isEmpty() -> { applyPlan(plan, files, source = source, strict = !smart); }
@@ -656,6 +658,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** Cancel before anything was saved: the bubble simply goes away. */
     fun rejectPending() {
+        if (_pending.value?.plan?.local == false) { count("ai:main"); count("undo:main") }
         autoJob?.cancel()
         val p = _pending.value
         _pending.value = null
@@ -697,7 +700,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             taskIds = applied.touchedTasks,
             options = plan.question?.options ?: emptyList(),
         ).let { if (plan.reply != null && plan.question != null) it.copy(text = plan.reply + "\n" + plan.question.text) else it }
-        if (applied.caption != null) snapshots[msg.id] = current
+        if (applied.caption != null) { snapshots[msg.id] = current; if (!plan.local) aiChanged(msg.id, "main") }
         store.replace(withFiles.copy(chat = (withFiles.chat + msg).takeLast(60)))
         tidyNewNotes(applied, current)
         if (silentUser) _trayFrom.value = msg.id
@@ -711,6 +714,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val next = attachTo(applied, scope, files, current)
         val undoId = newId()
         snapshots[undoId] = current
+        if (!plan.local && (applied.touchedTasks.isNotEmpty() || applied.touchedNotes.isNotEmpty())) aiChanged(undoId, if (scope is Scope.InTask) "task" else "notes")
         store.replace(next)
         tidyNewNotes(applied, current)
         val text = listOfNotNull(applied.caption, plan.reply, plan.question?.text).joinToString(" · ").ifBlank { L.s.saved }
@@ -735,7 +739,19 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         store.update { it.copy(chat = (it.chat + m).takeLast(60)) }
     }
 
+    // ---------------- how often the AI gets it wrong: an undo right after its change ----------------
+
+    /** Undo ids of AI changes → where they happened (main / task / notes). */
+    private val aiChanges = mutableMapOf<String, String>()
+    private val stats get() = ctx.getSharedPreferences("stats", android.content.Context.MODE_PRIVATE)
+    private fun count(key: String) { stats.edit().putInt(key, stats.getInt(key, 0) + 1).apply() }
+    private fun aiChanged(id: String, where: String) { aiChanges[id] = where; count("ai:$where") }
+
+    /** «ИИ: 120 изменений, отменено 3» per place — read in the developer section. */
+    fun aiStats(): List<Triple<String, Int, Int>> = listOf("main", "task", "notes").map { w -> Triple(w, stats.getInt("ai:$w", 0), stats.getInt("undo:$w", 0)) }
+
     fun undo(id: String) {
+        aiChanges.remove(id)?.let { count("undo:$it") }
         val snap = snapshots.remove(id) ?: return
         store.update { d ->
             snap.copy(

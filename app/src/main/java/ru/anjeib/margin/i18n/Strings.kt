@@ -9,7 +9,31 @@ import ru.anjeib.margin.data.shortLabel
 enum class Lang { Ru, En }
 
 /** All user-facing text. One instance per language; the UI never mixes them. */
+/** One part of «Помощь»: a line of explanation, examples to say, and «what → what it does» pairs. */
+data class HelpSection(val title: String, val text: String, val examples: List<String> = emptyList(), val pairs: List<Pair<String, String>> = emptyList())
+
 interface Strings {
+    // help & tour
+    val helpTitle: String
+    val helpIntro: String
+    val helpSections: List<HelpSection>
+    val tourWriteTitle: String
+    val tourWriteText: String
+    val tourWriteExample: String
+    val tourGesturesTitle: String
+    val tourGesturesText: String
+    val tourSwipeDone: String
+    val tourSwipeLater: String
+    val tourFixTitle: String
+    val tourFixText: String
+    val tourCommands: List<String>
+    val tourMore: String
+    val tourDemoCall: String
+    val tourDemoEdits: String
+    val tourDemoName: String
+    val aiUndoTitle: String
+    val inTaskWord: String
+    fun aiUndoLine(where: String, n: Int, undone: Int): String
     // forwarding
     val close: String
     val connect: String
@@ -482,6 +506,78 @@ interface Strings {
 }
 
 object Ru : Strings {
+    override val helpTitle = "Помощь"
+    override val helpIntro = "Коротко о том, как устроен Margin."
+    override val helpSections = listOf(
+        HelpSection("Как писать", "Обычными словами или голосом. В одном сообщении может быть несколько дел — Margin разложит их сам.",
+            examples = listOf("Завтра в 15 созвон с Мариной", "Лена до пятницы пришлёт график, я обещал Виктору оплату до 10-го", "Идея: на сайте нужен калькулятор цен")),
+        HelpSection("Разделы", "", pairs = listOf(
+            "Задачи" to "дела со сроком и без: Сегодня, Неделя, Все",
+            "Заметки" to "мысли, идеи, фото, голосовые, списки",
+            "Контакты" to "люди и компании: телефон, почта, обещания, общие дела",
+            "Проекты" to "всё по одной теме: задачи, заметки, люди",
+            "Входящие" to "ещё не разобранное: без интернета и пересланное",
+            "Календарь" to "месяц и число дел в каждом дне",
+            "Архив" to "убранные заметки и контакты, можно вернуть",
+        )),
+        HelpSection("Обещания", "Margin отмечает, кто кому что должен. На главной — обещания на ближайшие три дня и просроченные.", pairs = listOf(
+            "«Марина пришлёт правки до среды»" to "Обещание · Вам от Марины",
+            "«Обещал Виктору оплату до 10-го»" to "Обещание · Виктору от Вас",
+            "⧗ песочные часы" to "нажмите, когда получили",
+        )),
+        HelpSection("Внутри задачи", "Всё, что вы пишете в карточке, относится к этой задаче.",
+            examples = listOf("Подзадачи: купить полис, взять паспорт", "Подзадача 2 готова", "Перенеси на пятницу в 15:00", "Место: Ленина, 5", "Это у доктора Иванова, не забыть полис")),
+        HelpSection("Внутри заметки", "Написанное добавляется новым блоком.", pairs = listOf(
+            "«+»" to "фото, видео, голосовое, файл, контакт, список",
+            "нажатие на блок" to "вставить рядом",
+            "удержание" to "изменить, подпись, удалить",
+            "«В задачу»" to "сделать из идеи задачу",
+        )),
+        HelpSection("Команды", "Если Margin понял не так — скажите прямо. Команды понимаются сразу, без ИИ.", pairs = listOf(
+            "Добавить задачу: …" to "новая задача",
+            "Добавить заметку: …" to "новая заметка",
+            "Добавить контакт: …" to "человек или компания",
+            "Добавить подзадачу: …" to "в открытую задачу",
+            "Исправить: …" to "изменить существующее, ничего нового",
+            "Место / Время / Телефон: …" to "одно поле задачи",
+        )),
+        HelpSection("Жесты", "", pairs = listOf(
+            "вправо по задаче" to "готово",
+            "влево по задаче" to "отложить: завтра, неделя, месяц, свой срок",
+            "влево по заметке, контакту" to "в архив",
+            "вправо по заметке, контакту" to "удалить",
+            "«Отменить»" to "есть под каждым изменением несколько секунд",
+        )),
+        HelpSection("Связи", "Задача помнит, откуда пришла: «↳ из сообщения» или идея из заметки. В карточке — «Связи»: люди, их другие обещания, проект."),
+        HelpSection("Пересылка", "Настройки → «Пересылка в Margin».", pairs = listOf(
+            "Telegram" to "свой бот: пересылайте ему сообщения",
+            "Почта" to "перешлите письмо на свой же адрес",
+            "MAX" to "«Копировать» → в Margin «Вставить скопированное»",
+            "Любое приложение" to "«Поделиться» или выделить текст → «В Margin»",
+        )),
+        HelpSection("Голос и файлы", "", pairs = listOf(
+            "микрофон" to "диктовка — сразу текстом",
+            "«+» → «Голосовое»" to "запись сохраняется с расшифровкой",
+            "фото → «Распознать»" to "текст, визитка в контакт, доска в задачи",
+        )),
+    )
+    override val tourWriteTitle = "Пишите как думаете"
+    override val tourWriteText = "Словами или голосом — Margin сам разложит на задачи, сроки и обещания."
+    override val tourWriteExample = "Завтра в 15 созвон с Мариной, она пришлёт правки до среды"
+    override val tourGesturesTitle = "Жесты"
+    override val tourGesturesText = "Нажатие открывает карточку задачи — всё, что пишете в ней, относится к этой задаче."
+    override val tourSwipeDone = "→ вправо — готово"
+    override val tourSwipeLater = "← влево — отложить"
+    override val tourFixTitle = "Если понял не так"
+    override val tourFixText = "Под каждым изменением есть «Отменить». Или скажите прямо:"
+    override val tourCommands = listOf("Добавить задачу: …", "Добавить заметку: …", "Добавить контакт: …", "Исправить: …")
+    override val tourMore = "Подробнее — в меню, «Помощь»."
+    override val tourDemoCall = "Созвон с Мариной"
+    override val tourDemoEdits = "Получить правки от Марины"
+    override val tourDemoName = "Марина"
+    override val aiUndoTitle = "Отмены после ИИ"
+    override val inTaskWord = "В задаче"
+    override fun aiUndoLine(where: String, n: Int, undone: Int) = "$where: $undone из $n" + if (n > 0) " (${undone * 100 / n}%)" else ""
     override val close = "Закрыть"
     override val connect = "Подключить"
     override val disconnect = "Отключить"
@@ -951,6 +1047,78 @@ object Ru : Strings {
 }
 
 object En : Strings {
+    override val helpTitle = "Help"
+    override val helpIntro = "How Margin works, in short."
+    override val helpSections = listOf(
+        HelpSection("How to write", "In plain words or by voice. One message can hold several things — Margin sorts them out.",
+            examples = listOf("Call with Marina tomorrow at 3 pm", "Lena sends the schedule by Friday, I promised Victor the payment by the 10th", "Idea: the site needs a price calculator")),
+        HelpSection("Sections", "", pairs = listOf(
+            "Tasks" to "with or without dates: Today, Week, All",
+            "Notes" to "thoughts, ideas, photos, voice, lists",
+            "Contacts" to "people and companies: phone, email, promises, shared tasks",
+            "Projects" to "everything on one topic: tasks, notes, people",
+            "Inbox" to "not sorted yet: offline and forwarded",
+            "Calendar" to "the month and how much each day holds",
+            "Archive" to "notes and contacts put away, can come back",
+        )),
+        HelpSection("Promises", "Margin keeps track of who owes whom. The main screen shows promises due within three days and late ones.", pairs = listOf(
+            "“Marina sends the edits by Wednesday”" to "Promise · to you from Marina",
+            "“Promised Victor the payment by the 10th”" to "Promise · to Victor from you",
+            "⧗ hourglass" to "tap when you got it",
+        )),
+        HelpSection("Inside a task", "Whatever you write in the card is about this task.",
+            examples = listOf("Subtasks: buy the policy, take the passport", "Subtask 2 done", "Move to Friday 3 pm", "Place: 5 Lenina St", "It’s at Dr Ivanov’s, don’t forget the policy")),
+        HelpSection("Inside a note", "What you write becomes a new block.", pairs = listOf(
+            "“+”" to "photo, video, voice, file, contact, list",
+            "tap a block" to "insert next to it",
+            "hold" to "edit, caption, delete",
+            "“To task”" to "turn an idea into a task",
+        )),
+        HelpSection("Commands", "If Margin got it wrong — say it directly. Commands are understood at once, without AI.", pairs = listOf(
+            "Add task: …" to "a new task",
+            "Add note: …" to "a new note",
+            "Add contact: …" to "a person or a company",
+            "Add subtask: …" to "to the open task",
+            "Fix: …" to "change what exists, nothing new",
+            "Place / Time / Phone: …" to "one field of the task",
+        )),
+        HelpSection("Gestures", "", pairs = listOf(
+            "right on a task" to "done",
+            "left on a task" to "put off: tomorrow, week, month, a date",
+            "left on a note, contact" to "archive",
+            "right on a note, contact" to "delete",
+            "“Undo”" to "under every change for a few seconds",
+        )),
+        HelpSection("Links", "A task remembers where it came from: “↳ from a message” or an idea in a note. The card shows “Links”: people, their other promises, the project."),
+        HelpSection("Forwarding", "Settings → “Forwarding to Margin”.", pairs = listOf(
+            "Telegram" to "your own bot: forward messages to it",
+            "Mail" to "forward a letter to your own address",
+            "MAX" to "“Copy” → in Margin “Paste what you copied”",
+            "Any app" to "“Share” or select text → “To Margin”",
+        )),
+        HelpSection("Voice and files", "", pairs = listOf(
+            "mic" to "dictation — straight to text",
+            "“+” → “Voice”" to "a recording kept with its transcript",
+            "photo → “Recognize”" to "text, a business card to a contact, a whiteboard to tasks",
+        )),
+    )
+    override val tourWriteTitle = "Write as you think"
+    override val tourWriteText = "In words or by voice — Margin turns it into tasks, dates and promises."
+    override val tourWriteExample = "Call with Marina tomorrow at 3 pm, she sends the edits by Wednesday"
+    override val tourGesturesTitle = "Gestures"
+    override val tourGesturesText = "A tap opens the task card — whatever you write there is about that task."
+    override val tourSwipeDone = "→ right — done"
+    override val tourSwipeLater = "← left — put off"
+    override val tourFixTitle = "If it got it wrong"
+    override val tourFixText = "Every change has “Undo”. Or say it directly:"
+    override val tourCommands = listOf("Add task: …", "Add note: …", "Add contact: …", "Fix: …")
+    override val tourMore = "More in the menu, “Help”."
+    override val tourDemoCall = "Call with Marina"
+    override val tourDemoEdits = "Get the edits from Marina"
+    override val tourDemoName = "Marina"
+    override val aiUndoTitle = "Undone after AI"
+    override val inTaskWord = "In a task"
+    override fun aiUndoLine(where: String, n: Int, undone: Int) = "$where: $undone of $n" + if (n > 0) " (${undone * 100 / n}%)" else ""
     override val close = "Close"
     override val connect = "Connect"
     override val disconnect = "Disconnect"

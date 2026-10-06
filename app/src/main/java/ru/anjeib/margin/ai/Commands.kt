@@ -22,6 +22,7 @@ object Commands {
         "phone" to "телефон\\p{L}*|номер(?:а)?|phone",
         "email" to "почт[уаы]|e-?mail|имейл",
         "telegram" to "телеграм\\p{L}*|telegram|тг",
+        "contact" to "контакт\\p{L}*|contacts?",
         "people" to "участник\\p{L}*|человек\\p{L}*|people|person",
         "project" to "проект\\p{L}*|project",
         "repeat" to "повтор\\p{L}*|repeat",
@@ -52,8 +53,12 @@ object Commands {
         return null
     }
 
+    /** «Исправить: перенеси созвон на пятницу» — change what exists, never make anything new. */
+    private val fix = Regex("^(?:исправ\\p{L}*|поправ\\p{L}*|fix|correct)\\s*[:—–\\-]?\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+
     fun parse(text: String): Command? {
         val t = text.trim()
+        fix.find(t)?.let { return Command("fix", it.groupValues[1].trim()) }
         for ((what, r) in withVerb + withColon) {
             val m = r.find(t) ?: continue
             return Command(what, m.groupValues[1].trim().trim('«', '»', '"').trim())
@@ -77,6 +82,8 @@ object Commands {
 
     /** A hint for the AI when the command needs its understanding (dates, which task). */
     fun hint(c: Command): String? = when (c.what) {
+        "fix" -> "[The user explicitly asked to CHANGE something that already exists: \"${c.value}\". Only update_task / update_subtask / append_note / person on the existing item they mean; never create a new task or note.]"
+        "contact" -> "[The user explicitly asked to add a CONTACT (a person or a company): \"${c.value}\". One person action with everything said (name, about, company, phone, email, telegram, address); no tasks, no notes.]"
         "task" -> "[The user explicitly asked to create exactly ONE task: \"${c.value}\". No notes, no other changes.]"
         "subtask" -> "[The user explicitly asked to add subtasks (add_subtasks) to the task they mean: \"${c.value}\". Nothing else.]"
         "note" -> "[The user explicitly asked for a NOTE: \"${c.value}\". create_note/append_note only.]"

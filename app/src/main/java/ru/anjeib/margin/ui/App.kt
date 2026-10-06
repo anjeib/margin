@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.PeopleOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.TaskAlt
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
@@ -79,6 +80,7 @@ private const val TASKS = "tasks"
 private const val NOTES = "notes"
 private const val PEOPLE = "people"
 private const val SETTINGS = "settings"
+private const val HELP = "help"
 private const val INBOX = "inbox"
 private const val PROJECTS = "projects"
 private const val CALENDAR = "calendar"
@@ -162,6 +164,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             CALENDAR -> CalendarScreen(data, vm, onOpenTask = { openTask = it }, contentPadding = pad)
                             ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad)
                             SETTINGS -> SettingsScreen(settings, vm, pad)
+                            HELP -> HelpScreen(pad)
                             INBOX -> InboxScreen(data, vm, onOpenNote = { openNote = it }, contentPadding = pad)
                         }
                     }
@@ -325,6 +328,7 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
             // Settings at the bottom, out of the way.
             Spacer(Modifier.height(8.dp))
             NavRow(Icons.Outlined.Settings, s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
+            NavRow(Icons.AutoMirrored.Outlined.HelpOutline, s.helpTitle, "", screen == HELP, small = true) { onGo(HELP, null) }
         }
     }
 }

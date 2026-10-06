@@ -189,6 +189,15 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             Divider()
             val spent = if (settings.spentMonth == YearMonth.now().toString()) settings.spentRub else 0.0
             ValueRow(s.spentMonth, null, (if (ya) "" else "≈ ") + "%.2f ₽".format(java.util.Locale.US, spent), chevron = false) {}
+            Divider()
+            // How often an AI change was undone right away — where Margin misunderstands most.
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Text(s.aiUndoTitle, style = Type.body.copy(color = c.ink))
+                vm.aiStats().forEach { (w, n, u) ->
+                    Text(s.aiUndoLine(when (w) { "main" -> s.tasks; "task" -> s.inTaskWord; else -> s.notes }, n, u),
+                        style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
+                }
+            }
                     Divider()
             ToggleRow(s.voiceAi, s.voiceAiHint, settings.voiceAi) { v -> vm.updateSettings { it.copy(voiceAi = v) } }
             Divider()
