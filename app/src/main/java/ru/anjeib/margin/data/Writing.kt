@@ -26,3 +26,17 @@ fun String.withNames(names: Collection<String>): String {
 
 /** A person's name as it should read: «тимур» → «Тимур», «анна-мария» → «Анна-Мария». */
 fun String.properName(): String = trim().split('-').joinToString("-") { p -> p.replaceFirstChar { it.uppercaseChar() } }
+
+/**
+ * An address as it is written: «Ленина 5» → «Ленина, 5», «ул Мира 12к2» → «ул Мира, 12к2».
+ * Only the house number gets its comma; a city or anything already punctuated is left as said.
+ */
+fun String.address(): String {
+    val s = trim().replace(Regex("\\s+"), " ")
+    if (s.isEmpty()) return s
+    return s.replace(Regex("(\\p{L}[\\p{L}.\\-]*)\\s+(д\\.?\\s*)?(\\d+[\\p{L}]?(?:[/к-]\\s?\\d+\\p{L}?)?)(?=$|[\\s,;])")) { m ->
+        val word = m.groupValues[1]
+        // «5 мая», «2 этаж», «10 мин» are not addresses; a word right before a number is a street.
+        if (m.range.first > 0 && s[m.range.first - 1] == ',') m.value else "$word, ${m.groupValues[2]}${m.groupValues[3]}"
+    }.replace(",,", ",").sentence()
+}

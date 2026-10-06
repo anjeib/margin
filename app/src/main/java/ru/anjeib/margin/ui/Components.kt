@@ -49,6 +49,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -378,4 +383,41 @@ fun Countdown(running: Boolean, durationMs: Long, key: Any) {
     Box(Modifier.fillMaxWidth().height(2.dp).background(c.hairline)) {
         if (running) Box(Modifier.fillMaxWidth(f).height(2.dp).background(c.accent))
     }
+}
+
+/**
+ * A row that answers a swipe: to the left [left] (a soft action — «В архив»), to the right [right] («Удалить»).
+ * The row springs back; the list itself shows what changed, and «Отменить» is offered below.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SwipeActions(
+    left: Pair<String, () -> Unit>?,
+    right: Pair<String, () -> Unit>?,
+    modifier: Modifier = Modifier,
+    radius: Int = 18,
+    content: @Composable () -> Unit,
+) {
+    val c = M.c
+    val state = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
+        when (v) {
+            SwipeToDismissBoxValue.EndToStart -> left?.second?.invoke()
+            SwipeToDismissBoxValue.StartToEnd -> right?.second?.invoke()
+            else -> {}
+        }
+        false
+    })
+    SwipeToDismissBox(
+        state = state, modifier = modifier,
+        enableDismissFromEndToStart = left != null, enableDismissFromStartToEnd = right != null,
+        backgroundContent = {
+            val dir = state.dismissDirection
+            val toEnd = dir == SwipeToDismissBoxValue.StartToEnd
+            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(radius.dp))
+                .background(if (dir == SwipeToDismissBoxValue.Settled) c.bg else if (toEnd) c.accent else c.ink).padding(horizontal = 22.dp),
+                contentAlignment = if (toEnd) Alignment.CenterStart else Alignment.CenterEnd) {
+                if (dir != SwipeToDismissBoxValue.Settled) Text((if (toEnd) right?.first else left?.first).orEmpty(), style = Type.tab.copy(color = c.bg))
+            }
+        },
+    ) { content() }
 }

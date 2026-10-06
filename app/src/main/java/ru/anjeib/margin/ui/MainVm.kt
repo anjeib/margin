@@ -20,6 +20,7 @@ import ru.anjeib.margin.ai.Processor
 import ru.anjeib.margin.ai.Scope
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.logged
+import ru.anjeib.margin.data.address
 import ru.anjeib.margin.data.properName
 import ru.anjeib.margin.data.sentence
 import ru.anjeib.margin.data.withNames
@@ -484,7 +485,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val v = value?.trim()?.ifBlank { null }
         when (what) {
             "people" -> n.copy(people = (n.people + Commands.items(v.orEmpty()).map { it.properName() }).distinct())
-            "place" -> n.copy(place = v)
+            "place" -> n.copy(place = v?.address())
             "project" -> n.copy(project = v?.removePrefix("#")?.lowercase())
             "remind" -> n.copy(remindAt = v)
             else -> n
@@ -985,6 +986,43 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         n.copy(entries = n.entries.filterNot { it.id == entryId })
     }
 
+    // ---------------- swipes: archive and delete, each with «Отменить» ----------------
+
+    fun archiveNote(id: String, on: Boolean = true) {
+        val before = data.value
+        store.update { d -> d.copy(notes = d.notes.map { if (it.id == id) it.copy(archived = on) else it }) }
+        offerUndo(before, if (on) L.s.archivedOne else L.s.restoredOne)
+    }
+
+    fun archivePerson(id: String, on: Boolean = true) {
+        val before = data.value
+        store.update { d -> d.copy(persons = d.persons.map { if (it.id == id) it.copy(archived = on) else it }) }
+        offerUndo(before, if (on) L.s.archivedOne else L.s.restoredOne)
+    }
+
+    /** Deleting by swipe keeps the files until the undo window has passed — so «Отменить» brings everything back. */
+    fun removeNote(id: String) {
+        val before = data.value
+        store.update { d -> d.copy(notes = d.notes.filterNot { it.id == id }, tasks = d.tasks.map { if (it.noteId == id) it.copy(noteId = null) else it }) }
+        offerUndo(before, L.s.deletedOne)
+        val files = before.notes.find { it.id == id }?.entries?.flatMap { it.attachments }.orEmpty()
+        viewModelScope.launch { kotlinx.coroutines.delay(9000); if (data.value.notes.none { it.id == id }) files.forEach { Files.delete(ctx, it) } }
+    }
+
+    fun removePerson(id: String) {
+        val before = data.value
+        store.update { d -> d.copy(persons = d.persons.filterNot { it.id == id }) }
+        offerUndo(before, L.s.deletedOne)
+    }
+
+    fun removeEntry(owner: String, id: String) {
+        val before = data.value
+        val files = entriesOf(owner).find { it.id == id }?.attachments.orEmpty()
+        editEntries(owner) { l -> l.filterNot { it.id == id } }
+        offerUndo(before, L.s.deletedOne)
+        viewModelScope.launch { kotlinx.coroutines.delay(9000); if (entriesOf(owner).none { it.id == id }) files.forEach { Files.delete(ctx, it) } }
+    }
+
     fun deleteNote(id: String) = store.update { d ->
         d.notes.find { it.id == id }?.entries?.flatMap { it.attachments }?.forEach { Files.delete(ctx, it) }
         d.copy(notes = d.notes.filterNot { it.id == id }, tasks = d.tasks.map { if (it.noteId == id) it.copy(noteId = null) else it })
@@ -1008,7 +1046,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             "company" -> p.copy(company = v)
             "phone" -> p.copy(phone = v)
             "email" -> p.copy(email = v)
-            "address" -> p.copy(address = v)
+            "address" -> p.copy(address = v?.address())
             "max" -> p.copy(max = v)
             "telegram" -> p.copy(telegram = v?.removePrefix("https://t.me/")?.removePrefix("@")?.let { "@$it" })
             "personal" -> p.copy(personal = value.lines().map { it.trim() }.filter { it.isNotEmpty() }.map { it.sentence() })

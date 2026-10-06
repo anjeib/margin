@@ -134,9 +134,11 @@ fun BlockStream(
             // One visit — one record: a hairline and the date only where a new visit starts.
             val newSession = i == 0 || e.session == null || e.session != entries[i - 1].session
             if (newSession && i > 0) Hairline(Modifier.padding(top = 6.dp, bottom = 2.dp))
+            // Swipe a block left to delete it (with «Отменить»).
+            SwipeActions(left = s.delete to { if (active == e.id) active = null; vm.removeEntry(owner, e.id) }, right = null, radius = 12) {
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                    .background(if (on) c.chip.copy(alpha = 0.45f) else Color.Transparent)
+                    .background(if (on) c.chip.copy(alpha = 0.45f) else c.bg)
                     .combinedClickable(onClick = { active = if (on) null else e.id; if (!on) inserting = null }, onLongClick = { active = e.id; menuFor = e.id })
                     .padding(horizontal = 6.dp, vertical = 4.dp),
             ) {
@@ -176,8 +178,9 @@ fun BlockStream(
                     DropdownMenuItem(text = { Text(s.insertBelow, style = Type.body) }, onClick = { menuFor = null; active = e.id; inserting = e.id })
                     if (i > 0) DropdownMenuItem(text = { Text(s.moveUp, style = Type.body) }, onClick = { menuFor = null; vm.moveEntry(owner, e.id, -1) })
                     if (i < entries.lastIndex) DropdownMenuItem(text = { Text(s.moveDown, style = Type.body) }, onClick = { menuFor = null; vm.moveEntry(owner, e.id, 1) })
-                    DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menuFor = null; active = null; vm.deleteEntry(owner, e.id) })
+                    DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menuFor = null; active = null; vm.removeEntry(owner, e.id) })
                 }
+            }
             }
         }
     }

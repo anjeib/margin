@@ -70,14 +70,14 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 
 @Composable
-fun NotesList(data: AppData, onOpen: (String) -> Unit, contentPadding: PaddingValues) {
+fun NotesList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPadding: PaddingValues) {
     val c = M.c
     val s = M.s
     var q by rememberSaveable { mutableStateOf("") }
     var searching by rememberSaveable { mutableStateOf(false) }
     var filter by rememberSaveable { mutableStateOf<String?>(null) }
     val words = q.lowercase().split(' ').filter { it.isNotBlank() }
-    val notes = data.notes.filter { n -> n.title != s.inboxNote }.filter { n ->
+    val notes = data.notes.filter { n -> n.title != s.inboxNote && !n.archived }.filter { n ->
         val hay = (n.title + " " + n.text + " " + n.aiSummary.orEmpty() + " " + n.entries.flatMap { it.attachments }.joinToString(" ") { it.name + " " + it.transcript.orEmpty() }).lowercase()
         words.all { it in hay } && (filter == null || n.project == filter)
     }
@@ -109,7 +109,12 @@ fun NotesList(data: AppData, onOpen: (String) -> Unit, contentPadding: PaddingVa
         (groups.keys.filterNotNull().sorted() + listOf(null)).forEach { p ->
             val l = groups[p] ?: return@forEach
             if (filter == null && groups.size > 1) item("g-$p") { SectionLabel(p ?: s.noProject, Modifier.padding(start = 6.dp, top = 8.dp)) }
-            items(l, key = { it.id }) { n -> NoteCard(n, data, onClick = { onOpen(n.id) }, modifier = Modifier.animateItem()) }
+            items(l, key = { it.id }) { n ->
+                // Swipe left — into the archive, right — delete; both can be undone.
+                SwipeActions(left = s.toArchive to { vm.archiveNote(n.id) }, right = s.delete to { vm.removeNote(n.id) }, modifier = Modifier.animateItem()) {
+                    NoteCard(n, data, onClick = { onOpen(n.id) })
+                }
+            }
         }
     }
 }

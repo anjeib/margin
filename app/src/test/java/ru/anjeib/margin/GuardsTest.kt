@@ -8,6 +8,7 @@ import ru.anjeib.margin.ai.Assistant
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.Repeat
 import ru.anjeib.margin.data.Task
+import ru.anjeib.margin.data.address
 import ru.anjeib.margin.data.sentence
 import ru.anjeib.margin.data.withNames
 import ru.anjeib.margin.i18n.L
@@ -149,5 +150,13 @@ class GuardsTest {
         val wed = today.with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.WEDNESDAY))
         val d = run(AppData(), """{"actions":[{"type":"create_task","title":"Заказать упаковку","due":"${wed.plusDays(2)}"}]}""", "заказать упаковку до среды")
         assertEquals(wed.toString(), d.tasks[0].due)
+    }
+
+    @Test fun addressGetsItsComma() {
+        assertEquals("Ленина, 5", "ленина 5".address())
+        assertEquals("Ул. Мира, 12к2", "ул. Мира 12к2".address())
+        assertEquals("Симферополь, Ленина, 5", "Симферополь, Ленина 5".address())
+        assertEquals("Тверская, 12", "Тверская, 12".address())
+        assertEquals("Кафе Зерно", "кафе Зерно".address())
     }
 }

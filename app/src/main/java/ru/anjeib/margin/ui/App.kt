@@ -33,6 +33,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.PeopleOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -75,6 +78,9 @@ private const val NOTES = "notes"
 private const val PEOPLE = "people"
 private const val SETTINGS = "settings"
 private const val INBOX = "inbox"
+private const val PROJECTS = "projects"
+private const val CALENDAR = "calendar"
+private const val ARCHIVE = "archive"
 
 @Composable
 fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
@@ -131,6 +137,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
             Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
                 TopBar(screen, view, data, onMenu = { scope.launch { drawer.open() } }, onTab = { i -> view = listOf(Views.TODAY, Views.WEEK, Views.ALL)[i] },
                     onSearch = { searching = true })
+                // Sections one tap away, without the side menu.
+                val section = when { screen == NOTES -> 1; screen == PEOPLE -> 2; screen == PROJECTS || (screen == TASKS && view.startsWith("p:")) -> 3; screen == TASKS -> 0; else -> -1 }
+                if (section >= 0) SectionRow(section) { i -> when (i) { 0 -> go(TASKS, Views.TODAY); 1 -> go(NOTES); 2 -> go(PEOPLE); else -> go(PROJECTS) } }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     val pad = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
                     Crossfade(screen, label = "screen") { sc ->
@@ -143,8 +152,11 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
                                     onOpenNotes = { screen = NOTES }, onOpenInbox = { screen = INBOX }, contentPadding = pad,
                                 )
                             }
-                            NOTES -> NotesList(data, onOpen = { openNote = it }, contentPadding = pad)
-                            PEOPLE -> PeopleList(data, onOpen = { openPerson = it }, contentPadding = pad)
+                            NOTES -> NotesList(data, vm, onOpen = { openNote = it }, contentPadding = pad)
+                            PEOPLE -> PeopleList(data, vm, onOpen = { openPerson = it }, contentPadding = pad)
+                            PROJECTS -> ProjectsScreen(data, onOpen = { go(TASKS, Views.project(it)) }, contentPadding = pad)
+                            CALENDAR -> CalendarScreen(data, vm, onOpenTask = { openTask = it }, contentPadding = pad)
+                            ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad)
                             SETTINGS -> SettingsScreen(settings, vm, pad)
                             INBOX -> InboxScreen(data, vm, onOpenNote = { openNote = it }, contentPadding = pad)
                         }
@@ -189,16 +201,6 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
                     } else {
                         notice?.takeIf { it.scopeKey == "notes" }?.let { NoticeLine(it, vm) }
                     }
-                    // «Перенесено: ср 7 окт · Отменить» for a few seconds after a swipe.
-                    AnimatedVisibility(undoBar != null, enter = fadeIn(), exit = fadeOut()) {
-                        val ub = undoBar
-                        if (ub != null) Row(Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(14.dp)).background(c.bubble)
-                            .padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(ub.text, style = Type.small.copy(color = c.onBubble, fontSize = 14.sp), modifier = Modifier.weight(1f))
-                            Text(s.undo, style = Type.small.copy(color = c.accent, fontSize = 14.sp),
-                                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.undoBar() }.padding(12.dp))
-                        }
-                    }
                     Spacer(Modifier.height(8.dp))
                     SmartComposer(
                         vm,
@@ -221,6 +223,16 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit) {
                 val note = data.notes.find { it.id == id }
                 if (note == null) openNote = null
                 else NoteEditor(note, data, vm, onBack = { openNote = null }, onOpenTask = { openTask = it })
+            }
+            // «Удалено · Отменить» for a few seconds after a swipe — above whatever screen is open.
+            AnimatedVisibility(undoBar != null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 84.dp)) {
+                val ub = undoBar
+                if (ub != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.bubble)
+                    .padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(ub.text, style = Type.small.copy(color = c.onBubble, fontSize = 14.sp), modifier = Modifier.weight(1f))
+                    Text(s.undo, style = Type.small.copy(color = c.accent, fontSize = 14.sp),
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.undoBar() }.padding(12.dp))
+                }
             }
         }
     }
@@ -280,16 +292,10 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
             NavRow(Icons.Outlined.Description, s.notes, "", screen == NOTES) { onGo(NOTES, null) }
             NavRow(Icons.Outlined.PeopleOutline, s.peopleTitle, "", screen == PEOPLE) { onGo(PEOPLE, null) }
 
-            val projects = data.projects.filter { p -> data.tasks.any { it.project == p } || data.notes.any { it.project == p } }
-            if (projects.isNotEmpty()) {
-                Hairline(Modifier.padding(horizontal = 26.dp, vertical = 14.dp))
-                SectionLabel(s.projects, Modifier.padding(start = 30.dp, bottom = 6.dp))
-                projects.forEach { p ->
-                    val n = data.tasks.count { !it.done && it.project == p }
-                    NavRow(null, projectLabel(p), if (n > 0) n.toString() else "", screen == TASKS && view == Views.project(p)) { onGo(TASKS, Views.project(p)) }
-                }
-            }
-
+            NavRow(Icons.Outlined.FolderOpen, s.projects.lowercase().replaceFirstChar { it.uppercase() }, "", screen == PROJECTS || (screen == TASKS && view.startsWith("p:"))) { onGo(PROJECTS, null) }
+            Hairline(Modifier.padding(horizontal = 26.dp, vertical = 14.dp))
+            NavRow(Icons.Outlined.CalendarMonth, s.calendarTitle, "", screen == CALENDAR) { onGo(CALENDAR, null) }
+            NavRow(Icons.Outlined.Archive, s.archiveTitle, (data.notes.count { it.archived } + data.persons.count { it.archived }).takeIf { it > 0 }?.toString() ?: "", screen == ARCHIVE) { onGo(ARCHIVE, null) }
           }
             // Settings at the bottom, out of the way.
             Spacer(Modifier.height(8.dp))

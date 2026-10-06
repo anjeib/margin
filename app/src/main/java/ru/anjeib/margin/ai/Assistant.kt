@@ -23,6 +23,7 @@ import ru.anjeib.margin.data.Task
 import ru.anjeib.margin.data.findSub
 import ru.anjeib.margin.data.mapTree
 import ru.anjeib.margin.data.nowStamp
+import ru.anjeib.margin.data.address
 import ru.anjeib.margin.data.properName
 import ru.anjeib.margin.data.sentence
 import ru.anjeib.margin.data.withNames
@@ -167,7 +168,9 @@ object Assistant {
      * [query] = what the user wrote: then only a skeleton (this week's tasks in one line each, names, projects,
      * note titles) plus the items related to the text go to the model. [query] = null → full overview (briefs, reviews).
      */
-    fun context(d: AppData, s: Settings, now: LocalDateTime = LocalDateTime.now(), focusTask: String? = null, query: String? = null, recent: Set<String> = emptySet()): String {
+    fun context(d0: AppData, s: Settings, now: LocalDateTime = LocalDateTime.now(), focusTask: String? = null, query: String? = null, recent: Set<String> = emptySet()): String {
+        // What is in the archive is put away: the AI doesn't append to it or bring it up.
+        val d = d0.copy(notes = d0.notes.filter { !it.archived })
         val today = now.toLocalDate()
         return buildString {
             appendLine("Now: $today, ${now.toLocalTime().withSecond(0).withNano(0)}.")
@@ -443,7 +446,7 @@ object Assistant {
                             entries = listOfNotNull(entryText?.let { Entry(text = it.sentence()) }),
                             waitingFor = a.str("waiting_for"),
                             promisedTo = a.str("promised_to"),
-                            place = a.str("place")?.trim(),
+                            place = a.str("place")?.address(),
                             source = origin,
                             // The model links tasks to whatever note it sees in the context; keep the link only when they share words.
                             noteId = validNote(a.str("note_id"))?.takeIf { nid -> !strict || d.notes.first { it.id == nid }.let { n ->
@@ -509,7 +512,7 @@ object Assistant {
                             project = if ("project" in a) a.project() else old.project,
                             waitingFor = newWait,
                             promisedTo = newPromise,
-                            place = if ("place" in a) a.str("place")?.trim() else old.place,
+                            place = if ("place" in a) a.str("place")?.address() else old.place,
                             noteId = if ("note_id" in a) validNote(a.str("note_id")) else old.noteId,
                             repeat = if (has("repeat", saysRepeat)) repeat(a["repeat"]) else old.repeat,
                         ).normalized()
@@ -660,7 +663,7 @@ object Assistant {
                             email = a.str("email") ?: it.email,
                             company = a.str("company") ?: it.company,
                             telegram = a.str("telegram")?.trim()?.removePrefix("https://t.me/")?.removePrefix("@")?.let { t0 -> "@$t0" } ?: it.telegram,
-                            address = a.str("address") ?: it.address,
+                            address = a.str("address")?.address() ?: it.address,
                             personal = (it.personal + listOfNotNull(a.str("personal")?.sentence())).distinctBy { p0 -> p0.lowercase() },
                             updatedAt = nowStamp(),
                         )

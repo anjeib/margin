@@ -82,6 +82,18 @@ interface Strings {
     fun undatedCount(n: Int): String
     val subtaskOne: String
     val freeDay: String
+    fun nextDue(d: String): String
+    val archivedOne: String
+    val restoredOne: String
+    val deletedOne: String
+    val toArchive: String
+    val archiveTitle: String
+    val archiveEmpty: String
+    val restoreWord: String
+    val calendarTitle: String
+    val projectsEmpty: String
+    val projectsHint: String
+    fun projectStats(tasks: Int, notes: Int): String
     val postponeTitle: String
     val inAWeek: String
     val inAMonth: String
@@ -488,6 +500,18 @@ object Ru : Strings {
     override fun undatedCount(n: Int) = "Ещё без срока: " + tasksCount(n)
     override val subtaskOne = "Подзадача"
     override val freeDay = "Свободный день"
+    override fun nextDue(d: String) = "ближайшее: $d"
+    override val archivedOne = "Убрано в архив"
+    override val restoredOne = "Возвращено"
+    override val deletedOne = "Удалено"
+    override val toArchive = "В архив"
+    override val archiveTitle = "Архив"
+    override val archiveEmpty = "Свайп влево по заметке или человеку убирает их сюда. Отсюда их можно вернуть."
+    override val restoreWord = "Вернуть"
+    override val calendarTitle = "Календарь"
+    override val projectsEmpty = "Проектов пока нет"
+    override val projectsHint = "Проект появляется сам, когда вы пишете о нём: «для vuzburo купить домен», «идея по сайту vuzburo»."
+    override fun projectStats(tasks: Int, notes: Int) = listOfNotNull(tasksCount(tasks).takeIf { tasks > 0 }, notes.takeIf { it > 0 }?.let { "$it " + pluralRu(it, "заметка", "заметки", "заметок") }).joinToString(" · ").ifBlank { "пусто" }
     override val postponeTitle = "Отложить"
     override val inAWeek = "Через неделю"
     override val inAMonth = "Через месяц"
@@ -898,6 +922,18 @@ object En : Strings {
     override fun undatedCount(n: Int) = "Also without a date: " + tasksCount(n)
     override val subtaskOne = "Subtask"
     override val freeDay = "A free day"
+    override fun nextDue(d: String) = "next: $d"
+    override val archivedOne = "Archived"
+    override val restoredOne = "Restored"
+    override val deletedOne = "Deleted"
+    override val toArchive = "Archive"
+    override val archiveTitle = "Archive"
+    override val archiveEmpty = "Swipe a note or a person left to put it here. You can bring it back from here."
+    override val restoreWord = "Restore"
+    override val calendarTitle = "Calendar"
+    override val projectsEmpty = "No projects yet"
+    override val projectsHint = "A project appears by itself when you write about it: “buy a domain for vuzburo”, “an idea for the vuzburo site”."
+    override fun projectStats(tasks: Int, notes: Int) = listOfNotNull(tasksCount(tasks).takeIf { tasks > 0 }, notes.takeIf { it > 0 }?.let { "$it " + (if (it == 1) "note" else "notes") }).joinToString(" · ").ifBlank { "empty" }
     override val postponeTitle = "Postpone"
     override val inAWeek = "In a week"
     override val inAMonth = "In a month"

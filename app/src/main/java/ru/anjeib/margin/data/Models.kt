@@ -78,6 +78,7 @@ data class Person(
     val telegram: String? = null,
     /** MAX messenger: a username or a phone. */
     val max: String? = null,
+    val archived: Boolean = false,
     /** «Личная информация»: short facts the user told about them (birthday, family, what they like). */
     val personal: List<String> = emptyList(),
 ) {
@@ -188,6 +189,8 @@ data class Note(
     val entries: List<Entry> = emptyList(),
     val project: String? = null,
     val aiSummary: String? = null,
+    /** Put away: out of the lists and the AI's view, back from «Архив». */
+    val archived: Boolean = false,
     /** The same properties a task has, minus «done»: who, where, and a reminder. */
     val people: List<String> = emptyList(),
     val place: String? = null,
@@ -270,14 +273,14 @@ data class AppData(
         fun subs(l: List<Subtask>, names: List<String>): List<Subtask> = l.map { it.copy(title = it.title.sentence().withNames(names), children = subs(it.children, names)) }
         val names = d.persons.map { it.name.properName() }
         val fixed = d.copy(
-            persons = d.persons.map { it.copy(name = it.name.properName()) },
+            persons = d.persons.map { it.copy(name = it.name.properName(), address = it.address?.address()) },
             tasks = d.tasks.map { t ->
                 val who = t.people + listOfNotNull(t.waitingFor, t.promisedTo)
-                t.copy(title = t.title.sentence().withNames(who + names), people = t.people.map { if (it.length > 1) it.properName() else it },
+                t.copy(title = t.title.sentence().withNames(who + names), place = t.place?.address(), people = t.people.map { if (it.length > 1) it.properName() else it },
                     waitingFor = t.waitingFor?.properName(), promisedTo = t.promisedTo?.properName(), subtasks = subs(t.subtasks, who + names),
                     entries = t.entries.map { e -> e.copy(text = e.text.sentence()) })
             },
-            notes = d.notes.map { n -> n.copy(title = n.title.sentence(), entries = n.entries.map { e -> e.copy(text = e.text.sentence()) }) },
+            notes = d.notes.map { n -> n.copy(title = n.title.sentence(), place = n.place?.address(), entries = n.entries.map { e -> e.copy(text = e.text.sentence()) }) },
         )
         if (fixed != d) d = fixed
         return d

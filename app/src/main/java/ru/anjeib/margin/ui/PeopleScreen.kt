@@ -69,18 +69,19 @@ import ru.anjeib.margin.data.dayMonthShort
 private fun Task.involves(p: Person) = p.involvedIn(this)
 
 @Composable
-fun PeopleList(data: AppData, onOpen: (String) -> Unit, contentPadding: PaddingValues) {
+fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPadding: PaddingValues) {
     val c = M.c
     val s = M.s
-    val people = data.persons.sortedByDescending { p -> data.tasks.count { !it.done && it.involves(p) } }
+    val people = data.persons.filter { !it.archived }.sortedByDescending { p -> data.tasks.count { !it.done && it.involves(p) } }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item("h") { Text(s.peopleTitle, style = Type.display.copy(color = c.ink), modifier = Modifier.padding(top = 18.dp, bottom = 12.dp, start = 4.dp)) }
         if (people.isEmpty()) item("empty") { Empty(s.peopleTitle, s.emptyPeople) }
         items(people, key = { it.id }) { p ->
             val open = data.tasks.count { !it.done && it.involves(p) }
+            SwipeActions(left = s.toArchive to { vm.archivePerson(p.id) }, right = s.delete to { vm.removePerson(p.id) }, modifier = Modifier.animateItem()) {
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).clickable { onOpen(p.id) }
-                    .padding(horizontal = 16.dp, vertical = 14.dp).animateItem(),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Monogram(p.name, 40.dp)
@@ -96,6 +97,7 @@ fun PeopleList(data: AppData, onOpen: (String) -> Unit, contentPadding: PaddingV
                     if (line.isNotBlank()) Text(line, style = Type.small.copy(color = c.graphite), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 if (open > listOfNotNull(wait, promise).size) Text(s.tasksCount(open), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
+            }
             }
         }
     }
