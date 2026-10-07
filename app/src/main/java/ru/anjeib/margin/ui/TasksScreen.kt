@@ -128,7 +128,7 @@ fun isRunning(t: Task, today: LocalDate = LocalDate.now()) = isThisWeek(t, today
 fun tabCounts(d: AppData): Triple<Int, Int, Int> {
     val today = LocalDate.now()
     val l = d.listTasks()
-    return Triple(l.count { isToday(it, today) }, l.count { isThisWeek(it, today) }, d.tasks.count { !it.done })
+    return Triple(l.count { isToday(it, today) }, l.count { isThisWeek(it, today) }, d.tasks.count { !it.done && !(it.thought && it.subtasks.isEmpty()) })
 }
 
 /** Short right-hand label for compact rows: «вчера», «вт 18:00», «до вс», «20 окт». */
@@ -333,17 +333,17 @@ fun TaskList(
                     if (isOpen("s-nostep")) items(settled, key = { "ns" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }) }
                 }
                 // Notes never mix into task lists — one quiet line says what was written today.
-                val notesToday = data.notes.filter { n -> n.title != s.inboxNote && n.updatedAt.startsWith(today.toString()) && (n.entries.isNotEmpty() || n.title.isNotBlank()) }
+                val notesToday = data.tasks.filter { t -> t.thought && !t.done && (t.createdAt == today.toString() || t.entries.any { it.at.startsWith(today.toString()) }) }
                 if (notesToday.isNotEmpty()) item("notes-today") {
                     Row(
                         Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(14.dp))
-                            .clickable { if (notesToday.size == 1) onOpenNote(notesToday[0].id) else onOpenNotes() }
+                            .clickable { if (notesToday.size == 1) onOpen(notesToday[0].id) else onView(Views.ALL) }
                             .landing(notesToday.any { it.id in landed }, 14).padding(horizontal = 10.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("✎", style = Type.body.copy(color = c.graphite))
                         Spacer(Modifier.width(10.dp))
-                        Text(s.notesToday(notesToday.take(3).joinToString(", ") { it.title.ifBlank { s.untitled } } + if (notesToday.size > 3) "…" else ""),
+                        Text(s.thoughtsToday + ": " + notesToday.take(3).joinToString(", ") { it.title.ifBlank { s.untitled } } + if (notesToday.size > 3) "…" else "",
                             style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -367,9 +367,10 @@ fun TaskList(
 
             view == Views.ALL -> {
                 // v2: everything at once — topics in progress, simple tasks, thoughts, and topics with no next step; labels filter it.
-                val openTopics = data.tasks.filter { it.topic && !it.done }
+                fun bare(t: Task) = t.thought && t.subtasks.isEmpty()
+                val openTopics = data.tasks.filter { it.topic && !it.done && !bare(it) }
                 val simple = data.tasks.filter { !it.topic && !it.done }
-                val thoughts = data.notes.filter { !it.archived && it.title != s.inboxNote }
+                val thoughts = data.tasks.filter { !it.done && bare(it) }.sortedByDescending { t -> t.entries.maxOfOrNull { it.at } ?: t.createdAt }
                 val labels = (openTopics.mapNotNull { it.project } + simple.mapNotNull { it.project } + thoughts.mapNotNull { it.project }).distinct().sorted()
                 val lb = label?.takeIf { it in labels }
                 header(s.all, s.tasksCount(simple.size + openTopics.size))
@@ -399,7 +400,7 @@ fun TaskList(
                 }
                 if (thoughtsShown.isNotEmpty()) {
                     section(s.thoughts, "a-thoughts", thoughtsShown.size, collapsible = true)
-                    if (isOpen("a-thoughts")) items(thoughtsShown, key = { "an" + it.id }) { n -> ThoughtRow(n, onOpen = { onOpenNote(n.id) }) }
+                    if (isOpen("a-thoughts")) items(thoughtsShown, key = { "an" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }) }
                 }
                 if (idle.isNotEmpty()) {
                     section(s.noNextStepCaps, "a-idle", idle.size, collapsible = true)
@@ -639,7 +640,9 @@ fun TopicRow(t: Task, onOpen: () -> Unit) {
     val open = t.openQuestions.size
     val waits = t.openWaits
     val files = t.materials().size
-    val meta = buildList {
+    val bare = t.thought && t.subtasks.isEmpty()
+    val meta = if (bare) listOfNotNull(s.thoughtWord, t.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, files.takeIf { it > 0 }?.let { s.nMaterials(it) },
+        t.project?.let { "#" + projectLabel(it) }).joinToString("  ·  ") else buildList {
         if (open > 0) add(s.nQuestions(open))
         waits.mapNotNull { it.due }.minOrNull()?.let { add(s.waitUntil(LocalDate.parse(it).shortLabel(today).lowercase())) }
         if (open == 0 && waits.isEmpty()) add(s.allDoneShort)
@@ -648,28 +651,13 @@ fun TopicRow(t: Task, onOpen: () -> Unit) {
     }.joinToString("  ·  ")
     Column(Modifier.fillMaxWidth().background(c.bg).clickable(onClick = onOpen)) {
         Row(Modifier.fillMaxWidth().padding(end = 6.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.size(40.dp, 26.dp), contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Outlined.ViewList, null, tint = c.ink, modifier = Modifier.size(19.dp)) }
+            Box(Modifier.size(40.dp, 26.dp), contentAlignment = Alignment.Center) {
+                if (bare) Icon(Icons.Outlined.ChatBubbleOutline, null, tint = c.graphite, modifier = Modifier.size(18.dp))
+                else Icon(Icons.AutoMirrored.Outlined.ViewList, null, tint = c.ink, modifier = Modifier.size(19.dp))
+            }
             Column(Modifier.weight(1f)) {
                 Text(t.title, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                 Text(meta, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
-            }
-        }
-        Hairline(Modifier.padding(start = 40.dp))
-    }
-}
-
-/** A thought: a topic without questions — for now the note it always was. */
-@Composable
-fun ThoughtRow(n: ru.anjeib.margin.data.Note, onOpen: () -> Unit) {
-    val c = M.c
-    val s = M.s
-    val meta = listOfNotNull(s.thoughtWord, n.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, n.project?.let { "#" + projectLabel(it) }).joinToString("  ·  ")
-    Column(Modifier.fillMaxWidth().background(c.bg).clickable(onClick = onOpen)) {
-        Row(Modifier.fillMaxWidth().padding(end = 6.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.size(40.dp, 26.dp), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.ChatBubbleOutline, null, tint = c.graphite, modifier = Modifier.size(18.dp)) }
-            Column(Modifier.weight(1f)) {
-                Text(n.title.ifBlank { s.untitled }, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-                Text(meta, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, modifier = Modifier.padding(top = 3.dp))
             }
         }
         Hairline(Modifier.padding(start = 40.dp))

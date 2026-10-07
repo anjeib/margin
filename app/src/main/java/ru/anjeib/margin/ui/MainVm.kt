@@ -250,7 +250,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         _trayFrom.value = _trayFrom.value ?: user.id
     }
 
-    fun send(text: String, smart: Boolean = false, label: String? = null, scope: Scope = Scope.Main, files: List<Attachment> = emptyList(), asQuestion: Boolean = false) {
+    fun send(text: String, smart: Boolean = false, label: String? = null, scope: Scope = Scope.Main, files: List<Attachment> = emptyList(), asQuestion: Boolean = false, movedHere: Boolean = false) {
         val t = text.trim()
         if ((t.isEmpty() && files.isEmpty()) || _busy.value != null) return
         if (scope == Scope.Main && files.isEmpty() && !smart && setupAnswer(t)) return
@@ -297,7 +297,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                     s,
                     Assistant.systemPrompt(before, s, scope, query = if (smart) null else t + " " + history.joinToString(" ") { it.second }, recent = recent),
                     history + ("user" to Assistant.userMessage(t) + (cmd?.let { Commands.hint(it) }?.let { "\n$it" } ?: "") +
-                        (if (asQuestion) "\n[Written on this topic's questions page: a new question → add_subtasks (due/time/from only when said), no add_entry.]" else "")),
+                        (if (asQuestion) "\n[Written on this topic's questions page: a new question → add_subtasks (due/time/from only when said), no add_entry.]" else "") +
+                        (if (movedHere) "\n[The user moved these words into this topic: add_entry with them; questions or answers only for THIS topic.]" else "")),
                     smart = smart, complex = Assistant.isComplex(t, scope), images = images,
                 )
                 prefs.addSpend(cost)
@@ -309,7 +310,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                     else -> plan0
                 }
                 when {
-                    scope != Scope.Main -> applyScoped(plan, scope, files, source)
+                    scope != Scope.Main -> applyScoped(plan, scope, files, source, movedHere)
                     plan.actions.isEmpty() -> { applyPlan(plan, files, source = source, strict = !smart); }
                     else -> propose(plan, files, userId, smart, source)
                 }
@@ -675,6 +676,19 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         p?.files?.takeIf { it.isNotEmpty() }?.let { fileAway(Scope.Main, it, data.value, null) }
     }
 
+    /**
+     * «В другую тему» / «В тему…»: the words were meant for [topicId]. The preview is dropped and the same words
+     * are read again inside that topic, where they become its feed, questions and answers.
+     */
+    fun moveToTopic(topicId: String) {
+        val p = _pending.value ?: return
+        val title = data.value.tasks.find { it.id == topicId }?.title ?: return
+        rejectPending()
+        send(p.source, scope = Scope.InTask(topicId), files = p.files, movedHere = true)
+        _toast.value = L.s.movedToTopic(title)
+        land(listOf(topicId))
+    }
+
     /** Stops the auto-confirm countdown (the user started looking at the preview). */
     fun holdPending() {
         autoJob?.cancel()
@@ -712,20 +726,26 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         if (applied.caption != null) { snapshots[msg.id] = current; if (!plan.local) aiChanged(msg.id, "main") }
         store.replace(withFiles.copy(chat = (withFiles.chat + msg).takeLast(60)))
         tidyNewNotes(applied, current)
+        nameNewTopics(current)
         if (silentUser) _trayFrom.value = msg.id
         return applied.touchedTasks
     }
 
-    private fun applyScoped(plan: AiPlan, scope: Scope, files: List<Attachment>, source: String = "") {
+    private fun applyScoped(plan: AiPlan, scope: Scope, files: List<Attachment>, source: String = "", movedHere: Boolean = false) {
         val current = data.value
         val applied = Assistant.apply(current, plan, source, strict = true, focus = (scope as? Scope.InTask)?.taskId)
         applySettings(applied.settings)
-        val next = attachTo(applied, scope, files, current)
+        var next = attachTo(applied, scope, files, current)
+        // «В другую тему»: the words were moved here on purpose — they land in its feed whatever the model made of them.
+        val fid = (scope as? Scope.InTask)?.taskId
+        if (movedHere && fid != null && source.isNotBlank() && next.tasks.find { it.id == fid }?.entries?.size == current.tasks.find { it.id == fid }?.entries?.size)
+            next = next.copy(tasks = next.tasks.map { if (it.id == fid) it.copy(entries = it.entries + Entry(text = source.sentence())) else it })
         val undoId = newId()
         snapshots[undoId] = current
         if (!plan.local && (applied.touchedTasks.isNotEmpty() || applied.touchedNotes.isNotEmpty())) aiChanged(undoId, if (scope is Scope.InTask) "task" else "notes")
         store.replace(next)
         tidyNewNotes(applied, current)
+        nameNewTopics(current)
         val text = listOfNotNull(applied.caption, plan.reply, plan.question?.text).joinToString(" · ").ifBlank { L.s.saved }
         _notice.value = Notice(key(scope), text, undoId)
     }
@@ -1202,6 +1222,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** A note that is all title gets its spelling and capitals fixed once, by the quick model. */
     fun tidyNote(id: String) {
         val s = settings.value
+        // v2: a thought is a topic now — its title is tidied the same way.
+        data.value.tasks.find { it.id == id && it.thought }?.let { t -> tidyThought(t); return }
         val n = data.value.notes.find { it.id == id } ?: return
         if (n.titleFixed || n.title.isBlank() || n.title.length > 60 || !Processor.ready(s) || !Processor.online(ctx) || "tidy:$id" in _working.value) return
         _working.value += "tidy:$id"
@@ -1216,6 +1238,51 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 android.util.Log.w("Margin", "tidy note failed: ${e.message}")
             } finally {
                 _working.value -= "tidy:$id"
+            }
+        }
+    }
+
+    private fun tidyThought(t: Task) {
+        val s = settings.value
+        val id = t.id
+        if (t.titleFixed || t.title.isBlank() || t.title.length > 60 || !Processor.ready(s) || !Processor.online(ctx) || "tidy:$id" in _working.value) return
+        _working.value += "tidy:$id"
+        viewModelScope.launch {
+            try {
+                val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.tidyPrompt(), listOf("user" to t.title))
+                prefs.addSpend(r.rub)
+                val clean = (Assistant.field(Assistant.parseObject(r.content), "text") ?: r.content).trim().trim('"').trim()
+                val ok = clean.length in (t.title.length * 8 / 10)..(t.title.length * 13 / 10 + 8) && !clean.contains('{')
+                updateTask(id) { it.copy(title = if (ok) clean else it.title, titleFixed = true) }
+            } catch (e: Exception) {
+                android.util.Log.w("Margin", "tidy thought failed: ${e.message}")
+            } finally {
+                _working.value -= "tidy:$id"
+            }
+        }
+    }
+
+    /**
+     * A simple task just grew into a topic and the model didn't name the matter: the quick model names it,
+     * once, from the task and the words that turned it («Позвонить Игорю насчёт приказа» → «Приказ о зачислении»).
+     */
+    private fun nameNewTopics(before: AppData) {
+        val s = settings.value
+        data.value.tasks.filter { t -> t.topic && !t.thought && before.tasks.find { it.id == t.id }?.let { o -> !o.topic && o.title == t.title } == true }.forEach { t ->
+            if (!Processor.ready(s) || !Processor.online(ctx) || "name:${t.id}" in _working.value) return@forEach
+            _working.value += "name:${t.id}"
+            viewModelScope.launch {
+                try {
+                    val words = t.entries.lastOrNull { it.text.isNotBlank() }?.text.orEmpty()
+                    val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.topicNamePrompt(), listOf("user" to "Task: ${t.title}\nNews: $words"))
+                    prefs.addSpend(r.rub)
+                    val name = (Assistant.field(Assistant.parseObject(r.content), "title") ?: "").trim().trim('"', '«', '»', '.').trim()
+                    if (name.length in 3..48 && !name.contains('{')) updateTask(t.id) { cur -> if (cur.title == t.title) cur.copy(title = name.sentence()) else cur }
+                } catch (e: Exception) {
+                    android.util.Log.w("Margin", "topic name failed: ${e.message}")
+                } finally {
+                    _working.value -= "name:${t.id}"
+                }
             }
         }
     }

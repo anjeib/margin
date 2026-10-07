@@ -85,11 +85,19 @@ class TopicsLiveTest {
             val tue = today.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.TUESDAY)).toString()
             println("  zhek title=«${z.title}» subs=" + z.subtasks.map { "${it.title}|done=${it.done}|due=${it.due}|${it.time}" })
             check("zhek → topic with a Tuesday question", z.topic && z.subtasks.any { !it.done && it.due == tue })
+            check("zhek call settled", z.subtasks.first().done)
             val before = d.tasks.size
             d = ask(d, "Ремонт ванной: купить плитку до пятницы и вызвать плиточника", Scope.Main)
             val rem = d.tasks.drop(before)
             println("  remont: " + rem.map { "${it.title}|topic=${it.topic}|subs=${it.subtasks.map { s -> s.title + "@" + s.due }}" })
             check("matter with steps → one topic", rem.size == 1 && rem[0].topic && rem[0].subtasks.size >= 2)
+        }
+        // The quick model names a matter when the main one didn't.
+        listOf("Позвонить в ЖЭК насчёт счётчиков" to "Сказали прийти с паспортом во вторник до 13:00", "Позвонить Игорю насчёт приказа о зачислении" to "Созвонились, приказ будет через 2 недели").forEach { (task, news) ->
+            val r = runBlocking { Yandex.chat(key, folder, "aliceai-llm-flash", Assistant.topicNamePrompt(), listOf("user" to "Task: $task\nNews: $news")) }
+            val name = Assistant.field(Assistant.parseObject(r.content), "title").orEmpty()
+            println("  name: $task → «$name»")
+            check("named as a matter: $name", name.length in 3..48 && !name.lowercase().startsWith("позвон"))
         }
         println("TOTAL $ok/$all")
     }

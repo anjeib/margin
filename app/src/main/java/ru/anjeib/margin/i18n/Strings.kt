@@ -563,6 +563,12 @@ interface Strings {
     val noLabel: String
     val noDateQ: String
     val kindTopic: String
+    val kindThought: String
+    fun movedToTopic(t: String): String
+    val toOtherTopic: String
+    val toTopicPick: String
+    fun thoughtSince(d: String): String
+    val thoughtsToday: String
     val questionDateQ: String
 }
 
@@ -1163,6 +1169,12 @@ object Ru : Strings {
     override val noLabel = "Без метки"
     override val noDateQ = "без срока"
     override val kindTopic = "в тему"
+    override val kindThought = "мысль"
+    override fun movedToTopic(t: String) = "Перенесено в «$t»"
+    override val toOtherTopic = "В другую тему"
+    override val toTopicPick = "В тему…"
+    override fun thoughtSince(d: String) = "мысль с $d"
+    override val thoughtsToday = "Сегодня в мыслях"
     override val questionDateQ = "Срок вопроса"
 }
 
@@ -1763,6 +1775,12 @@ object En : Strings {
     override val noLabel = "No label"
     override val noDateQ = "no date"
     override val kindTopic = "to the topic"
+    override val kindThought = "thought"
+    override fun movedToTopic(t: String) = "Moved to “$t”"
+    override val toOtherTopic = "Another topic"
+    override val toTopicPick = "To a topic…"
+    override fun thoughtSince(d: String) = "thought since $d"
+    override val thoughtsToday = "Thoughts today"
     override val questionDateQ = "Item date"
 }
 

@@ -93,4 +93,35 @@ class TopicsTest {
         assertFalse(d.tasks.single().done)
         assertEquals("revived", d.tasks.single().events.last().kind)
     }
+
+    @Test fun notesBecomeThoughts() {
+        val d = AppData(notes = listOf(ru.anjeib.margin.data.Note(title = "Посмотреть «Одиссею» Нолана", entries = listOf(Entry(text = "Дима: только в IMAX"))))).migrated()
+        assertTrue(d.notes.isEmpty())
+        val t = d.tasks.single()
+        assertTrue(t.thought && t.topic)
+        assertEquals("Посмотреть «Одиссею» Нолана", t.title)
+        assertEquals(0, d.listTasks().size)
+    }
+
+    @Test fun aiNoteActionsLandInThoughts() {
+        val th = Task(title = "Идеи для сайта", topic = true, thought = true, project = "сайт", entries = listOf(Entry(text = "Калькулятор на главной")))
+        var d = AppData(tasks = listOf(th))
+        d = Topics.track(d, Assistant.apply(d, AiPlan(null, listOf(o("type" to "append_note", "note_id" to th.id, "text" to "Отзывы с фото")), null), "идея для сайта: отзывы с фото", strict = true).data)
+        assertEquals(2, d.tasks.single().entries.size)
+        d = Topics.track(d, Assistant.apply(d, AiPlan(null, listOf(o("type" to "create_note", "text" to "Посмотреть Одиссею")), null), "запиши: посмотреть одиссею", strict = true).data)
+        assertTrue(d.notes.isEmpty())
+        assertEquals(2, d.tasks.count { it.thought })
+    }
+
+    @Test fun reportClosesTheCall() {
+        val call = Task(title = "Позвонить в ЖЭК насчёт счётчиков", due = today.toString())
+        val said = "Сказали прийти с паспортом во вторник до 13:00"
+        val d = step(AppData(tasks = listOf(call)), said, call.id,
+            o("type" to "add_entry", "task_id" to call.id, "text" to said),
+            o("type" to "add_subtasks", "task_id" to call.id, "subtasks" to listOf(o("title" to "Прийти в ЖЭК с паспортом", "due" to today.plusDays(3).toString(), "time" to "13:00"))))
+        val t = d.tasks.single()
+        assertTrue(t.topic && !t.done)
+        assertTrue(t.subtasks.first().done)
+        assertEquals("13:00", t.subtasks.last().time)
+    }
 }

@@ -212,13 +212,14 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             onEdit = {
                                 // Edit opens what was made: the task, or the note when it was a note.
                                 val ids = vm.confirm()
-                                if (ids.isNotEmpty()) openTask = ids.first()
+                                if (ids.isNotEmpty()) openId(ids.first())
                                 else vm.landed.value.firstOrNull { id -> vm.data.value.notes.any { it.id == id } }?.let { openNote = it }
                             },
                             onReject = vm::rejectPending,
                             onHold = vm::holdPending,
                             onSeparate = vm::pendingAsNewNote,
                             onKeepContact = { vm.keepContact(it) },
+                            onMoveTo = { vm.moveToTopic(it) },
                             onAskWhen = { _, what ->
                                 // The preview's ids are not the saved ones: take the new task without a time from what was saved.
                                 val ids = vm.confirm()
@@ -259,7 +260,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             }
             openNote?.let { id ->
                 val note = data.notes.find { it.id == id }
-                if (note == null) openNote = null
+                // v2: a note became a thought — it opens as a topic.
+                if (note == null) { openNote = null; if (data.tasks.any { it.id == id }) openId(id) }
                 else NoteEditor(note, data, vm, onBack = { openNote = null }, onOpenTask = { openTask = it })
             }
             // A name that isn't a contact was tapped: «Марина · + контакт», quietly, for a few seconds.

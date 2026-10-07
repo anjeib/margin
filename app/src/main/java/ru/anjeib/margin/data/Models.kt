@@ -220,6 +220,10 @@ data class Task(
     val topic: Boolean = false,
     /** What happened in the topic besides the user's own words. */
     val events: List<TopicEvent> = emptyList(),
+    /** A thought: a topic that began as a note — no questions needed («Посмотреть «Одиссею» Нолана»). */
+    val thought: Boolean = false,
+    /** A thought's title had its spelling and capitals tidied once. */
+    val titleFixed: Boolean = false,
     /** A row made for the lists from a topic's question: which topic it belongs to. Never stored. */
     @kotlinx.serialization.Transient val topicId: String? = null,
     @kotlinx.serialization.Transient val topicTitle: String? = null,
@@ -307,7 +311,8 @@ data class AppData(
 
     /** Brings files written by older versions to the current shape. */
     fun migrated(): AppData {
-        var d = this
+        // v2: notes are thoughts — topics without questions.
+        var d = Topics.thoughts(this)
         // 3.20: contacts only when the user adds them — the ones made by mere mention (a name, nothing else) become drafts.
         if (d.persons.any { !it.kept && !it.draft && !it.hasInfo })
             d = d.copy(persons = d.persons.map { if (!it.kept && !it.draft && !it.hasInfo) it.copy(draft = true) else it })

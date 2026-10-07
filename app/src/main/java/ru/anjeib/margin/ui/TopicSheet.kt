@@ -163,7 +163,7 @@ fun ColumnScope.TopicBody(task: Task, data: AppData, vm: MainVm, startTab: Int, 
     Text(task.title, style = Type.title.copy(color = c.ink, fontSize = 28.sp, lineHeight = 34.sp),
         modifier = Modifier.padding(horizontal = 20.dp).clip(RoundedCornerShape(8.dp)).clickable { dialog = "rename" })
     val since = runCatching { LocalDate.parse(task.createdAt) }.getOrNull()?.dayMonthShort()
-    Text(listOfNotNull(task.project?.let { "#" + projectLabel(it) }, since?.let { s.topicSince(it) }).joinToString("  ·  "),
+    Text(listOfNotNull(task.project?.let { "#" + projectLabel(it) }, since?.let { if (task.thought && task.subtasks.isEmpty()) s.thoughtSince(it) else s.topicSince(it) }).joinToString("  ·  "),
         style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 20.dp, top = 6.dp).clip(RoundedCornerShape(6.dp)).clickable { dialog = "label" })
     if (task.done) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 14.dp, vertical = 10.dp)) {
         Text(s.inArchiveSince(task.doneAt?.let { runCatching { LocalDate.parse(it).dayMonthShort() }.getOrNull() } ?: ""), style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
@@ -186,7 +186,7 @@ fun ColumnScope.TopicBody(task: Task, data: AppData, vm: MainVm, startTab: Int, 
         }
     }
     Hairline()
-    HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 2, verticalAlignment = Alignment.Top) { page ->
+    HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, verticalAlignment = Alignment.Top) { page ->
         when (page) {
             0 -> FeedPage(task, feed, feedState, hl, onQuestion = ::toQuestion, onView = { viewing = it }, onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
             1 -> QuestionsPage(task, hl, vm, onFeed = ::toFeedLine, onEdit = { editQ = it }, onDate = { dateQ = it })

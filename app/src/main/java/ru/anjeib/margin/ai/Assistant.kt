@@ -182,7 +182,8 @@ object Assistant {
      */
     fun context(d0: AppData, s: Settings, now: LocalDateTime = LocalDateTime.now(), focusTask: String? = null, query: String? = null, recent: Set<String> = emptySet()): String {
         // What is in the archive is put away: the AI doesn't append to it or bring it up.
-        val d = d0.copy(notes = d0.notes.filter { !it.archived })
+        // v2: thoughts are shown to the model as the notes it knows (all but the one the user is inside).
+        val d = ru.anjeib.margin.data.Topics.asNotes(d0, focusTask).let { x -> x.copy(notes = x.notes.filter { !it.archived }, tasks = x.tasks.filter { !(it.topic && it.done) }) }
         val today = now.toLocalDate()
         return buildString {
             appendLine("Now: $today, ${now.toLocalTime().withSecond(0).withNano(0)}.")
@@ -313,6 +314,11 @@ object Assistant {
     fun tidyPrompt() = "Fix spelling, capital letters (names, places) and punctuation in the user's note. Keep the words and their order, " +
         "do not add anything, keep the language. Reply with JSON only: {\"text\": string}"
 
+    /** v2: a simple task grew into a topic — what is the matter, in a few words. */
+    fun topicNamePrompt() = "A to-do grew into an ongoing matter. Name the matter in 2–4 words in the language of the text: a noun phrase about WHAT it is " +
+        "(«Позвонить Игорю насчёт приказа о зачислении» + news → «Приказ о зачислении»; «Позвонить в ЖЭК насчёт счётчиков» → «Счётчики в ЖЭК»), never an action, no quotes. " +
+        "Reply with JSON only: {\"title\": string}"
+
     /** One idea → exactly one task linked to its note. */
     fun ideaPrompt(noteId: String, text: String, noteTitle: String? = null) =
         "Turn this idea into exactly ONE concrete task (create_task with note_id=$noteId; add subtasks only if obvious, people/dates only if stated). Do not create notes. " +
@@ -400,7 +406,8 @@ object Assistant {
      * [recent] — tasks of the last exchanges, for «перенеси его»). Unasked dates, times, repeats and other tasks stay as they were.
      */
     fun apply(data: AppData, plan: AiPlan, source: String = "", strict: Boolean = false, focus: String? = null, recent: Set<String> = emptySet()): Applied {
-        var d = data
+        // Thoughts go through the note logic the model was taught, then come back as thoughts.
+        var d = ru.anjeib.margin.data.Topics.asNotes(data, focus)
         val touched = linkedSetOf<String>()
         val touchedNotes = linkedSetOf<String>()
         var created = 0; var updated = 0; var subAdded = 0; var notes = 0; var entries = 0; var completed = 0
@@ -421,7 +428,8 @@ object Assistant {
         val saysOwe = strict.not() || oweCue.containsMatchIn(low)
         val bulk = strict.not() || bulkCue.containsMatchIn(low)
         /** Is this existing task what the user is talking about? */
-        fun asked(t: Task): Boolean = bulk || t.id == focus || t.id in recent ||
+        // Inside a topic only that topic changes: a phrase that happens to match another one's question is still about this one.
+        fun asked(t: Task): Boolean = if (strict && focus != null) t.id == focus else bulk || t.id == focus || t.id in recent ||
             (stems(t.title + " " + t.people.joinToString(" ") + " " + listOfNotNull(t.waitingFor, t.promisedTo, t.project).joinToString(" ") +
                 // A topic is also named by its open questions: «документы отправил» is about «Отправить документы».
                 (if (t.topic) " " + t.subtasks.filter { !it.done }.joinToString(" ") { it.title + " " + (it.from ?: "") } else "")) intersect said).isNotEmpty()
@@ -722,6 +730,13 @@ object Assistant {
                 }
             }
         }
+        // «Сказали прийти…», «Созвонились…» inside a simple task: its own call or message has happened, even if the model didn't say so.
+        if (strict && focus != null && reportCue.containsMatchIn(low) && plan.actions.none { it.str("type") == "complete_task" }) {
+            val t = d.tasks.find { it.id == focus }
+            val o = data.tasks.find { it.id == focus }
+            if (t != null && o != null && !t.topic && !t.done && t.repeat == null && (t.entries.size > o.entries.size || t.subtasks.size > o.subtasks.size) && actionCue.containsMatchIn(t.title.lowercase()))
+                d = d.copy(tasks = d.tasks.map { if (it.id == focus) it.copy(done = true, doneAt = LocalDate.now().toString()) else it })
+        }
         // News from the main screen that settled or added a topic's question: the words go into its feed too.
         if (strict && focus == null && origin != null) {
             val moved = plan.actions.filter { it.str("type") in setOf("complete_subtask", "add_subtasks") }.mapNotNull { it.str("task_id") }.toSet()
@@ -742,7 +757,9 @@ object Assistant {
             prefs.isNotEmpty() -> s.settingsChanged
             else -> null
         }
-        return Applied(d, touched.toList().filter { id -> d.tasks.any { it.id == id } }, touchedNotes.toList(), caption, created, prefs)
+        d = ru.anjeib.margin.data.Topics.thoughts(d, data)
+        val thoughtIds = touchedNotes.filter { id -> d.tasks.any { it.id == id } }
+        return Applied(d, (touched + thoughtIds).toList().filter { id -> d.tasks.any { it.id == id } }, touchedNotes.toList(), caption, created, prefs)
     }
 
     // What the user's words are about — so the model can't quietly change what wasn't mentioned.
@@ -762,6 +779,8 @@ object Assistant {
         if (d.dayOfWeek.value == wd) return date
         return LocalDate.now().with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.of(wd))).toString()
     }
+    private val reportCue = Regex("созвонил|дозвонил|поговорил|сказал|ответил|договорил|встретил|перезвонил|отправил|отдал|получил|прислал|написал|сходил|съездил|звонил|были у|был у|сдал|оплатил|we talked|called|they said|sent|replied")
+    private val actionCue = Regex("^(позвонить|созвониться|набрать|написать|связаться|уточнить|спросить|узнать|встретиться|отправить|сходить|съездить|записаться|договориться|отдать|сдать|оплатить|call|write|ask|send|email|text)")
     private val newTaskCue = Regex("отдельн|нов(ую|ая) задач|созда(й|ть) задач|ещё задач|еще задач|separate|new task|create a task")
     private val stepTalk = Regex("подзадач|шаг[аеиу]?\\b|пункт|subtask|step")
     private val dayParts = setOf("morning", "day", "afternoon", "evening", "night")

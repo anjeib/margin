@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package ru.anjeib.margin.ui
 
 import androidx.compose.animation.AnimatedContent
@@ -83,6 +85,7 @@ fun Tray(
     onSeparate: () -> Unit = {},
     onAskWhen: (taskId: String, what: String) -> Unit = { _, _ -> },
     onKeepContact: (String) -> Unit = {},
+    onMoveTo: (String) -> Unit = {},
 ) {
     val c = M.c
     val s = M.s
@@ -120,13 +123,13 @@ fun Tray(
                         contentKey = { it?.id ?: "raw" },
                         label = "bubble",
                     ) { p ->
-                        if (p != null) ResultBubble(p, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen, onKeepContact)
+                        if (p != null) ResultBubble(p, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen, onKeepContact, onMoveTo)
                         else UserBubble(m, working = busy && m.id == lastUser)
                     }
                 } else AssistantMsg(m, canUndo(m.id), onUndo = { onUndo(m.id) }, onOpenTask = onOpenTask, onOption = onOption, onOpenSettings = onOpenSettings)
             }
             // A result without a user bubble (e.g. from a suggestion) still gets its own bubble.
-            if (pending != null && msgs.none { it.id == pending.userMsgId }) ResultBubble(pending, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen, onKeepContact)
+            if (pending != null && msgs.none { it.id == pending.userMsgId }) ResultBubble(pending, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen, onKeepContact, onMoveTo)
         }
     }
 }
@@ -162,7 +165,7 @@ private fun Dots(color: androidx.compose.ui.graphics.Color) {
 
 @Composable
 private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, onEdit: () -> Unit, onReject: () -> Unit, onHold: () -> Unit, onSeparate: () -> Unit = {},
-                         onAskWhen: (String, String) -> Unit = { _, _ -> }, onKeepContact: (String) -> Unit = {}) {
+                         onAskWhen: (String, String) -> Unit = { _, _ -> }, onKeepContact: (String) -> Unit = {}, onMoveTo: (String) -> Unit = {}) {
     val c = M.c
     val s = M.s
     val after = p.preview.data
@@ -172,6 +175,13 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
             val t = after.tasks.find { it.id == id } ?: return@forEach
             val old = current.tasks.find { it.id == id }
             val (_, n) = t.subtasks.progress()
+            // v2: a thought (what used to be a note) — its title and what was written.
+            if (t.thought && (old == null || old.entries != t.entries)) {
+                notes++
+                if (old != null) appended = true
+                add(t.title to (t.entries.lastOrNull()?.text?.takeIf { it != t.title }.orEmpty()))
+                return@forEach
+            }
             // A change says what it changed: «ср 7 окт 09:00 · было вт 6 окт», a done task says done (and when it comes back).
             val meta = when {
                 // v2: news landed in a topic — say what it settled or started there.
@@ -219,10 +229,16 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
         if (changed > 0 && created == 0) s.kindChanged else null,
         if (topics > 0 && created == 0) s.kindTopic else null,
         if (done > 0 && created == 0 && changed == 0) s.markedDone.lowercase() else null,
-        if (notes > 0) s.kindNote else null,
+        if (notes > 0) s.kindThought else null,
         if (people > 0) s.kindContact else null,
     ).joinToString(" · ")
 
+    var picking by remember(p.id) { mutableStateOf(false) }
+    val touched = p.preview.touchedTasks.toSet()
+    val moveTargets = remember(p.id) {
+        current.tasks.filter { it.topic && !it.done && it.id !in touched }
+            .sortedByDescending { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.events.maxOfOrNull { it.at } ?: "", t.createdAt) }.take(6)
+    }
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
         Column(
             Modifier.padding(start = 48.dp).widthIn(max = 320.dp).clip(bubbleShape).background(c.bubble).clickable(onClick = onHold),
@@ -247,16 +263,25 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
             }
             if (p.auto) Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)) { BubbleCountdown(p.id) }
         }
-        Row(Modifier.padding(top = 4.dp, end = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        // Several quiet links wrap to a second line instead of breaking a word.
+        androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 4.dp, end = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End)) {
             // A new task without a time: offer the clock instead of asking in words; ignored, it leaves with the bubble.
             p.preview.touchedTasks.firstNotNullOfOrNull { id -> after.tasks.find { it.id == id && current.tasks.none { o -> o.id == id } && it.time == null && it.waitingFor == null } }?.let { nt ->
                 val what = if (nt.dueDate == null && nt.startDate == null) "dates" else "time"
                 QuietLink(if (what == "dates") s.askWhen else s.askTime) { onAskWhen(nt.id, what) }
             }
             if (!p.auto) QuietLink(s.create, onConfirm)
+            // The words were about another matter: pick the topic, they are read again there.
+            if ((topics > 0 || changed > 0 || created == 1 || notes > 0) && moveTargets.isNotEmpty()) QuietLink(if (topics > 0 || changed > 0) s.toOtherTopic else s.toTopicPick) { onHold(); picking = !picking }
             if (appended) QuietLink(s.toSeparateNote, onSeparate)
             QuietLink(s.edit, onEdit)
             QuietLink(s.undo, onReject)
+        }
+        if (picking) Column(Modifier.padding(start = 48.dp, top = 2.dp).widthIn(max = 320.dp).clip(RoundedCornerShape(14.dp)).background(c.card)) {
+            moveTargets.forEach { t ->
+                Text(t.title, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().clickable { picking = false; onMoveTo(t.id) }.padding(horizontal = 16.dp, vertical = 11.dp))
+            }
         }
     }
 }

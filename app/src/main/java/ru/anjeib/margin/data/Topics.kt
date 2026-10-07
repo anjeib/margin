@@ -37,8 +37,38 @@ fun AppData.listTasks(): List<Task> =
     tasks.filter { !it.topic } + tasks.filter { it.topic && !it.done }.flatMap { t -> t.subtasks.filter { !it.done && it.due != null }.map { t.questionRow(it) } }
 
 object Topics {
+    /** The «Входящие» note (files without words) stays a note in both languages; every other note is a thought. */
+    private val inboxTitles = setOf(ru.anjeib.margin.i18n.Ru.inboxNote, ru.anjeib.margin.i18n.En.inboxNote)
+    fun isInbox(n: Note) = n.title in inboxTitles
+
+    /** Notes → thoughts: the same id, so links to «the note it came from» keep working. */
+    fun thoughts(d: AppData, base: AppData = d): AppData {
+        val moving = d.notes.filter { !isInbox(it) }
+        if (moving.isEmpty()) return d
+        val back = moving.map { n ->
+            val o = base.tasks.find { it.id == n.id }
+            val born = n.entries.minOfOrNull { it.at }?.take(10) ?: n.updatedAt.take(10)
+            (o ?: Task(id = n.id, title = n.title, topic = true, thought = true, createdAt = born, done = n.archived, doneAt = if (n.archived) LocalDate.now().toString() else null))
+                .copy(title = n.title.ifBlank { n.entries.firstOrNull { it.text.isNotBlank() }?.text?.take(60) ?: "" }, entries = n.entries, project = n.project,
+                    people = n.people, place = n.place, remindAt = n.remindAt, titleFixed = n.titleFixed, noteId = null)
+        }
+        val ids = back.map { it.id }.toSet()
+        return d.copy(notes = d.notes - moving.toSet(), tasks = d.tasks.filterNot { it.id in ids } + back)
+    }
+
+    /** For the AI, which knows notes: open thoughts shown as notes (all but [keep] — the one the user is inside). */
+    fun asNotes(d: AppData, keep: String? = null): AppData {
+        val th = d.tasks.filter { it.thought && !it.done && it.id != keep && it.subtasks.isEmpty() }
+        if (th.isEmpty()) return d
+        return d.copy(tasks = d.tasks - th.toSet(), notes = d.notes + th.map { t ->
+            Note(id = t.id, title = t.title, entries = t.entries, project = t.project, people = t.people, place = t.place, remindAt = t.remindAt,
+                titleFixed = t.titleFixed, updatedAt = t.entries.maxOfOrNull { it.at } ?: (t.createdAt + "T00:00"))
+        })
+    }
+
     /** The feed lines for [new] compared with [old]; a task with something new to say about it becomes a topic. */
-    fun track(old: AppData, new: AppData): AppData {
+    fun track(old: AppData, new0: AppData): AppData {
+        val new = if (new0.notes.any { !isInbox(it) }) thoughts(new0, old) else new0
         if (old.tasks === new.tasks) return new
         var changed = false
         val tasks = new.tasks.map { n ->
