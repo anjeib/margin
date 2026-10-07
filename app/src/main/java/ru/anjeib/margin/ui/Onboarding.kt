@@ -77,7 +77,7 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                     // What you say → what it becomes.
                     0 -> Column {
                         Said(s.tourWriteExample)
-                        Text("↓", style = Type.body.copy(color = c.accent, fontSize = 20.sp), modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 2.dp))
+                        Text("↓", style = Type.body.copy(color = c.link, fontSize = 20.sp), modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 2.dp))
                         Column(Modifier.fillMaxWidth()) {
                             TaskRow(call, today, false, onToggle = {}, onOpen = {})
                             TaskRow(edits, today, false, onToggle = {}, onOpen = {})
@@ -113,7 +113,7 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
                 pages.indices.forEach { i ->
-                    Box(Modifier.size(if (i == page) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (i == page) c.accent else c.hairline))
+                    Box(Modifier.size(if (i == page) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (i == page) c.link else c.hairline))
                 }
             }
             Pill(if (page < pages.lastIndex) s.next else s.begin, filled = true, onClick = { if (page < pages.lastIndex) page++ else onDone() })

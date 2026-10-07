@@ -24,6 +24,10 @@ data class YaReply(val content: String, val usage: Usage, val rub: Double)
  * Yandex AI Studio through its OpenAI-compatible endpoint. Models are addressed as gpt://<folder>/<name>/latest.
  * Prices: rub per 1000 tokens incl. VAT (input, cached, output) — official page, October 2026.
  */
+/**
+ * Every request goes with «x-data-logging-enabled: false»: Yandex then keeps nothing of what was sent
+ * (by default AI Studio logs requests). The user's tasks, notes and names are personal data.
+ */
 object Yandex {
     private const val BASE = "https://llm.api.cloud.yandex.net/v1"
 
@@ -76,7 +80,7 @@ object Yandex {
         val url = URL("https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?folderId=$folder&lang=$lang&format=lpcm&sampleRateHertz=16000")
         val c = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; doOutput = true; connectTimeout = 20_000; readTimeout = 60_000
-            setRequestProperty("Authorization", "Api-Key $apiKey")
+            setRequestProperty("Authorization", "Api-Key $apiKey"); setRequestProperty("x-data-logging-enabled", "false")
         }
         try {
             c.outputStream.use { it.write(pcm) }
@@ -103,7 +107,7 @@ object Yandex {
         }.toString()
         val c = (URL("https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; doOutput = true; connectTimeout = 20_000; readTimeout = 60_000
-            setRequestProperty("Authorization", "Api-Key $apiKey"); setRequestProperty("x-folder-id", folder)
+            setRequestProperty("Authorization", "Api-Key $apiKey"); setRequestProperty("x-data-logging-enabled", "false"); setRequestProperty("x-folder-id", folder)
             setRequestProperty("Content-Type", "application/json")
         }
         try {
@@ -123,7 +127,7 @@ object Yandex {
     suspend fun check(apiKey: String, folder: String): String = withContext(Dispatchers.IO) {
         val c = (URL("$BASE/models").openConnection() as HttpURLConnection).apply {
             connectTimeout = 20_000; readTimeout = 30_000
-            setRequestProperty("Authorization", "Api-Key $apiKey"); setRequestProperty("OpenAI-Project", folder)
+            setRequestProperty("Authorization", "Api-Key $apiKey"); setRequestProperty("x-data-logging-enabled", "false"); setRequestProperty("OpenAI-Project", folder)
         }
         try {
             val code = c.responseCode
@@ -138,7 +142,7 @@ object Yandex {
         val c = (URL("$BASE/chat/completions").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; doOutput = true; connectTimeout = 20_000; readTimeout = 120_000
             setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Authorization", "Api-Key $key")
+            setRequestProperty("Authorization", "Api-Key $key"); setRequestProperty("x-data-logging-enabled", "false")
             setRequestProperty("OpenAI-Project", folder)
         }
         c.outputStream.use { it.write(body.toByteArray()) }

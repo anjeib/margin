@@ -68,7 +68,7 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
             }
             Box(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(c.chip).padding(horizontal = 16.dp, vertical = 12.dp)) {
                 if (q.isEmpty()) Text(s.searchHint, style = Type.body.copy(color = c.graphite))
-                BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.accent),
+                BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link),
                     modifier = Modifier.fillMaxWidth().focusRequester(focus))
             }
             Spacer(Modifier.width(8.dp))

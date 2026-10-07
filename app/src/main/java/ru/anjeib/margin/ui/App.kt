@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.PeopleOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.TaskAlt
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.DrawerValue
@@ -115,6 +116,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     var typing by rememberSaveable { mutableStateOf(false) }
     var prefill by rememberSaveable { mutableStateOf<String?>(null) }
     var copiedText by remember { mutableStateOf<String?>(null) }
+    var feedback by remember { mutableStateOf(false) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -139,7 +141,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         drawerState = drawer,
         scrimColor = c.scrim,
         drawerContent = {
-            Drawer(data, screen, view, onGo = ::go)
+            Drawer(data, screen, view, onGo = ::go, onFeedback = { feedback = true; scope.launch { drawer.close() } })
         },
     ) {
         Box(Modifier.fillMaxSize().background(c.bg)) {
@@ -250,7 +252,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 if (n != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.bubble)
                     .padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(s.notAContact(n), style = Type.small.copy(color = c.onBubble, fontSize = 14.sp), modifier = Modifier.weight(1f))
-                    Text(s.addContact, style = Type.small.copy(color = c.accent, fontSize = 14.sp),
+                    Text(s.addContact, style = Type.small.copy(color = c.link, fontSize = 14.sp),
                         modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.keepContact(n) }.padding(12.dp))
                 }
             }
@@ -260,12 +262,21 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 if (ub != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.bubble)
                     .padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(ub.text, style = Type.small.copy(color = c.onBubble, fontSize = 14.sp), modifier = Modifier.weight(1f))
-                    Text(s.undo, style = Type.small.copy(color = c.accent, fontSize = 14.sp),
+                    Text(s.undo, style = Type.small.copy(color = c.link, fontSize = 14.sp),
                         modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.undoBar() }.padding(12.dp))
                 }
             }
         }
     }
+
+    // «Пожаловаться или похвалить»: a placeholder until there is somewhere to send it.
+    if (feedback) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { feedback = false },
+        containerColor = c.card,
+        title = { Text(s.feedbackTitle, style = Type.cardTitle.copy(color = c.ink)) },
+        text = { Text(s.feedbackStub, style = Type.body.copy(color = c.graphite)) },
+        confirmButton = { androidx.compose.material3.TextButton({ feedback = false }) { Text(s.close, color = c.link) } },
+    )
 
     copiedText?.let { t ->
         BackHandler { copiedText = null; onCopiedSeen() }
@@ -310,14 +321,14 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
             val (t, w, a) = tabCounts(data)
             QuietTabs(
                 listOf(s.today, s.thisWeek, s.all), listOf(Views.TODAY, Views.WEEK, Views.ALL).indexOf(view), onTab,
-                counts = listOf(t, w, a), alertFirst = data.tasks.any { it.isOverdue() },
+                counts = listOf(t, w, a),
             )
         }
     }
 }
 
 @Composable
-private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, String?) -> Unit) {
+private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, String?) -> Unit, onFeedback: () -> Unit = {}) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
@@ -343,6 +354,7 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
             Spacer(Modifier.height(8.dp))
             NavRow(Icons.Outlined.Settings, s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
             NavRow(Icons.AutoMirrored.Outlined.HelpOutline, s.helpTitle, "", screen == HELP, small = true) { onGo(HELP, null) }
+            NavRow(Icons.Outlined.ChatBubbleOutline, s.feedbackTitle, "", false, small = true) { onFeedback() }
         }
     }
 }
@@ -352,12 +364,12 @@ private fun NavRow(icon: ImageVector?, label: String, count: String, active: Boo
     val c = M.c
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(14.dp))
-            .background(if (active) c.accentSoft else Color.Transparent).clickable(onClick = onClick)
+            .background(if (active) c.linkSoft else Color.Transparent).clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = if (small) 10.dp else 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) Icon(icon, null, tint = if (active) c.accent else c.graphite, modifier = Modifier.size(if (small) 18.dp else 21.dp))
-        else Box(Modifier.padding(horizontal = 6.dp).size(7.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.7f)))
+        if (icon != null) Icon(icon, null, tint = if (active) c.link else c.graphite, modifier = Modifier.size(if (small) 18.dp else 21.dp))
+        else Box(Modifier.padding(horizontal = 6.dp).size(7.dp).clip(CircleShape).background(c.link.copy(alpha = 0.7f)))
         Spacer(Modifier.width(16.dp))
         Text(label, style = (if (small) Type.body.copy(fontSize = 15.sp) else Type.cardTitle).copy(color = c.ink), modifier = Modifier.weight(1f))
         Text(count, style = Type.small.copy(color = c.graphite))

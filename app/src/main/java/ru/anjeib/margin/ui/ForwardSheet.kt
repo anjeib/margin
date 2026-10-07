@@ -78,7 +78,7 @@ fun ForwardSheet(
             Spacer(Modifier.height(8.dp))
             // Where from and who: the app by name, the sender with their address — and a way to keep them.
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 12.dp)) {
-                Text(from.uppercase(), style = Type.label.copy(color = c.accent))
+                Text(from.uppercase(), style = Type.label.copy(color = c.link))
                 if (sender != null) {
                     Spacer(Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -98,7 +98,7 @@ fun ForwardSheet(
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                    Box(Modifier.width(2.dp).fillMaxHeight().background(c.accent))
+                    Box(Modifier.width(2.dp).fillMaxHeight().background(c.link))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         if (text.isNotBlank()) Text(text.trim(), style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 7, overflow = TextOverflow.Ellipsis)

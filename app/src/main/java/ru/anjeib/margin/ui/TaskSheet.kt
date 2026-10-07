@@ -174,7 +174,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     BasicTextField(
                         value = title, onValueChange = { title = it },
                         textStyle = Type.title.copy(color = if (task.done) c.graphite else c.ink, fontSize = 28.sp, lineHeight = 34.sp),
-                        cursorBrush = SolidColor(c.accent),
+                        cursorBrush = SolidColor(c.link),
                         modifier = Modifier.weight(1f).padding(top = 6.dp, start = 2.dp),
                     )
                 }
@@ -250,7 +250,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     val phone = data.person(who)?.phone
                     Spacer(Modifier.height(14.dp))
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.accentSoft).padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.linkSoft).padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(s.overdueWaiting, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.weight(1f))
@@ -298,7 +298,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     }
                     Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(
-                        progress = { d.toFloat() / n }, color = c.accent, trackColor = c.hairline,
+                        progress = { d.toFloat() / n }, color = c.link, trackColor = c.hairline,
                         modifier = Modifier.fillMaxWidth().height(2.dp), drawStopIndicator = {}, gapSize = 0.dp,
                     )
                     Spacer(Modifier.height(4.dp))
@@ -440,10 +440,10 @@ private fun RepeatDialog(task: Task, onDismiss: () -> Unit, onPick: (ru.anjeib.m
             Column {
                 options.forEach { (label, r) ->
                     val sel = task.repeat == r
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (sel) c.accentSoft else c.card)
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (sel) c.linkSoft else c.card)
                         .clickable { onPick(r) }.padding(horizontal = 12.dp, vertical = 12.dp)) {
                         Text(label + (r?.let { if (it.freq == "weekly" && it.days.size == 1) " · " + it.label() else "" } ?: ""),
-                            style = Type.body.copy(color = if (sel) c.accent else c.ink))
+                            style = Type.body.copy(color = if (sel) c.link else c.ink))
                     }
                 }
             }
@@ -547,8 +547,8 @@ private fun DatesDialog(task: Task, onDismiss: () -> Unit, onSave: (String?, Str
         initialSelectedEndDateMillis = task.startDate?.let { task.dueDate?.ms() },
     )
     val colors = DatePickerDefaults.colors(
-        containerColor = c.card, selectedDayContainerColor = c.accent, todayDateBorderColor = c.accent,
-        todayContentColor = c.accent, dayInSelectionRangeContainerColor = c.accentSoft,
+        containerColor = c.card, selectedDayContainerColor = c.link, todayDateBorderColor = c.link,
+        todayContentColor = c.link, dayInSelectionRangeContainerColor = c.linkSoft,
         titleContentColor = c.graphite, headlineContentColor = c.ink,
     )
     androidx.compose.material3.DatePickerDialog(
@@ -560,7 +560,7 @@ private fun DatesDialog(task: Task, onDismiss: () -> Unit, onSave: (String?, Str
                     val a = rng.selectedStartDateMillis?.date(); val b = rng.selectedEndDateMillis?.date()
                     if (a != null && b != null) onSave(a.toString(), b.toString()) else onSave(null, a?.toString())
                 } else onSave(null, single.selectedDateMillis?.date()?.toString())
-            }) { Text(s.save, color = c.accent) }
+            }) { Text(s.save, color = c.link) }
         },
         dismissButton = { TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
     ) {
@@ -594,12 +594,12 @@ fun TimeDialog(time: String?, onDismiss: () -> Unit, onSave: (String?) -> Unit) 
         containerColor = c.card,
         text = {
             TimePicker(st, colors = TimePickerDefaults.colors(
-                clockDialColor = c.chip, selectorColor = c.accent, timeSelectorSelectedContainerColor = c.accentSoft,
+                clockDialColor = c.chip, selectorColor = c.link, timeSelectorSelectedContainerColor = c.linkSoft,
                 timeSelectorUnselectedContainerColor = c.chip, timeSelectorSelectedContentColor = c.ink,
                 timeSelectorUnselectedContentColor = c.ink, clockDialSelectedContentColor = c.bg, clockDialUnselectedContentColor = c.ink,
             ))
         },
-        confirmButton = { TextButton({ onSave("%02d:%02d".format(st.hour, st.minute)) }) { Text(s.save, color = c.accent) } },
+        confirmButton = { TextButton({ onSave("%02d:%02d".format(st.hour, st.minute)) }) { Text(s.save, color = c.link) } },
         dismissButton = {
             Row {
                 TextButton({ onSave(null) }) { Text(s.clear, color = c.graphite) }
@@ -621,10 +621,10 @@ fun TextDialog(title: String, initial: String, hint: String, onDismiss: () -> Un
         text = {
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.chip).padding(14.dp)) {
                 if (v.isEmpty()) Text(hint, style = Type.body.copy(color = c.graphite))
-                BasicTextField(v, { v = it }, textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+                BasicTextField(v, { v = it }, textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
             }
         },
-        confirmButton = { TextButton({ onSave(v) }) { Text(s.save, color = c.accent) } },
+        confirmButton = { TextButton({ onSave(v) }) { Text(s.save, color = c.link) } },
         dismissButton = { TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
     )
 }

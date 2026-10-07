@@ -138,8 +138,8 @@ fun Pill(
     onClick: (() -> Unit)? = null,
 ) {
     val c = M.c
-    val bg = when { filled -> c.ink; accent -> c.accentSoft; else -> Color.Transparent }
-    val fg = when { filled -> c.bg; accent -> c.accent; else -> c.ink }
+    val bg = when { filled -> c.ink; accent -> c.linkSoft; else -> Color.Transparent }
+    val fg = when { filled -> c.bg; accent -> c.link; else -> c.ink }
     Box(
         modifier
             .clip(RoundedCornerShape(50))
@@ -158,10 +158,10 @@ fun Tag(text: String) {
     val c = M.c
     Text(
         "#" + projectLabel(text),
-        style = Type.small.copy(color = c.accent, fontSize = 12.5.sp),
+        style = Type.small.copy(color = c.link, fontSize = 12.5.sp),
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .background(c.accentSoft)
+            .background(c.linkSoft)
             .padding(horizontal = 8.dp, vertical = 2.dp),
     )
 }
@@ -207,11 +207,11 @@ fun QuietTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, coun
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(l, style = Type.tab.copy(color = if (i == selected) c.ink else c.graphite))
                     counts?.getOrNull(i)?.takeIf { it > 0 }?.let { n ->
-                        Text(" $n", style = Type.small.copy(fontSize = 13.sp, color = if (i == 0 && alertFirst) c.accent else c.faint))
+                        Text(" $n", style = Type.small.copy(fontSize = 13.sp, color = if (i == 0 && alertFirst) c.link else c.faint))
                     }
                 }
                 Spacer(Modifier.height(5.dp))
-                Box(Modifier.size(4.dp).clip(CircleShape).background(if (i == selected) c.accent else Color.Transparent))
+                Box(Modifier.size(4.dp).clip(CircleShape).background(if (i == selected) c.link else Color.Transparent))
             }
         }
     }
@@ -237,8 +237,8 @@ val LocalPeopleLinks = androidx.compose.runtime.compositionLocalOf { PeopleLinks
 
 /**
  * The one quiet line under a task: «Вам от Марины · завтра · Ленина, 5 · #сайт».
- * Links look like links (accent): a contact opens their page, the place opens the map; a name that isn't a contact
- * stays grey and a tap offers «+ контакт». Late dates are accent too. No pills — they live in the card.
+ * Links are petrol blue: a contact opens their page, the place opens the map; a name that isn't a contact
+ * stays grey and a tap offers «+ контакт». Late dates — terracotta, the one colour of attention. No pills — they live in the card.
  */
 @Composable
 fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: Boolean = false, today: java.time.LocalDate = java.time.LocalDate.now()) {
@@ -253,16 +253,17 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         fun next() { if (!first) append(sep); first = false }
         fun link(tag: String, shown: String, color: Color, onClick: () -> Unit) =
             withLink(androidx.compose.ui.text.LinkAnnotation.Clickable(tag, androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = color))) { onClick() }) { append(shown) }
-        fun name(n0: String, shown: String = n0) = link("p:$n0", shown, if (links.isContact(n0)) c.accent else c.graphite) { links.onName(n0) }
+        fun name(n0: String, shown: String = n0) = link("p:$n0", shown, if (links.isContact(n0)) c.link else c.graphite) { links.onName(n0) }
+        // When first, darker than the rest — the eye finds it without looking; late in accent.
+        whenText?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = if (t.isOverdue(today)) c.accent else c.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)) { append(it) } }
         if (!t.done) {
             val parts = t.waitingFor?.let { s.promiseToYouParts(it) to it } ?: t.promisedTo?.let { s.promiseFromYouParts(it) to it }
             parts?.let { (p, who) -> next(); append(p.first); name(who, p.second); append(p.third) }
         }
-        whenText?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = if (t.isOverdue(today)) c.accent else c.graphite)) { append(it) } }
         t.people.filter { p -> p != t.waitingFor && p != t.promisedTo && p != s.me }.take(2).forEach { next(); name(it) }
         t.place?.let { pl ->
             next()
-            link("place", pl, c.accent) {
+            link("place", pl, c.link) {
                 runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
             }
         }
@@ -271,7 +272,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         val files = t.entries.sumOf { it.attachments.size }
         if (files > 0) { next(); append("📎 $files") }
         if (showIdea && t.noteId != null) { next(); append("✎ " + s.ideaMark) }
-        if (showProject) t.project?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = c.accent)) { append("#" + projectLabel(it)) } }
+        if (showProject) t.project?.let { next(); append("#" + projectLabel(it)) }
     }
     if (text.isNotEmpty()) Text(text, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
         modifier = Modifier.padding(top = 3.dp))
@@ -285,7 +286,7 @@ fun PromiseBadge(t: Task, big: Boolean = false, onClick: (() -> Unit)? = null) {
     val text = t.waitingFor?.let { s.promiseToYou(it) } ?: t.promisedTo?.let { s.promiseFromYou(it) } ?: return
     Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
         .padding(horizontal = if (big) 12.dp else 9.dp, vertical = if (big) 6.dp else 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(s.promiseWord, style = Type.small.copy(color = c.accent, fontSize = if (big) 14.sp else 12.5.sp))
+        Text(s.promiseWord, style = Type.small.copy(color = c.link, fontSize = if (big) 14.sp else 12.5.sp))
         Text("  " + text, style = Type.small.copy(color = c.ink, fontSize = if (big) 14.sp else 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -428,7 +429,7 @@ fun Countdown(running: Boolean, durationMs: Long, key: Any) {
     )
     androidx.compose.runtime.LaunchedEffect(key) { started = true }
     Box(Modifier.fillMaxWidth().height(2.dp).background(c.hairline)) {
-        if (running) Box(Modifier.fillMaxWidth(f).height(2.dp).background(c.accent))
+        if (running) Box(Modifier.fillMaxWidth(f).height(2.dp).background(c.link))
     }
 }
 

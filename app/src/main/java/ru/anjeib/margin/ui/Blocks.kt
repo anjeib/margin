@@ -146,9 +146,9 @@ fun BlockStream(
                     Box(Modifier.weight(1f)) { Block(owner, e, vm, onFill, on, newSession, onView = { viewing = it }) }
                     trailing(e)?.let { t -> Spacer(Modifier.width(4.dp)); Box(Modifier.padding(top = 6.dp)) { t() } }
                     // The quiet «+» of the active block: things to put right after it.
-                    if (on) Box(Modifier.padding(top = 2.dp).size(36.dp).clip(CircleShape).background(if (inserting == e.id) c.accent else c.accentSoft)
+                    if (on) Box(Modifier.padding(top = 2.dp).size(36.dp).clip(CircleShape).background(if (inserting == e.id) c.link else c.linkSoft)
                         .clickable { inserting = if (inserting == e.id) null else e.id }, contentAlignment = Alignment.Center) {
-                        Icon(if (inserting == e.id) Icons.Rounded.Close else Icons.Rounded.Add, s.insertBelow, tint = if (inserting == e.id) c.bg else c.accent, modifier = Modifier.size(18.dp))
+                        Icon(if (inserting == e.id) Icons.Rounded.Close else Icons.Rounded.Add, s.insertBelow, tint = if (inserting == e.id) c.bg else c.link, modifier = Modifier.size(18.dp))
                     }
                 }
                 if (inserting == e.id) InsertRow(
@@ -237,8 +237,8 @@ private fun FileBlock(a: Attachment, onView: () -> Unit) {
     val c = M.c
     val ext = a.name.substringAfterLast('.', "").uppercase().take(4)
     Row(Modifier.clip(RoundedCornerShape(14.dp)).background(c.chip).clickable(onClick = onView).padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(width = 52.dp, height = 64.dp).clip(RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp)).background(c.accentSoft), contentAlignment = Alignment.Center) {
-            Text(ext.ifBlank { "•" }, style = Type.label.copy(color = c.accent, fontSize = 11.sp))
+        Box(Modifier.size(width = 52.dp, height = 64.dp).clip(RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp)).background(c.linkSoft), contentAlignment = Alignment.Center) {
+            Text(ext.ifBlank { "•" }, style = Type.label.copy(color = c.link, fontSize = 11.sp))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.widthIn(max = 220.dp)) {
@@ -325,12 +325,12 @@ private fun PhotoBlock(a: Attachment, vm: MainVm, active: Boolean, onView: () ->
         // The text on a photo only on request: what to do with it decides whether it is worth reading.
         var menu by remember { mutableStateOf(false) }
         if ("ocr:${a.id}" in working) Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(8.dp))
+            CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(8.dp))
             Text(s.readingPhoto, style = Type.small.copy(color = c.faint, fontSize = 12.5.sp))
         } else if (active) Box(Modifier.padding(top = 6.dp)) {
-            Row(Modifier.clip(RoundedCornerShape(50)).background(c.accentSoft).clickable { menu = true }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.DocumentScanner, null, tint = c.accent, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
-                Text(s.photoTextAction, style = Type.small.copy(color = c.accent, fontSize = 13.5.sp))
+            Row(Modifier.clip(RoundedCornerShape(50)).background(c.linkSoft).clickable { menu = true }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.DocumentScanner, null, tint = c.link, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
+                Text(s.photoTextAction, style = Type.small.copy(color = c.link, fontSize = 13.5.sp))
             }
             DropdownMenu(menu, { menu = false }, containerColor = c.card) {
                 DropdownMenuItem(text = { Text(s.insertAsText, style = Type.body) }, onClick = { menu = false; onText("insert") })
@@ -395,11 +395,11 @@ private fun VoiceBlock(a: Attachment, vm: MainVm) {
     Column {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.chip).padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(c.accent).clickable { toggle() }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(c.link).clickable { toggle() }, contentAlignment = Alignment.Center) {
                 Icon(if (playing) Icons.Outlined.Pause else Icons.Outlined.PlayArrow, s.voiceNote, tint = c.bg, modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(12.dp))
-            LinearProgressIndicator(progress = { progress }, color = c.accent, trackColor = c.hairline, modifier = Modifier.weight(1f).height(3.dp), drawStopIndicator = {}, gapSize = 0.dp)
+            LinearProgressIndicator(progress = { progress }, color = c.link, trackColor = c.hairline, modifier = Modifier.weight(1f).height(3.dp), drawStopIndicator = {}, gapSize = 0.dp)
             Spacer(Modifier.width(12.dp))
             Text(a.durationLabel(), style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
         }
@@ -494,7 +494,7 @@ private fun InsertRow(vm: MainVm, onText: () -> Unit, onList: () -> Unit, onAtta
     val rec = recorder
     if (rec != null) {
         // Recording in place: a breathing dot, the time, done or cancel.
-        Row(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(50)).background(c.accentSoft).padding(horizontal = 6.dp, vertical = 4.dp),
+        Row(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(50)).background(c.linkSoft).padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.Close, s.cancel, tint = c.graphite, modifier = Modifier.size(20.dp))

@@ -140,12 +140,12 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
                                     val count = open.count { on(it, d) }
                                     val sel = d == day
                                     Column(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp))
-                                        .background(if (sel) c.accent else Color.Transparent)
-                                        .then(if (d == today && !sel) Modifier.border(1.dp, c.accent, RoundedCornerShape(12.dp)) else Modifier)
+                                        .background(if (sel) c.link else Color.Transparent)
+                                        .then(if (d == today && !sel) Modifier.border(1.dp, c.link, RoundedCornerShape(12.dp)) else Modifier)
                                         .clickable { picked = d.toString() }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                                         Text("$n", style = Type.body.copy(color = when { sel -> c.bg; d.isBefore(today) -> c.faint; else -> c.ink }, fontSize = 15.sp))
                                         // How busy the day is — a number, quiet, never a colour per project.
-                                        Text(if (count > 0) "$count" else " ", style = Type.small.copy(color = if (sel) c.bg else if (d.isBefore(today)) c.faint else c.accent, fontSize = 11.sp))
+                                        Text(if (count > 0) "$count" else " ", style = Type.small.copy(color = if (sel) c.bg else if (d.isBefore(today)) c.faint else c.link, fontSize = 11.sp))
                                     }
                                 }
                             }

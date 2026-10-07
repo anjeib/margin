@@ -70,7 +70,7 @@ private fun HelpCard(h: HelpSection) {
                     val badge = M.s.promiseWord + " · "
                     if (does.startsWith(badge)) Row(Modifier.weight(0.55f)) {
                         Column(Modifier.clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 9.dp, vertical = 4.dp)) {
-                            Text(M.s.promiseWord, style = Type.small.copy(color = c.accent, fontSize = 12.5.sp))
+                            Text(M.s.promiseWord, style = Type.small.copy(color = c.link, fontSize = 12.5.sp))
                             Text(does.removePrefix(badge), style = Type.small.copy(color = c.ink, fontSize = 13.5.sp))
                         }
                     }

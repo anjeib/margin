@@ -70,6 +70,10 @@ interface Strings {
     val mailPasswordHow: String
     fun waitingShort(n: String): String
     val promiseWord: String
+    val feedbackTitle: String
+    val feedbackStub: String
+    val forwardHowTo: String
+    val allDay: String
     val addContact: String
     fun notAContact(n: String): String
     val inContacts: String
@@ -553,11 +557,10 @@ object Ru : Strings {
             "«Отменить»" to "есть под каждым изменением несколько секунд",
         )),
         HelpSection("Связи", "Задача помнит, откуда пришла: «↳ из сообщения» или идея из заметки. В карточке — «Связи»: люди, их другие обещания, проект. Под задачей ссылки выделены цветом: контакт открывает его страницу, адрес — карту."),
-        HelpSection("Пересылка", "Настройки → «Пересылка в Margin».", pairs = listOf(
-            "Telegram" to "свой бот: пересылайте ему сообщения",
-            "Почта" to "перешлите письмо на свой же адрес",
-            "MAX" to "«Копировать» → в Margin «Вставить скопированное»",
-            "Любое приложение" to "«Поделиться» или выделить текст → «В Margin»",
+        HelpSection("Пересылка", "Чужое сообщение — из Telegram, MAX, почты — Margin разберёт как чужие слова: что вам обещали, о чём просят.", pairs = listOf(
+            "«Поделиться»" to "→ «В Margin»",
+            "выделить текст" to "→ «В Margin» в меню",
+            "«Копировать»" to "→ в Margin «Вставить скопированное»",
         )),
         HelpSection("Голос и файлы", "", pairs = listOf(
             "микрофон" to "диктовка — сразу текстом",
@@ -618,6 +621,10 @@ object Ru : Strings {
     override fun waitingShort(n: String) = "обещание: Вам от ${n.genitive()}"
     override fun promisedShort(n: String) = "обещание: ${n.dative()} от Вас"
     override val promiseWord = "Обещание"
+    override val feedbackTitle = "Пожаловаться или похвалить"
+    override val feedbackStub = "Скоро здесь можно будет написать нам напрямую — что мешает, чего не хватает, что нравится. Спасибо, что пользуетесь Margin."
+    override val forwardHowTo = "Из Telegram, MAX, почты: «Поделиться» или выделить текст → «В Margin». Или «Копировать» — и в Margin появится «Вставить скопированное»."
+    override val allDay = "весь день"
     override val addContact = "+ контакт"
     override fun notAContact(n: String) = "$n — нет в контактах"
     override val inContacts = "в контактах"
@@ -842,7 +849,7 @@ object Ru : Strings {
 
 
     override fun until(day: String) = "до $day"
-    override val inWorkThisWeek = "В работе на неделе"
+    override val inWorkThisWeek = "На неделе"
     override val thisMonth = "Этот месяц"
     override val waitingOthers = "Ждём от других"
     override val byDates = "по срокам"
@@ -1097,11 +1104,10 @@ object En : Strings {
             "“Undo”" to "under every change for a few seconds",
         )),
         HelpSection("Links", "A task remembers where it came from: “↳ from a message” or an idea in a note. The card shows “Links”: people, their other promises, the project. Under a task, links are in colour: a contact opens their page, an address opens the map."),
-        HelpSection("Forwarding", "Settings → “Forwarding to Margin”.", pairs = listOf(
-            "Telegram" to "your own bot: forward messages to it",
-            "Mail" to "forward a letter to your own address",
-            "MAX" to "“Copy” → in Margin “Paste what you copied”",
-            "Any app" to "“Share” or select text → “To Margin”",
+        HelpSection("Forwarding", "Someone else’s message — from Telegram, MAX, mail — Margin reads as their words: what they promised you, what they ask.", pairs = listOf(
+            "“Share”" to "→ “To Margin”",
+            "select text" to "→ “To Margin” in the menu",
+            "“Copy”" to "→ in Margin “Paste what you copied”",
         )),
         HelpSection("Voice and files", "", pairs = listOf(
             "mic" to "dictation — straight to text",
@@ -1162,6 +1168,10 @@ object En : Strings {
     override fun waitingShort(n: String) = "promise to you from $n"
     override fun promisedShort(n: String) = "promise to $n from you"
     override val promiseWord = "Promise"
+    override val feedbackTitle = "Complain or praise"
+    override val feedbackStub = "Soon you’ll be able to write to us right here — what gets in the way, what’s missing, what you like. Thank you for using Margin."
+    override val forwardHowTo = "From Telegram, MAX, mail: “Share” or select text → “To Margin”. Or “Copy” — and “Paste what you copied” appears in Margin."
+    override val allDay = "all day"
     override val addContact = "+ contact"
     override fun notAContact(n: String) = "$n isn’t in contacts"
     override val inContacts = "in contacts"
@@ -1386,7 +1396,7 @@ object En : Strings {
 
 
     override fun until(day: String) = "by $day"
-    override val inWorkThisWeek = "In progress this week"
+    override val inWorkThisWeek = "This week"
     override val thisMonth = "This month"
     override val waitingOthers = "Waiting on others"
     override val byDates = "by date"

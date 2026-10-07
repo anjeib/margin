@@ -95,7 +95,7 @@ fun NotesList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddin
         if (searching) item("search") {
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.chip).padding(horizontal = 16.dp, vertical = 12.dp)) {
                 if (q.isEmpty()) Text(s.searchNotes, style = Type.body.copy(color = c.graphite))
-                BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+                BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
             }
         }
         if (projects.isNotEmpty()) item("filters") {
@@ -189,7 +189,7 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 Box(Modifier.weight(1f)) {
                     if (title.isEmpty()) Text(s.noteTitleHint, style = Type.title.copy(color = c.faint, fontSize = 32.sp))
                     BasicTextField(title, { title = it }, textStyle = Type.title.copy(color = c.ink, fontSize = 32.sp, lineHeight = 38.sp),
-                        cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+                        cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
                 }
                 // A note that is all title is one idea: it gets the same «to a task» button as an entry.
                 if (note.entries.isEmpty() && note.title.isNotBlank()) Box(Modifier.padding(top = 8.dp)) {
@@ -271,17 +271,17 @@ private fun RemindDialog(initial: String?, onDismiss: () -> Unit, onSave: (Strin
         val st = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = start.toLocalDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli())
         androidx.compose.material3.DatePickerDialog(
             onDismissRequest = onDismiss,
-            confirmButton = { androidx.compose.material3.TextButton({ day = st.selectedDateMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() } ?: start.toLocalDate() }) { Text(s.next, color = c.accent) } },
+            confirmButton = { androidx.compose.material3.TextButton({ day = st.selectedDateMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() } ?: start.toLocalDate() }) { Text(s.next, color = c.link) } },
             dismissButton = { androidx.compose.material3.TextButton({ if (initial != null) onSave(null) else onDismiss() }) { Text(if (initial != null) s.removeWord else s.cancel, color = c.graphite) } },
             colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card),
-        ) { androidx.compose.material3.DatePicker(st, colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card, selectedDayContainerColor = c.accent, todayDateBorderColor = c.accent)) }
+        ) { androidx.compose.material3.DatePicker(st, colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card, selectedDayContainerColor = c.link, todayDateBorderColor = c.link)) }
     } else {
         val tp = androidx.compose.material3.rememberTimePickerState(start.hour, start.minute, is24Hour = true)
         androidx.compose.material3.AlertDialog(
             onDismissRequest = onDismiss, containerColor = c.card,
-            text = { androidx.compose.material3.TimePicker(tp, colors = androidx.compose.material3.TimePickerDefaults.colors(clockDialColor = c.chip, selectorColor = c.accent,
-                timeSelectorSelectedContainerColor = c.accentSoft, timeSelectorUnselectedContainerColor = c.chip)) },
-            confirmButton = { androidx.compose.material3.TextButton({ onSave(day!!.atTime(tp.hour, tp.minute).toString().take(16)) }) { Text(s.save, color = c.accent) } },
+            text = { androidx.compose.material3.TimePicker(tp, colors = androidx.compose.material3.TimePickerDefaults.colors(clockDialColor = c.chip, selectorColor = c.link,
+                timeSelectorSelectedContainerColor = c.linkSoft, timeSelectorUnselectedContainerColor = c.chip)) },
+            confirmButton = { androidx.compose.material3.TextButton({ onSave(day!!.atTime(tp.hour, tp.minute).toString().take(16)) }) { Text(s.save, color = c.link) } },
             dismissButton = { androidx.compose.material3.TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
         )
     }
@@ -293,13 +293,13 @@ fun IdeaTaskButton(made: List<ru.anjeib.margin.data.Task>, busy: Boolean, onOpen
     val c = M.c
     val s = M.s
     // In words, not an icon nobody reads: «В задачу», or «В задачах» once it is one.
-    Row(Modifier.clip(RoundedCornerShape(50)).background(if (made.isEmpty()) c.accentSoft else Color.Transparent)
+    Row(Modifier.clip(RoundedCornerShape(50)).background(if (made.isEmpty()) c.linkSoft else Color.Transparent)
         .clickable(enabled = !busy) { made.firstOrNull()?.let { onOpenTask(it.id) } ?: onMake() }.padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
         when {
-            busy -> CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
+            busy -> CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
             made.isNotEmpty() -> Text("✓ " + s.inTasks, style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
-            else -> Text(s.toTaskPill, style = Type.small.copy(color = c.accent, fontSize = 13.sp))
+            else -> Text(s.toTaskPill, style = Type.small.copy(color = c.link, fontSize = 13.sp))
         }
     }
 }

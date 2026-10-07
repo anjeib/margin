@@ -100,7 +100,7 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                         )
                         if (st is ru.anjeib.margin.voice.LocalWhisper.State.Downloading) {
                             Spacer(Modifier.height(8.dp))
-                            androidx.compose.material3.LinearProgressIndicator(progress = { st.progress }, color = c.accent, trackColor = c.hairline,
+                            androidx.compose.material3.LinearProgressIndicator(progress = { st.progress }, color = c.link, trackColor = c.hairline,
                                 modifier = Modifier.fillMaxWidth().height(3.dp), drawStopIndicator = {}, gapSize = 0.dp)
                         }
                     }
@@ -122,7 +122,11 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             }
         }
 
-        Group(s.forwardSection) { ForwardSettings(vm) }
+        Group(s.forwardSection) {
+            // The own Telegram bot and mail need setup and a server-side redo — only in the developer section for now.
+            Text(s.forwardHowTo, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+            if (settings.devMode) { Divider(); ForwardSettings(vm) }
+        }
 
         Group(s.appearance) {
             Segmented(
@@ -235,12 +239,12 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                 Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.chip).padding(14.dp)) {
                     if (v.isEmpty()) Text(s.apiKeyHint, style = Type.body.copy(color = c.graphite))
                     BasicTextField(v, { v = it.trim() }, singleLine = true, textStyle = Type.body.copy(color = c.ink),
-                        visualTransformation = PasswordVisualTransformation(), cursorBrush = SolidColor(c.accent),
+                        visualTransformation = PasswordVisualTransformation(), cursorBrush = SolidColor(c.link),
                         modifier = Modifier.fillMaxWidth())
                 }
             },
             confirmButton = {
-                TextButton({ vm.updateSettings { if (it.provider == "yandex") it.copy(yaKey = v) else it.copy(apiKey = v) }; keyDraft = null; vm.checkKey() }) { Text(s.save, color = c.accent) }
+                TextButton({ vm.updateSettings { if (it.provider == "yandex") it.copy(yaKey = v) else it.copy(apiKey = v) }; keyDraft = null; vm.checkKey() }) { Text(s.save, color = c.link) }
             },
             dismissButton = { TextButton({ keyDraft = null }) { Text(s.cancel, color = c.graphite) } },
         )
@@ -300,7 +304,7 @@ private fun ToggleRow(label: String, hint: String?, value: Boolean, onLabel: (()
         Switch(
             checked = value, onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
-                checkedTrackColor = c.accent, checkedThumbColor = c.card, checkedBorderColor = c.accent,
+                checkedTrackColor = c.link, checkedThumbColor = c.card, checkedBorderColor = c.link,
                 uncheckedTrackColor = c.chip, uncheckedThumbColor = c.card, uncheckedBorderColor = c.hairline,
             ),
         )
@@ -314,10 +318,10 @@ private fun Segmented(labels: List<String>, selected: Int, onSelect: (Int) -> Un
         horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         labels.forEachIndexed { i, l ->
             Box(
-                Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (i == selected) c.accentSoft else c.chip)
+                Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (i == selected) c.linkSoft else c.chip)
                     .clickable { onSelect(i) }.padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text(l, style = Type.small.copy(color = if (i == selected) c.accent else c.graphite, fontSize = 14.sp)) }
+            ) { Text(l, style = Type.small.copy(color = if (i == selected) c.link else c.graphite, fontSize = 14.sp)) }
         }
     }
 }
@@ -341,12 +345,12 @@ private fun ModelPicker(current: String, vm: MainVm, audioOnly: Boolean = false,
                 Box(Modifier.weight(1f)) {
                     if (q.isEmpty()) Text(s.searchModels, style = Type.body.copy(color = c.graphite))
                     BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink),
-                        cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+                        cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
                 }
             }
             Spacer(Modifier.height(10.dp))
             if (models.isEmpty()) Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(20.dp))
+                CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(20.dp))
             }
             val words = q.lowercase().split(' ').filter { it.isNotBlank() }
             val list = models.filter { m -> (!audioOnly || m.audio) && words.all { it in (m.id + " " + m.name).lowercase() } }
@@ -354,7 +358,7 @@ private fun ModelPicker(current: String, vm: MainVm, audioOnly: Boolean = false,
                 items(list, key = { it.id }) { m ->
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                            .background(if (m.id == current) c.accentSoft else c.bg)
+                            .background(if (m.id == current) c.linkSoft else c.bg)
                             .clickable { onPick(m.id) }.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -388,12 +392,6 @@ private fun ForwardSettings(vm: MainVm) {
     ValueRow("Telegram", if (st.telegram) s.tgOn(st.tgBot) else s.tgHint, if (st.telegram) s.connected else "") { dialog = "tg" }
     Divider()
     ValueRow(s.viaMailTitle, if (st.mail) s.mailOn(st.mailAddress) else s.mailHint, if (st.mail) s.connected else "") { dialog = "mail" }
-    Divider()
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Text("MAX", style = Type.body.copy(color = c.ink))
-        Spacer(Modifier.height(2.dp))
-        Text(s.maxHint, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
-    }
     st.error?.let {
         Divider()
         Text(it, style = Type.small.copy(color = c.accent, fontSize = 12.5.sp), modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
@@ -405,16 +403,16 @@ private fun ForwardSettings(vm: MainVm) {
             if (value.isEmpty()) Text(hint, style = Type.body.copy(color = c.graphite))
             BasicTextField(value, onChange, singleLine = true, textStyle = Type.body.copy(color = c.ink),
                 visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-                cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+                cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
         }
     }
     @Composable
     fun Step(n: Int, text: String, link: String? = null, url: String? = null) {
         Row(Modifier.padding(vertical = 4.dp)) {
-            Text("$n.", style = Type.small.copy(color = c.accent, fontSize = 14.sp), modifier = Modifier.width(20.dp))
+            Text("$n.", style = Type.small.copy(color = c.link, fontSize = 14.sp), modifier = Modifier.width(20.dp))
             Column {
                 Text(text, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
-                if (link != null && url != null) Text(link, style = Type.small.copy(color = c.accent, fontSize = 14.sp),
+                if (link != null && url != null) Text(link, style = Type.small.copy(color = c.link, fontSize = 14.sp),
                     modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { open(url) }.padding(vertical = 4.dp))
             }
         }
@@ -434,7 +432,7 @@ private fun ForwardSettings(vm: MainVm) {
                         if (st.telegram) {
                             Text(s.tgConnectedText(st.tgBot), style = Type.body.copy(color = c.ink))
                             Spacer(Modifier.height(10.dp))
-                            Text(s.tgOpenBot, style = Type.body.copy(color = c.accent),
+                            Text(s.tgOpenBot, style = Type.body.copy(color = c.link),
                                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { open("https://t.me/${st.tgBot}") }.padding(vertical = 6.dp))
                         } else {
                             Text(s.tgWhy, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
@@ -453,7 +451,7 @@ private fun ForwardSettings(vm: MainVm) {
                     if (st.telegram) TextButton({ vm.disconnectTelegram(); dialog = null }) { Text(s.disconnect, color = c.accent) }
                     else TextButton({
                         if (!busy && token.isNotBlank()) { busy = true; vm.connectTelegram(token) { e -> busy = false; err = e; if (e == null) open("https://t.me/${vm.forward.value.tgBot}?start=margin") } }
-                    }) { if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp)) else Text(s.connect, color = c.accent) }
+                    }) { if (busy) CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp)) else Text(s.connect, color = c.link) }
                 },
                 dismissButton = { TextButton({ dialog = null }) { Text(if (st.telegram) s.close else s.cancel, color = c.graphite) } },
             )
@@ -486,7 +484,7 @@ private fun ForwardSettings(vm: MainVm) {
                     if (st.mail) TextButton({ vm.disconnectMail(); dialog = null }) { Text(s.disconnect, color = c.accent) }
                     else TextButton({
                         if (!busy && address.contains('@') && password.isNotBlank()) { busy = true; vm.connectMail(address, password) { e -> busy = false; err = e; if (e == null) dialog = null } }
-                    }) { if (busy) CircularProgressIndicator(color = c.accent, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp)) else Text(s.connect, color = c.accent) }
+                    }) { if (busy) CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp)) else Text(s.connect, color = c.link) }
                 },
                 dismissButton = { TextButton({ dialog = null }) { Text(if (st.mail) s.close else s.cancel, color = c.graphite) } },
             )

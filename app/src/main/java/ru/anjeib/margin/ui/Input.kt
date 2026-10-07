@@ -182,11 +182,11 @@ fun SmartComposer(
     }
 
     Column(modifier.fillMaxWidth()) {
-        if (modeLabel != null) Row(Modifier.padding(start = 6.dp, bottom = 6.dp).clip(RoundedCornerShape(50)).background(c.accentSoft)
+        if (modeLabel != null) Row(Modifier.padding(start = 6.dp, bottom = 6.dp).clip(RoundedCornerShape(50)).background(c.linkSoft)
             .clickable(onClick = onModeClose).padding(start = 12.dp, end = 8.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(modeLabel, style = Type.small.copy(color = c.accent, fontSize = 13.5.sp))
+            Text(modeLabel, style = Type.small.copy(color = c.link, fontSize = 13.5.sp))
             Spacer(Modifier.width(6.dp))
-            Icon(Icons.Rounded.Close, s.dismiss, tint = c.accent, modifier = Modifier.size(14.dp))
+            Icon(Icons.Rounded.Close, s.dismiss, tint = c.link, modifier = Modifier.size(14.dp))
         }
         if (files.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -238,13 +238,13 @@ fun SmartComposer(
                 if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = Type.body.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 BasicTextField(
                     value = text, onValueChange = { text = it },
-                    textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.accent), maxLines = 6,
+                    textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link), maxLines = 6,
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 )
             }
             if (text.isBlank() && !busy) {
                 if (transcribing) Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = c.accent, strokeWidth = 1.6.dp, modifier = Modifier.size(18.dp))
+                    CircularProgressIndicator(color = c.link, strokeWidth = 1.6.dp, modifier = Modifier.size(18.dp))
                 } else RoundIcon(Icons.Outlined.Mic, c.graphite, s.a11yMic, onClick = ::mic)
             }
             Spacer(Modifier.width(4.dp))
