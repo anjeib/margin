@@ -52,7 +52,8 @@ fun SectionRow(selected: Int, onSelect: (Int) -> Unit) {
     val c = M.c
     val s = M.s
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        listOf(s.tasks, s.notes, s.peopleTitle, s.projects.lowercase().replaceFirstChar { it.uppercase() }).forEachIndexed { i, l ->
+        // v2: notes became thoughts among the topics, projects became labels.
+        listOf(s.casesTitle, s.materialsTitle, s.peopleTitle).forEachIndexed { i, l ->
             val on = i == selected
             Text(l, style = Type.small.copy(color = if (on) c.ink else c.graphite, fontSize = 14.sp),
                 modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.chip else Color.Transparent)
@@ -165,14 +166,24 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
 
 /** «Архив»: notes and people put away by a swipe — each comes back with «Вернуть». */
 @Composable
-fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpenPerson: (String) -> Unit, contentPadding: PaddingValues) {
+fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpenPerson: (String) -> Unit, contentPadding: PaddingValues, onOpenTask: (String) -> Unit = {}) {
     val c = M.c
     val s = M.s
     val notes = data.notes.filter { it.archived }
     val people = data.persons.filter { it.archived }
+    val topics = data.tasks.filter { it.topic && it.done }.sortedByDescending { it.doneAt }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item("h") { Text(s.archiveTitle, style = Type.display.copy(color = c.ink), modifier = Modifier.padding(top = 18.dp, bottom = 12.dp, start = 4.dp)) }
-        if (notes.isEmpty() && people.isEmpty()) item("empty") { Empty(s.archiveTitle, s.archiveEmpty) }
+        if (notes.isEmpty() && people.isEmpty() && topics.isEmpty()) item("empty") { Empty(s.archiveTitle, s.archiveEmpty) }
+        // v2: settled topics with their materials; news in one brings it back.
+        if (topics.isNotEmpty()) item("th") { SectionLabel(s.casesTitle.uppercase(), Modifier.padding(start = 6.dp, top = 6.dp)) }
+        items(topics, key = { "t" + it.id }) { t ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { TopicRow(t, onOpen = { onOpenTask(t.id) }) }
+                Spacer(Modifier.width(8.dp))
+                Pill(s.bringBack, onClick = { vm.reviveTopic(t.id) })
+            }
+        }
         if (notes.isNotEmpty()) item("nh") { SectionLabel(s.notes.uppercase(), Modifier.padding(start = 6.dp, top = 6.dp)) }
         items(notes, key = { "n" + it.id }) { n ->
             Row(verticalAlignment = Alignment.CenterVertically) {

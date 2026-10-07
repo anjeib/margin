@@ -1,0 +1,96 @@
+package ru.anjeib.margin
+
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import ru.anjeib.margin.ai.AiPlan
+import ru.anjeib.margin.ai.Assistant
+import ru.anjeib.margin.data.AppData
+import ru.anjeib.margin.data.Entry
+import ru.anjeib.margin.data.Task
+import ru.anjeib.margin.data.Topics
+import ru.anjeib.margin.data.listTasks
+import ru.anjeib.margin.data.noNextStep
+import java.time.LocalDate
+
+/** v2 «Темы»: a task grows into a topic on its second event, and the feed lines are written by the app. Offline. */
+class TopicsTest {
+    private val today = LocalDate.now()
+    private fun o(vararg p: Pair<String, Any>): JsonObject = JsonObject(p.associate { (k, v) ->
+        k to when (v) { is List<*> -> JsonArray(v.map { it as JsonObject }); else -> JsonPrimitive(v.toString()) }
+    })
+    private fun step(d: AppData, text: String, focus: String, vararg actions: JsonObject): AppData =
+        Topics.track(d, Assistant.apply(d, AiPlan(null, actions.toList(), null), text, strict = true, focus = focus).data)
+
+    @Test fun callBecomesTopic() {
+        val call = Task(title = "Позвонить Игорю насчёт приказа о зачислении", due = today.plusDays(1).toString(), people = listOf("Игорь"))
+        var d = AppData(tasks = listOf(call))
+        val said = "Созвонились. Приказ о зачислении в работе, будет через 2 недели. Нужно отправить документы об оплате в бухгалтерию."
+        d = step(d, said, call.id,
+            o("type" to "add_entry", "task_id" to call.id, "text" to said),
+            o("type" to "complete_task", "task_id" to call.id),
+            o("type" to "add_subtasks", "task_id" to call.id, "subtasks" to listOf(
+                o("title" to "Отправить документы об оплате в бухгалтерию"),
+                o("title" to "Приказ о зачислении", "from" to "Игорь", "due" to today.plusDays(14).toString()),
+            )),
+            o("type" to "update_task", "task_id" to call.id, "topic_title" to "Приказ о зачислении"),
+        )
+        val t = d.tasks.single()
+        assertTrue(t.topic)
+        assertFalse(t.done)
+        assertEquals("Приказ о зачислении", t.title)
+        assertEquals(null, t.due)
+        assertEquals(3, t.subtasks.size)
+        val first = t.subtasks.first()
+        assertEquals("Позвонить Игорю насчёт приказа о зачислении", first.title)
+        assertTrue(first.done)
+        assertEquals("Игорь", t.subtasks.last().from)
+        val kinds = t.events.map { it.kind }
+        assertTrue(kinds.containsAll(listOf("q", "became", "solved", "wait")))
+        // Under the words: became, settled, the new question, the wait.
+        assertTrue(t.events.filter { it.kind != "q" || it.ref != first.id }.all { it.entry == t.entries.single().id })
+        // In the lists: the dated wait is a row linked to its topic; the topic itself isn't.
+        val rows = d.listTasks()
+        assertEquals(1, rows.size)
+        assertEquals(t.id, rows.single().topicId)
+        assertEquals("Игорь", rows.single().waitingFor)
+    }
+
+    @Test fun lastQuestionSettledOffersArchive() {
+        val t0 = Task(title = "Приказ о зачислении", topic = true, subtasks = listOf(ru.anjeib.margin.data.Subtask(title = "Документы", done = false)))
+        var d = AppData(tasks = listOf(t0))
+        d = step(d, "документы отправил", t0.id, o("type" to "complete_subtask", "task_id" to t0.id, "subtask_id" to t0.subtasks[0].id))
+        val t = d.tasks.single()
+        assertTrue(t.noNextStep)
+        assertEquals("solved", t.events.last().kind)
+    }
+
+    @Test fun movingATopicMovesItsQuestion() {
+        val q = ru.anjeib.margin.data.Subtask(title = "Стоматолог", due = today.toString(), time = "18:00")
+        val t0 = Task(title = "Зубы", topic = true, subtasks = listOf(q))
+        val fri = today.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.FRIDAY)).toString()
+        val d = step(AppData(tasks = listOf(t0)), "перенеси на пятницу в 15:00", t0.id, o("type" to "update_task", "task_id" to t0.id, "due" to fri, "time" to "15:00"))
+        val t = d.tasks.single()
+        assertEquals(null, t.due)
+        assertEquals(fri, t.subtasks.single().due)
+        assertEquals("15:00", t.subtasks.single().time)
+    }
+
+    @Test fun plainNoteDoesNotTurnNewTaskIntoTopic() {
+        val d0 = AppData()
+        val d = Topics.track(d0, d0.copy(tasks = listOf(Task(title = "Купить молоко", entries = listOf(Entry(text = "2,5%"))))))
+        assertFalse(d.tasks.single().topic)
+    }
+
+    @Test fun archivedTopicComesBackWithNews() {
+        val t0 = Task(title = "Приказ", topic = true, done = true, doneAt = today.toString(), subtasks = listOf(ru.anjeib.margin.data.Subtask(title = "x", done = true)))
+        val d0 = AppData(tasks = listOf(t0))
+        val d = Topics.track(d0, d0.copy(tasks = listOf(t0.copy(entries = listOf(Entry(text = "Игорь перезвонил"))))))
+        assertFalse(d.tasks.single().done)
+        assertEquals("revived", d.tasks.single().events.last().kind)
+    }
+}

@@ -96,7 +96,7 @@ import java.time.ZoneOffset
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpenNote: (String) -> Unit, onOpenPerson: (String) -> Unit, onOpenTask: (String) -> Unit = {},
-              startDialog: String? = null, onStartDialogUsed: () -> Unit = {}) {
+              startDialog: String? = null, onStartDialogUsed: () -> Unit = {}, startTab: Int = 0, startHl: String? = null) {
     val c = M.c
     val s = M.s
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -145,6 +145,13 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
         val maxH = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.92f).dp
         // The sheet itself lifts above the keyboard, so the content gives up exactly the keyboard's height.
         val ime = androidx.compose.foundation.layout.WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+        // v2: a task that grew into a topic — the feed, its questions and materials.
+        if (task.topic) {
+            Column(Modifier.fillMaxWidth().height((maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
+                TopicBody(task, data, vm, startTab, startHl, onClose = onClose, onOpenPerson = onOpenPerson)
+            }
+            return@ModalBottomSheet
+        }
         // Always the same height: the fields sit in the same place for every task, the input stays at the bottom.
         Column(Modifier.fillMaxWidth().height((maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {

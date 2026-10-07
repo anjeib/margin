@@ -13,6 +13,25 @@ data class Subtask(
     val done: Boolean = false,
     val assignee: String? = null,
     val children: List<Subtask> = emptyList(),
+    /** In a topic a step is a «вопрос»: it can have its own day and hour. */
+    val due: String? = null,
+    val time: String? = null,
+    /** Someone else owes it («ждём от Игоря: приказ»): closed as «получено», not «решено». */
+    val from: String? = null,
+    val doneAt: String? = null,
+)
+
+/**
+ * One line of a topic's feed that the user didn't write: a question appeared, was settled, we started waiting, got it.
+ * [kind]: became, q, solved, wait, got, revived. [ref] — the subtask; [entry] — the words it came from (shown under them).
+ */
+@Serializable
+data class TopicEvent(
+    val id: String = newId(),
+    val at: String = nowStamp(),
+    val kind: String,
+    val ref: String? = null,
+    val entry: String? = null,
 )
 
 fun nowStamp(): String = java.time.LocalDateTime.now().withNano(0).withSecond(0).toString()
@@ -197,6 +216,13 @@ data class Task(
     /** What changed and who changed it — shown folded in the card, so an AI edit is never a mystery. */
     val history: List<Change> = emptyList(),
     val createdAt: String = LocalDate.now().toString(),
+    /** v2: the task grew into a topic — a living feed with questions, not a single checkbox. */
+    val topic: Boolean = false,
+    /** What happened in the topic besides the user's own words. */
+    val events: List<TopicEvent> = emptyList(),
+    /** A row made for the lists from a topic's question: which topic it belongs to. Never stored. */
+    @kotlinx.serialization.Transient val topicId: String? = null,
+    @kotlinx.serialization.Transient val topicTitle: String? = null,
 ) {
     val startDate: LocalDate? get() = start?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     val dueDate: LocalDate? get() = due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }

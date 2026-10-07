@@ -74,6 +74,13 @@ import ru.anjeib.margin.data.rangeLabel
 import ru.anjeib.margin.data.shortLabel
 import ru.anjeib.margin.data.weekEnd
 import ru.anjeib.margin.data.weekStart
+import ru.anjeib.margin.data.listTasks
+import ru.anjeib.margin.data.materials
+import ru.anjeib.margin.data.noNextStep
+import ru.anjeib.margin.data.openQuestions
+import ru.anjeib.margin.data.openWaits
+import androidx.compose.material.icons.automirrored.outlined.ViewList
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import ru.anjeib.margin.i18n.L
 import java.time.LocalDate
 import java.time.LocalTime
@@ -120,7 +127,8 @@ fun isRunning(t: Task, today: LocalDate = LocalDate.now()) = isThisWeek(t, today
 /** Counters for the top tabs: today, week, all open. */
 fun tabCounts(d: AppData): Triple<Int, Int, Int> {
     val today = LocalDate.now()
-    return Triple(d.tasks.count { isToday(it, today) }, d.tasks.count { isThisWeek(it, today) }, d.tasks.count { !it.done })
+    val l = d.listTasks()
+    return Triple(l.count { isToday(it, today) }, l.count { isThisWeek(it, today) }, d.tasks.count { !it.done })
 }
 
 /** Short right-hand label for compact rows: «вчера», «вт 18:00», «до вс», «20 окт». */
@@ -162,6 +170,7 @@ fun TaskList(
     val s = M.s
     val today = LocalDate.now()
     var byProject by rememberSaveable { mutableStateOf(false) }
+    var label by rememberSaveable { mutableStateOf<String?>(null) }
     var weekDay by rememberSaveable { mutableStateOf<String?>(null) }
     // Swipe left asks «на когда?» instead of quietly moving a day.
     var postponing by remember { mutableStateOf<String?>(null) }
@@ -170,7 +179,7 @@ fun TaskList(
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val ui = remember { ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE) }
     val collapsed = rememberSaveable(saver = setSaver) {
-        mutableStateOf(ui.getStringSet("folded", null) ?: setOf("s-done", "s-pdone", "s-running", "s-undated", "s-done-today"))
+        mutableStateOf(ui.getStringSet("folded", null) ?: setOf("s-done", "s-pdone", "s-running", "s-undated", "s-done-today", "s-nostep", "a-idle"))
     }
     fun toggle(k: String) {
         collapsed.value = if (k in collapsed.value) collapsed.value - k else collapsed.value + k
@@ -178,6 +187,8 @@ fun TaskList(
     }
     fun isOpen(k: String) = k !in collapsed.value
 
+    // v2: simple tasks and, for topics, their dated questions — the next steps.
+    val tasks = remember(data) { data.listTasks() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         fun header(title: String, subtitle: String?, trailing: (@Composable () -> Unit)? = null) {
             item("header") {
@@ -240,12 +251,12 @@ fun TaskList(
 
         when {
             view == Views.TODAY -> {
-                val list = data.tasks.filter { isToday(it, today) }
-                val running = data.tasks.filter { isRunning(it, today) }.sortedBy { sortKey(it) }
-                val doneToday = data.tasks.filter { it.done && it.doneAt == today.toString() }
+                val list = tasks.filter { isToday(it, today) }
+                val running = tasks.filter { isRunning(it, today) }.sortedBy { sortKey(it) }
+                val doneToday = data.tasks.filter { !it.topic && it.done && it.doneAt == today.toString() }
                 header(today.longTitle(), null)
                 // Instead of an AI retelling of the list below: whose promises fall due now — built here, free and exact.
-                val promises = data.tasks.filter { t -> !t.done && (t.waitingFor != null || t.promisedTo != null) && t.anchor?.let { !it.isAfter(today.plusDays(3)) } == true }
+                val promises = tasks.filter { t -> !t.done && (t.waitingFor != null || t.promisedTo != null) && t.anchor?.let { !it.isAfter(today.plusDays(3)) } == true }
                     .sortedWith(compareBy({ it.anchor }, { it.time ?: "99" }))
                 if (promises.isNotEmpty()) item("promises") { PromisesCard(promises, today, briefQuiet, onOpen, onToggle = { vm.completeWithUndo(it) }) }
                 // One fact once: what the card shows isn't repeated in the lists below (a timed one stays in the day's timeline).
@@ -303,7 +314,7 @@ fun TaskList(
                     if (isOpen("s-done-today")) rows(doneToday, "dt")
                 }
                 // Undated tasks live in «Все» — one quiet line keeps them from being forgotten.
-                val undated = data.tasks.filter { !it.done && it.dueDate == null && it.startDate == null && it.waitingFor == null }.sortedByDescending { it.createdAt }
+                val undated = tasks.filter { !it.done && it.dueDate == null && it.startDate == null && it.waitingFor == null }.sortedByDescending { it.createdAt }
                 if (undated.isNotEmpty()) {
                     // Undated tasks live here too, so they aren't forgotten; swipe left puts one off to tomorrow.
                     section(s.noDates, "s-undated", undated.size, collapsible = true)
@@ -314,6 +325,12 @@ fun TaskList(
                                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onView(Views.ALL) }.padding(8.dp))
                         }
                     }
+                }
+                // Topics with nothing left to do or wait for: one tap to see what's next or to put them away.
+                val settled = data.tasks.filter { it.noNextStep }
+                if (settled.isNotEmpty()) {
+                    section(s.noNextStepCaps, "s-nostep", settled.size, collapsible = true)
+                    if (isOpen("s-nostep")) items(settled, key = { "ns" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }) }
                 }
                 // Notes never mix into task lists — one quiet line says what was written today.
                 val notesToday = data.notes.filter { n -> n.title != s.inboxNote && n.updatedAt.startsWith(today.toString()) && (n.entries.isNotEmpty() || n.title.isNotBlank()) }
@@ -333,11 +350,11 @@ fun TaskList(
             }
 
             view == Views.WEEK -> {
-                val week = data.tasks.filter { isThisWeek(it, today) }.sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) }))
+                val week = tasks.filter { isThisWeek(it, today) }.sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) }))
                 // The strip of seven days: a dot where something is planned; a tap shows that day, a second tap the whole week.
                 val picked = weekDay?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.takeIf { !it.isBefore(today.weekStart()) && !it.isAfter(today.weekEnd()) }
                 val list = if (picked == null) week else week.filter { onDay(it, picked, today) }
-                val done = data.tasks.filter { it.done && it.doneAt?.let { d -> !LocalDate.parse(d).isBefore(today.weekStart()) } == true }
+                val done = data.tasks.filter { !it.topic && it.done && it.doneAt?.let { d -> !LocalDate.parse(d).isBefore(today.weekStart()) } == true }
                 header(s.thisWeekSoft, (picked?.shortLabel(today) ?: rangeLabel(today.weekStart(), today.weekEnd())) + " · " + s.tasksCount(list.size))
                 item("strip") { WeekStrip(today, picked, week) { d -> weekDay = if (d == picked) null else d.toString() } }
                 if (list.isEmpty() && done.isEmpty()) item("empty") { Empty(s.emptyWeek, s.emptyHint) }
@@ -349,47 +366,48 @@ fun TaskList(
             }
 
             view == Views.ALL -> {
-                val open = data.tasks.filter { !it.done }
-                header(s.all, s.tasksCount(open.size)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {
-                        ToggleText(s.byDates, !byProject) { byProject = false }
-                        Text("  |  ", style = Type.small.copy(color = c.faint))
-                        ToggleText(s.byProjects, byProject) { byProject = true }
-                    }
-                }
-                if (open.isEmpty()) item("empty") { Empty(s.emptyAll, s.emptyHint) }
-                if (!byProject) {
-                    val monthEnd = today.withDayOfMonth(today.lengthOfMonth())
-                    val groups = open.groupBy { t ->
-                        if (t.waitingFor != null) return@groupBy 6
-                        val (st, _) = t.span() ?: return@groupBy 5
-                        when {
-                            t.isOverdue(today) -> 0
-                            isToday(t, today) -> 1
-                            !st.isAfter(today.weekEnd()) -> 2
-                            !st.isAfter(monthEnd) -> 3
-                            else -> 4
+                // v2: everything at once — topics in progress, simple tasks, thoughts, and topics with no next step; labels filter it.
+                val openTopics = data.tasks.filter { it.topic && !it.done }
+                val simple = data.tasks.filter { !it.topic && !it.done }
+                val thoughts = data.notes.filter { !it.archived && it.title != s.inboxNote }
+                val labels = (openTopics.mapNotNull { it.project } + simple.mapNotNull { it.project } + thoughts.mapNotNull { it.project }).distinct().sorted()
+                val lb = label?.takeIf { it in labels }
+                header(s.all, s.tasksCount(simple.size + openTopics.size))
+                if (labels.isNotEmpty()) item("labels") {
+                    androidx.compose.foundation.layout.FlowRow(Modifier.padding(start = 4.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        (listOf<String?>(null) + labels).forEach { l ->
+                            val on = lb == l
+                            Text(l?.let { "#" + projectLabel(it) } ?: s.all, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 13.5.sp),
+                                modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else c.chip).clickable { label = l }.padding(horizontal = 12.dp, vertical = 6.dp))
                         }
                     }
-                    val names = listOf(s.overdue, s.today, s.thisWeekSoft, s.thisMonth, s.later, s.noDates, s.waitingOthers)
-                    (0..6).forEach { g ->
-                        val l = groups[g] ?: return@forEach
-                        val k = "s-$g"
-                        section(names[g], k, l.size, collapsible = true, action = if (g == 0) s.moveToToday to vm::moveOverdue else null)
-                        if (isOpen(k)) rows(l.sortedBy { sortKey(it) }, k)
-                    }
-                } else {
-                    val groups = open.groupBy { it.project }
-                    (groups.keys.filterNotNull().sorted() + listOf(null)).forEach { p ->
-                        val l = groups[p] ?: return@forEach
-                        val k = "p-" + (p ?: "-")
-                        section(p?.let { "#" + projectLabel(it) } ?: s.noProject, k, l.size, collapsible = true)
-                        if (isOpen(k)) rows(l.sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) })), k, showProject = false)
-                    }
                 }
-                val recent = data.tasks.filter { it.done && it.doneAt?.let { d -> LocalDate.parse(d).isAfter(today.minusDays(8)) } == true }
+                fun ok(p: String?) = lb == null || p == lb
+                val nextOf = { t: Task -> t.subtasks.filter { !it.done }.mapNotNull { it.due }.minOrNull() ?: "9999" }
+                val working = openTopics.filter { ok(it.project) && !it.noNextStep }.sortedBy(nextOf)
+                val idle = openTopics.filter { ok(it.project) && it.noNextStep }
+                val plainOpen = simple.filter { ok(it.project) }
+                val thoughtsShown = thoughts.filter { ok(it.project) }
+                if (working.isEmpty() && plainOpen.isEmpty() && thoughtsShown.isEmpty() && idle.isEmpty()) item("empty") { Empty(s.emptyAll, s.emptyHint) }
+                if (working.isNotEmpty()) {
+                    section(s.topicsInWork, "a-topics", working.size)
+                    items(working, key = { "at" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }) }
+                }
+                if (plainOpen.isNotEmpty()) {
+                    section(s.simpleTasks, "a-simple", plainOpen.size)
+                    rows(plainOpen.sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) })), "as")
+                }
+                if (thoughtsShown.isNotEmpty()) {
+                    section(s.thoughts, "a-thoughts", thoughtsShown.size, collapsible = true)
+                    if (isOpen("a-thoughts")) items(thoughtsShown, key = { "an" + it.id }) { n -> ThoughtRow(n, onOpen = { onOpenNote(n.id) }) }
+                }
+                if (idle.isNotEmpty()) {
+                    section(s.noNextStepCaps, "a-idle", idle.size, collapsible = true)
+                    if (isOpen("a-idle")) items(idle, key = { "ai" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }) }
+                }
+                val recent = data.tasks.filter { !it.topic && it.done && it.doneAt?.let { d -> LocalDate.parse(d).isAfter(today.minusDays(8)) } == true }
                     .sortedByDescending { it.doneAt }
-                if (data.tasks.any { it.done }) {
+                if (recent.isNotEmpty()) {
                     section(s.done, "s-done", recent.size, collapsible = true)
                     if (isOpen("s-done")) {
                         rows(recent, "d")
@@ -402,7 +420,7 @@ fun TaskList(
             }
 
             view == Views.DONE -> {
-                val list = data.tasks.filter { it.done }.sortedByDescending { it.doneAt }
+                val list = data.tasks.filter { it.done && !it.topic }.sortedByDescending { it.doneAt }
                 header(s.completed, s.tasksCount(list.size))
                 list.groupBy { it.doneAt }.forEach { (day, l) ->
                     section(day?.let { LocalDate.parse(it).shortLabel(today) } ?: "—", "dd-$day", l.size)
@@ -602,8 +620,56 @@ fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Uni
                     // Under «Сегодня» the day goes without saying: only the hour (or «утром»), and late ones keep their date.
                     val whenText = if (todayBlock && !t.isOverdue(today) && (t.anchor == today || t.anchor == null)) t.time ?: t.dayPart?.let { L.s.dayPart(it) } else t.rowLabel(today)
                     // One quiet line: whose promise, when, who, where — names and places are links.
-                    TaskLine(t, whenText, showProject, today = today)
+                    TaskLine(t, whenText, showProject && t.topicTitle == null, today = today)
+                    // A topic's question: which matter it moves forward.
+                    t.topicTitle?.let { Text("↳ $it", style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
                 }
+            }
+        }
+        Hairline(Modifier.padding(start = 40.dp))
+    }
+}
+
+/** A topic in «Все»: a feed mark instead of a circle — it isn't ticked off, it is settled and put away. */
+@Composable
+fun TopicRow(t: Task, onOpen: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    val today = LocalDate.now()
+    val open = t.openQuestions.size
+    val waits = t.openWaits
+    val files = t.materials().size
+    val meta = buildList {
+        if (open > 0) add(s.nQuestions(open))
+        waits.mapNotNull { it.due }.minOrNull()?.let { add(s.waitUntil(LocalDate.parse(it).shortLabel(today).lowercase())) }
+        if (open == 0 && waits.isEmpty()) add(s.allDoneShort)
+        if (files > 0) add(s.nMaterials(files))
+        t.project?.let { add("#" + projectLabel(it)) }
+    }.joinToString("  ·  ")
+    Column(Modifier.fillMaxWidth().background(c.bg).clickable(onClick = onOpen)) {
+        Row(Modifier.fillMaxWidth().padding(end = 6.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
+            Box(Modifier.size(40.dp, 26.dp), contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Outlined.ViewList, null, tint = c.ink, modifier = Modifier.size(19.dp)) }
+            Column(Modifier.weight(1f)) {
+                Text(t.title, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                Text(meta, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+            }
+        }
+        Hairline(Modifier.padding(start = 40.dp))
+    }
+}
+
+/** A thought: a topic without questions — for now the note it always was. */
+@Composable
+fun ThoughtRow(n: ru.anjeib.margin.data.Note, onOpen: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    val meta = listOfNotNull(s.thoughtWord, n.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, n.project?.let { "#" + projectLabel(it) }).joinToString("  ·  ")
+    Column(Modifier.fillMaxWidth().background(c.bg).clickable(onClick = onOpen)) {
+        Row(Modifier.fillMaxWidth().padding(end = 6.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
+            Box(Modifier.size(40.dp, 26.dp), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.ChatBubbleOutline, null, tint = c.graphite, modifier = Modifier.size(18.dp)) }
+            Column(Modifier.weight(1f)) {
+                Text(n.title.ifBlank { s.untitled }, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                Text(meta, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, modifier = Modifier.padding(top = 3.dp))
             }
         }
         Hairline(Modifier.padding(start = 40.dp))

@@ -166,7 +166,7 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
     val c = M.c
     val s = M.s
     val after = p.preview.data
-    var created = 0; var changed = 0; var done = 0; var notes = 0; var people = 0; var appended = false
+    var created = 0; var changed = 0; var done = 0; var notes = 0; var people = 0; var appended = false; var topics = 0
     val lines = buildList {
         p.preview.touchedTasks.forEach { id ->
             val t = after.tasks.find { it.id == id } ?: return@forEach
@@ -174,6 +174,12 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
             val (_, n) = t.subtasks.progress()
             // A change says what it changed: «ср 7 окт 09:00 · было вт 6 окт», a done task says done (and when it comes back).
             val meta = when {
+                // v2: news landed in a topic — say what it settled or started there.
+                old != null && old.topic -> { topics++; buildList {
+                    t.subtasks.filter { q -> q.done && old.subtasks.find { it.id == q.id }?.done == false }.forEach { q -> add((q.from?.let { s.gotPrefix(it) } ?: s.solvedPrefix) + " " + q.title) }
+                    t.subtasks.filter { q -> old.subtasks.none { it.id == q.id } }.forEach { q -> add((q.from?.let { s.waitPrefix(it) } ?: s.questionPrefix) + " " + q.title) }
+                    if (isEmpty() && t.entries.size > old.entries.size) add(s.entryAdded)
+                } }
                 old != null && t.done && !old.done -> { done++; listOfNotNull(s.markedDone,
                     t.nextOccurrence()?.let { nx -> (nx.dueDate ?: nx.startDate)?.shortLabel()?.lowercase()?.let { s.nextOn(it) } }) }
                 old != null -> { changed++; listOfNotNull(
@@ -211,6 +217,7 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
     val kind = listOfNotNull(
         when { created == 1 -> s.kindTask; created > 1 -> s.kindTasks(created); else -> null },
         if (changed > 0 && created == 0) s.kindChanged else null,
+        if (topics > 0 && created == 0) s.kindTopic else null,
         if (done > 0 && created == 0 && changed == 0) s.markedDone.lowercase() else null,
         if (notes > 0) s.kindNote else null,
         if (people > 0) s.kindContact else null,

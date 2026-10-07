@@ -23,11 +23,12 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "ru.anjeib.margin"
+        // v2 «Темы» lives next to Margin 3.x as a separate app with its own data.
+        applicationId = "ru.anjeib.margin.v2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "3.21"
+        versionCode = 1
+        versionName = "0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild { cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_static") } }

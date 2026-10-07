@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.PeopleOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -86,6 +87,7 @@ private const val INBOX = "inbox"
 private const val PROJECTS = "projects"
 private const val CALENDAR = "calendar"
 private const val ARCHIVE = "archive"
+private const val MATERIALS = "materials"
 
 @Composable
 fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
@@ -110,6 +112,14 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     var view by rememberSaveable { mutableStateOf(Views.TODAY) }
     var openTask by rememberSaveable { mutableStateOf<String?>(null) }
     var openTaskDialog by rememberSaveable { mutableStateOf<String?>(null) }
+    var openTab by rememberSaveable { mutableStateOf(0) }
+    var openHl by rememberSaveable { mutableStateOf<String?>(null) }
+    var viewing by remember { mutableStateOf<ru.anjeib.margin.data.Attachment?>(null) }
+    /** A task, or a topic's question from the lists: then the topic opens on «Вопросы» with that one lit. */
+    fun openId(id: String) {
+        val q = ru.anjeib.margin.data.questionRef(id)
+        if (q != null) { openTask = q.first; openTab = 1; openHl = q.second } else { openTask = id; openTab = 0; openHl = null }
+    }
     var openNote by rememberSaveable { mutableStateOf<String?>(null) }
     var openPerson by rememberSaveable { mutableStateOf<String?>(null) }
     var searching by rememberSaveable { mutableStateOf(false) }
@@ -149,8 +159,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 TopBar(screen, view, data, onMenu = { scope.launch { drawer.open() } }, onTab = { i -> view = listOf(Views.TODAY, Views.WEEK, Views.ALL)[i] },
                     onSearch = { searching = true })
                 // Sections one tap away, without the side menu.
-                val section = when { screen == NOTES -> 1; screen == PEOPLE -> 2; screen == PROJECTS || (screen == TASKS && view.startsWith("p:")) -> 3; screen == TASKS -> 0; else -> -1 }
-                if (section >= 0) SectionRow(section) { i -> when (i) { 0 -> go(TASKS, Views.TODAY); 1 -> go(NOTES); 2 -> go(PEOPLE); else -> go(PROJECTS) } }
+                val section = when { screen == MATERIALS -> 1; screen == PEOPLE -> 2; screen == TASKS -> 0; else -> -1 }
+                if (section >= 0) SectionRow(section) { i -> when (i) { 0 -> go(TASKS, Views.TODAY); 1 -> go(MATERIALS); else -> go(PEOPLE) } }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     val pad = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
                     Crossfade(screen, label = "screen") { sc ->
@@ -159,7 +169,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                 TaskList(
                                     v, data, settings, working, vm, events,
                                     briefQuiet = typing || tray != null || pending != null || busy == "main",
-                                    onOpen = { openTask = it }, onView = { view = it }, onOpenNote = { openNote = it },
+                                    onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
                                     onOpenNotes = { screen = NOTES }, onOpenInbox = { screen = INBOX }, contentPadding = pad,
                                 )
                             }
@@ -167,7 +177,13 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             PEOPLE -> PeopleList(data, vm, onOpen = { openPerson = it }, contentPadding = pad)
                             PROJECTS -> ProjectsScreen(data, onOpen = { go(TASKS, Views.project(it)) }, contentPadding = pad)
                             CALENDAR -> CalendarScreen(data, vm, onOpenTask = { openTask = it }, contentPadding = pad)
-                            ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad)
+                            ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad, onOpenTask = { openId(it) })
+                            MATERIALS -> MaterialsGrid(data.tasks.filter { !(it.topic && it.done) }, onView = { viewing = it }, onTopic = { openId(it) }) {
+                                Column(Modifier.padding(start = 20.dp, top = 18.dp)) {
+                                    Text(s.materialsTitle, style = Type.display.copy(color = c.ink))
+                                    Text(s.materialsSub, style = Type.small.copy(color = c.graphite, fontSize = 15.sp), modifier = Modifier.padding(top = 4.dp))
+                                }
+                            }
                             SETTINGS -> SettingsScreen(settings, vm, pad)
                             HELP -> HelpScreen(pad)
                             INBOX -> InboxScreen(data, vm, onOpenNote = { openNote = it }, contentPadding = pad)
@@ -187,7 +203,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         Tray(
                             data, lastTray.first, lastTray.second, lastTray.third,
                             canUndo = vm::canUndo, onUndo = vm::undo,
-                            onOpenTask = { openTask = it },
+                            onOpenTask = { openId(it) },
                             onToggleTask = vm::toggleTask, onToggleSub = vm::toggleSubtask,
                             onOption = { vm.send(it) },
                             onOpenSettings = { screen = SETTINGS },
@@ -235,7 +251,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 }
             }
             if (searching) SearchScreen(data, vm, onBack = { searching = false },
-                onTask = { openTask = it }, onNote = { openNote = it }, onPerson = { openPerson = it })
+                onTask = { openId(it) }, onNote = { openNote = it }, onPerson = { openPerson = it })
             openPerson?.let { id ->
                 val p = data.persons.find { it.id == id }
                 if (p == null) openPerson = null
@@ -290,13 +306,16 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         )
     }
 
+    viewing?.let { a -> Viewer(a, vm, onClose = { viewing = null }) }
+
     if (!settings.onboarded) Onboarding(vm, onDone = { vm.updateSettings { it.copy(onboarded = true) }; vm.startSetup() })
 
     openTask?.let { id ->
         val t = data.tasks.find { it.id == id }
         if (t == null) openTask = null
         else TaskSheet(
-            t, data, vm, onClose = { openTask = null; openTaskDialog = null },
+            t, data, vm, onClose = { openTask = null; openTaskDialog = null; openHl = null; openTab = 0 },
+            startTab = openTab, startHl = openHl,
             startDialog = openTaskDialog, onStartDialogUsed = { openTaskDialog = null },
             onOpenNote = { openTask = null; openNote = it },
             onOpenPerson = { openTask = null; openPerson = it },
@@ -341,14 +360,12 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
             }
             Spacer(Modifier.height(22.dp))
             NavRow(Icons.Outlined.Inbox, s.inboxNote, data.inboxCount().takeIf { it > 0 }?.toString() ?: "", screen == INBOX) { onGo(INBOX, null) }
-            NavRow(Icons.Outlined.TaskAlt, s.tasks, "", screen == TASKS && !view.startsWith("p:")) { onGo(TASKS, Views.TODAY) }
-            NavRow(Icons.Outlined.Description, s.notes, "", screen == NOTES) { onGo(NOTES, null) }
+            NavRow(Icons.Outlined.TaskAlt, s.casesTitle, "", screen == TASKS && !view.startsWith("p:")) { onGo(TASKS, Views.TODAY) }
+            NavRow(Icons.Outlined.PhotoLibrary, s.materialsTitle, "", screen == MATERIALS) { onGo(MATERIALS, null) }
             NavRow(Icons.Outlined.PeopleOutline, s.peopleTitle, "", screen == PEOPLE) { onGo(PEOPLE, null) }
-
-            NavRow(Icons.Outlined.FolderOpen, s.projects.lowercase().replaceFirstChar { it.uppercase() }, "", screen == PROJECTS || (screen == TASKS && view.startsWith("p:"))) { onGo(PROJECTS, null) }
             Hairline(Modifier.padding(horizontal = 26.dp, vertical = 14.dp))
             NavRow(Icons.Outlined.CalendarMonth, s.calendarTitle, "", screen == CALENDAR) { onGo(CALENDAR, null) }
-            NavRow(Icons.Outlined.Archive, s.archiveTitle, (data.notes.count { it.archived } + data.persons.count { it.archived }).takeIf { it > 0 }?.toString() ?: "", screen == ARCHIVE) { onGo(ARCHIVE, null) }
+            NavRow(Icons.Outlined.Archive, s.archiveTitle, (data.notes.count { it.archived } + data.persons.count { it.archived } + data.tasks.count { it.topic && it.done }).takeIf { it > 0 }?.toString() ?: "", screen == ARCHIVE) { onGo(ARCHIVE, null) }
           }
             // Settings at the bottom, out of the way.
             Spacer(Modifier.height(8.dp))

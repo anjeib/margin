@@ -31,6 +31,7 @@ import ru.anjeib.margin.data.text
 import ru.anjeib.margin.data.weekEnd
 import ru.anjeib.margin.data.weekStart
 import ru.anjeib.margin.data.withDone
+import ru.anjeib.margin.data.isWait
 import ru.anjeib.margin.i18n.L
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -71,9 +72,9 @@ object Assistant {
         Reply with ONE JSON object only: {"reply":"…","actions":[…],"question":{"text":"…","options":["…"]}}
         Leave out every field you don't know or that is empty — never write null, [] or "". reply and question are optional too.
         Each action is an object with "type". Shapes (all fields except type/ids/title/text are optional):
-        {"type":"create_task","title":"…","start":"YYYY-MM-DD","due":"YYYY-MM-DD","time":"HH:MM","part":"morning|day|afternoon|evening","remind_at":"YYYY-MM-DDTHH:MM","people":["…"],"project":"…","entry":"…","waiting_for":"…","promised_to":"…","place":"…","note_id":"…","repeat":{"freq":"weekly","interval":1,"days":[2]},"subtasks":[{"title":"…","assignee":"…","children":[…]}]}
-        {"type":"add_subtasks","task_id":"…","parent_subtask_id":"…","subtasks":[{"title":"…"}]}
-        {"type":"update_task","task_id":"…", + only the changed fields of create_task}
+        {"type":"create_task","title":"…","start":"YYYY-MM-DD","due":"YYYY-MM-DD","time":"HH:MM","part":"morning|day|afternoon|evening","remind_at":"YYYY-MM-DDTHH:MM","people":["…"],"project":"…","entry":"…","waiting_for":"…","promised_to":"…","place":"…","note_id":"…","repeat":{"freq":"weekly","interval":1,"days":[2]},"subtasks":[{"title":"…","due":"YYYY-MM-DD","time":"HH:MM","from":"…","assignee":"…","children":[…]}]}
+        {"type":"add_subtasks","task_id":"…","parent_subtask_id":"…","subtasks":[{"title":"…","due":"YYYY-MM-DD","from":"…"}]}
+        {"type":"update_task","task_id":"…","topic_title":"…", + only the changed fields of create_task}
         {"type":"add_entry","task_id":"…","text":"…"}   — a dated record on a task
         {"type":"complete_task","task_id":"…"}  {"type":"complete_subtask","task_id":"…","subtask_id":"…"}  {"type":"update_subtask","task_id":"…","subtask_id":"…","title":"…"}  {"type":"delete_subtask","task_id":"…","subtask_id":"…"}  {"type":"delete_task","task_id":"…"}
         {"type":"create_note","title":"…","text":"…","project":"…"}  {"type":"append_note","note_id":"…","text":"…"}  {"type":"update_note","note_id":"…","title":"…","project":"…"}
@@ -93,6 +94,7 @@ object Assistant {
         appendLine("- people: others involved; add \"${L.s.me}\" only when work is split with others.")
         appendLine("- project: when the text names a product, site, client or area (e.g. \"vuzburo\"), that name in lowercase is the project — even if it's new. Never attach an unrelated known project; no clear project → leave it out.")
         appendLine("- One message may hold several things: one action per thing. Concrete steps → subtasks (dictated steps verbatim, assignee if stated).")
+        appendLine("- A matter named with its steps («Ремонт ванной: купить плитку до пятницы и вызвать плиточника») → ONE create_task titled by the matter, the steps as its subtasks, each with its own due if said; the matter is not a project.")
         appendLine("- Ideas, thoughts, opinions (\"идея:\", \"мне кажется\"), facts, phones, links are NOTES, never tasks or subtasks. append_note only to a listed note on the SAME topic/project; otherwise create_note with a short topical title (project ideas → \"<project> · $ideas\"). Never invent ids.")
         appendLine("- Someone owes the user something (\"Дима должен прислать макет в среду\") → a NEW task: title = what is expected, waiting_for = person, due = when expected (else +2 days). Never put waiting_for on an existing task.")
         appendLine("- \"заказать/купить/спросить у X\" is the user's own errand: X goes to people, not waiting_for.")
@@ -101,6 +103,7 @@ object Assistant {
         appendLine("- [Forwarded … message, written by X]: X's words, not the user's (lines may start with their author; «${L.s.me}» is the user). What X will do or send (\"пришлю\", \"сделаю к среде\") → a NEW task, title = what is expected, waiting_for = X, due = when X said (counted from the sent date). What X asks the user to do → a task for the user with people = [X]; promised_to = X only if the user agreed (their own line or words above the forward). The user's own lines («${L.s.me}: пришлю в пятницу») → promised_to = the other author. Plain information (addresses, links, prices, details) → a note, or person facts about X. Author unknown → never invent one.")
         appendLine("- Facts about a person → person action: about = their role in 2–4 words (\"дизайнер\"), company, phone/email/telegram/address if given; personal = a private fact (birthday, family, likes) in a few words.")
         appendLine("- place: where a task happens (address, venue) when said; not in the title.")
+        appendLine("- News about an EXISTING listed task or topic (the same matter or person) → add_entry on it with the user's words, plus complete_subtask for every listed subtask the words settle (\"Игорь сказал, приказ подписан\" settles «Приказ (waiting for Игорь)»; \"документы отправил\" settles «Отправить документы»), add_subtasks for what is still to do (\"from\" = the person when someone else owes it). Never a new task for it. If that task is marked [simple], also update_task with \"topic_title\": the matter in 2–4 words, a noun phrase, not an action.")
         appendLine("- More work for an EXISTING listed task (same topic, \"ещё\", \"для …\") → add_subtasks to it; changed dates/people → update_task; done → complete. Don't duplicate tasks.")
         appendLine(if (s.autoSubtasks) "- A clearly big new task with no steps given → add 3–5 short subtasks." else "- Don't invent subtasks.")
         appendLine("- Never ask questions. A missing time or date is fine: create the task without it (the app offers to set it).")
@@ -111,7 +114,12 @@ object Assistant {
     }
 
     private fun scopeRule(scope: Scope) = when (scope) {
-        is Scope.InTask -> "SCOPE: the user is inside task_id=${scope.taskId}. Everything is about THIS task: changes → update_task; a change to a step («подзадача 2», «второй шаг») → update_subtask / delete_subtask / complete_subtask with that subtask_id, never the task's own title; steps → add_subtasks (their steps verbatim; \"разбей на шаги\" alone → 3–6 concrete steps); done → complete; any other info → add_entry, keeping facts (places, addresses, names, numbers) verbatim even if you also add a subtask. No other tasks unless asked."
+        is Scope.InTask -> "SCOPE: the user is inside task_id=${scope.taskId}. It is a topic: a matter that develops, a feed of what happened. Everything is about THIS task. " +
+            "Words reporting what happened («Созвонились. Приказ будет через 2 недели, нужно отправить документы в бухгалтерию») → add_entry with the words (tidied, facts verbatim), then: " +
+            "what the user still has to do → add_subtasks (a question; due/time only when said); what someone else will do or send → add_subtasks with \"from\" = that person and due = when expected (\"через 2 недели\" → that date); " +
+            "a listed open subtask the words settle → complete_subtask; the task's own action happened (\"созвонились\" for «Позвонить …», \"отправил\" for «Отправить …») → complete_task (the app keeps the topic open). " +
+            "If the task is marked [simple], also give update_task with \"topic_title\": what the matter is about in 2–4 words, a noun phrase («Приказ о зачислении»), never an action. " +
+            "A change to a step («подзадача 2», «второй вопрос») → update_subtask / delete_subtask / complete_subtask with that subtask_id, never the task's own title; \"разбей на шаги\" alone → add_subtasks with 3–6 concrete steps. No other tasks unless asked."
         Scope.Notes -> "SCOPE: Notes section. The text is a note: append_note to the related listed note or create_note with a fitting title and project. A task only if explicitly asked."
         Scope.Main -> ""
     }
@@ -141,7 +149,7 @@ object Assistant {
     }
 
     private fun StringBuilder.taskLine(t: Task) {
-        append("[task_id=${t.id}] ${t.title}")
+        append("[task_id=${t.id}] ${if (t.topic) "[topic] " else "[simple] "}${t.title}")
         val meta = listOfNotNull(t.start?.let { "start $it" }, t.due?.let { "due $it" }, t.time?.let { "at $it" }, t.project?.let { "#$it" },
             t.people.takeIf { it.isNotEmpty() }?.joinToString(), t.waitingFor?.let { "waiting for $it" }, t.promisedTo?.let { "promised to $it" }, t.noteId?.let { "note_id=$it" },
             t.repeat?.let { "repeats ${it.freq}" + (if (it.days.isNotEmpty()) " ${it.days}" else "") }, if (t.postponed >= 2) "postponed ${t.postponed}×" else null)
@@ -157,6 +165,9 @@ object Assistant {
                 // Top-level steps carry the number the user sees in the card («подзадача 2»).
                 append("  ".repeat(depth + 1) + "- [subtask_id=${st.id}] " + (if (depth == 0) "${i + 1}. " else "") + st.title)
                 st.assignee?.let { append(" ($it)") }
+                st.from?.let { append(" (waiting for $it)") }
+                st.due?.let { append(" due $it") }
+                st.time?.let { append(" at $it") }
                 if (st.done) append(" [done]")
                 appendLine()
                 sub(st.children, depth + 1)
@@ -411,7 +422,9 @@ object Assistant {
         val bulk = strict.not() || bulkCue.containsMatchIn(low)
         /** Is this existing task what the user is talking about? */
         fun asked(t: Task): Boolean = bulk || t.id == focus || t.id in recent ||
-            (stems(t.title + " " + t.people.joinToString(" ") + " " + listOfNotNull(t.waitingFor, t.promisedTo, t.project).joinToString(" ")) intersect said).isNotEmpty()
+            (stems(t.title + " " + t.people.joinToString(" ") + " " + listOfNotNull(t.waitingFor, t.promisedTo, t.project).joinToString(" ") +
+                // A topic is also named by its open questions: «документы отправил» is about «Отправить документы».
+                (if (t.topic) " " + t.subtasks.filter { !it.done }.joinToString(" ") { it.title + " " + (it.from ?: "") } else "")) intersect said).isNotEmpty()
         /** One spelling per person: the known one, or the name with a capital letter. */
         fun who(n: String?): String? = n?.trim()?.takeIf { it.isNotEmpty() }?.let { x -> if (x.lowercase() in me) x else d.person(x)?.name ?: x.properName() }
         val origin = source.trim().take(240).ifBlank { null }?.let { raw ->
@@ -428,10 +441,25 @@ object Assistant {
         }
         fun validNote(id: String?) = id?.takeIf { n -> d.notes.any { it.id == n } }
 
-        for (a in plan.actions) {
+        // «Done» goes last: adding a step reopens a task, and «созвонились, теперь нужно…» means the call is done all the same.
+        var wordsKept = false
+        for (a in plan.actions.sortedBy { if (it.str("type") == "complete_task") 1 else 0 }) {
             when (a.str("type")) {
                 "create_task" -> {
                     val title = a.str("title")?.trim()?.trimEnd('.')?.cap() ?: continue
+                    // Inside a topic a «new task» is its next question, unless the user asked for a separate one.
+                    if (strict && focus != null && !newTaskCue.containsMatchIn(low) && d.tasks.any { it.id == focus }) {
+                        val q = Subtask(title = title, due = a.date("due") ?: a.date("start"), time = a.time("time"),
+                            from = a.str("waiting_for")?.let { who(it) }?.takeIf { it.lowercase() !in me })
+                        d = d.copy(tasks = d.tasks.map { if (it.id == focus) it.copy(subtasks = it.subtasks + q, done = false) else it })
+                        // The words themselves belong in the feed even when the model forgot them.
+                        if (!wordsKept && plan.actions.none { it.str("type") == "add_entry" } && origin != null) {
+                            d = d.copy(tasks = d.tasks.map { if (it.id == focus) it.copy(entries = it.entries + Entry(text = origin)) else it })
+                            wordsKept = true
+                        }
+                        touched += focus; subAdded++
+                        continue
+                    }
                     // The same open task already exists — small models re-create what they see in the context.
                     // Same words with a new date or a new promise is a new thing, not a copy.
                     if (strict && d.tasks.any { o -> !o.done && o.title.trim().trimEnd('.').equals(title, true) &&
@@ -505,7 +533,8 @@ object Assistant {
                     var next = withAutoReminder(
                         old.copy(
                             // «измени подзадачу…» is about a step: the task keeps its name.
-                            title = if ("title" in a && !(strict && stepTalk.containsMatchIn(low))) a.str("title")?.trim()?.trimEnd('.')?.sentence()?.withNames(old.people + listOfNotNull(old.waitingFor, old.promisedTo)) ?: old.title else old.title,
+                            title = a.str("topic_title")?.takeIf { !old.topic }?.trim()?.trimEnd('.')?.sentence()
+                                ?: if ("title" in a && !(strict && stepTalk.containsMatchIn(low))) a.str("title")?.trim()?.trimEnd('.')?.sentence()?.withNames(old.people + listOfNotNull(old.waitingFor, old.promisedTo)) ?: old.title else old.title,
                             start = if (has("start", saysWhen)) a.date("start") else old.start,
                             due = if (has("due", saysWhen)) (if (strict && oneDate) onSaidWeekday(a.date("due"), low) else a.date("due")) else old.due,
                             time = if (timed) a.time("time") else if (parted) null else old.time,
@@ -520,6 +549,13 @@ object Assistant {
                             repeat = if (has("repeat", saysRepeat)) repeat(a["repeat"]) else old.repeat,
                         ).normalized()
                     )
+                    // A topic has no date of its own: «перенеси на пятницу» moves its open question (the nearest, when there are several).
+                    if (old.topic && (next.due != old.due || next.time != old.time || next.start != old.start)) {
+                        val q = old.subtasks.filter { !it.done && !it.isWait }.let { l -> l.singleOrNull() ?: l.minByOrNull { it.due ?: "9999" } }
+                        val moved = next
+                        next = next.copy(due = null, start = null, time = null, remindAt = null)
+                        if (q != null) next = next.copy(subtasks = next.subtasks.mapTree(q.id) { it.copy(due = moved.due ?: moved.start ?: it.due, time = if (moved.time != old.time) moved.time else it.time) })
+                    }
                     // A new promise or expectation is a thing of its own: it never turns a recurring task into a one-off.
                     val split = old.repeat != null && ((newPromise != null && old.promisedTo == null) || (newWait != null && old.waitingFor == null))
                     if (split) {
@@ -556,6 +592,13 @@ object Assistant {
                     val id = a.str("task_id") ?: continue
                     val target = d.tasks.find { it.id == id && !it.done } ?: continue
                     if (strict && !asked(target)) continue
+                    // A topic is not ticked off by words: they settle its one open question; the archive is the user's call.
+                    if (target.topic) {
+                        val only = target.subtasks.filter { !it.done }.singleOrNull() ?: continue
+                        d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(subtasks = it.subtasks.mapTree(only.id) { s -> s.withDone(true).copy(doneAt = LocalDate.now().toString()) }) else it })
+                        touched += id; updated++
+                        continue
+                    }
                     val next = target.nextOccurrence()
                     d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, doneAt = LocalDate.now().toString()).logged(it, by) else it } + listOfNotNull(next?.copy(history = emptyList())?.logged(null, by)))
                     touched += id; completed++
@@ -574,7 +617,7 @@ object Assistant {
                     val id = a.str("task_id") ?: continue
                     val sid = a.str("subtask_id") ?: continue
                     if (strict && d.tasks.find { it.id == id }?.let { asked(it) } != true) continue
-                    d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(subtasks = it.subtasks.mapTree(sid) { s -> s.withDone(true) }) else it })
+                    d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(subtasks = it.subtasks.mapTree(sid) { s -> s.withDone(true).copy(doneAt = LocalDate.now().toString()) }) else it })
                     touched += id; updated++
                 }
                 "delete_task" -> {
@@ -679,6 +722,14 @@ object Assistant {
                 }
             }
         }
+        // News from the main screen that settled or added a topic's question: the words go into its feed too.
+        if (strict && focus == null && origin != null) {
+            val moved = plan.actions.filter { it.str("type") in setOf("complete_subtask", "add_subtasks") }.mapNotNull { it.str("task_id") }.toSet()
+            val written = plan.actions.filter { it.str("type") == "add_entry" }.mapNotNull { it.str("task_id") }.toSet()
+            (moved - written).filter { id -> id in touched && d.tasks.any { it.id == id && it.topic } }.forEach { id ->
+                d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(entries = it.entries + Entry(text = origin)) else it })
+            }
+        }
         val s = L.s
         val caption = when {
             created > 1 -> s.tasksCreated(created)
@@ -711,6 +762,7 @@ object Assistant {
         if (d.dayOfWeek.value == wd) return date
         return LocalDate.now().with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.of(wd))).toString()
     }
+    private val newTaskCue = Regex("отдельн|нов(ую|ая) задач|созда(й|ть) задач|ещё задач|еще задач|separate|new task|create a task")
     private val stepTalk = Regex("подзадач|шаг[аеиу]?\\b|пункт|subtask|step")
     private val dayParts = setOf("morning", "day", "afternoon", "evening", "night")
     private fun partOf(low: String): String? = when {
@@ -754,7 +806,8 @@ object Assistant {
             when (e) {
                 is JsonObject -> {
                     val title = e.str("title")?.trim()?.trimEnd('.') ?: return@mapNotNull null
-                    Subtask(title = title.cap(), assignee = e.str("assignee")?.takeIf { it.isNotBlank() }, children = subtasks(e["children"]))
+                    Subtask(title = title.cap(), assignee = e.str("assignee")?.takeIf { it.isNotBlank() }, children = subtasks(e["children"]),
+                        due = e.date("due"), time = e.time("time"), from = (e.str("from") ?: e.str("waiting_for"))?.takeIf { it.isNotBlank() && it.lowercase() !in setOf("я", "me") }?.properName())
                 }
                 is JsonPrimitive -> e.contentOrNull?.takeIf { it.isNotBlank() }?.let { Subtask(title = it.trim().cap()) }
                 else -> null

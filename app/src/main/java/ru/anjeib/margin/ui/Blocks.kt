@@ -253,7 +253,7 @@ private fun FileBlock(a: Attachment, onView: () -> Unit) {
  * Anything else opens in the app that knows it. Save and share from the top bar.
  */
 @Composable
-private fun Viewer(a: Attachment, vm: MainVm, onClose: () -> Unit) {
+fun Viewer(a: Attachment, vm: MainVm, onClose: () -> Unit) {
     val ctx = LocalContext.current
     val s = M.s
     val scope = rememberCoroutineScope()

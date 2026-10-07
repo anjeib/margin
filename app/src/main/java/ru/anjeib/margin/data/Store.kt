@@ -33,11 +33,18 @@ class Store private constructor(context: Context) {
     }.getOrElse { AppData() }
 
     fun update(f: (AppData) -> AppData) {
-        val next = synchronized(this) { f(_data.value).also { _data.value = it } }
+        // Every change passes one place, so a topic's feed lines are written the same way whoever made the change.
+        val next = synchronized(this) { val cur = _data.value; Topics.track(cur, f(cur)).also { _data.value = it } }
         persist(next)
     }
 
     fun replace(d: AppData) = update { d }
+
+    /** Back to a saved state (undo): nothing new happened, so no feed lines either. */
+    fun restore(f: (AppData) -> AppData) {
+        val next = synchronized(this) { f(_data.value).also { _data.value = it } }
+        persist(next)
+    }
 
     private fun persist(d: AppData) {
         scope.launch {

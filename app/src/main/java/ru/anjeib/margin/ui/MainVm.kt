@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.questionRef
+
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -248,7 +250,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         _trayFrom.value = _trayFrom.value ?: user.id
     }
 
-    fun send(text: String, smart: Boolean = false, label: String? = null, scope: Scope = Scope.Main, files: List<Attachment> = emptyList()) {
+    fun send(text: String, smart: Boolean = false, label: String? = null, scope: Scope = Scope.Main, files: List<Attachment> = emptyList(), asQuestion: Boolean = false) {
         val t = text.trim()
         if ((t.isEmpty() && files.isEmpty()) || _busy.value != null) return
         if (scope == Scope.Main && files.isEmpty() && !smart && setupAnswer(t)) return
@@ -294,7 +296,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 val (plan0, cost) = Processor.askPlan(
                     s,
                     Assistant.systemPrompt(before, s, scope, query = if (smart) null else t + " " + history.joinToString(" ") { it.second }, recent = recent),
-                    history + ("user" to Assistant.userMessage(t) + (cmd?.let { Commands.hint(it) }?.let { "\n$it" } ?: "")),
+                    history + ("user" to Assistant.userMessage(t) + (cmd?.let { Commands.hint(it) }?.let { "\n$it" } ?: "") +
+                        (if (asQuestion) "\n[Written on this topic's questions page: a new question → add_subtasks (due/time/from only when said), no add_entry.]" else "")),
                     smart = smart, complex = Assistant.isComplex(t, scope), images = images,
                 )
                 prefs.addSpend(cost)
@@ -759,7 +762,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun undo(id: String) {
         aiChanges.remove(id)?.let { count("undo:$it") }
         val snap = snapshots.remove(id) ?: return
-        store.update { d ->
+        store.restore { d ->
             snap.copy(
                 chat = d.chat.map { if (it.id == id) it.copy(caption = L.s.undone, taskIds = emptyList(), options = emptyList()) else it },
                 brief = d.brief,
@@ -877,6 +880,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) f(it).logged(it, by) else it }) }
 
     fun toggleTask(id: String) = store.update { d ->
+        questionRef(id)?.let { (tid, qid) -> return@update d.copy(tasks = d.tasks.map { t -> if (t.id != tid) t else t.copy(subtasks = t.subtasks.mapTree(qid) { val x = !it.done; it.withDone(x).copy(doneAt = if (x) LocalDate.now().toString() else null) }) }) }
         val t = d.tasks.find { it.id == id } ?: return@update d
         if (t.done) d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = false, doneAt = null, dropped = false).logged(it, "you") else it })
         else {
@@ -920,7 +924,34 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleSubtask(taskId: String, subId: String) = updateTask(taskId) { t ->
-        t.copy(subtasks = t.subtasks.mapTree(subId) { it.withDone(!it.done) })
+        t.copy(subtasks = t.subtasks.mapTree(subId) { val d = !it.done; it.withDone(d).copy(doneAt = if (d) LocalDate.now().toString() else null) })
+    }
+
+    /** A topic's question from the lists or the questions page: settled (or back), with a moment to take it back. */
+    fun toggleQuestion(taskId: String, subId: String) {
+        val before = data.value
+        val q = before.tasks.find { it.id == taskId }?.subtasks?.find { it.id == subId } ?: return
+        toggleSubtask(taskId, subId)
+        offerUndo(before, if (q.done) L.s.reopened else if (q.from != null) L.s.gotIt else L.s.solvedWord)
+    }
+
+    fun setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null) = updateTask(taskId) { t ->
+        t.copy(subtasks = t.subtasks.mapTree(subId) { it.copy(due = due, time = if (due == null) null else time ?: it.time) })
+    }
+
+    /** «Решено · в архив»: the topic with its materials leaves the lists; news in it brings it back. */
+    fun archiveTopic(id: String) {
+        val before = data.value
+        val t = before.tasks.find { it.id == id } ?: return
+        store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, doneAt = LocalDate.now().toString()) else it }) }
+        offerUndo(before, L.s.archivedTopic(t.title))
+    }
+
+    fun reviveTopic(id: String) = store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = false, doneAt = null) else it }) }
+
+    fun setTopicLabel(id: String, label: String?) = store.update { d ->
+        val p = label?.trim()?.removePrefix("#")?.lowercase()?.ifBlank { null }
+        d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(project = p) else it }, projects = if (p != null && p !in d.projects) d.projects + p else d.projects)
     }
 
     fun addSubtask(taskId: String, title: String, parent: String? = null) {
@@ -966,6 +997,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** «Отложить» to a chosen day: the task moves there whole (a range keeps its length). */
     fun postponeTo(id: String, day: LocalDate) {
         val before = data.value
+        questionRef(id)?.let { (tid, qid) -> setQuestionDue(tid, qid, day.toString()); offerUndo(before, L.s.movedTo(day.shortLabel().lowercase())); return }
         val t = before.tasks.find { it.id == id } ?: return
         val base = t.dueDate ?: t.startDate ?: LocalDate.now()
         val shift = java.time.temporal.ChronoUnit.DAYS.between(base, day)
@@ -986,6 +1018,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** Swipe-right: done, with a few seconds to take it back. */
     fun completeWithUndo(id: String) {
+        questionRef(id)?.let { (tid, qid) -> toggleQuestion(tid, qid); return }
         val before = data.value
         val t = before.tasks.find { it.id == id } ?: return
         toggleTask(id)
@@ -1006,7 +1039,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val n = _undoBar.value ?: return
         _undoBar.value = null
         val snap = n.undoId?.let { snapshots.remove(it) } ?: return
-        store.update { d -> snap.copy(chat = d.chat, brief = d.brief) }
+        store.restore { d -> snap.copy(chat = d.chat, brief = d.brief) }
     }
     private var undoJob: kotlinx.coroutines.Job? = null
 

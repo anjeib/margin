@@ -511,6 +511,59 @@ interface Strings {
     val promptNext: String
     val promptPlanDay: String
     fun promptBreakDown(what: String): String
+    // v2 «Темы»
+    val solvedWord: String
+    val gotIt: String
+    fun archivedTopic(t: String): String
+    val feedTab: String
+    val questionsTab: String
+    val materialsTab: String
+    fun topicSince(d: String): String
+    val questionPrefix: String
+    val solvedPrefix: String
+    fun waitPrefix(who: String): String
+    fun gotPrefix(who: String): String
+    val becameTopic: String
+    val revivedTopic: String
+    fun solvedOn(d: String): String
+    fun gotOn(d: String): String
+    val allSettled: String
+    val archiveQ: String
+    fun archiveText(t: String): String
+    fun inArchiveSince(d: String): String
+    val bringBack: String
+    val openCaps: String
+    val waitingCaps: String
+    val solvedCaps: String
+    fun inFeed(d: String): String
+    val noQuestions: String
+    val newQuestionHint: String
+    val writeInTopic: String
+    val materialsEmpty: String
+    val searchMaterials: String
+    val kindPhotos: String
+    val kindDocs: String
+    val kindVoice: String
+    val noMaterialsFound: String
+    val topicsInWork: String
+    val simpleTasks: String
+    val thoughts: String
+    val noNextStepCaps: String
+    fun nQuestions(n: Int): String
+    fun waitUntil(d: String): String
+    val allDoneShort: String
+    fun nMaterials(n: Int): String
+    fun nEntries(n: Int): String
+    val thoughtWord: String
+    val whatNext: String
+    val labelWord: String
+    val casesTitle: String
+    val materialsTitle: String
+    val materialsSub: String
+    val noLabel: String
+    val noDateQ: String
+    val kindTopic: String
+    val questionDateQ: String
 }
 
 object Ru : Strings {
@@ -1058,6 +1111,59 @@ object Ru : Strings {
     override val promptNext = "Что мне сделать дальше? Посоветуй одну-две задачи с учётом сроков и времени."
     override val promptPlanDay = "Составь реалистичный план на сегодня: расставь время задачам на сегодня через update_task (time), начиная с ближайшего свободного часа, не трогая задачи с уже заданным временем. В reply — 1–2 предложения, что главное."
     override fun promptBreakDown(what: String) = "Разбей $what на конкретные шаги."
+    // v2 «Темы»
+    override val solvedWord = "Решено"
+    override val gotIt = "Получено"
+    override fun archivedTopic(t: String) = "«$t» в архиве"
+    override val feedTab = "Лента"
+    override val questionsTab = "Вопросы"
+    override val materialsTab = "Материалы"
+    override fun topicSince(d: String) = "тема с $d"
+    override val questionPrefix = "Вопрос:"
+    override val solvedPrefix = "Решено:"
+    override fun waitPrefix(who: String) = "Ждём от ${who.genitive()}:"
+    override fun gotPrefix(who: String) = "Получено от ${who.genitive()}:"
+    override val becameTopic = "Задача стала темой"
+    override val revivedTopic = "Тема вернулась из архива"
+    override fun solvedOn(d: String) = "решено $d"
+    override fun gotOn(d: String) = "получено $d"
+    override val allSettled = "Похоже, всё решено."
+    override val archiveQ = "Тема решена?"
+    override fun archiveText(t: String) = "«$t» уйдёт в архив вместе с материалами. Новое событие в ней вернёт её обратно."
+    override fun inArchiveSince(d: String) = "В архиве с $d"
+    override val bringBack = "Вернуть"
+    override val openCaps = "Открыто"
+    override val waitingCaps = "Ждём"
+    override val solvedCaps = "Решено"
+    override fun inFeed(d: String) = "в ленте $d ›"
+    override val noQuestions = "Вопросов нет. Напишите внизу — появится вопрос."
+    override val newQuestionHint = "Новый вопрос…"
+    override val writeInTopic = "Написать в тему…"
+    override val materialsEmpty = "Материалов пока нет. Фото, файлы и голосовые из ленты появятся здесь."
+    override val searchMaterials = "Искать в материалах и в тексте на фото"
+    override val kindPhotos = "Фото"
+    override val kindDocs = "Документы"
+    override val kindVoice = "Голосовые"
+    override val noMaterialsFound = "Ничего не нашлось."
+    override val topicsInWork = "Темы в работе"
+    override val simpleTasks = "Задачи"
+    override val thoughts = "Мысли"
+    override val noNextStepCaps = "Без следующего шага"
+    override fun nQuestions(n: Int) = "$n " + pluralRu(n, "вопрос", "вопроса", "вопросов")
+    override fun waitUntil(d: String) = "ждём до $d"
+    override val allDoneShort = "всё решено"
+    override fun nMaterials(n: Int) = "$n " + pluralRu(n, "материал", "материала", "материалов")
+    override fun nEntries(n: Int) = "$n " + pluralRu(n, "запись", "записи", "записей")
+    override val thoughtWord = "мысль"
+    override val whatNext = "Что дальше?"
+    override val labelWord = "Метка"
+    override val casesTitle = "Дела"
+    override val materialsTitle = "Материалы"
+    override val materialsSub = "все фото, файлы и голосовые из тем"
+    override val noLabel = "Без метки"
+    override val noDateQ = "без срока"
+    override val kindTopic = "в тему"
+    override val questionDateQ = "Срок вопроса"
 }
 
 object En : Strings {
@@ -1605,6 +1711,59 @@ object En : Strings {
     override val promptNext = "What should I do next? Suggest one or two tasks given deadlines and the time of day."
     override val promptPlanDay = "Make a realistic plan for today: give today's tasks times via update_task (time), starting from the next free hour, leaving already-timed tasks alone. In reply, 1–2 sentences on what matters most."
     override fun promptBreakDown(what: String) = "Break $what into concrete steps."
+    // v2 topics
+    override val solvedWord = "Settled"
+    override val gotIt = "Received"
+    override fun archivedTopic(t: String) = "“$t” archived"
+    override val feedTab = "Feed"
+    override val questionsTab = "Open items"
+    override val materialsTab = "Materials"
+    override fun topicSince(d: String) = "topic since $d"
+    override val questionPrefix = "Open item:"
+    override val solvedPrefix = "Settled:"
+    override fun waitPrefix(who: String) = "Waiting for $who:"
+    override fun gotPrefix(who: String) = "Received from $who:"
+    override val becameTopic = "The task became a topic"
+    override val revivedTopic = "The topic is back from the archive"
+    override fun solvedOn(d: String) = "settled $d"
+    override fun gotOn(d: String) = "received $d"
+    override val allSettled = "Looks like it's all settled."
+    override val archiveQ = "Is the topic settled?"
+    override fun archiveText(t: String) = "“$t” moves to the archive with its materials. Any news in it brings it back."
+    override fun inArchiveSince(d: String) = "Archived $d"
+    override val bringBack = "Bring back"
+    override val openCaps = "Open"
+    override val waitingCaps = "Waiting"
+    override val solvedCaps = "Settled"
+    override fun inFeed(d: String) = "in the feed, $d ›"
+    override val noQuestions = "No open items. Write below to add one."
+    override val newQuestionHint = "New item…"
+    override val writeInTopic = "Write to the topic…"
+    override val materialsEmpty = "No materials yet. Photos, files and voice notes from the feed appear here."
+    override val searchMaterials = "Search materials and text on photos"
+    override val kindPhotos = "Photos"
+    override val kindDocs = "Documents"
+    override val kindVoice = "Voice"
+    override val noMaterialsFound = "Nothing found."
+    override val topicsInWork = "Topics in progress"
+    override val simpleTasks = "Tasks"
+    override val thoughts = "Thoughts"
+    override val noNextStepCaps = "No next step"
+    override fun nQuestions(n: Int) = if (n == 1) "1 open item" else "$n open items"
+    override fun waitUntil(d: String) = "waiting till $d"
+    override val allDoneShort = "all settled"
+    override fun nMaterials(n: Int) = if (n == 1) "1 file" else "$n files"
+    override fun nEntries(n: Int) = if (n == 1) "1 entry" else "$n entries"
+    override val thoughtWord = "thought"
+    override val whatNext = "What's next?"
+    override val labelWord = "Label"
+    override val casesTitle = "To-dos"
+    override val materialsTitle = "Materials"
+    override val materialsSub = "all photos, files and voice notes from topics"
+    override val noLabel = "No label"
+    override val noDateQ = "no date"
+    override val kindTopic = "to the topic"
+    override val questionDateQ = "Item date"
 }
 
 /** Current language for code outside composition (dates, notifications, prompts). */
