@@ -72,13 +72,13 @@ object Assistant {
         Reply with ONE JSON object only: {"reply":"…","actions":[…],"question":{"text":"…","options":["…"]}}
         Leave out every field you don't know or that is empty — never write null, [] or "". reply and question are optional too.
         Each action is an object with "type". Shapes (all fields except type/ids/title/text are optional):
-        {"type":"create_task","title":"…","start":"YYYY-MM-DD","due":"YYYY-MM-DD","time":"HH:MM","part":"morning|day|afternoon|evening","remind_at":"YYYY-MM-DDTHH:MM","people":["…"],"project":"…","entry":"…","waiting_for":"…","promised_to":"…","place":"…","note_id":"…","repeat":{"freq":"weekly","interval":1,"days":[2]},"subtasks":[{"title":"…","due":"YYYY-MM-DD","time":"HH:MM","from":"…","assignee":"…","children":[…]}]}
+        {"type":"create_task","title":"…","start":"YYYY-MM-DD","due":"YYYY-MM-DD","time":"HH:MM","part":"morning|day|afternoon|evening","remind_at":"YYYY-MM-DDTHH:MM","people":["…"],"project":"…","sphere":"personal|work","entry":"…","waiting_for":"…","promised_to":"…","place":"…","note_id":"…","repeat":{"freq":"weekly","interval":1,"days":[2]},"subtasks":[{"title":"…","due":"YYYY-MM-DD","time":"HH:MM","from":"…","assignee":"…","children":[…]}]}
         {"type":"add_subtasks","task_id":"…","parent_subtask_id":"…","subtasks":[{"title":"…","due":"YYYY-MM-DD","from":"…"}]}
         {"type":"update_task","task_id":"…","topic_title":"…", + only the changed fields of create_task}
         {"type":"add_entry","task_id":"…","text":"…"}   — a dated record on a task
         {"type":"complete_task","task_id":"…"}  {"type":"complete_subtask","task_id":"…","subtask_id":"…"}  {"type":"update_subtask","task_id":"…","subtask_id":"…","title":"…"}  {"type":"delete_subtask","task_id":"…","subtask_id":"…"}  {"type":"delete_task","task_id":"…"}
         {"type":"create_note","title":"…","text":"…","project":"…"}  {"type":"append_note","note_id":"…","text":"…"}  {"type":"update_note","note_id":"…","title":"…","project":"…"}
-        {"type":"person","name":"…","about":"…","company":"…","phone":"…","email":"…","telegram":"…","address":"…","personal":"…"}
+        {"type":"person","name":"…","org":true,"about":"…","company":"…","phone":"…","email":"…","telegram":"…","address":"…","personal":"…"}
         {"type":"settings","name":"…","morning":"HH:MM|off","evening":"HH:MM|off"}  — only when the user asks about the app itself
         repeat.freq: daily|weekly|monthly|yearly; days: 1–7, Monday=1.
     """.trimIndent()
@@ -92,6 +92,7 @@ object Assistant {
         appendLine("- Phone calendar entries are busy time: never plan tasks over them.")
         appendLine("- remind_at only when the user asks to be reminded.")
         appendLine("- people: others involved; add \"${L.s.me}\" only when work is split with others.")
+        appendLine("- sphere: work — the job, clients, colleagues, the user's business; personal — home, family, health, study, shopping, leisure. Set it on every create_task; change it only when the user says so.")
         appendLine("- project: when the text names a product, site, client or area (e.g. \"vuzburo\"), that name in lowercase is the project — even if it's new. Never attach an unrelated known project; no clear project → leave it out.")
         appendLine("- One message may hold several things: one action per thing. Concrete steps → subtasks (dictated steps verbatim, assignee if stated).")
         appendLine("- A matter named with its steps («Ремонт ванной: купить плитку до пятницы и вызвать плиточника») → ONE create_task titled by the matter, the steps as its subtasks, each with its own due if said; the matter is not a project.")
@@ -101,7 +102,7 @@ object Assistant {
         appendLine("- A step with its own person AND its own deadline (\"Катя — макеты к четвергу\") → its own create_task (people, due, same project). Work split without its own deadline (\"Дима сделает дизайн\") stays a subtask with assignee.")
         appendLine("- The user promised something to someone (\"обещал Анне показать до пятницы\", \"договорились, что я пришлю Диме тексты\") → a task for the user with promised_to = that person (and due if said).")
         appendLine("- [Forwarded … message, written by X]: X's words, not the user's (lines may start with their author; «${L.s.me}» is the user). What X will do or send (\"пришлю\", \"сделаю к среде\") → a NEW task, title = what is expected, waiting_for = X, due = when X said (counted from the sent date). What X asks the user to do → a task for the user with people = [X]; promised_to = X only if the user agreed (their own line or words above the forward). The user's own lines («${L.s.me}: пришлю в пятницу») → promised_to = the other author. Plain information (addresses, links, prices, details) → a note, or person facts about X. Author unknown → never invent one.")
-        appendLine("- Facts about a person → person action: about = their role in 2–4 words (\"дизайнер\"), company, phone/email/telegram/address if given; personal = a private fact (birthday, family, likes) in a few words.")
+        appendLine("- Facts about a person → person action: about = their role in 2–4 words (\"дизайнер\"), company, phone/email/telegram/address if given; personal = a private fact (birthday, family, likes) in a few words. org = true when it is a business or an office, not a person (\"ЖЭК\", \"Сбербанк\", \"клиника на Ленина\", \"плиточная мастерская\").")
         appendLine("- place: where a task happens (address, venue) when said; not in the title.")
         appendLine("- News about an EXISTING listed task or topic (the same matter or person) → add_entry on it with the user's words, plus complete_subtask for every listed subtask the words settle (\"Игорь сказал, приказ подписан\" settles «Приказ (waiting for Игорь)»; \"документы отправил\" settles «Отправить документы»), add_subtasks for what is still to do (\"from\" = the person when someone else owes it). Never a new task for it. If that task is marked [simple], also update_task with \"topic_title\": the matter in 2–4 words, a noun phrase, not an action.")
         appendLine("- More work for an EXISTING listed task (same topic, \"ещё\", \"для …\") → add_subtasks to it; changed dates/people → update_task; done → complete. Don't duplicate tasks.")
@@ -496,6 +497,7 @@ object Assistant {
                             remindAt = a.dateTime("remind_at"),
                             people = a.strList("people"),
                             project = a.project(),
+                            sphere = a.sphere(),
                             entries = listOfNotNull(entryText?.let { Entry(text = it.sentence()) }),
                             waitingFor = a.str("waiting_for"),
                             promisedTo = a.str("promised_to"),
@@ -564,6 +566,7 @@ object Assistant {
                             remindAt = if ("remind_at" in a) a.dateTime("remind_at") else if (dated || timed) null else old.remindAt,
                             people = if ("people" in a) a.strList("people").mapNotNull { who(it) }.distinct() else old.people,
                             project = if ("project" in a) a.project() else old.project,
+                            sphere = if ("sphere" in a) (a.sphere() ?: old.sphere) else old.sphere,
                             waitingFor = newWait,
                             promisedTo = newPromise,
                             place = if ("place" in a) a.str("place")?.address() else old.place,
@@ -734,6 +737,7 @@ object Assistant {
                             phone = a.str("phone") ?: it.phone,
                             email = a.str("email") ?: it.email,
                             company = a.str("company") ?: it.company,
+                            org = if ("org" in a) a.str("org") == "true" else it.org,
                             telegram = a.str("telegram")?.trim()?.removePrefix("https://t.me/")?.removePrefix("@")?.let { t0 -> "@$t0" } ?: it.telegram,
                             address = a.str("address")?.address() ?: it.address,
                             personal = (it.personal + listOfNotNull(a.str("personal")?.sentence())).distinctBy { p0 -> p0.lowercase() },
@@ -912,6 +916,8 @@ object Assistant {
 
     private fun JsonObject.dateTime(k: String): String? =
         str(k)?.take(16)?.let { runCatching { LocalDateTime.parse(it).toString().take(16) }.getOrNull() }
+
+    private fun JsonObject.sphere(): String? = str("sphere")?.trim()?.lowercase()?.takeIf { it == "personal" || it == "work" }
 
     private fun JsonObject.project(): String? =
         str("project")?.trim()?.removePrefix("#")?.lowercase()?.takeIf { it.isNotBlank() }

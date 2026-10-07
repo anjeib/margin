@@ -124,7 +124,8 @@ fun CheckCircle(done: Boolean, size: Dp = 24.dp, onToggle: () -> Unit) {
                 .border(1.4.dp, if (done) c.ink else c.faint, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            if (done) Icon(Icons.Rounded.Check, null, tint = c.bg, modifier = Modifier.size(size * 0.62f))
+            // A pale check waits inside the ring — it says «tap to finish»; done, the ring fills and the check turns bright.
+            Icon(Icons.Rounded.Check, null, tint = if (done) c.bg else c.faint.copy(alpha = 0.55f), modifier = Modifier.size(size * 0.62f))
         }
     }
 }
@@ -207,7 +208,7 @@ fun QuietTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, coun
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(l, style = Type.tab.copy(color = if (i == selected) c.ink else c.graphite))
                     counts?.getOrNull(i)?.takeIf { it > 0 }?.let { n ->
-                        Text(" $n", style = Type.small.copy(fontSize = 13.sp, color = if (i == 0 && alertFirst) c.link else c.faint))
+                        Text(" $n", style = Type.small.copy(fontSize = 13.sp, color = if (i == 0 && alertFirst) c.link else c.graphite))
                     }
                 }
                 Spacer(Modifier.height(5.dp))

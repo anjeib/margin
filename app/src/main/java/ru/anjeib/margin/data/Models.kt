@@ -104,6 +104,8 @@ data class Person(
     val draft: Boolean = false,
     /** Added by the user («+ контакт», «Добавить контакт», a card, a phone contact) — never turned back into a draft. */
     val kept: Boolean = false,
+    /** A business, not a person: a shop, a clinic, a housing office, a bank — «Организации» in «Контакты». */
+    val org: Boolean = false,
 ) {
     fun matches(n: String) = name.equals(n, true) || aliases.any { it.equals(n, true) }
     /** Anything beyond a name: worth keeping in «Контакты» even if nobody pressed «+ контакт». */
@@ -185,6 +187,8 @@ data class Task(
     val remindAt: String? = null, // ISO date-time yyyy-MM-ddTHH:mm
     val people: List<String> = emptyList(),
     val project: String? = null,
+    /** v2: «Личное» or «Работа» — the one badge a topic carries instead of a project: personal | work. */
+    val sphere: String? = null,
     /** Legacy single comment — migrated into [entries]. */
     val comment: String? = null,
     /** Dated records about the task (things said, files, photos). */

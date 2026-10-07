@@ -1,5 +1,11 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.text.withLink
+
+import androidx.compose.ui.text.SpanStyle
+
+import androidx.compose.animation.animateContentSize
+
 import kotlinx.coroutines.launch
 
 import androidx.compose.ui.text.withStyle
@@ -190,6 +196,16 @@ fun TaskList(
         ui.edit().putStringSet("folded", collapsed.value).apply()
     }
     fun isOpen(k: String) = k !in collapsed.value
+    // Which days are open on the timeline: today by default; what the user opens stays open while the screen lives.
+    val openDays = rememberSaveable(saver = setSaver) { mutableStateOf(setOf(today.toString())) }
+    fun isDayOpen(d: LocalDate) = d.toString() in openDays.value
+    fun toggleDay(d: LocalDate) { openDays.value = if (d.toString() in openDays.value) openDays.value - d.toString() else openDays.value + d.toString() }
+    // The hour, tapped: the clock opens for it.
+    var timeFor by remember { mutableStateOf<String?>(null) }
+    timeFor?.let { id ->
+        val cur = ru.anjeib.margin.data.questionRef(id)?.let { (tid, qid) -> data.tasks.find { it.id == tid }?.subtasks?.find { it.id == qid }?.time } ?: data.tasks.find { it.id == id }?.time
+        TimeDialog(cur, onDismiss = { timeFor = null }) { tm -> vm.setTime(id, tm); timeFor = null }
+    }
 
     // v2: simple tasks and, for topics, their dated questions — the next steps.
     val tasks = remember(data) { data.listTasks() }
@@ -263,62 +279,22 @@ fun TaskList(
 
         when {
             view == Views.TODAY -> {
-                val list = tasks.filter { isToday(it, today) }
-                val running = tasks.filter { isRunning(it, today) }.sortedBy { sortKey(it) }
-                val doneToday = data.tasks.filter { !it.topic && it.done && it.doneAt == today.toString() }
-                header(today.dowFull(), null, day = today)
-                // Instead of an AI retelling of the list below: whose promises fall due now — built here, free and exact.
-                val promises = tasks.filter { t -> !t.done && (t.waitingFor != null || t.promisedTo != null) && t.anchor?.let { !it.isAfter(today.plusDays(3)) } == true }
-                    .sortedWith(compareBy({ it.anchor }, { it.time ?: "99" }))
-                if (promises.isNotEmpty()) item("promises") { MarginPromises(promises, today, onOpen, onToggle = { vm.completeWithUndo(it) }) }
-                // One fact once: what the card shows isn't repeated in the lists below (a timed one stays in the day's timeline).
-                val shown = promises.map { it.id }.toSet()
+                // v2: a timeline of days. Today open — «Дела» and «Темы»; the next days with something in them, closed to one line each.
+                val plans = (0L..13L).map { dayPlan(data, today.plusDays(it), today, events) }.filter { it.date == today || !it.empty }
+                plans.forEach { p ->
+                    item("day" + p.date) {
+                        DayBlock(p, today, open = isDayOpen(p.date), heading = p.date == today, onToggle = { toggleDay(p.date) },
+                            onOpen = onOpen, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = landed)
+                    }
+                }
                 // Written without internet: one quiet line here, the items themselves live in «Входящие».
                 if (data.queue.isNotEmpty()) plain("queue") {
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onOpenInbox).padding(horizontal = 10.dp, vertical = 10.dp),
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onOpenInbox).padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.CloudOff, null, tint = c.graphite, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(10.dp))
                         Text(s.queuedLine(data.queue.size) + " →", style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
                     }
-                }
-                // «Сегодня»: one block, one look — late first, then the hours (meetings among them), then the rest of the day.
-                val timed = list.filter { it.time != null && it.dueDate?.let { d -> !d.isBefore(today) } != false }.sortedBy { it.time }
-                val rest = (list - timed.toSet()).filter { it.id !in shown }
-                val late = rest.filter { it.isOverdue(today) }.sortedBy { sortKey(it) }
-                val plain = (rest - late.toSet()).sortedBy { sortKey(it) }
-                val todays = events.filter { it.start.toLocalDate() == today || (it.allDay && !it.start.toLocalDate().isAfter(today) && it.end.toLocalDate().isAfter(today)) }
-                if (list.isEmpty() && running.isEmpty() && doneToday.isEmpty() && todays.isEmpty()) plain("empty") {
-                    // A day with nothing in it is a free day; the how-to text only while the app is still empty.
-                    Empty(s.freeDay, if (data.tasks.none { !it.done }) s.emptyHint else s.freeDayHint)
-                }
-                // No «Сегодня 4» badge: the tab and the day on the margin already say it. Late ones get a quiet line with one action.
-                if (late.isNotEmpty()) section(s.overdue, "s-late", late.size, action = s.moveToToday to vm::moveOverdue)
-                rows(late, "late", todayBlock = true)
-                todays.filter { it.allDay }.forEach { e -> item("ev-all" + e.title + e.start) { EventRow(e, margin = true) } }
-                // One timeline: meetings and timed tasks interleaved by time.
-                val timeline = (todays.filter { !it.allDay }.map { it.start.toLocalTime().toString().take(5) to (it as Any) } + timed.map { it.time!! to (it as Any) })
-                    .sortedBy { it.first }
-                timeline.forEachIndexed { i, (_, x) ->
-                    if (x is CalEvent) item("ev$i" + x.title) { EventRow(x, margin = true) }
-                    else rows(listOf(x as Task), "tl", todayBlock = true)
-                }
-                rows(plain, "td", todayBlock = true)
-                // Topics moving now: their progress and next step at a glance.
-                val moving = data.tasks.filter { it.topic && !it.done && !(it.thought && it.subtasks.isEmpty()) && it.subtasks.any { q -> !q.done } }
-                    .sortedBy { t -> t.subtasks.filter { !it.done }.mapNotNull { it.due }.minOrNull() ?: "9999" }
-                if (moving.isNotEmpty()) {
-                    section(s.topicsInWork, "s-topics", moving.size, collapsible = true)
-                    if (isOpen("s-topics")) items(moving.take(6), key = { "tw" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }, lit = t.id in landed) }
-                }
-                val runningRest = running.filter { it.id !in shown }
-                if (runningRest.isNotEmpty()) {
-                    section(s.inWorkThisWeek, "s-running", runningRest.size, collapsible = true)
-                    if (isOpen("s-running")) rows(runningRest, "s-running")
-                }
-                if (doneToday.isNotEmpty()) {
-                    section(s.done, "s-done-today", doneToday.size, collapsible = true)
-                    if (isOpen("s-done-today")) rows(doneToday, "dt")
                 }
                 // Undated tasks live in «Все» — one quiet line keeps them from being forgotten.
                 val undated = tasks.filter { !it.done && it.dueDate == null && it.startDate == null && it.waitingFor == null }.sortedByDescending { it.createdAt }
@@ -354,21 +330,19 @@ fun TaskList(
                             style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
+            
             }
 
             view == Views.WEEK -> {
-                val week = tasks.filter { isThisWeek(it, today) }.sortedWith(compareBy({ !it.isOverdue(today) }, { sortKey(it) }))
-                // The strip of seven days: a dot where something is planned; a tap shows that day, a second tap the whole week.
-                val picked = weekDay?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.takeIf { !it.isBefore(today.weekStart()) && !it.isAfter(today.weekEnd()) }
-                val list = if (picked == null) week else week.filter { onDay(it, picked, today) }
-                val done = data.tasks.filter { !it.topic && it.done && it.doneAt?.let { d -> !LocalDate.parse(d).isBefore(today.weekStart()) } == true }
-                header(s.thisWeekSoft, (picked?.shortLabel(today) ?: rangeLabel(today.weekStart(), today.weekEnd())) + " · " + s.tasksCount(list.size))
-                plain("strip") { WeekStrip(today, picked, week) { d -> weekDay = if (d == picked) null else d.toString() } }
-                if (list.isEmpty() && done.isEmpty()) plain("empty") { Empty(s.emptyWeek, s.emptyHint) }
-                rows(list, "wk")
-                if (done.isNotEmpty()) {
-                    section(s.done, "s-done-week", done.size, collapsible = true)
-                    if (isOpen("s-done-week")) rows(done, "dw")
+                // The week as seven dates on the margin: past days say what got done, today is open, the rest closed.
+                val days = (0L..6L).map { today.weekStart().plusDays(it) }
+                header(s.thisWeekSoft, rangeLabel(today.weekStart(), today.weekEnd()))
+                days.forEach { d ->
+                    val p = dayPlan(data, d, today, events)
+                    item("wday" + d) {
+                        DayBlock(p, today, open = isDayOpen(d), heading = false, onToggle = { toggleDay(d) },
+                            onOpen = onOpen, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = landed)
+                    }
                 }
             }
 
@@ -378,24 +352,26 @@ fun TaskList(
                 val openTopics = data.tasks.filter { it.topic && !it.done && !bare(it) }
                 val simple = data.tasks.filter { !it.topic && !it.done }
                 val thoughts = data.tasks.filter { !it.done && bare(it) }.sortedByDescending { t -> t.entries.maxOfOrNull { it.at } ?: t.createdAt }
-                val labels = (openTopics.mapNotNull { it.project } + simple.mapNotNull { it.project } + thoughts.mapNotNull { it.project }).distinct().sorted()
+                // v2: «Личное» / «Работа» instead of free labels.
+                val labels = (openTopics + simple + thoughts).mapNotNull { it.sphere }.distinct().sortedBy { if (it == "personal") 0 else 1 }
                 val lb = label?.takeIf { it in labels }
-                header(s.all, s.tasksCount(simple.size + openTopics.size))
+                // No «N задач» under it: the tab already counts, and here are topics and ideas too.
+                header(s.all, null)
                 if (labels.isNotEmpty()) plain("labels") {
                     androidx.compose.foundation.layout.FlowRow(Modifier.padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         (listOf<String?>(null) + labels).forEach { l ->
                             val on = lb == l
-                            Text(l?.let { "#" + projectLabel(it) } ?: s.all, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 13.5.sp),
+                            Text(l?.let { if (it == "work") s.sphereWork else s.spherePersonal } ?: s.all, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 13.5.sp),
                                 modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else c.chip).clickable { label = l }.padding(horizontal = 12.dp, vertical = 6.dp))
                         }
                     }
                 }
                 fun ok(p: String?) = lb == null || p == lb
                 val nextOf = { t: Task -> t.subtasks.filter { !it.done }.mapNotNull { it.due }.minOrNull() ?: "9999" }
-                val working = openTopics.filter { ok(it.project) && !it.noNextStep }.sortedBy(nextOf)
-                val idle = openTopics.filter { ok(it.project) && it.noNextStep }
-                val plainOpen = simple.filter { ok(it.project) }
-                val thoughtsShown = thoughts.filter { ok(it.project) }
+                val working = openTopics.filter { ok(it.sphere) && !it.noNextStep }.sortedBy(nextOf)
+                val idle = openTopics.filter { ok(it.sphere) && it.noNextStep }
+                val plainOpen = simple.filter { ok(it.sphere) }
+                val thoughtsShown = thoughts.filter { ok(it.sphere) }
                 if (working.isEmpty() && plainOpen.isEmpty() && thoughtsShown.isEmpty() && idle.isEmpty()) plain("empty") { Empty(s.emptyAll, s.emptyHint) }
                 if (working.isNotEmpty()) {
                     section(s.topicsInWork, "a-topics", working.size)
@@ -487,7 +463,7 @@ private fun IdeaRow(ch: Chain, busy: Boolean, onOpen: () -> Unit, onMake: () -> 
 /** «Отложить»: tomorrow, in a week, in a month — or a day from the calendar. */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun PostponeDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
+fun PostponeDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
@@ -665,13 +641,8 @@ private fun marginWhen(t: Task, today: LocalDate, todayBlock: Boolean): String? 
     if ((todayBlock || day == today) && (day == today || day == null) && hour != null) return hour
     if (todayBlock && !t.isOverdue(today) && (day == today || day == null)) return hour
     val d = day ?: return hour
-    val dayText = when {
-        d == today -> L.s.todayShort
-        d == today.plusDays(1) -> L.s.quickTomorrow.lowercase()
-        d == today.minusDays(1) -> d.shortLabel(today).lowercase()
-        !d.isBefore(today.weekStart()) && !d.isAfter(today.weekEnd()) -> d.dowShort().lowercase() + " " + d.dayOfMonth
-        else -> d.dayMonthShort()
-    }
+    // Only dates on the margin; «сегодня» / «завтра» is a badge over the row (SoonBadge).
+    val dayText = d.dayMonthShort()
     return listOfNotNull(dayText, hour).joinToString("\n")
 }
 
@@ -696,13 +667,15 @@ private fun MarginTaskRow(t: Task, today: LocalDate, showProject: Boolean, onTog
             onToggle()
         }
     }
-    Margined(Modifier.background(c.bg).clickable(onClick = onOpen), margin = { if (!t.done) marginWhen(t, today, todayBlock)?.let { MarginText(it, late = late) } }) {
+    val lift = if (!t.done && !todayBlock && isSoon(t.dueDate ?: t.startDate)) SoonLift + 6.dp else 0.dp
+    Margined(Modifier.background(c.bg).clickable(onClick = onOpen), margin = { if (!t.done) marginWhen(t, today, todayBlock)?.let { Box(Modifier.padding(top = lift)) { MarginText(it, late = late) } } }) {
         Column {
+            if (!t.done && !todayBlock) SoonBadge(t.dueDate ?: t.startDate, Modifier.padding(top = 6.dp))
             Row(Modifier.fillMaxWidth().padding(top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
-                // Waiting on someone: the hourglass closes it («получено»), the circle — the user's own.
-                if (t.waitingFor != null && !t.done) Box(Modifier.size(24.dp).clip(CircleShape).clickable { tick() }, contentAlignment = Alignment.Center) {
-                    if (ticking) TickGlyph(c.ok, 19.dp) else HourglassGlyph(c.graphite, 18.dp)
-                } else Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                // One circle for everything; what kind of thing it is — a small mark in the narrow column.
+                KindMark(if (t.done) null else t)
+                Spacer(Modifier.width(4.dp))
+                Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
                     CheckCircle(t.done || ticking, size = 19.dp, onToggle = ::tick)
                 }
                 Spacer(Modifier.width(12.dp))
@@ -767,16 +740,16 @@ fun TopicRow(t: Task, onOpen: () -> Unit, lit: Boolean = false) {
     // The next step in one grey line: who we wait for and until when, or the nearest question and its hour.
     val next = t.subtasks.filter { !it.done }.minByOrNull { it.due ?: "9999" }
     val nextLine = when {
-        bare -> listOfNotNull(s.thoughtWord, t.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, files.takeIf { it > 0 }?.let { s.nMaterials(it) }).joinToString("  ·  ")
+        bare -> listOfNotNull(t.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, files.takeIf { it > 0 }?.let { s.nMaterials(it) }).joinToString("  ·  ")
         next == null -> s.allDoneShort
         next.from != null -> s.waitPrefix(next.from).trimEnd(':') + (next.due?.let { "  ·  ~" + LocalDate.parse(it).shortLabel(today).lowercase() } ?: "")
         else -> next.title + listOfNotNull(next.due?.let { d -> if (d == today.toString()) null else LocalDate.parse(d).shortLabel(today).lowercase() }, next.time).joinToString(" ").let { if (it.isBlank()) "" else "  ·  $it" }
-    } + (t.project?.let { "  ·  #" + projectLabel(it) } ?: "")
+    } + (if (!bare && t.entries.isNotEmpty()) "  ·  " + s.nEntries(t.entries.size) else "")
     Margined(Modifier.background(c.bg).landing(lit, 0).clickable(onClick = onOpen), margin = {
         Box(Modifier.padding(top = 3.dp)) { if (bare) ThoughtGlyph(c.graphite, 19.dp) else TopicGlyph(c.graphite, 19.dp) }
     }) {
         Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
-            Text(t.title, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            TitleWithSphere(t.title, t.sphere, Type.body.copy(fontSize = 15.5.sp, color = c.ink))
             if (!bare && total > 0) Row(Modifier.padding(top = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                 TopicProgress(done, total, Modifier.weight(1f))
                 Spacer(Modifier.width(12.dp))
@@ -942,5 +915,239 @@ private fun BriefCard(data: AppData, settings: Settings, loading: Boolean, quiet
                 }
             }
         }
+    }
+}
+
+// ---------------- the day timeline: dates on the margin, one block per day ----------------
+
+/** A topic's step that falls on a day. */
+data class TopicStep(val topic: Task, val q: ru.anjeib.margin.data.Subtask)
+
+/** What a day holds: single things to do, topic steps, meetings — and, for a past day, what got done. */
+data class DayPlan(val date: LocalDate, val deals: List<Task>, val steps: List<TopicStep>, val events: List<CalEvent>, val doneCount: Int) {
+    val empty get() = deals.isEmpty() && steps.isEmpty() && events.isEmpty()
+}
+
+/** The day a thing belongs to on the timeline: late ones gather on today. */
+private fun dayOf(due: LocalDate?, start: LocalDate?, today: LocalDate): LocalDate? {
+    val d = due ?: start ?: return null
+    return if (d.isBefore(today)) today else d
+}
+
+fun dayPlan(data: AppData, date: LocalDate, today: LocalDate, events: List<CalEvent>): DayPlan {
+    val deals = data.tasks.filter { !it.topic && !it.done && dayOf(it.dueDate, it.startDate, today) == date }
+        .sortedWith(compareBy({ !it.isOverdue(today) }, { it.time ?: "99" }, { it.title }))
+    val steps = data.tasks.filter { it.topic && !it.done }.flatMap { t ->
+        t.subtasks.filter { !it.done && it.due != null }.mapNotNull { q ->
+            val d = runCatching { LocalDate.parse(q.due) }.getOrNull()
+            if (dayOf(d, null, today) == date) TopicStep(t, q) else null
+        }
+    }.sortedWith(compareBy({ it.q.time ?: "99" }, { it.topic.title }))
+    val evs = events.filter { !it.allDay && it.start.toLocalDate() == date || it.allDay && it.start.toLocalDate() == date }
+    val done = if (date.isBefore(today)) data.tasks.count { it.doneAt == date.toString() && !it.topic } +
+        data.tasks.sumOf { t -> t.subtasks.count { it.doneAt == date.toString() } } else 0
+    return DayPlan(date, deals, steps, evs, done)
+}
+
+/** The date on the margin: the number in serif, the month and the weekday small under it; today in petrol. */
+@Composable
+private fun DayMargin(date: LocalDate, today: LocalDate, big: Boolean) {
+    val c = M.c
+    val past = date.isBefore(today)
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (big) 2.dp else 8.dp)) {
+        Text(date.dayOfMonth.toString(), style = Type.display.copy(color = when { date == today && !big -> c.link; past -> c.faint; else -> c.ink },
+            fontSize = if (big) 40.sp else 26.sp, lineHeight = if (big) 42.sp else 28.sp))
+        Text(date.dayMonthShort().substringAfter(' '), style = Type.small.copy(color = if (past) c.faint else c.graphite, fontSize = 11.5.sp, fontWeight = FontWeight.Medium))
+        if (!big) Text(date.dowShort().lowercase(), style = Type.small.copy(color = c.faint, fontSize = 11.sp))
+    }
+}
+
+/** The little column right of the rule: what kind of thing it is — waiting, promised, repeating, a meeting, a topic. */
+@Composable
+private fun KindMark(t: Task?) {
+    val c = M.c
+    Box(Modifier.size(20.dp, 24.dp), contentAlignment = Alignment.Center) {
+        when {
+            t == null -> {}
+            t.waitingFor != null -> HourglassGlyph(c.graphite, 14.dp)
+            t.promisedTo != null -> ArrowGlyph(c.graphite, 14.dp)
+            t.repeat != null -> RepeatGlyph(c.graphite, 14.dp)
+            t.time != null -> ClockGlyph(c.graphite, 14.dp)
+        }
+    }
+}
+
+/** The hour as a petrol link that opens the clock; late in terracotta. */
+private fun androidx.compose.ui.text.AnnotatedString.Builder.timeLink(time: String, late: Boolean, link: Color, accent: Color, onTime: () -> Unit) {
+    withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("time", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = if (late) accent else link, fontWeight = FontWeight.Medium))) { onTime() }) { append(time) }
+    append("   ")
+}
+
+/** One thing to do on an open day: kind mark, the circle, the hour as a link, the words, a quiet line under. */
+@Composable
+private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () -> Unit, onTime: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    val view = androidx.compose.ui.platform.LocalView.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val motion = motionOn()
+    val strike = remember(t.id) { androidx.compose.animation.core.Animatable(0f) }
+    var ticking by remember(t.id) { mutableStateOf(false) }
+    fun tick() {
+        view.confirmTick()
+        if (!motion) { onToggle(); return }
+        scope.launch { ticking = true; strike.animateTo(1f, androidx.compose.animation.core.tween(320)); kotlinx.coroutines.delay(220); onToggle() }
+    }
+    val late = t.isOverdue(today)
+    Row(Modifier.fillMaxWidth().background(c.bg).clickable(onClick = onOpen).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+        KindMark(t)
+        Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(ticking, size = 18.dp, onToggle = ::tick) }
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            val title = androidx.compose.ui.text.buildAnnotatedString {
+                t.time?.let { timeLink(it, late && t.dueDate == today, c.link, c.accent, onTime) }
+                append(t.title)
+            }
+            Text(title, style = Type.body.copy(fontSize = 15.5.sp, color = if (ticking) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 1.dp).drawStrike(strike.value, c.faint))
+            if (late && t.dueDate?.isBefore(today) == true) Text(s.lateSince(t.dueDate!!.dayMonthShort()), style = Type.small.copy(color = c.accent, fontSize = 12.5.sp))
+            TaskLine(t, null, true, today = today)
+        }
+    }
+}
+
+/** A line through the whole box as [strike] goes 0→1 (for rows whose text mixes links). */
+private fun Modifier.drawStrike(strike: Float, color: Color): Modifier = if (strike <= 0f) this else this.drawWithContent {
+    drawContent()
+    val y = 11.dp.toPx()
+    drawLine(color, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width * strike, y), strokeWidth = 1.3.dp.toPx())
+}
+
+/** A topic on a day: its title and progress, then its steps for that day — each with the circle and its hour. */
+@Composable
+private fun TopicDayRow(topic: Task, steps: List<ru.anjeib.margin.data.Subtask>, today: LocalDate, onOpen: (String) -> Unit, onSettle: (String) -> Unit, onTime: (String) -> Unit) {
+    val c = M.c
+    val view = androidx.compose.ui.platform.LocalView.current
+    val total = topic.subtasks.size
+    val done = topic.subtasks.count { it.done }
+    Column(Modifier.fillMaxWidth().background(c.bg).clickable { onOpen(topic.id) }.padding(vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.Top) {
+            Box(Modifier.size(20.dp, 24.dp), contentAlignment = Alignment.Center) { TopicGlyph(c.graphite, 15.dp) }
+            Spacer(Modifier.width(6.dp))
+            Column(Modifier.weight(1f)) {
+                TitleWithSphere(topic.title, topic.sphere, Type.body.copy(fontSize = 15.5.sp, color = c.ink, fontWeight = FontWeight.Medium))
+                // How much has been written in it — a topic lives by its feed.
+                val n = topic.entries.size
+                val files = topic.materials().size
+                if (n > 0 || files > 0) Text(listOfNotNull(n.takeIf { it > 0 }?.let { M.s.nEntries(it) }, files.takeIf { it > 0 }?.let { M.s.nMaterials(it) }).joinToString("  ·  "),
+                    style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(top = 1.dp))
+            }
+            if (total > 0) {
+                Spacer(Modifier.width(10.dp))
+                Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(64.dp)) {
+                    Text(M.s.progressOf(done, total), style = Type.small.copy(color = c.graphite, fontSize = 11.5.sp, fontFeatureSettings = "tnum"))
+                    TopicProgress(done, total, Modifier.padding(top = 3.dp))
+                }
+            }
+        }
+        steps.forEach { q ->
+            val qid = "q:${topic.id}:${q.id}"
+            val late = q.due?.let { LocalDate.parse(it).isBefore(today) } == true
+            Row(Modifier.fillMaxWidth().clickable { onOpen(qid) }.padding(top = 6.dp), verticalAlignment = Alignment.Top) {
+                Box(Modifier.size(20.dp, 24.dp), contentAlignment = Alignment.Center) { if (q.from != null) HourglassGlyph(c.graphite, 14.dp) }
+                Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(false, size = 16.dp) { view.confirmTick(); onSettle(qid) } }
+                Spacer(Modifier.width(8.dp))
+                val text = androidx.compose.ui.text.buildAnnotatedString {
+                    q.time?.let { timeLink(it, late || q.due == today.toString() && it < java.time.LocalTime.now().toString().take(5), c.link, c.accent) { onTime(qid) } }
+                    append(if (q.from != null) M.s.waitPrefix(q.from).trimEnd(':') + ": " + q.title else q.title)
+                }
+                Text(text, style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(top = 2.dp))
+            }
+        }
+    }
+}
+
+/** A closed day: one line per thing, no hours except a meeting's, a chevron. */
+@Composable
+private fun CompactLine(icon: (@Composable () -> Unit)?, text: String, faint: Boolean = false) {
+    val c = M.c
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(20.dp, 20.dp), contentAlignment = Alignment.Center) { icon?.invoke() }
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = Type.body.copy(fontSize = 15.sp, color = if (faint) c.graphite else c.ink), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * One day on the timeline. Open: «Дела» and «Темы» with hours, people and places. Closed: titles only.
+ * A tap on the date (or on a closed day) opens and closes it — smoothly, the height following the content.
+ */
+@Composable
+fun DayBlock(
+    plan: DayPlan, today: LocalDate, open: Boolean, heading: Boolean, onToggle: () -> Unit,
+    onOpen: (String) -> Unit, onDone: (String) -> Unit, onLater: (String) -> Unit, onTime: (String) -> Unit, landed: Set<String>,
+) {
+    val c = M.c
+    val s = M.s
+    val past = plan.date.isBefore(today)
+    Column(Modifier.fillMaxWidth().animateContentSize(androidx.compose.animation.core.tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing))) {
+        Margined(Modifier.padding(top = 10.dp, bottom = 10.dp), margin = {
+            Box(Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle)) { DayMargin(plan.date, today, heading) }
+        }) {
+            Column {
+                if (heading) Text(plan.date.dowFull(), style = Type.display.copy(color = c.ink), modifier = Modifier.padding(bottom = 8.dp))
+                if (!open) {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle).padding(top = 8.dp), verticalAlignment = Alignment.Top) {
+                        Column(Modifier.weight(1f)) {
+                            val lines = buildList<@Composable () -> Unit> {
+                                plan.events.forEach { e -> add { CompactLine({ CalendarGlyph(c.graphite) }, e.start.toLocalTime().toString().take(5) + "  " + e.title) } }
+                                plan.deals.forEach { t -> add { CompactLine({ KindMark(t) }, t.title) } }
+                                plan.steps.forEach { st -> add { CompactLine({ if (st.q.from != null) HourglassGlyph(c.graphite, 14.dp) else TopicGlyph(c.graphite, 14.dp) },
+                                    (if (st.q.from != null) s.waitPrefix(st.q.from).trimEnd(':') + ": " else "") + st.q.title + "  ·  " + st.topic.title) } }
+                            }
+                            when {
+                                past && plan.empty -> CompactLine(null, if (plan.doneCount > 0) s.doneCountWord(plan.doneCount) else s.freeWord, faint = true)
+                                plan.empty -> CompactLine(null, s.freeWord, faint = true)
+                                else -> { lines.take(4).forEach { it() }; if (lines.size > 4) CompactLine(null, s.more(lines.size - 4), faint = true) }
+                            }
+                        }
+                        if (!plan.empty) Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.faint, modifier = Modifier.padding(top = 4.dp).size(18.dp))
+                    }
+                } else {
+                    val dealsAll = plan.events.isNotEmpty() || plan.deals.isNotEmpty()
+                    if (plan.empty) Text(if (plan.date == today) s.freeDay else s.freeWord, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(top = 6.dp))
+                    if (dealsAll) {
+                        plan.events.forEach { e ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                                Box(Modifier.size(20.dp, 24.dp), contentAlignment = Alignment.Center) { CalendarGlyph(c.graphite) }
+                                Spacer(Modifier.width(34.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(e.start.toLocalTime().toString().take(5) + "   " + e.title, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink))
+                                    e.location?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 13.sp)) }
+                                }
+                            }
+                        }
+                        plan.deals.forEach { t ->
+                            androidx.compose.runtime.key(t.id) {
+                                SwipeTask(t, onDone = { onDone(t.id) }, onLater = { onLater(t.id) }, modifier = Modifier.landing(t.id in landed, 0), radius = 0) {
+                                    DealRow(t, today, onToggle = { onDone(t.id) }, onOpen = { onOpen(t.id) }, onTime = { onTime(t.id) })
+                                }
+                            }
+                        }
+                    }
+                    if (plan.steps.isNotEmpty()) {
+                        if (dealsAll) Spacer(Modifier.height(10.dp))
+                        plan.steps.groupBy { it.topic.id }.values.forEach { group ->
+                            androidx.compose.runtime.key(group.first().topic.id) {
+                                Box(Modifier.landing(group.first().topic.id in landed, 0)) {
+                                    TopicDayRow(group.first().topic, group.map { it.q }, today, onOpen = onOpen, onSettle = onDone, onTime = onTime)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Hairline(Modifier.padding(start = MarginW))
     }
 }

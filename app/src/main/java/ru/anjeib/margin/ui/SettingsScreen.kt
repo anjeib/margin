@@ -76,8 +76,8 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         vm.updateSettings { it.copy(calendar = ok) }; vm.refreshCalendar()
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(contentPadding)) {
-        Text(s.settings, style = Type.display.copy(color = c.ink), modifier = Modifier.padding(top = 18.dp, bottom = 18.dp, start = 4.dp))
+    Column(Modifier.fillMaxSize().screenRule().verticalScroll(rememberScrollState()).padding(contentPadding.vertical()).padding(start = MarginW + MarginGap, end = 16.dp)) {
+        Text(s.settings, style = Type.display.copy(color = c.ink), modifier = Modifier.padding(top = 14.dp, bottom = 18.dp))
 
         Group(s.voiceSection) {
             // One switch for people: speech on the phone (Whisper) or in the cloud. Models live in the developer section.
@@ -314,14 +314,14 @@ private fun ToggleRow(label: String, hint: String?, value: Boolean, onLabel: (()
 @Composable
 private fun Segmented(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     val c = M.c
-    Row(Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(3.dp),
+    Row(Modifier.fillMaxWidth().padding(10.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         labels.forEachIndexed { i, l ->
             Box(
                 Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (i == selected) c.linkSoft else c.chip)
                     .clickable { onSelect(i) }.padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text(l, style = Type.small.copy(color = if (i == selected) c.link else c.graphite, fontSize = 14.sp)) }
+            ) { Text(l, style = Type.small.copy(color = if (i == selected) c.link else c.graphite, fontSize = 14.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
         }
     }
 }

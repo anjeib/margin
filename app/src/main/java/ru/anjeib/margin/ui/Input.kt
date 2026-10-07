@@ -220,7 +220,7 @@ fun SmartComposer(
             }
             Box {
                 RoundIcon(Icons.Rounded.Add, c.graphite, s.a11yAttach) { menu = true }
-                DropdownMenu(menu, { menu = false }, containerColor = c.card) {
+                SoftMenu(menu, { menu = false }) {
                     MenuItem(Icons.Outlined.PhotoLibrary, s.attachPhoto) { menu = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
                     MenuItem(Icons.Outlined.PhotoCamera, s.attachCamera) {
                         menu = false

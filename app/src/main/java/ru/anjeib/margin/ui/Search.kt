@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.dayMonthShort
+
+import androidx.compose.foundation.layout.PaddingValues
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -73,22 +77,31 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
             }
             Spacer(Modifier.width(8.dp))
         }
-        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            if (words.isNotEmpty() && tasks.isEmpty() && notes.isEmpty() && people.isEmpty()) item { Empty(s.nothing, "") }
-            if (tasks.isNotEmpty()) {
-                item { SectionLabel(s.tasks, Modifier.padding(start = 6.dp, top = 16.dp, bottom = 4.dp)) }
-                items(tasks, key = { "t" + it.id }) { t -> TaskRow(t, LocalDate.now(), true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onTask(t.id) }) }
+        // «Поля» under the search line: matters with their date on the margin, topics with their progress, people with their face.
+        val topics = tasks.filter { it.topic }
+        val deals = tasks.filterNot { it.topic }
+        LazyColumn(Modifier.fillMaxSize().screenRule(), contentPadding = PaddingValues(bottom = 24.dp)) {
+            if (words.isNotEmpty() && tasks.isEmpty() && notes.isEmpty() && people.isEmpty()) item { Margined { Empty(s.nothing, "") } }
+            if (deals.isNotEmpty()) {
+                item { Margined(Modifier.padding(top = 16.dp, bottom = 4.dp)) { GroupBadge(s.dealsBadge) } }
+                items(deals, key = { "t" + it.id }) { t ->
+                    Margined(margin = { (t.dueDate ?: t.startDate)?.let { MarginText(it.dayMonthShort(), faint = t.done) } }) {
+                        TaskRow(t, LocalDate.now(), true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onTask(t.id) })
+                    }
+                }
+            }
+            if (topics.isNotEmpty()) {
+                item { Margined(Modifier.padding(top = 16.dp, bottom = 4.dp)) { GroupBadge(s.topicsBadge) } }
+                items(topics, key = { "t" + it.id }) { t -> Margined { TopicRow(t, onOpen = { onTask(t.id) }) } }
             }
             if (notes.isNotEmpty()) {
-                item { SectionLabel(s.notes, Modifier.padding(start = 6.dp, top = 20.dp, bottom = 8.dp)) }
-                items(notes, key = { "n" + it.id }) { n -> NoteCard(n, data, onClick = { onNote(n.id) }, modifier = Modifier.padding(bottom = 8.dp)) }
+                item { Margined(Modifier.padding(top = 20.dp, bottom = 8.dp)) { GroupBadge(s.notes) } }
+                items(notes, key = { "n" + it.id }) { n -> Margined { NoteCard(n, data, onClick = { onNote(n.id) }, modifier = Modifier.padding(bottom = 8.dp)) } }
             }
             if (people.isNotEmpty()) {
-                item { SectionLabel(s.peopleTitle, Modifier.padding(start = 6.dp, top = 20.dp, bottom = 8.dp)) }
+                item { Margined(Modifier.padding(top = 20.dp, bottom = 8.dp)) { GroupBadge(s.peopleTitle) } }
                 items(people, key = { "p" + it.id }) { p ->
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { onPerson(p.id) }.padding(vertical = 10.dp, horizontal = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Monogram(p.name, 32.dp); Spacer(Modifier.width(12.dp))
+                    Margined(Modifier.clickable { onPerson(p.id) }.padding(vertical = 10.dp), margin = { Monogram(p.name, 30.dp) }) {
                         Column {
                             Text(p.name, style = Type.body.copy(color = c.ink))
                             p.about?.let { Text(it, style = Type.small.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis) }

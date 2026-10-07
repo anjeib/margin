@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.offset
+
+import androidx.compose.foundation.layout.wrapContentWidth
+
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -73,19 +77,22 @@ fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddi
     val c = M.c
     val s = M.s
     val people = data.persons.filter { it.isContact }.sortedByDescending { p -> data.tasks.count { !it.done && it.involves(p) } }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item("h") { Text(s.peopleTitle, style = Type.display.copy(color = c.ink), modifier = Modifier.padding(top = 18.dp, bottom = 12.dp, start = 4.dp)) }
-        if (people.isEmpty()) item("empty") { Empty(s.peopleTitle, s.emptyPeople) }
-        items(people, key = { it.id }) { p ->
+    Box(Modifier.fillMaxSize().screenRule()) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
+        item("h") { PageHead(s.peopleTitle, s.peopleSub) }
+        if (people.isEmpty()) item("empty") { Margined { Empty(s.peopleTitle, s.emptyPeople) } }
+        // People and businesses apart; the badges only when both are there.
+        val orgs = people.filter { it.org }
+        val humans = people.filterNot { it.org }
+        listOf(s.peopleBadge to humans, s.orgsBadge to orgs).filter { it.second.isNotEmpty() }.forEach { (badge, group) ->
+        if (orgs.isNotEmpty()) item("b" + badge) { Margined(Modifier.padding(top = 12.dp, bottom = 2.dp)) { GroupBadge(badge) } }
+        items(group, key = { it.id }) { p ->
             val open = data.tasks.count { !it.done && it.involves(p) }
             SwipeActions(left = s.toArchive to { vm.archivePerson(p.id) }, right = s.delete to { vm.removePerson(p.id) }, modifier = Modifier.animateItem()) {
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).clickable { onOpen(p.id) }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Monogram(p.name, 40.dp)
-                Spacer(Modifier.width(14.dp))
+            Column(Modifier.fillMaxWidth().background(c.bg).clickable { onOpen(p.id) }) {
+            // «Поля»: the face on the margin, who they are and what's open with them right of the rule.
+            Margined(Modifier.padding(top = 12.dp, bottom = 12.dp), margin = { Monogram(p.name, 34.dp) }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 // What's open with them right now beats a static description.
                 val wait = data.tasks.firstOrNull { !it.done && it.waitingFor?.let { w -> p.matches(w) } == true }
                 val promise = data.tasks.firstOrNull { !it.done && it.promisedTo?.let { w -> p.matches(w) } == true }
@@ -96,10 +103,15 @@ fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddi
                         .joinToString(" · ").ifBlank { listOfNotNull(p.phone, p.email).joinToString(" · ") }
                     if (line.isNotBlank()) Text(line, style = Type.small.copy(color = c.graphite), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-                if (open > listOfNotNull(wait, promise).size) Text(s.tasksCount(open), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
+                if (open > listOfNotNull(wait, promise).size) Text(s.tasksCount(open), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"))
+            }
+            }
+            Hairline(Modifier.padding(start = MarginW + MarginGap))
             }
             }
         }
+        }
+    }
     }
 }
 
@@ -120,7 +132,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
     val done = tasks.filter { it.done }.sortedByDescending { it.doneAt }.take(5)
     val notes = data.notes.filter { n -> listOf(person.name).plus(person.aliases).any { n.title.contains(it, true) || n.text.contains(it, true) } }
 
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().screenRule()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = c.ink)
@@ -130,17 +142,20 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Outlined.MoreHoriz, null, tint = c.graphite)
                 }
-                DropdownMenu(menu, { menu = false }, containerColor = c.card) {
-                    DropdownMenuItem(text = { Text(s.rename, style = Type.body) }, onClick = { menu = false; dialog = "rename" })
-                    if (data.persons.size > 1) DropdownMenuItem(text = { Text(s.mergeWith, style = Type.body) }, onClick = { menu = false; dialog = "merge" })
-                    DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menu = false; vm.deletePerson(person.id); onBack() })
+                SoftMenu(menu, { menu = false }) {
+                    SoftMenuItem(s.rename, onClick = { menu = false; dialog = "rename" })
+                    if (data.persons.size > 1) SoftMenuItem(s.mergeWith, onClick = { menu = false; dialog = "merge" })
+                    SoftMenuItem(if (person.org) s.markPerson else s.markOrg, onClick = { menu = false; vm.setOrg(person.id, !person.org) })
+                    SoftMenuItem(s.delete, danger = true, onClick = { menu = false; vm.deletePerson(person.id); onBack() })
                 }
             }
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
+        // «Поля»: the face on the margin, everything else right of the rule.
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = MarginW + MarginGap, end = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Monogram(person.name, 64.dp)
-                Spacer(Modifier.width(18.dp))
+                Box(Modifier.width(0.dp)) {
+                    Box(Modifier.wrapContentWidth(Alignment.Start, unbounded = true).offset(x = -(MarginW + MarginGap) + 4.dp)) { Monogram(person.name, 46.dp) }
+                }
                 Column(Modifier.weight(1f)) {
                     Text(person.name, style = Type.display.copy(color = c.ink, fontSize = 36.sp))
                     // Who they are: role · company · the projects they show up in.

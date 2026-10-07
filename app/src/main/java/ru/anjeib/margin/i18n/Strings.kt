@@ -564,6 +564,12 @@ interface Strings {
     val noDateQ: String
     val kindTopic: String
     val kindThought: String
+    fun lateSince(d: String): String
+    fun doneCountWord(n: Int): String
+    val freeWord: String
+    val dealsBadge: String
+    val topicsBadge: String
+    fun buildLabel(name: String, code: Int, debug: Boolean): String
     val backWord: String
     val todayShort: String
     fun progressOf(d: Int, n: Int): String
@@ -571,6 +577,25 @@ interface Strings {
     fun movedToTopic(t: String): String
     val toOtherTopic: String
     val toTopicPick: String
+    val recognizeWord: String
+    val feedTitle: String
+    val filterWord: String
+    val filterAll: String
+    val spherePersonal: String
+    val sphereWork: String
+    val sphereAdd: String
+    val orgsBadge: String
+    val peopleBadge: String
+    val markOrg: String
+    val markPerson: String
+    val stepOne: String
+    val stepHint: String
+    val peopleSub: String
+    val archiveSub: String
+    val sinceWord: String
+    val sortsWhenOnline: String
+    val unplacedBadge: String
+    val photoNoCaption: String
     fun thoughtSince(d: String): String
     val thoughtsToday: String
     val questionDateQ: String
@@ -777,7 +802,7 @@ object Ru : Strings {
     override val deletedOne = "Удалено"
     override val toArchive = "В архив"
     override val archiveTitle = "Архив"
-    override val archiveEmpty = "Свайп влево по заметке или контакту убирает их сюда. Отсюда их можно вернуть."
+    override val archiveEmpty = "Сюда уходят решённые темы — со всей лентой и материалами. Новость в теме или «Вернуть» возвращают её."
     override val restoreWord = "Вернуть"
     override val calendarTitle = "Календарь"
     override val projectsEmpty = "Проектов пока нет"
@@ -904,7 +929,7 @@ object Ru : Strings {
     override val themeDark = "Тёмная"
     override val themeAuto = "Авто"
     override val language = "Язык"
-    override val langAuto = "Как в системе"
+    override val langAuto = "Системный"
     override val data = "ДАННЫЕ"
     override val searchModels = "Поиск модели…"
     override val loading = "Загрузка…"
@@ -923,7 +948,7 @@ object Ru : Strings {
     override val saved = "Сохранено"
     override val savedToInbox = "Сохранено во «Входящие»"
     override val inboxNote = "Входящие"
-    override val inboxHint = "Что ещё не разложено по задачам и заметкам"
+    override val inboxHint = "что ещё не разложено по делам и темам"
     override val setupBriefQ = "Присылать утром короткую сводку дня? Выберите время — или «Не нужно»."
     override val setupBriefOptions = listOf("8:00", "9:00", "10:00", "Не нужно")
     override val setupNameQ = "Как к вам обращаться? Напишите имя — или пропустите."
@@ -1155,16 +1180,16 @@ object Ru : Strings {
     override val kindDocs = "Документы"
     override val kindVoice = "Голосовые"
     override val noMaterialsFound = "Ничего не нашлось."
-    override val topicsInWork = "Темы в работе"
-    override val simpleTasks = "Задачи"
-    override val thoughts = "Мысли"
+    override val topicsInWork = "Темы"
+    override val simpleTasks = "Дела"
+    override val thoughts = "Идеи"
     override val noNextStepCaps = "Без следующего шага"
     override fun nQuestions(n: Int) = "$n " + pluralRu(n, "вопрос", "вопроса", "вопросов")
     override fun waitUntil(d: String) = "ждём до $d"
     override val allDoneShort = "всё решено"
     override fun nMaterials(n: Int) = "$n " + pluralRu(n, "материал", "материала", "материалов")
     override fun nEntries(n: Int) = "$n " + pluralRu(n, "запись", "записи", "записей")
-    override val thoughtWord = "мысль"
+    override val thoughtWord = "идея"
     override val whatNext = "Что дальше?"
     override val labelWord = "Метка"
     override val casesTitle = "Дела"
@@ -1173,7 +1198,13 @@ object Ru : Strings {
     override val noLabel = "Без метки"
     override val noDateQ = "без срока"
     override val kindTopic = "в тему"
-    override val kindThought = "мысль"
+    override val kindThought = "идея"
+    override fun lateSince(d: String) = "с $d"
+    override fun doneCountWord(n: Int) = "сделано $n"
+    override val freeWord = "свободно"
+    override val dealsBadge = "Дела"
+    override val topicsBadge = "Темы"
+    override fun buildLabel(name: String, code: Int, debug: Boolean) = "Margin 2 · сборка $name ($code)" + if (debug) " · отладка" else ""
     override val backWord = "Назад"
     override val todayShort = "сег."
     override fun progressOf(d: Int, n: Int) = "$d из $n"
@@ -1181,8 +1212,27 @@ object Ru : Strings {
     override fun movedToTopic(t: String) = "Перенесено в «$t»"
     override val toOtherTopic = "В другую тему"
     override val toTopicPick = "В тему…"
-    override fun thoughtSince(d: String) = "мысль с $d"
-    override val thoughtsToday = "Сегодня в мыслях"
+    override val recognizeWord = "Распознать"
+    override val feedTitle = "Лента"
+    override val filterWord = "Показать"
+    override val filterAll = "Всё"
+    override val spherePersonal = "Личное"
+    override val sphereWork = "Работа"
+    override val sphereAdd = "личное или работа?"
+    override val orgsBadge = "Организации"
+    override val peopleBadge = "Люди"
+    override val markOrg = "Это организация"
+    override val markPerson = "Это человек"
+    override val stepOne = "вопрос"
+    override val stepHint = "с вопросами дело станет темой"
+    override val peopleSub = "люди из ваших дел и тем"
+    override val archiveSub = "решённые темы — со всеми материалами"
+    override val sinceWord = "с"
+    override val sortsWhenOnline = "разберётся, когда появится связь"
+    override val unplacedBadge = "Без места"
+    override val photoNoCaption = "Фото без подписи"
+    override fun thoughtSince(d: String) = "идея с $d"
+    override val thoughtsToday = "Идеи за сегодня"
     override val questionDateQ = "Срок вопроса"
 }
 
@@ -1387,7 +1437,7 @@ object En : Strings {
     override val deletedOne = "Deleted"
     override val toArchive = "Archive"
     override val archiveTitle = "Archive"
-    override val archiveEmpty = "Swipe a note or a contact left to put it here. You can bring it back from here."
+    override val archiveEmpty = "Settled topics come here with their whole feed and materials. News in a topic or «Bring back» returns it."
     override val restoreWord = "Restore"
     override val calendarTitle = "Calendar"
     override val projectsEmpty = "No projects yet"
@@ -1533,7 +1583,7 @@ object En : Strings {
     override val saved = "Saved"
     override val savedToInbox = "Saved to Inbox"
     override val inboxNote = "Inbox"
-    override val inboxHint = "What isn’t sorted into tasks and notes yet"
+    override val inboxHint = "what isn’t sorted into matters and topics yet"
     override val setupBriefQ = "Send a short summary of the day in the morning? Pick a time — or “No need”."
     override val setupBriefOptions = listOf("8:00", "9:00", "10:00", "No need")
     override val setupNameQ = "What should I call you? Type a name — or skip."
@@ -1765,16 +1815,16 @@ object En : Strings {
     override val kindDocs = "Documents"
     override val kindVoice = "Voice"
     override val noMaterialsFound = "Nothing found."
-    override val topicsInWork = "Topics in progress"
-    override val simpleTasks = "Tasks"
-    override val thoughts = "Thoughts"
+    override val topicsInWork = "Topics"
+    override val simpleTasks = "To-dos"
+    override val thoughts = "Ideas"
     override val noNextStepCaps = "No next step"
     override fun nQuestions(n: Int) = if (n == 1) "1 open item" else "$n open items"
     override fun waitUntil(d: String) = "waiting till $d"
     override val allDoneShort = "all settled"
     override fun nMaterials(n: Int) = if (n == 1) "1 file" else "$n files"
     override fun nEntries(n: Int) = if (n == 1) "1 entry" else "$n entries"
-    override val thoughtWord = "thought"
+    override val thoughtWord = "idea"
     override val whatNext = "What's next?"
     override val labelWord = "Label"
     override val casesTitle = "To-dos"
@@ -1783,7 +1833,13 @@ object En : Strings {
     override val noLabel = "No label"
     override val noDateQ = "no date"
     override val kindTopic = "to the topic"
-    override val kindThought = "thought"
+    override val kindThought = "idea"
+    override fun lateSince(d: String) = "since $d"
+    override fun doneCountWord(n: Int) = "$n done"
+    override val freeWord = "free"
+    override val dealsBadge = "To-dos"
+    override val topicsBadge = "Topics"
+    override fun buildLabel(name: String, code: Int, debug: Boolean) = "Margin 2 · build $name ($code)" + if (debug) " · debug" else ""
     override val backWord = "Back"
     override val todayShort = "today"
     override fun progressOf(d: Int, n: Int) = "$d of $n"
@@ -1791,8 +1847,27 @@ object En : Strings {
     override fun movedToTopic(t: String) = "Moved to “$t”"
     override val toOtherTopic = "Another topic"
     override val toTopicPick = "To a topic…"
-    override fun thoughtSince(d: String) = "thought since $d"
-    override val thoughtsToday = "Thoughts today"
+    override val recognizeWord = "Read text"
+    override val feedTitle = "Feed"
+    override val filterWord = "Show"
+    override val filterAll = "Everything"
+    override val spherePersonal = "Personal"
+    override val sphereWork = "Work"
+    override val sphereAdd = "personal or work?"
+    override val orgsBadge = "Businesses"
+    override val peopleBadge = "People"
+    override val markOrg = "It’s a business"
+    override val markPerson = "It’s a person"
+    override val stepOne = "question"
+    override val stepHint = "with questions a matter becomes a topic"
+    override val peopleSub = "people from your matters and topics"
+    override val archiveSub = "settled topics, with all their materials"
+    override val sinceWord = "since"
+    override val sortsWhenOnline = "will be sorted once you’re online"
+    override val unplacedBadge = "Unplaced"
+    override val photoNoCaption = "Photo, no caption"
+    override fun thoughtSince(d: String) = "idea since $d"
+    override val thoughtsToday = "Ideas today"
     override val questionDateQ = "Item date"
 }
 

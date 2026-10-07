@@ -47,6 +47,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -139,7 +140,9 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     val view = LocalView.current
     val motion = motionOn()
     val scope = rememberCoroutineScope()
-    val pager = rememberPagerState(initialPage = startTab.coerceIn(0, 2)) { 3 }
+    // Two pages: the feed (or its materials) and, to the right, the questions.
+    val pager = rememberPagerState(initialPage = if (startTab == 1) 1 else 0) { 2 }
+    var materialsMode by remember(task.id) { mutableStateOf(startTab == 2) }
     val feedState = rememberLazyListState()
     var hl by remember(task.id) { mutableStateOf(startHl) }
     var dialog by remember(task.id) { mutableStateOf<String?>(null) }
@@ -195,7 +198,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             scaleY = 1f - 0.92f * fold.value; alpha = 1f - fold.value; transformOrigin = TransformOrigin(0.5f, 1f)
         }.background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding().marginRule(c.accent.copy(alpha = 0.85f), rule.value),
     ) {
-        // ---- header: back on the margin, the title right of the rule ----
+        // ---- header: back on the margin, ⋯ on the right; nothing else up there ----
         Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(MarginW), contentAlignment = Alignment.Center) {
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
@@ -203,59 +206,58 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 }
             }
             Spacer(Modifier.weight(1f))
-            if (!task.done) Box(Modifier.size(40.dp).clip(CircleShape).clickable { dialog = "archive" }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.CheckCircle, s.toArchive, tint = if (task.noNextStep) c.link else c.graphite, modifier = Modifier.size(22.dp))
-            }
             Box(Modifier.padding(end = 8.dp)) {
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) { Icon(Icons.Outlined.MoreHoriz, null, tint = c.graphite) }
-                DropdownMenu(menu, { menu = false }, containerColor = c.card) {
-                    DropdownMenuItem(text = { Text(s.edit, style = Type.body) }, onClick = { menu = false; dialog = "rename" })
-                    DropdownMenuItem(text = { Text(s.labelWord, style = Type.body) }, onClick = { menu = false; dialog = "label" })
-                    DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menu = false; dialog = "delete" })
+                SoftMenu(menu, { menu = false }) {
+                    SoftMenuItem(s.edit) { menu = false; dialog = "rename" }
+                    SoftMenuItem(s.delete, danger = true) { menu = false; dialog = "delete" }
                 }
             }
         }
+        val open = task.subtasks.count { !it.done }
+        val files = task.materials().size
         Margined {
             Column {
                 Text(task.title, style = Type.title.copy(color = c.ink, fontSize = 28.sp, lineHeight = 34.sp),
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { dialog = "rename" })
-                val since = runCatching { LocalDate.parse(task.createdAt) }.getOrNull()?.dayMonthShort()
-                Text(listOfNotNull(task.project?.let { "#" + projectLabel(it) }, since?.let { if (task.thought && task.subtasks.isEmpty()) s.thoughtSince(it) else s.topicSince(it) }).joinToString("  ·  "),
-                    style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(6.dp)).clickable { dialog = "label" })
-                if (total > 0) Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TopicProgress(doneCount, total, Modifier.weight(1f))
-                    Spacer(Modifier.width(12.dp))
-                    Text(s.progressSolved(doneCount, total), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"))
+                // The label and age on the left; materials and «в архив» as two quiet icons on the right of the same line.
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val since = runCatching { LocalDate.parse(task.createdAt) }.getOrNull()?.dayMonthShort()
+                    SphereBadge(task.sphere, Modifier.padding(end = 8.dp)) { vm.setSphere(task.id, nextSphere(task.sphere)) }
+                    Text(since?.let { if (task.thought && task.subtasks.isEmpty()) s.thoughtSince(it) else s.topicSince(it) } ?: "",
+                        style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f))
+                    HeaderIcon(Icons.Outlined.AttachFile, s.materialsTab, count = files, on = materialsMode && pager.currentPage == 0) {
+                        materialsMode = !materialsMode
+                        if (pager.currentPage != 0) scope.launch { pager.animateScrollToPage(0) }
+                    }
+                    if (!task.done) HeaderIcon(Icons.Outlined.CheckCircle, s.toArchive, on = false, tint = if (task.noNextStep) c.link else c.graphite) { dialog = "archive" }
                 }
-                if (task.done) Row(Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    Text(s.inArchiveSince(task.doneAt?.let { runCatching { LocalDate.parse(it).dayMonthShort() }.getOrNull() } ?: ""), style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
-                    Text(s.bringBack, style = Type.small.copy(color = c.link), modifier = Modifier.clickable { vm.reviveTopic(task.id) })
-                }
-                // ---- three views ----
-                val open = task.subtasks.count { !it.done }
-                val files = task.materials().size
-                Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                    listOf(s.feedTab to 0, s.questionsTab to open, s.materialsTab to files).forEachIndexed { i, (label, n) ->
-                        val on = pager.currentPage == i
-                        val bar by animateFloatAsState(if (on) 1f else 0f, tween(220), label = "tab")
-                        Column(Modifier.clip(RoundedCornerShape(6.dp)).clickable { scope.launch { pager.animateScrollToPage(i) } }) {
-                            Row(verticalAlignment = Alignment.Bottom) {
-                                Text(label, style = Type.tab.copy(color = if (on) c.link else c.graphite, fontSize = 14.5.sp))
-                                if (i > 0 && n > 0) Text(" $n", style = Type.small.copy(color = if (on) c.link else c.faint, fontSize = 12.5.sp))
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Box(Modifier.height(2.dp).width(40.dp * bar).background(c.link))
+                // The progress and, at its right end, the way to the questions page.
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        if (total > 0) {
+                            TopicProgress(doneCount, total)
+                            Text(s.progressSolved(doneCount, total), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(top = 5.dp))
                         }
                     }
+                    Spacer(Modifier.width(14.dp))
+                    QuestionsPill(open, on = pager.currentPage == 1) { materialsMode = false; scope.launch { pager.animateScrollToPage(if (pager.currentPage == 1) 0 else 1) } }
+                }
+                if (task.done) Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Text(s.inArchiveSince(task.doneAt?.let { runCatching { LocalDate.parse(it).dayMonthShort() }.getOrNull() } ?: ""), style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
+                    Text(s.bringBack, style = Type.small.copy(color = c.link), modifier = Modifier.clickable { vm.reviveTopic(task.id) })
                 }
             }
         }
         Hairline(Modifier.padding(start = MarginW))
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, verticalAlignment = Alignment.Top) { page ->
             when (page) {
-                0 -> FeedPage(task, feed, feedState, hl, seenAtOpen, working, onQuestion = ::toQuestion, onView = { viewing = it }, onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
-                1 -> QuestionsPage(task, hl, vm, onFeed = ::toFeedLine, onEdit = { editQ = it }, onDate = { dateQ = it })
-                else -> MaterialsGrid(listOf(task), onView = { viewing = it }, onTopic = null, inset = MarginW + MarginGap)
+                0 -> androidx.compose.animation.Crossfade(materialsMode, animationSpec = tween(240), label = "materials") { m ->
+                    if (m) MaterialsFeed(task, onView = { viewing = it })
+                    else FeedPage(task, feed, feedState, hl, seenAtOpen, working, onQuestion = ::toQuestion, onView = { viewing = it }, onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
+                }
+                else -> QuestionsPage(task, hl, vm, onFeed = ::toFeedLine, onEdit = { editQ = it }, onDate = { dateQ = it })
             }
         }
         // ---- composer: words go to the feed, on «Вопросы» they become a question ----
@@ -296,13 +298,109 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     dateQ?.let { q -> QuestionDateDialog(q, onDismiss = { dateQ = null }) { d -> vm.setQuestionDue(task.id, q.id, d); dateQ = null } }
 }
 
+/** A quiet icon in the topic's header with an optional raised count; [on] — filled petrol. */
+@Composable
+private fun HeaderIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, count: Int = 0, on: Boolean, tint: Color = M.c.graphite, onClick: () -> Unit) {
+    val c = M.c
+    val bg by androidx.compose.animation.animateColorAsState(if (on) c.link else Color.Transparent, tween(200), label = "hi")
+    Row(Modifier.padding(start = 4.dp).clip(RoundedCornerShape(50)).background(bg).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.Top) {
+        Icon(icon, label, tint = if (on) c.bg else tint, modifier = Modifier.size(19.dp))
+        if (count > 0) Text(count.toString(), style = Type.small.copy(color = if (on) c.bg else c.graphite, fontSize = 10.sp), modifier = Modifier.padding(start = 1.dp))
+    }
+}
+
+/** «Вопросы² ›» — the door to the questions page, at the end of the progress line. */
+@Composable
+private fun QuestionsPill(n: Int, on: Boolean, onClick: () -> Unit) {
+    val c = M.c
+    val bg by androidx.compose.animation.animateColorAsState(if (on) c.link else Color.Transparent, tween(220), label = "qp")
+    val fg = if (on) c.bg else c.link
+    Row(Modifier.clip(RoundedCornerShape(50)).background(bg).border(1.dp, c.link, RoundedCornerShape(50)).clickable(onClick = onClick)
+        .padding(start = 14.dp, end = 10.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        // The count as on «Сегодня 3»: on the same line, smaller and quieter than the word.
+        Text(buildAnnotatedString {
+            append(M.s.questionsTab)
+            if (n > 0) withStyle(SpanStyle(fontSize = 13.sp, fontWeight = FontWeight.Normal, color = if (on) c.bg.copy(alpha = 0.75f) else c.graphite)) { append(" $n") }
+        }, style = Type.small.copy(color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium))
+        Text(if (on) " ‹" else " ›", style = Type.small.copy(color = fg, fontSize = 15.sp))
+    }
+}
+
+/** The feed with only what was attached: a search that reads text on photos and in voice notes, kinds, still on the thread. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MaterialsFeed(task: Task, onView: (Attachment) -> Unit) {
+    val c = M.c
+    val s = M.s
+    var q by remember { mutableStateOf("") }
+    var kind by remember { mutableStateOf("all") }
+    fun Attachment.words() = listOfNotNull(name, caption, ocr, transcript, contact?.name).joinToString(" ").lowercase().replace(" ", "")
+    val needle = q.trim().lowercase().replace(" ", "")
+    fun ok(a: Attachment) = (kind == "all" || (kind == "photo" && (a.kind == "photo" || a.kind == "video")) || (kind == "file" && a.kind == "file") || (kind == "audio" && a.kind == "audio")) &&
+        (needle.isEmpty() || a.words().contains(needle))
+    val entries = task.entries.filter { e -> e.attachments.any(::ok) }.reversed()
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp)) {
+        item("search") {
+            Margined {
+                Column {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Search, null, tint = c.graphite, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Box(Modifier.weight(1f)) {
+                            if (q.isEmpty()) Text(s.searchMaterials, style = Type.body.copy(color = c.faint, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp), cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 10.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("all" to s.all, "photo" to s.kindPhotos, "file" to s.kindDocs, "audio" to s.kindVoice).forEach { (k, l) ->
+                            val on = kind == k
+                            Text(l, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 13.sp),
+                                modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else c.chip).clickable { kind = k }.padding(horizontal = 11.dp, vertical = 6.dp))
+                        }
+                    }
+                }
+            }
+        }
+        if (entries.isEmpty()) item("none") { Margined { Text(if (task.materials().isEmpty()) s.materialsEmpty else s.noMaterialsFound, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(top = 16.dp)) } }
+        entries.forEach { e ->
+            item(e.id) {
+                Margined(Modifier.animateItem().padding(top = 10.dp), node = c.accent.copy(alpha = 0.8f), nodeY = 12.dp, margin = { MarginText(dateOfStamp(e.at)?.dayMonthShort() ?: "") }) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        e.attachments.filter(::ok).forEach { a -> BigMaterial(a, onView) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One material at full width: a photo large, a file or a voice note as a quiet card with its transcript. */
+@Composable
+fun BigMaterial(a: Attachment, onView: (Attachment) -> Unit) {
+    val c = M.c
+    if (a.kind == "photo" || a.kind == "video") Column(Modifier.fillMaxWidth().clickable { onView(a) }) {
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(14.dp))) { Thumb(a, maxWidth) }
+        a.caption?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 5.dp)) }
+    } else Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(14.dp)).clickable { onView(a) }
+        .padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(c.chip), contentAlignment = Alignment.Center) { Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.size(20.dp)) }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(attachmentLabel(a).ifBlank { a.name }, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            (a.transcript ?: a.ocr)?.takeIf { it.isNotBlank() }?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+        }
+    }
+}
+
 // ---------------- the feed: a thread on the margin ----------------
 
 /** What sits on the margin next to an event: when we expect it, when the question is due. */
 private fun eventNote(q: Subtask?, kind: String): String? {
     if (q == null || q.done || (kind != "wait" && kind != "q")) return null
     val d = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return null
-    return (if (q.isWait) "~" else "") + d.shortLabel().lowercase().let { if (it.length > 8) d.dayMonthShort() else it }
+    return (if (q.isWait) "~" else "") + d.dayMonthShort()
 }
 
 @Composable
@@ -429,9 +527,13 @@ private fun EventLine(task: Task, ev: TopicEvent, dayText: String?, hl: String?,
             val who = q.from ?: ""
             val prefix = when (ev.kind) { "q" -> s.questionPrefix; "solved" -> s.solvedPrefix; "wait" -> s.waitPrefix(who); else -> s.gotPrefix(who) }
             val note = eventNote(q, ev.kind)
+            val soon = note != null && isSoon(q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() })
+            val lift = if (soon) SoonLift else 0.dp
             Margined(Modifier.clip(RoundedCornerShape(8.dp)).landing(hl == "e:" + ev.id, 8).clickable { onQuestion(q.id) }.padding(vertical = 5.dp),
-                node = nodeColor, nodeSize = 7.dp, nodeY = 11.dp,
-                margin = (note ?: dayText)?.let { m -> { MarginText(m, petrol = note != null) } }) {
+                node = nodeColor, nodeSize = 7.dp, nodeY = 11.dp + lift,
+                margin = (note ?: dayText)?.let { m -> { Box(Modifier.padding(top = lift)) { MarginText(m, petrol = note != null) } } }) {
+                Column {
+                if (note != null) SoonBadge(q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, Modifier.padding(bottom = 2.dp))
                 Row(verticalAlignment = Alignment.Top) {
                     Box(Modifier.padding(top = 1.dp)) {
                         val tint = if (faded) c.faint else c.graphite
@@ -451,6 +553,7 @@ private fun EventLine(task: Task, ev: TopicEvent, dayText: String?, hl: String?,
                         }
                         if (meta != null) Text(meta, style = Type.small.copy(color = c.faint, fontSize = 13.sp), modifier = Modifier.padding(top = 2.dp))
                     }
+                }
                 }
             }
         }
@@ -536,13 +639,14 @@ private fun QuestionRow(task: Task, q: Subtask, lit: Boolean, vm: MainVm, onFeed
     val late = !q.done && q.due != null && LocalDate.parse(q.due).isBefore(LocalDate.now())
     val marginText = when {
         q.done -> q.doneAt?.let { LocalDate.parse(it).dayMonthShort() }
-        q.due != null -> (if (q.isWait) "~" else "") + LocalDate.parse(q.due).shortLabel().lowercase().let { if (it.length > 8) LocalDate.parse(q.due).dayMonthShort() else it } + (q.time?.let { "\n$it" } ?: "")
+        q.due != null -> (if (q.isWait) "~" else "") + LocalDate.parse(q.due).dayMonthShort() + (q.time?.let { "\n$it" } ?: "")
         else -> null
     }
     Box {
         Margined(Modifier.landing(lit, 0).combinedClickable(onClick = { onDate(q) }, onLongClick = { menu = true }),
-            margin = marginText?.let { m -> { MarginText(m, late = late, petrol = q.isWait && !q.done, faint = q.done) } }) {
+            margin = marginText?.let { m -> { Box(Modifier.padding(top = if (!q.done && isSoon(q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() })) SoonLift + 6.dp else 0.dp)) { MarginText(m, late = late, petrol = q.isWait && !q.done, faint = q.done) } } }) {
             Column {
+                if (!q.done) SoonBadge(q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, Modifier.padding(top = 6.dp))
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
                     Box(Modifier.size(28.dp).clip(CircleShape).clickable(onClick = ::settle), contentAlignment = Alignment.Center) {
                         if (q.isWait && !q.done) {
@@ -568,7 +672,7 @@ private fun QuestionRow(task: Task, q: Subtask, lit: Boolean, vm: MainVm, onFeed
                 Hairline(Modifier.padding(start = 38.dp))
             }
         }
-        DropdownMenu(menu, { menu = false }, containerColor = c.card) {
+        SoftMenu(menu, { menu = false }) {
             DropdownMenuItem(text = { Text(s.edit, style = Type.body) }, onClick = { menu = false; onEdit(q) })
             DropdownMenuItem(text = { Text(s.questionDateQ, style = Type.body) }, onClick = { menu = false; onDate(q) })
             DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menu = false; vm.deleteSubtask(task.id, q.id) })
@@ -604,10 +708,12 @@ private fun QuestionDateDialog(q: Subtask, onDismiss: () -> Unit, onSave: (Strin
 
 // ---------------- materials ----------------
 
-/** Photos, files and voice notes of [topics] in one grid with a search that reads the text on photos and in voice notes too. */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * Photos, files and voice notes of [topics] on the thread, newest first: the day on the margin, the topic over its files,
+ * and a search that reads the text on photos and in voice notes too.
+ */
 @Composable
-fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((String) -> Unit)?, inset: Dp = 20.dp, header: (@Composable () -> Unit)? = null) {
+fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((String) -> Unit)?, header: (@Composable () -> Unit)? = null) {
     val c = M.c
     val s = M.s
     var q by remember { mutableStateOf("") }
@@ -619,41 +725,62 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
         (kind == "all" || (kind == "photo" && (a.kind == "photo" || a.kind == "video")) || (kind == "file" && a.kind == "file") || (kind == "audio" && a.kind == "audio")) &&
             (needle.isEmpty() || a.words().contains(needle))
     }
-    Column(Modifier.fillMaxSize()) {
-        header?.invoke()
-        if (all.isEmpty()) { Text(s.materialsEmpty, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(start = inset, end = 20.dp, top = 20.dp)); return@Column }
-        Row(Modifier.fillMaxWidth().padding(start = inset, end = 20.dp, top = 14.dp).clip(RoundedCornerShape(14.dp)).background(c.card)
-            .border(1.dp, c.hairline, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Search, null, tint = c.graphite, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(10.dp))
-            Box(Modifier.weight(1f)) {
-                if (q.isEmpty()) Text(s.searchMaterials, style = Type.body.copy(color = c.faint, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp), cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
-            }
-        }
-        FlowRow(Modifier.padding(start = inset, end = 20.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("all" to s.all, "photo" to s.kindPhotos, "file" to s.kindDocs, "audio" to s.kindVoice).forEach { (k, l) ->
-                val on = kind == k
-                Text(l, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 13.5.sp),
-                    modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else c.chip).clickable { kind = k }.padding(horizontal = 12.dp, vertical = 6.dp))
-            }
-        }
-        if (shown.isEmpty()) { Text(s.noMaterialsFound, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(start = inset, end = 20.dp, top = 20.dp)); return@Column }
-        LazyVerticalGrid(GridCells.Adaptive(104.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(start = inset, end = 20.dp, top = 14.dp, bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(shown, key = { it.third.id }) { (t, e, a) ->
-                Column(Modifier.clip(RoundedCornerShape(10.dp)).clickable { onView(a) }) {
-                    if (a.kind == "photo" || a.kind == "video") Thumb(a, 104.dp)
-                    else Box(Modifier.size(104.dp).clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                        Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.size(26.dp))
+    val groups = shown.groupBy { (t, e, _) -> t.id + "/" + e.id }.values.sortedByDescending { it.first().second.at }
+    Box(Modifier.fillMaxSize().screenRule()) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+            header?.let { h -> item("head") { h() } }
+            if (all.isEmpty()) item("none") { Margined { Text(s.materialsEmpty, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(top = 10.dp)) } }
+            else item("search") {
+                Margined {
+                    Column {
+                        Row(Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Search, null, tint = c.graphite, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Box(Modifier.weight(1f)) {
+                                if (q.isEmpty()) Text(s.searchMaterials, style = Type.body.copy(color = c.faint, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp), cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 10.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("all" to s.all, "photo" to s.kindPhotos, "file" to s.kindDocs, "audio" to s.kindVoice).forEach { (k, l) ->
+                                val on = kind == k
+                                Text(l, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 13.sp),
+                                    modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else c.chip).clickable { kind = k }.padding(horizontal = 11.dp, vertical = 6.dp))
+                            }
+                        }
                     }
-                    Text(a.caption ?: attachmentLabel(a).ifBlank { a.name }, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp))
-                    if (onTopic != null) Text("↳ " + t.title, style = Type.small.copy(color = c.link, fontSize = 12.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable { onTopic(t.id) })
-                    // Found by the words inside, not the name: say what matched.
-                    if (needle.isNotEmpty() && !a.name.lowercase().replace(" ", "").contains(needle)) (a.ocr ?: a.transcript)?.let {
-                        Text("«" + it.take(60) + "»", style = Type.small.copy(color = c.faint, fontSize = 11.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (all.isNotEmpty() && shown.isEmpty()) item("nf") { Margined { Text(s.noMaterialsFound, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(top = 14.dp)) } }
+            groups.forEach { g ->
+                val (t, e, _) = g.first()
+                item(t.id + "/" + e.id) {
+                    Margined(Modifier.animateItem().padding(top = 14.dp), node = c.accent.copy(alpha = 0.8f), nodeY = 10.dp,
+                        margin = { MarginText(dateOfStamp(e.at)?.dayMonthShort() ?: "") }) {
+                        Column {
+                            if (onTopic != null) Row(Modifier.clip(RoundedCornerShape(6.dp)).clickable { onTopic(t.id) }.padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                TopicGlyph(c.link, 14.dp)
+                                Spacer(Modifier.width(6.dp))
+                                Text(t.title, style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                g.forEach { (_, _, a) ->
+                                    Column(Modifier.width(120.dp).clip(RoundedCornerShape(10.dp)).clickable { onView(a) }) {
+                                        if (a.kind == "photo" || a.kind == "video") Thumb(a, 120.dp)
+                                        else Box(Modifier.size(120.dp).clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                                            Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.size(26.dp))
+                                        }
+                                        Text(a.caption ?: attachmentLabel(a).ifBlank { a.name }, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(top = 4.dp))
+                                        // Found by the words inside, not the name: say what matched.
+                                        if (needle.isNotEmpty() && !a.name.lowercase().replace(" ", "").contains(needle)) (a.ocr ?: a.transcript)?.let {
+                                            Text("«" + it.take(60) + "»", style = Type.small.copy(color = c.faint, fontSize = 11.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.PaddingValues
+
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -7,10 +9,16 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -220,3 +228,178 @@ fun StrikeText(text: String, style: androidx.compose.ui.text.TextStyle, strike: 
             }
         })
 }
+
+// ---------------- the soft menu: rounded, grows from its corner, fades away ----------------
+
+/** Below the anchor, its right edges lined up; above it when there is no room below. */
+private class MenuPosition(private val gap: Int) : androidx.compose.ui.window.PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: androidx.compose.ui.unit.IntRect, windowSize: androidx.compose.ui.unit.IntSize,
+                                   layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: androidx.compose.ui.unit.IntSize): androidx.compose.ui.unit.IntOffset {
+        val x = (anchorBounds.right - popupContentSize.width).coerceIn(gap, (windowSize.width - popupContentSize.width - gap).coerceAtLeast(gap))
+        val below = anchorBounds.bottom + gap
+        val y = if (below + popupContentSize.height <= windowSize.height - gap) below else (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(gap)
+        return androidx.compose.ui.unit.IntOffset(x, y)
+    }
+}
+
+/** Margin's menu: 16 dp corners, a soft shadow, grows from the corner it opens at in ~200 ms and fades out. */
+@Composable
+fun SoftMenu(expanded: Boolean, onDismissRequest: () -> Unit, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val c = M.c
+    val state = remember { androidx.compose.animation.core.MutableTransitionState(false) }
+    state.targetState = expanded
+    if (!state.currentState && !state.targetState) return
+    val gap = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.roundToPx() }
+    androidx.compose.ui.window.Popup(popupPositionProvider = remember(gap) { MenuPosition(gap) }, onDismissRequest = onDismissRequest,
+        properties = androidx.compose.ui.window.PopupProperties(focusable = true)) {
+        androidx.compose.animation.AnimatedVisibility(state,
+            enter = androidx.compose.animation.fadeIn(tween(180)) + androidx.compose.animation.scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.9f,
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)),
+            exit = androidx.compose.animation.fadeOut(tween(140)) + androidx.compose.animation.scaleOut(tween(160), targetScale = 0.95f,
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f))) {
+            androidx.compose.material3.Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp), color = c.card, shadowElevation = 10.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, c.hairline)) {
+                Column(Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max).padding(vertical = 6.dp), content = content)
+            }
+        }
+    }
+}
+
+/** One line of [SoftMenu]; [danger] — in terracotta («Удалить»); [selected] — petrol with a tick at the end (a chosen filter). */
+@Composable
+fun SoftMenuItem(text: String, danger: Boolean = false, selected: Boolean = false, onClick: () -> Unit) {
+    val c = M.c
+    Row(Modifier.fillMaxWidth().clickableSoft(onClick).padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text, style = Type.body.copy(color = when { danger -> c.accent; selected -> c.link; else -> c.ink }, fontSize = 15.5.sp), modifier = Modifier.weight(1f, fill = false))
+        if (selected) { androidx.compose.foundation.layout.Spacer(Modifier.width(16.dp)); TickGlyph(c.link, 16.dp) }
+    }
+}
+
+private fun Modifier.clickableSoft(onClick: () -> Unit): Modifier = this.then(Modifier.clickable(onClick = onClick))
+
+/** One rhythm for every switch: quick, with a soft landing. */
+val SoftTween = tween<Float>(240, easing = FastOutSlowInEasing)
+
+/** «Обещал»: a small arrow going out. */
+@Composable
+fun ArrowGlyph(color: Color, size: Dp = 14.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply { moveTo(w * 0.15f, h * 0.5f); lineTo(w * 0.85f, h * 0.5f); moveTo(w * 0.58f, h * 0.24f); lineTo(w * 0.85f, h * 0.5f); lineTo(w * 0.58f, h * 0.76f) }, color, style = stroke(1.4.dp))
+}
+
+/** A repeating task: a quiet loop. */
+@Composable
+fun RepeatGlyph(color: Color, size: Dp = 14.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawArc(color, startAngle = 200f, sweepAngle = 280f, useCenter = false, topLeft = Offset(w * 0.16f, h * 0.16f), size = Size(w * 0.68f, h * 0.68f), style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.12f, h * 0.3f); lineTo(w * 0.2f, h * 0.48f); lineTo(w * 0.38f, h * 0.4f) }, color, style = stroke(1.4.dp))
+}
+
+/** A thing with its own hour. */
+@Composable
+fun ClockGlyph(color: Color, size: Dp = 14.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawCircle(color, radius = w * 0.36f, center = Offset(w / 2, h / 2), style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.5f, h * 0.3f); lineTo(w * 0.5f, h * 0.5f); lineTo(w * 0.64f, h * 0.6f) }, color, style = stroke(1.4.dp))
+}
+
+/** A meeting from the phone's calendar. */
+@Composable
+fun CalendarGlyph(color: Color, size: Dp = 14.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawRoundRect(color, topLeft = Offset(w * 0.14f, h * 0.22f), size = Size(w * 0.72f, h * 0.64f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.12f), style = stroke(1.4.dp))
+    drawLine(color, Offset(w * 0.14f, h * 0.42f), Offset(w * 0.86f, h * 0.42f), strokeWidth = 1.4.dp.toPx())
+    drawLine(color, Offset(w * 0.34f, h * 0.12f), Offset(w * 0.34f, h * 0.3f), strokeWidth = 1.4.dp.toPx(), cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.66f, h * 0.12f), Offset(w * 0.66f, h * 0.3f), strokeWidth = 1.4.dp.toPx(), cap = StrokeCap.Round)
+}
+
+/** «ДЕЛА», «ТЕМЫ»: a quiet petrol badge over a group. */
+@Composable
+fun GroupBadge(text: String, modifier: Modifier = Modifier) {
+    val c = M.c
+    Text(text.uppercase(), style = Type.label.copy(color = c.link, fontSize = 10.5.sp, letterSpacing = 1.1.sp),
+        modifier = modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(c.linkSoft).padding(horizontal = 10.dp, vertical = 3.dp))
+}
+
+/** Only the vertical part of a screen's padding: on «Поля» screens the rule is the left edge. */
+fun PaddingValues.vertical() = PaddingValues(top = calculateTopPadding(), bottom = calculateBottomPadding())
+
+/** A screen's title right of the rule, a quiet line under it, an optional control at the right. */
+@Composable
+fun PageHead(title: String, subtitle: String? = null, modifier: Modifier = Modifier, trailing: (@Composable () -> Unit)? = null) {
+    val c = M.c
+    Margined(modifier.padding(top = 14.dp, bottom = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = Type.display.copy(color = c.ink), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                if (subtitle != null) Text(subtitle, style = Type.small.copy(color = c.graphite, fontSize = 15.sp), modifier = Modifier.padding(top = 4.dp))
+            }
+            trailing?.invoke()
+        }
+    }
+}
+
+/** The rule behind a whole screen, the same on every one. */
+@Composable
+fun Modifier.screenRule(): Modifier = marginRule(M.c.accent.copy(alpha = 0.85f), over = true)
+
+/** A petrol word with a thin underline, like a link on paper; [quiet] — graphite, no line. */
+@Composable
+fun PaperLink(text: String, quiet: Boolean = false, onClick: () -> Unit) {
+    val c = M.c
+    Text(text, style = Type.small.copy(color = if (quiet) c.graphite else c.link, fontSize = 14.sp,
+        textDecoration = if (quiet) null else androidx.compose.ui.text.style.TextDecoration.Underline),
+        modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(vertical = 6.dp, horizontal = 2.dp))
+}
+
+/** «Личное» / «Работа» — a quiet outlined pill with a dot of its own colour; null with [onClick] — an offer to choose. */
+@Composable
+fun SphereBadge(sphere: String?, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
+    val c = M.c
+    val s = M.s
+    if (sphere == null && onClick == null) return
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(50)
+    Row(modifier.clip(shape).then(if (sphere != null) Modifier.border(1.dp, c.hairline, shape) else Modifier)
+        .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 8.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        if (sphere != null) {
+            Box(Modifier.size(6.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (sphere == "work") c.link else c.ok))
+            Text((if (sphere == "work") s.sphereWork else s.spherePersonal), style = Type.small.copy(color = c.graphite, fontSize = 12.sp), modifier = Modifier.padding(start = 5.dp))
+        } else Text("+ " + s.sphereAdd, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
+    }
+}
+
+/** personal → work → personal: one tap switches. */
+fun nextSphere(cur: String?) = if (cur == "personal") "work" else "personal"
+
+/** A title with its sphere riding at the end of the last line, so a long name wraps naturally instead of being pushed. */
+@Composable
+fun TitleWithSphere(title: String, sphere: String?, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier, maxLines: Int = 2) {
+    if (sphere == null) { Text(title, style = style, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = modifier); return }
+    val text = androidx.compose.ui.text.buildAnnotatedString { append(title); append(" "); appendInlineContent("sphere", "·") }
+    val inline = mapOf("sphere" to androidx.compose.foundation.text.InlineTextContent(
+        androidx.compose.ui.text.Placeholder(76.sp, 20.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.Center)) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) { SphereBadge(sphere, Modifier.padding(start = 4.dp)) }
+    })
+    Text(text, style = style, inlineContent = inline, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = modifier)
+}
+
+/** «Сегодня» / «Завтра» over a row, at the right: the margin keeps only dates, this catches the eye. Nothing for other days. */
+@Composable
+fun SoonBadge(day: java.time.LocalDate?, modifier: Modifier = Modifier) {
+    val c = M.c
+    val today = java.time.LocalDate.now()
+    val (text, fg, bg) = when (day) {
+        today -> Triple(M.s.quickToday, c.accent, c.accentSoft)
+        today.plusDays(1) -> Triple(M.s.quickTomorrow, c.link, c.linkSoft)
+        else -> return
+    }
+    Row(modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
+        Text(text.uppercase(), style = Type.label.copy(color = fg, fontSize = 9.5.sp, letterSpacing = 1.sp),
+            modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(bg).padding(horizontal = 8.dp, vertical = 2.dp))
+    }
+}
+
+/** Whether [SoonBadge] shows for [day] — rows push their margin and node down by [SoonLift] then. */
+fun isSoon(day: java.time.LocalDate?): Boolean = day != null && day in setOf(java.time.LocalDate.now(), java.time.LocalDate.now().plusDays(1))
+val SoonLift = 19.dp

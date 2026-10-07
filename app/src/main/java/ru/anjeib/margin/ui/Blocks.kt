@@ -157,7 +157,7 @@ fun BlockStream(
                     onList = { inserting = null; onFill(Fill("items", vm.insertList(owner, e.id))) },
                     onAttachment = { a -> inserting = null; vm.insertAttachment(owner, e.id, a) },
                 )
-                DropdownMenu(menuFor == e.id, { menuFor = null }, containerColor = c.card) {
+                SoftMenu(menuFor == e.id, { menuFor = null }) {
                     if (e.text.isNotBlank() || (!e.isList && e.attachments.isEmpty()))
                         DropdownMenuItem(text = { Text(s.edit, style = Type.body) }, onClick = { menuFor = null; onFill(Fill("edit", e.id, prefill = e.text)) })
                     if (e.isList) DropdownMenuItem(text = { Text(s.listItem, style = Type.body) }, onClick = { menuFor = null; onFill(Fill("items", e.id)) })
@@ -332,7 +332,7 @@ private fun PhotoBlock(a: Attachment, vm: MainVm, active: Boolean, onView: () ->
                 Icon(Icons.Outlined.DocumentScanner, null, tint = c.link, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
                 Text(s.photoTextAction, style = Type.small.copy(color = c.link, fontSize = 13.5.sp))
             }
-            DropdownMenu(menu, { menu = false }, containerColor = c.card) {
+            SoftMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text(s.insertAsText, style = Type.body) }, onClick = { menu = false; onText("insert") })
                 DropdownMenuItem(text = { Text(s.makeContact, style = Type.body) }, onClick = { menu = false; onText("contact") })
                 DropdownMenuItem(text = { Text(s.makeTasks, style = Type.body) }, onClick = { menu = false; onText("tasks") })

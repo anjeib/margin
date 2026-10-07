@@ -689,6 +689,19 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         land(listOf(topicId))
     }
 
+    /** «Входящие» → «В тему…»: the block leaves the inbox and lands in the topic's feed, at its own time. */
+    fun inboxToTopic(entryId: String, topicId: String) {
+        val inbox = data.value.inboxNote() ?: return
+        val e = inbox.entries.find { it.id == entryId } ?: return
+        val title = data.value.tasks.find { it.id == topicId }?.title ?: return
+        store.update { d -> d.copy(
+            notes = d.notes.map { if (it.id == inbox.id) it.copy(entries = it.entries.filterNot { x -> x.id == entryId }, updatedAt = nowStamp()) else it },
+            tasks = d.tasks.map { if (it.id == topicId) it.copy(entries = (it.entries + e.copy(session = null)).sortedBy { x -> x.at }) else it },
+        ) }
+        _toast.value = L.s.movedToTopic(title)
+        land(listOf(topicId))
+    }
+
     /** Stops the auto-confirm countdown (the user started looking at the preview). */
     fun holdPending() {
         autoJob?.cancel()
@@ -955,6 +968,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         offerUndo(before, if (q.done) L.s.reopened else if (q.from != null) L.s.gotIt else L.s.solvedWord)
     }
 
+    /** The hour of a task or of a topic's question («q:…»), set from the clock that opens on its time. */
+    fun setTime(id: String, time: String?) {
+        questionRef(id)?.let { (tid, qid) -> updateTask(tid) { t -> t.copy(subtasks = t.subtasks.map { if (it.id == qid) it.copy(time = time, due = it.due ?: if (time != null) LocalDate.now().toString() else null) else it }) }; return }
+        updateTask(id) { t -> Assistant.withAutoReminder(t.copy(time = time, due = t.due ?: if (time != null && t.start == null) LocalDate.now().toString() else t.due, remindAt = null)) }
+    }
+
     fun setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null) = updateTask(taskId) { t ->
         t.copy(subtasks = t.subtasks.mapTree(subId) { it.copy(due = due, time = if (due == null) null else time ?: it.time) })
     }
@@ -968,6 +987,21 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     fun reviveTopic(id: String) = store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = false, doneAt = null) else it }) }
+
+    /** «+ шаг» on a matter: the step becomes its first question, the matter grows into a topic. */
+    fun addStep(id: String, text: String) {
+        val t = text.trim().takeIf { it.isNotEmpty() } ?: return
+        updateTask(id) { m ->
+            // The first step takes the matter's day and hour — they were about doing it.
+            val first = m.subtasks.isEmpty()
+            m.copy(topic = true, subtasks = m.subtasks + ru.anjeib.margin.data.Subtask(title = t.sentence(),
+                due = if (first) m.due ?: m.start else null, time = if (first) m.time else null))
+        }
+    }
+
+    fun setSphere(id: String, sphere: String?) = updateTask(id) { it.copy(sphere = sphere) }
+
+    fun setOrg(personId: String, org: Boolean) = store.update { d -> d.copy(persons = d.persons.map { if (it.id == personId) it.copy(org = org) else it }) }
 
     fun setTopicLabel(id: String, label: String?) = store.update { d ->
         val p = label?.trim()?.removePrefix("#")?.lowercase()?.ifBlank { null }

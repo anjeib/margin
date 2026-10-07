@@ -177,7 +177,7 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Outlined.MoreHoriz, null, tint = c.graphite)
                 }
-                DropdownMenu(menu, { menu = false }, containerColor = c.card) {
+                SoftMenu(menu, { menu = false }) {
                     DropdownMenuItem(text = { Text(s.listBlock, style = Type.body) }, onClick = { menu = false; vm.addNoteList(note.id); fill("item") })
                     DropdownMenuItem(text = { Text(s.project, style = Type.body) }, onClick = { menu = false; projectDialog = true })
                     DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menu = false; vm.deleteNote(note.id); onBack() })

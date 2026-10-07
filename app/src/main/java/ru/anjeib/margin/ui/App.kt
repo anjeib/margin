@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -41,6 +42,8 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.TaskAlt
+import androidx.compose.material.icons.outlined.DynamicFeed
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.rounded.Close
@@ -110,6 +113,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
 
     var screen by rememberSaveable { mutableStateOf(TASKS) }
     var view by rememberSaveable { mutableStateOf(Views.TODAY) }
+    // «Лента» shows everything; the funnel narrows it to matters, topics or ideas.
+    var feedFilter by rememberSaveable { mutableStateOf("all") }
     var openTask by rememberSaveable { mutableStateOf<String?>(null) }
     var openTaskDialog by rememberSaveable { mutableStateOf<String?>(null) }
     var openTab by rememberSaveable { mutableStateOf(0) }
@@ -156,16 +161,25 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     ) {
         Box(Modifier.fillMaxSize().background(c.bg)) {
             Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-                TopBar(screen, view, data, onMenu = { scope.launch { drawer.open() } }, onTab = { i -> view = listOf(Views.TODAY, Views.WEEK, Views.ALL)[i] },
-                    onSearch = { searching = true })
+                fun bare(t: ru.anjeib.margin.data.Task) = t.thought && t.subtasks.isEmpty()
+                val shown = remember(data, feedFilter) {
+                    when (feedFilter) {
+                        "deals" -> data.copy(tasks = data.tasks.filter { !it.topic })
+                        "topics" -> data.copy(tasks = data.tasks.filter { it.topic && !bare(it) })
+                        "ideas" -> data.copy(tasks = data.tasks.filter { bare(it) })
+                        else -> data
+                    }
+                }
+                TopBar(screen, view, shown, onMenu = { scope.launch { drawer.open() } }, onTab = { i -> view = listOf(Views.TODAY, Views.WEEK, Views.ALL)[i] },
+                    onSearch = { searching = true }, filter = feedFilter, onFilter = { feedFilter = it })
                 // v2: no section row — almost everything happens in «Дела»; materials and contacts live in the side menu.
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     val pad = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
-                    Crossfade(screen, label = "screen") { sc ->
+                    Crossfade(screen, animationSpec = tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "screen") { sc ->
                         when (sc) {
-                            TASKS -> Crossfade(view, label = "view") { v ->
+                            TASKS -> Crossfade(view, animationSpec = tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "view") { v ->
                                 TaskList(
-                                    v, data, settings, working, vm, events,
+                                    v, shown, settings, working, vm, if (feedFilter == "all" || feedFilter == "deals") events else emptyList(),
                                     briefQuiet = typing || tray != null || pending != null || busy == "main",
                                     onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
                                     onOpenNotes = { screen = NOTES }, onOpenInbox = { screen = INBOX }, contentPadding = pad,
@@ -174,14 +188,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             NOTES -> NotesList(data, vm, onOpen = { openNote = it }, contentPadding = pad)
                             PEOPLE -> PeopleList(data, vm, onOpen = { openPerson = it }, contentPadding = pad)
                             PROJECTS -> ProjectsScreen(data, onOpen = { go(TASKS, Views.project(it)) }, contentPadding = pad)
-                            CALENDAR -> CalendarScreen(data, vm, onOpenTask = { openTask = it }, contentPadding = pad)
+                            CALENDAR -> CalendarScreen(data, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
                             ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad, onOpenTask = { openId(it) })
-                            MATERIALS -> MaterialsGrid(data.tasks.filter { !(it.topic && it.done) }, onView = { viewing = it }, onTopic = { openId(it) }) {
-                                Column(Modifier.padding(start = 20.dp, top = 18.dp)) {
-                                    Text(s.materialsTitle, style = Type.display.copy(color = c.ink))
-                                    Text(s.materialsSub, style = Type.small.copy(color = c.graphite, fontSize = 15.sp), modifier = Modifier.padding(top = 4.dp))
-                                }
-                            }
+                            MATERIALS -> MaterialsGrid(data.tasks.filter { !(it.topic && it.done) }, onView = { viewing = it }, onTopic = { openId(it) }) { PageHead(s.materialsTitle, s.materialsSub) }
                             SETTINGS -> SettingsScreen(settings, vm, pad)
                             HELP -> HelpScreen(pad)
                             INBOX -> InboxScreen(data, vm, onOpenNote = { openNote = it }, contentPadding = pad)
@@ -338,18 +347,35 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
 }
 
 @Composable
-private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Unit, onTab: (Int) -> Unit, onSearch: () -> Unit) {
+private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Unit, onTab: (Int) -> Unit, onSearch: () -> Unit, filter: String = "all", onFilter: (String) -> Unit = {}) {
     val s = M.s
+    val c = M.c
+    var filterMenu by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
         Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape).clickable(onClickLabel = s.a11yMenu, onClick = onMenu)
             .semantics { contentDescription = s.a11yMenu }, contentAlignment = Alignment.Center) {
             MenuGlyph()
         }
-        if (screen == TASKS || screen == PEOPLE) Box(
-            Modifier.align(Alignment.CenterEnd).size(44.dp).clip(CircleShape).clickable(onClick = onSearch),
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Outlined.Search, s.search, tint = M.c.graphite, modifier = Modifier.size(21.dp)) }
-        if (screen == TASKS) Box(Modifier.align(Alignment.Center)) {
+        Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+            // The funnel: only matters, only topics, only ideas — petrol while it narrows the feed.
+            if (screen == TASKS) Box {
+                val on = filter != "all"
+                Box(Modifier.size(44.dp).clip(CircleShape).background(if (on) c.linkSoft else Color.Transparent).clickable { filterMenu = true }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.FilterList, s.filterWord, tint = if (on) c.link else c.graphite, modifier = Modifier.size(21.dp))
+                }
+                SoftMenu(filterMenu, { filterMenu = false }) {
+                    listOf("all" to s.filterAll, "deals" to s.dealsBadge, "topics" to s.topicsBadge, "ideas" to s.thoughts).forEach { (k, l) ->
+                        SoftMenuItem(l, selected = k == filter) { filterMenu = false; onFilter(k) }
+                    }
+                }
+            }
+            if (screen == TASKS || screen == PEOPLE) Box(
+                Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onSearch),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Outlined.Search, s.search, tint = M.c.graphite, modifier = Modifier.size(21.dp)) }
+        }
+        // The tabs start where the content starts, leaving room on the right for the funnel and the search.
+        if (screen == TASKS) Box(Modifier.align(Alignment.CenterStart).padding(start = 48.dp)) {
             val (t, w, a) = tabCounts(data)
             QuietTabs(
                 listOf(s.today, s.thisWeek, s.all), listOf(Views.TODAY, Views.WEEK, Views.ALL).indexOf(view), onTab,
@@ -373,7 +399,7 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
             }
             Spacer(Modifier.height(22.dp))
             NavRow(Icons.Outlined.Inbox, s.inboxNote, data.inboxCount().takeIf { it > 0 }?.toString() ?: "", screen == INBOX) { onGo(INBOX, null) }
-            NavRow(Icons.Outlined.TaskAlt, s.casesTitle, "", screen == TASKS && !view.startsWith("p:")) { onGo(TASKS, Views.TODAY) }
+            NavRow(Icons.Outlined.DynamicFeed, s.feedTitle, "", screen == TASKS && !view.startsWith("p:")) { onGo(TASKS, Views.TODAY) }
             NavRow(Icons.Outlined.PhotoLibrary, s.materialsTitle, "", screen == MATERIALS) { onGo(MATERIALS, null) }
             NavRow(Icons.Outlined.PeopleOutline, s.peopleTitle, "", screen == PEOPLE) { onGo(PEOPLE, null) }
             Hairline(Modifier.padding(horizontal = 26.dp, vertical = 14.dp))
@@ -385,6 +411,9 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
             NavRow(Icons.Outlined.Settings, s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
             NavRow(Icons.AutoMirrored.Outlined.HelpOutline, s.helpTitle, "", screen == HELP, small = true) { onGo(HELP, null) }
             NavRow(Icons.Outlined.ChatBubbleOutline, s.feedbackTitle, "", false, small = true) { onFeedback() }
+            // Which build this is — so a screenshot or a complaint says what it is about.
+            Text(s.buildLabel(ru.anjeib.margin.BuildConfig.VERSION_NAME, ru.anjeib.margin.BuildConfig.VERSION_CODE, ru.anjeib.margin.BuildConfig.DEBUG),
+                style = Type.small.copy(color = c.faint, fontSize = 12.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 26.dp, top = 10.dp))
         }
     }
 }
