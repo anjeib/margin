@@ -1,0 +1,835 @@
+<title>Margin · Темы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600&display=swap">
+<style>
+/* Layout: a phone-sized working prototype of Margin «Темы»; on wide screens a short guide sits to its left. Palette and type are Margin's own (ui/Theme.kt). */
+:root {
+  --bg:#F6F3EE; --card:#FCFAF7; --ink:#1A1A1A; --graphite:#8A857D; --faint:#B9B3A9;
+  --hair:#E6E1D8; --accent:#C8643B; --accentSoft:#F2E6DC; --link:#1C6480; --linkSoft:#DFECF1;
+  --chip:#EFEAE2; --bubble:#1C1B1A; --onBubble:#F6F3EE; --scrim:rgba(26,26,26,.4);
+  --desk:#ECE8E1; --shadow:0 18px 50px rgba(60,45,30,.14);
+  --display:"Playfair Display", Georgia, "Times New Roman", serif;
+  --text:Inter, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#141210; --card:#1E1B18; --ink:#EDE7DD; --graphite:#8E877C; --faint:#5E5850;
+  --hair:#2B2723; --accent:#D9774E; --accentSoft:#2C221C; --link:#7FBFD6; --linkSoft:#16262C;
+  --chip:#25211D; --bubble:#EDE7DD; --onBubble:#141210; --scrim:rgba(0,0,0,.6);
+  --desk:#0C0B0A; --shadow:0 18px 50px rgba(0,0,0,.5); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg:#141210; --card:#1E1B18; --ink:#EDE7DD; --graphite:#8E877C; --faint:#5E5850;
+  --hair:#2B2723; --accent:#D9774E; --accentSoft:#2C221C; --link:#7FBFD6; --linkSoft:#16262C;
+  --chip:#25211D; --bubble:#EDE7DD; --onBubble:#141210; --scrim:rgba(0,0,0,.6);
+  --desk:#0C0B0A; --shadow:0 18px 50px rgba(0,0,0,.5); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--desk); color: var(--ink); font-family: var(--text); font-size: 15px; line-height: 1.4; padding-block: 28px; padding-inline: 16px; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 6px; }
+svg.i { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.s { width: 16px; height: 16px; }
+
+.stage { display: flex; gap: 40px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+.guide { width: 300px; max-width: 100%; padding-top: 18px; display: flex; flex-direction: column; gap: 14px; }
+.guide h1 { font-family: var(--display); font-weight: 600; font-size: 30px; line-height: 1.1; margin: 0; text-wrap: balance; }
+.guide p { margin: 0; color: var(--graphite); font-size: 14px; }
+.guide ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.guide ol li::marker { color: var(--graphite); font-variant-numeric: tabular-nums; }
+.guide .q { color: var(--link); }
+.seg { display: inline-flex; border: 1px solid var(--hair); border-radius: 99px; padding: 3px; gap: 2px; background: var(--card); }
+.seg button { padding: 5px 12px; border-radius: 99px; font-size: 13px; color: var(--graphite); }
+.seg button.on { background: var(--linkSoft); color: var(--link); font-weight: 500; }
+.reset { font-size: 13px; color: var(--graphite); text-decoration: underline; text-underline-offset: 3px; align-self: flex-start; }
+details.guide-m { display: none; }
+
+.phone { width: 390px; max-width: 100%; height: 820px; border-radius: 38px; background: var(--bg); position: relative; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--hair); }
+@media (max-width: 760px) {
+  body { padding-block: 12px; }
+  .guide { display: none; }
+  details.guide-m { display: block; width: 100%; max-width: 430px; margin: 0 auto 12px; font-size: 14px; }
+  details.guide-m summary { cursor: pointer; color: var(--graphite); }
+  details.guide-m ol { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+  .phone { width: 100%; max-width: 430px; height: calc(100svh - 70px); min-height: 600px; border-radius: 22px; }
+}
+
+/* app */
+.app { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.hdr { flex: none; padding-top: 10px; }
+.bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px 0; height: 46px; }
+.bar .g { display: flex; gap: 4px; }
+.ib { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+.ib:hover { background: var(--chip); }
+h2.title { font-family: var(--display); font-weight: 600; font-size: 28px; line-height: 1.12; margin: 2px 20px 0; text-wrap: balance; }
+.sub { margin: 6px 20px 0; color: var(--graphite); font-size: 13px; }
+.tabs { display: flex; gap: 22px; padding: 14px 20px 0; border-bottom: 1px solid var(--hair); }
+.tab { padding-bottom: 10px; font-size: 14.5px; color: var(--graphite); font-weight: 500; display: flex; gap: 6px; align-items: baseline; }
+.tab .n { font-size: 12.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.tab.on { color: var(--link); box-shadow: inset 0 -2px 0 var(--link); }
+.tab.on .n { color: var(--link); }
+.scroll { flex: 1; overflow-y: auto; padding-bottom: 210px; overscroll-behavior: contain; }
+.scroll.nocomp { padding-bottom: 40px; }
+
+.day { padding: 18px 20px 6px; font-size: 11.5px; letter-spacing: .9px; color: var(--graphite); font-weight: 600; text-transform: uppercase; }
+.ev { display: flex; gap: 12px; padding: 6px 20px; align-items: flex-start; border-radius: 10px; }
+.ev .ico { width: 22px; display: flex; justify-content: center; padding-top: 1px; color: var(--graphite); }
+.ev .body { flex: 1; min-width: 0; }
+.ev .t { font-size: 15px; text-align: left; }
+.ev .t .k { font-weight: 600; }
+.ev .meta { font-size: 13px; color: var(--graphite); margin-top: 3px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ev .time { font-size: 12px; color: var(--faint); padding-top: 3px; font-variant-numeric: tabular-nums; }
+.ev.faded .t, .ev.faded .ico, .ev.faded .meta { color: var(--faint); }
+.ev.faded .t .lnk { color: var(--faint); }
+.said { margin: 6px 20px 4px 54px; padding: 10px 14px; background: var(--card); border: 1px solid var(--hair); border-radius: 4px 16px 16px 16px; }
+.said .when { display: block; font-size: 12px; color: var(--faint); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.thread { margin: 0 0 4px 41px; border-left: 1px solid var(--hair); }
+.thread .ev { padding-left: 12px; }
+.sys { margin: 2px 20px 2px 54px; font-size: 12.5px; color: var(--graphite); font-style: italic; }
+.pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; padding: 1px 9px; border-radius: 99px; background: var(--chip); color: var(--ink); font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pill.link { background: var(--linkSoft); color: var(--link); }
+.pill.warn { background: var(--accentSoft); color: var(--accent); }
+.lnk { color: var(--link); }
+button.lnk:hover, .lnkb:hover { text-decoration: underline; text-underline-offset: 3px; }
+.lnkb { color: var(--link); font-size: 13px; }
+.strike { text-decoration: line-through; text-decoration-color: var(--faint); }
+.flash { animation: flash 2.2s ease-out; }
+@keyframes flash { 0%, 35% { background: var(--linkSoft); } 100% { background: transparent; } }
+.endcard { margin: 18px 20px 0; padding: 14px 16px; border: 1px dashed var(--hair); border-radius: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; color: var(--graphite); }
+.banner { margin: 12px 20px 0; padding: 10px 14px; background: var(--chip); border-radius: 12px; font-size: 13.5px; display: flex; justify-content: space-between; color: var(--graphite); }
+
+.thumbs { display: flex; gap: 10px; padding: 4px 20px 6px 54px; flex-wrap: wrap; }
+.thumb { width: 132px; text-align: left; }
+.thumb .img { height: 98px; border-radius: 10px; overflow: hidden; position: relative; border: 1px solid var(--hair); }
+.thumb .cap { font-size: 12.5px; color: var(--graphite); margin-top: 4px; line-height: 1.25; }
+.lbl { position: absolute; left: 7px; bottom: 6px; font-size: 9.5px; letter-spacing: .8px; font-weight: 700; color: #fff; background: rgba(0,0,0,.4); padding: 2px 6px; border-radius: 4px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 4px 20px; }
+.grid .thumb { width: auto; }
+.grid .thumb .img { height: 118px; }
+
+.art-receipt { background: linear-gradient(160deg,#cfc6b8,#b5aa98); height: 100%; display: flex; align-items: center; justify-content: center; }
+.art-receipt i { display: block; width: 58px; height: 78px; background: #fbfaf6 linear-gradient(#8a857d,#8a857d) 7px 9px/34px 3px no-repeat; transform: rotate(-6deg); box-shadow: 0 2px 6px rgba(0,0,0,.2); position: relative; }
+.art-receipt i::after { content: ""; position: absolute; left: 7px; right: 9px; top: 20px; height: 44px; background: repeating-linear-gradient(#c9c3b8 0 3px, transparent 3px 8px); }
+.art-room { height: 100%; background: linear-gradient(180deg, #d9d3c8 0 58%, #a8a093 58% 100%); position: relative; }
+.art-room::after { content: ""; position: absolute; left: 18%; right: 14%; bottom: 14%; height: 34%; background: #f4f2ee; border-radius: 6px 6px 18px 18px; box-shadow: 0 2px 4px rgba(0,0,0,.15); }
+.art-tiles { height: 100%; background: repeating-linear-gradient(90deg, transparent 0 21px, rgba(255,255,255,.35) 21px 22px), repeating-linear-gradient(0deg, transparent 0 21px, rgba(255,255,255,.35) 21px 22px), linear-gradient(135deg,#6f979a,#4f7679); }
+.art-sketch { height: 100%; background: repeating-linear-gradient(#f4f1ea 0 13px, #dfe6ec 13px 14px); display: flex; align-items: center; justify-content: center; font-family: var(--display); font-style: italic; color: #4a4640; font-size: 15px; }
+.art-faucet { height: 100%; background: radial-gradient(circle at 50% 42%, #f2f2f0 0 14%, #a9acab 15% 19%, transparent 20%), linear-gradient(135deg,#d7d8d5,#8f9291); }
+.art-video { height: 100%; background: linear-gradient(135deg,#3b3631,#5d554b); display: flex; align-items: center; justify-content: center; color: #fff; }
+.art-video .dur, .art-voice .dur { position: absolute; right: 7px; bottom: 6px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.art-video .dur { color: #fff; }
+.art-doc { height: 100%; background: var(--card); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--graphite); font-size: 11.5px; }
+.art-doc b { font-size: 11px; letter-spacing: .8px; color: var(--ink); }
+.art-voice { height: 100%; background: var(--card); display: flex; align-items: center; justify-content: center; gap: 3px; color: var(--graphite); }
+.art-voice span { width: 3px; border-radius: 2px; background: var(--graphite); }
+.art-voice .dur { color: var(--graphite); }
+
+.sec { display: flex; align-items: baseline; gap: 8px; padding: 20px 20px 6px; font-size: 11.5px; letter-spacing: .9px; color: var(--graphite); font-weight: 600; text-transform: uppercase; width: 100%; text-align: left; }
+.sec .r { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 13px; }
+.sec .chev { transition: transform .2s; display: inline-flex; }
+.sec.closed .chev { transform: rotate(-90deg); }
+.row { display: flex; gap: 14px; padding: 10px 20px; align-items: flex-start; border-radius: 10px; }
+.circ { width: 22px; height: 22px; border-radius: 50%; border: 1.6px solid var(--ink); flex: none; margin-top: 1px; display: flex; align-items: center; justify-content: center; color: var(--bg); }
+.circ.done { background: var(--ink); }
+.circ:hover { background: var(--chip); }
+.circ.done:hover { background: var(--ink); }
+.rico { width: 22px; height: 22px; flex: none; display: flex; align-items: center; justify-content: center; margin-top: 1px; color: var(--ink); }
+.rico.g { color: var(--graphite); }
+.row .body { flex: 1; min-width: 0; }
+.row .t { font-size: 16px; text-align: left; display: block; width: 100%; }
+.row .meta { font-size: 13px; color: var(--graphite); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.row .due { font-weight: 600; color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; }
+.row.done .t { color: var(--faint); }
+.row.hl { background: var(--linkSoft); }
+.dot { color: var(--faint); }
+
+.promises { margin: 14px 16px 2px; background: var(--linkSoft); border-radius: 16px; padding: 4px 0 6px; }
+.promises .sec { color: var(--link); padding-top: 12px; }
+.promises .row { padding: 8px 16px; }
+.promises .rico { color: var(--link); }
+.badge { display: inline-flex; align-items: center; gap: 6px; background: var(--linkSoft); color: var(--link); border-radius: 99px; padding: 2px 10px; font-size: 12px; letter-spacing: .4px; text-transform: none; font-weight: 600; }
+.chips { display: flex; gap: 8px; padding: 14px 20px 4px; flex-wrap: wrap; }
+.chip { padding: 5px 12px; border-radius: 99px; background: var(--chip); font-size: 13px; color: var(--graphite); }
+.chip.on { background: var(--linkSoft); color: var(--link); font-weight: 500; }
+.search { margin: 14px 20px 0; display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--hair); border-radius: 14px; padding: 0 14px; height: 44px; color: var(--graphite); }
+.search input { flex: 1; border: 0; background: transparent; outline: none; font-size: 15px; color: var(--ink); min-width: 0; }
+.search input::placeholder { color: var(--faint); }
+.empty { padding: 30px 20px; color: var(--graphite); font-size: 14px; }
+.hint { margin: 18px 20px 0; padding: 12px 14px; border: 1px dashed var(--hair); border-radius: 12px; color: var(--graphite); font-size: 13.5px; }
+.ttl-row { display: flex; gap: 14px; align-items: flex-start; padding: 2px 20px 0; }
+.ttl-row h2.title { margin: 0; }
+.ttl-row .circ { margin-top: 8px; width: 26px; height: 26px; }
+.props { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 20px 0 60px; }
+
+/* composer */
+.dock { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 12px 18px; background: linear-gradient(to bottom, transparent, var(--bg) 26px); pointer-events: none; }
+.dock > * { pointer-events: auto; }
+.try { display: flex; gap: 8px; flex-wrap: wrap; padding: 22px 4px 8px; align-items: center; }
+.try .lab { font-size: 11.5px; color: var(--faint); letter-spacing: .5px; text-transform: uppercase; font-weight: 600; }
+.try button { font-size: 13px; padding: 5px 11px; border-radius: 99px; border: 1px dashed var(--link); color: var(--link); background: var(--bg); text-align: left; }
+.composer { height: 54px; background: var(--card); border: 1px solid var(--hair); border-radius: 28px; display: flex; align-items: center; padding: 0 6px 0 14px; gap: 10px; box-shadow: 0 2px 14px rgba(0,0,0,.05); }
+.composer .plus { color: var(--ink); display: flex; padding-right: 10px; border-right: 1px solid var(--hair); }
+.composer input { flex: 1; border: 0; background: transparent; outline: none; font-size: 15px; min-width: 0; }
+.composer input::placeholder { color: var(--faint); }
+.composer .mic { color: var(--graphite); display: flex; }
+.composer .send { width: 42px; height: 42px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; color: #fff; }
+.composer .send svg.i { stroke: #fff; }
+
+/* tray: the user bubble that turns into the result */
+.tray { margin: 0 2px 10px; background: var(--bubble); color: var(--onBubble); border-radius: 18px 18px 4px 18px; padding: 12px 14px 10px; font-size: 14.5px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.tray .top { font-size: 11.5px; letter-spacing: .5px; opacity: .65; text-transform: uppercase; font-weight: 600; margin-bottom: 4px; }
+.tray .acts { display: flex; gap: 16px; margin-top: 8px; font-size: 13.5px; }
+.tray .acts button { color: var(--onBubble); opacity: .8; text-decoration: underline; text-underline-offset: 3px; }
+.tray .bar2 { height: 2px; background: var(--onBubble); opacity: .3; margin-top: 10px; border-radius: 2px; transform-origin: left; animation: shrink 7s linear forwards; }
+.tray .pick { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.tray .pick button { text-align: left; padding: 6px 10px; border-radius: 10px; background: rgba(127,127,127,.18); color: var(--onBubble); }
+@keyframes shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* overlays */
+.ovl { position: absolute; inset: 0; background: var(--scrim); display: flex; z-index: 5; }
+.drawer { width: 78%; background: var(--bg); height: 100%; padding: 56px 0 20px; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+.drawer .brand { font-family: var(--display); font-size: 26px; font-weight: 600; padding: 0 24px 18px; }
+.drawer button { text-align: left; padding: 12px 24px; font-size: 16px; display: flex; gap: 14px; align-items: center; }
+.drawer button.off { color: var(--faint); cursor: default; }
+.drawer button .n { margin-left: auto; color: var(--graphite); font-size: 13px; }
+.sheet { margin-top: auto; width: 100%; background: var(--bg); border-radius: 22px 22px 0 0; padding: 22px 20px 30px; display: flex; flex-direction: column; gap: 10px; }
+.sheet h3 { font-family: var(--display); font-weight: 600; font-size: 22px; margin: 0; }
+.sheet p { margin: 0; color: var(--graphite); font-size: 14px; }
+.sheet .btns { display: flex; gap: 10px; margin-top: 8px; }
+.btn { flex: 1; height: 46px; border-radius: 14px; font-weight: 600; font-size: 15px; }
+.btn.pri { background: var(--ink); color: var(--bg); }
+.btn.sec2 { background: var(--chip); }
+.viewer { margin: auto 16px; width: 100%; background: var(--bg); border-radius: 20px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.viewer .img { height: 260px; border-radius: 12px; overflow: hidden; position: relative; border: 1px solid var(--hair); }
+.viewer .name { font-weight: 600; }
+.viewer .ocr { font-size: 13.5px; color: var(--graphite); background: var(--chip); padding: 10px 12px; border-radius: 10px; }
+@media (prefers-reduced-motion: reduce) { .flash, .tray .bar2 { animation: none; } }
+</style>
+
+<div class="stage">
+  <aside class="guide">
+    <h1>Темы вместо задач</h1>
+    <p>Прототип Margin: дело живёт лентой событий, вопросы — на своей странице, материалы — отдельным видом той же темы. Сегодня в прототипе — пятница, 9 октября.</p>
+    <ol>
+      <li>На «Сегодня» нажмите <span class="q">«Отправить документы…»</span>: откроются вопросы темы, нужный подсвечен.</li>
+      <li>Вкладкой или стрелкой назад перейдите в «Ленту». Нажмите строку «Вопрос: …» в ленте, затем ← — вернётесь на то же место.</li>
+      <li>Отметьте вопрос кружком. В ленте появится «Решено», исходный вопрос побледнеет.</li>
+      <li>На главной отправьте <span class="q">«Игорь сказал, приказ подписан»</span>: фраза сама найдёт свою тему. Когда всё решено, тема предложит архив.</li>
+      <li>Откройте <span class="q">«Позвонить в ЖЭК…»</span> и ответьте в ней: простая задача станет темой.</li>
+      <li>В «Ремонте ванной» → «Материалы» найдите <span class="q">48 320</span> — поиск идёт и по тексту на фото.</li>
+    </ol>
+    <div class="seg" role="group" aria-label="Тема оформления">
+      <button data-th="light" id="th-light">Светлая</button><button data-th="dark" id="th-dark">Тёмная</button><button data-th="auto" id="th-auto">Как в системе</button>
+    </div>
+    <button class="reset" id="reset">Начать сначала</button>
+  </aside>
+
+  <details class="guide-m">
+    <summary>Что попробовать</summary>
+    <ol>
+      <li>«Отправить документы…» → вопросы темы → «Лента».</li>
+      <li>В ленте «Вопрос: …», затем ← — то же место.</li>
+      <li>Отметьте вопрос — в ленте «Решено».</li>
+      <li>На главной: «Игорь сказал, приказ подписан».</li>
+      <li>«Позвонить в ЖЭК…» → ответьте — станет темой.</li>
+      <li>«Ремонт ванной» → «Материалы» → поиск «48 320».</li>
+    </ol>
+    <p><button class="reset" id="reset-m">Начать сначала</button></p>
+  </details>
+
+  <div class="phone" id="phone">
+    <div class="app">
+      <div id="screen" style="display:contents"></div>
+    </div>
+    <div class="dock" id="dock">
+      <div id="tray"></div>
+      <div class="try" id="try"></div>
+      <form class="composer" id="composer">
+        <span class="plus" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        <input id="msg" autocomplete="off" placeholder="Написать…" aria-label="Сообщение">
+        <span class="mic" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+        <button class="send" type="submit" aria-label="Отправить"><svg class="i" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5z"/></svg></button>
+      </form>
+    </div>
+    <div id="ovl"></div>
+  </div>
+</div>
+
+<script>
+const TODAY = '2026-10-09';
+const MON = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const MONs = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+const WD = ['вс','пн','вт','ср','чт','пт','сб'];
+const WDF = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+const dt = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const iso = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+const add = (s, n) => { const x = dt(s); x.setDate(x.getDate() + n); return iso(x); };
+const diff = s => Math.round((dt(s) - dt(TODAY)) / 864e5);
+const plain = s => { const x = dt(s); return x.getDate() + ' ' + MONs[x.getMonth()]; };
+const short = s => { const n = diff(s); if (n === 0) return 'сегодня'; if (n === 1) return 'завтра'; if (n === -1) return 'вчера'; const x = dt(s); return WD[x.getDay()] + ' ' + x.getDate() + ' ' + MONs[x.getMonth()]; };
+const dayHead = s => { const x = dt(s); return WD[x.getDay()] + ', ' + x.getDate() + ' ' + MON[x.getMonth()]; };
+const pl = (n, a, b, c) => { const m = n % 10, h = n % 100; return n + ' ' + (m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c); };
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const I = {
+  menu: '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>',
+  search: '<svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>',
+  back: '<svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  check: '<svg class="i s" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  checkC: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.8 2.8L16.3 9.5"/></svg>',
+  dots: '<svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>',
+  q: '<svg class="i s" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.4"/><circle cx="12" cy="16.8" r=".5"/></svg>',
+  wait: '<svg class="i s" viewBox="0 0 24 24"><path d="M7 3h10M7 21h10M8 3c0 4.5 4 5.5 4 9s-4 4.5-4 9M16 3c0 4.5-4 5.5-4 9s4 4.5 4 9"/></svg>',
+  cal: '<svg class="i s" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
+  topic: '<svg class="i s" viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg>',
+  thought: '<svg class="i s" viewBox="0 0 24 24"><path d="M5 5h14v10H10l-5 4z"/></svg>',
+  doc: '<svg class="i" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>',
+  play: '<svg class="i" viewBox="0 0 24 24" style="fill:#fff;stroke:#fff"><path d="M9 7l8 5-8 5z"/></svg>',
+  chev: '<svg class="i s" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+  inbox: '<svg class="i" viewBox="0 0 24 24"><path d="M4 13l3-8h10l3 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>',
+  sun: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6L19 19M5 19l1.4-1.4M17.6 6.4L19 5"/></svg>',
+  files: '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 3-2 6 4"/></svg>',
+  people: '<svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2 .8 3 2.8 3 6"/></svg>',
+  archive: '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/></svg>',
+  gear: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
+};
+
+function seed() {
+  return {
+    topics: [
+      { id: 'prikaz', title: 'Приказ о зачислении', label: 'Поступление', since: '2026-10-07',
+        qs: [
+          { id: 'q1', text: 'Позвонить Игорю насчёт приказа', due: '2026-10-08', who: 'Игорь', done: '2026-10-08' },
+          { id: 'q2', text: 'Отправить документы об оплате в бухгалтерию', due: '2026-10-09', who: 'Бухгалтерия', done: null },
+        ],
+        waits: [{ id: 'w1', what: 'приказ о зачислении', gen: 'Игоря', until: '2026-10-22', got: null }],
+        files: [
+          { id: 'f1', kind: 'photo', art: 'receipt', name: 'Квитанция об оплате', day: '2026-10-09', text: 'ПАО Сбербанк. Оплата обучения, 45 000,00 ₽, 08.10.2026' },
+          { id: 'f2', kind: 'pdf', name: 'Договор № 418', day: '2026-10-09', pages: 3, text: 'Договор об оказании платных образовательных услуг № 418' },
+        ],
+        feed: [
+          { day: '2026-10-07', time: '10:12', k: 'q', q: 'q1', origin: 'из сообщения 7 окт, 10:12' },
+          { day: '2026-10-08', time: '14:05', k: 'said', text: 'Созвонились. Приказ о зачислении в работе, будет через 2 недели. Нужно отправить документы об оплате в бухгалтерию.',
+            sub: [{ k: 'became' }, { k: 'solved', q: 'q1' }, { k: 'wait', w: 'w1' }, { k: 'q', q: 'q2' }] },
+          { day: '2026-10-09', time: '09:40', k: 'files', files: ['f1', 'f2'] },
+        ] },
+      { id: 'remont', title: 'Ремонт ванной', label: 'Дом', since: '2026-09-28',
+        qs: [
+          { id: 'r3', text: 'Заказать плитку', due: '2026-10-02', done: '2026-10-02' },
+          { id: 'r1', text: 'Позвонить плиточнику насчёт затирки', due: '2026-10-09', time: '12:00', who: 'Сергей', done: null },
+          { id: 'r2', text: 'Выбрать смеситель', due: '2026-10-11', done: null },
+          { id: 'r4', text: 'Договориться о дате демонтажа', due: '2026-10-14', who: 'Сергей', done: null },
+        ],
+        waits: [{ id: 'rw1', what: 'смета по плитке', gen: 'Марины', until: '2026-10-09', got: null }],
+        files: [
+          { id: 'g1', kind: 'photo', art: 'room', name: 'Ванная до ремонта', day: '2026-09-28' },
+          { id: 'g2', kind: 'photo', art: 'sketch', name: 'Замеры', day: '2026-09-28', text: 'ширина 170, длина 210, высота 250' },
+          { id: 'g3', kind: 'photo', art: 'tiles', name: 'Плитка, образец', day: '2026-10-01', text: 'Kerama Marazzi, 20×20, бирюза' },
+          { id: 'g4', kind: 'photo', art: 'receipt', name: 'Чек за плитку', day: '2026-10-02', text: 'Леруа Мерлен. Плитка 6,2 м², итого 48 320 ₽' },
+          { id: 'g5', kind: 'pdf', name: 'Смета, первый вариант', day: '2026-10-02', pages: 2, text: 'Итого работы и материалы 186 400 ₽' },
+          { id: 'g6', kind: 'voice', name: 'Голосовое после встречи', day: '2026-10-03', dur: '1:12', text: 'Сергей советует эпоксидную затирку, она не темнеет' },
+          { id: 'g7', kind: 'video', name: 'Стена за ванной', day: '2026-10-05', dur: '0:24' },
+          { id: 'g8', kind: 'photo', art: 'faucet', name: 'Смеситель в магазине', day: '2026-10-06', text: 'Grohe Eurosmart, 12 900 ₽' },
+          { id: 'g9', kind: 'photo', art: 'room', name: 'Ванная, вид от двери', day: '2026-09-28' },
+        ],
+        feed: [
+          { day: '2026-09-28', time: '19:30', k: 'said', text: 'Решили делать ремонт в ванной. Плиточник — Сергей, советовала Марина.' },
+          { day: '2026-09-28', time: '19:34', k: 'files', files: ['g1', 'g9', 'g2'] },
+          { day: '2026-10-01', time: '18:10', k: 'files', files: ['g3'] },
+          { day: '2026-10-01', time: '18:12', k: 'q', q: 'r3' },
+          { day: '2026-10-02', time: '13:20', k: 'files', files: ['g4', 'g5'] },
+          { day: '2026-10-02', time: '13:21', k: 'solved', q: 'r3' },
+          { day: '2026-10-03', time: '20:05', k: 'said', text: 'Сергей советует эпоксидную затирку, надо узнать цену.', sub: [{ k: 'q', q: 'r1' }] },
+          { day: '2026-10-03', time: '20:06', k: 'files', files: ['g6'] },
+          { day: '2026-10-05', time: '17:40', k: 'files', files: ['g7'] },
+          { day: '2026-10-05', time: '17:45', k: 'said', text: 'Марина пришлёт смету по плитке до пятницы.', sub: [{ k: 'wait', w: 'rw1' }] },
+          { day: '2026-10-06', time: '16:00', k: 'files', files: ['g8'] },
+          { day: '2026-10-06', time: '16:02', k: 'said', text: 'Смеситель пока не выбрали, и надо договориться с Сергеем о демонтаже.', sub: [{ k: 'q', q: 'r2' }, { k: 'q', q: 'r4' }] },
+        ] },
+      { id: 'obsh', title: 'Общежитие', label: 'Поступление', since: '2026-10-02',
+        qs: [{ id: 'o1', text: 'Подать заявление на общежитие', due: '2026-10-02', done: '2026-10-02' }],
+        waits: [{ id: 'ow1', what: 'ответ о заселении', gen: 'деканата', until: '2026-10-12', got: null }],
+        files: [],
+        feed: [
+          { day: '2026-10-02', time: '11:00', k: 'q', q: 'o1', origin: 'из сообщения 2 окт, 11:00' },
+          { day: '2026-10-02', time: '15:30', k: 'said', text: 'Заявление подали, ответ о заселении будет до 12 октября.', sub: [{ k: 'became' }, { k: 'solved', q: 'o1' }, { k: 'wait', w: 'ow1' }] },
+        ] },
+      { id: 'osago', title: 'Страховка машины', label: null, since: '2026-09-29',
+        qs: [
+          { id: 's1', text: 'Сравнить ОСАГО в трёх компаниях', due: '2026-09-30', done: '2026-09-30' },
+          { id: 's2', text: 'Оформить полис', due: '2026-10-01', done: '2026-10-01' },
+        ],
+        waits: [],
+        files: [{ id: 'h1', kind: 'pdf', name: 'Полис ОСАГО', day: '2026-10-01', pages: 2, text: 'Полис ОСАГО ХХХ 0412, срок до 01.10.2027' }],
+        feed: [
+          { day: '2026-09-29', time: '09:15', k: 'q', q: 's1', origin: 'из сообщения 29 сен, 09:15' },
+          { day: '2026-09-30', time: '18:40', k: 'said', text: 'Дешевле всего вышло в Альфе, 9 870 ₽. Завтра оформляю.', sub: [{ k: 'became' }, { k: 'solved', q: 's1' }, { k: 'q', q: 's2' }] },
+          { day: '2026-10-01', time: '12:10', k: 'files', files: ['h1'] },
+          { day: '2026-10-01', time: '12:11', k: 'solved', q: 's2' },
+        ] },
+      { id: 'odyssey', title: 'Посмотреть «Одиссею» Нолана', label: null, since: '2026-10-04', qs: [], waits: [], files: [],
+        feed: [
+          { day: '2026-10-04', time: '22:10', k: 'said', text: 'Посмотреть «Одиссею» Нолана.' },
+          { day: '2026-10-06', time: '13:00', k: 'said', text: 'Дима говорит, смотреть только в IMAX, там снято на плёнку 70 мм.' },
+        ] },
+      { id: 'site', title: 'Идеи для сайта', label: 'Работа', since: '2026-09-21', qs: [], waits: [], files: [],
+        feed: [
+          { day: '2026-09-21', time: '10:00', k: 'said', text: 'Калькулятор стоимости на главной.' },
+          { day: '2026-09-24', time: '16:20', k: 'said', text: 'Отзывы выпускников с фото и названием вуза.' },
+          { day: '2026-10-01', time: '09:05', k: 'said', text: 'Страница «Как мы работаем» в четыре шага.' },
+          { day: '2026-10-05', time: '21:40', k: 'said', text: 'Тёмная тема — проверить на телефоне.' },
+        ] },
+      { id: 'passport', title: 'Замена паспорта', label: null, since: '2026-09-02', archived: '2026-09-20',
+        qs: [{ id: 'p1', text: 'Записаться в МФЦ', due: '2026-09-04', done: '2026-09-03' }, { id: 'p2', text: 'Забрать паспорт', due: '2026-09-20', done: '2026-09-20' }],
+        waits: [], files: [],
+        feed: [
+          { day: '2026-09-02', time: '08:50', k: 'q', q: 'p1' },
+          { day: '2026-09-03', time: '12:00', k: 'said', text: 'Записались на 6 сентября, готов будет через две недели.', sub: [{ k: 'became' }, { k: 'solved', q: 'p1' }, { k: 'q', q: 'p2' }] },
+          { day: '2026-09-20', time: '15:30', k: 'solved', q: 'p2' },
+        ] },
+    ],
+    simple: [
+      { id: 'zhek', title: 'Позвонить в ЖЭК насчёт счётчиков', due: '2026-10-09', origin: 'из сообщения 8 окт, 21:30', done: false },
+      { id: 'milk', title: 'Купить молоко', due: '2026-10-09', origin: 'из сообщения 9 окт, 08:05', done: false },
+      { id: 'suit', title: 'Забрать костюм из химчистки', due: '2026-10-12', origin: 'из сообщения 7 окт, 19:20', done: false },
+    ],
+    cal: [{ day: '2026-10-09', time: '15:00', title: 'Стоматолог', place: 'Лесная, 12' }],
+    folded: { week: true, nostep: true, solved: true },
+    label: 'Все',
+  };
+}
+
+let S = seed();
+let stack = [{ s: 'main', tab: 'today' }];
+let scrollMem = {}, undoSnap = null, trayTimer = null, clockMin = 11 * 60 + 20, fresh = new Set();
+const $ = s => document.querySelector(s);
+const cur = () => stack[stack.length - 1];
+const T = id => S.topics.find(t => t.id === id);
+const Q = (t, id) => t.qs.find(q => q.id === id);
+const W = (t, id) => t.waits.find(w => w.id === id);
+const F = (t, id) => t.files.find(f => f.id === id);
+const clone = o => JSON.parse(JSON.stringify(o));
+const now = () => { clockMin += 4; return String(Math.floor(clockMin / 60)).padStart(2, '0') + ':' + String(clockMin % 60).padStart(2, '0'); };
+const live = () => S.topics.filter(t => !t.archived);
+const isCase = t => t.qs.length > 0 || t.waits.length > 0;
+const openQs = t => t.qs.filter(q => !q.done);
+const openWs = t => t.waits.filter(w => !w.got);
+const noStep = t => isCase(t) && !openQs(t).length && !openWs(t).length;
+const entries = t => t.feed.filter(e => e.k === 'said').length;
+
+/* ---------- pieces ---------- */
+function thumbArt(f) {
+  const lbl = f.kind === 'photo' ? '<span class="lbl">ФОТО</span>' : f.kind === 'video' ? '<span class="lbl">ВИДЕО</span>' : '';
+  if (f.kind === 'photo') return (f.art === 'receipt' ? '<div class="art-receipt"><i></i></div>' : f.art === 'sketch' ? '<div class="art-sketch">170 × 210</div>' : '<div class="art-' + f.art + '"></div>') + lbl;
+  if (f.kind === 'video') return '<div class="art-video">' + I.play + '<span class="dur">' + f.dur + '</span></div>' + lbl;
+  if (f.kind === 'voice') { let b = ''; [6, 14, 22, 12, 26, 18, 9, 20, 28, 15, 8, 19, 24, 10, 6].forEach(h => b += '<span style="height:' + h + 'px"></span>'); return '<div class="art-voice">' + b + '<span class="dur">' + f.dur + '</span></div>'; }
+  return '<div class="art-doc">' + I.doc + '<b>PDF</b>' + pl(f.pages, 'страница', 'страницы', 'страниц') + '</div>';
+}
+const thumb = (t, f) => '<button class="thumb" data-act="file" data-t="' + t.id + '" data-f="' + f.id + '"><div class="img">' + thumbArt(f) + '</div><div class="cap">' + esc(f.name) + '</div></button>';
+const duePill = (s, time) => { if (!s) return ''; const n = diff(s); return '<span class="pill ' + (n < 0 ? 'warn' : '') + '">' + short(s) + (time ? ', ' + time : '') + '</span>'; };
+
+function evHTML(t, e, nested) {
+  const tm = nested ? '' : '<span class="time">' + (e.time || '') + '</span>';
+  if (e.k === 'q') {
+    const q = Q(t, e.q);
+    return '<div class="ev ' + (q.done ? 'faded' : '') + '" data-hl="q:' + q.id + '"><span class="ico">' + I.q + '</span><div class="body"><button class="t" data-act="goq" data-t="' + t.id + '" data-q="' + q.id + '"><span class="k">Вопрос:</span> <span class="lnk">' + esc(q.text) + '</span></button><div class="meta">' + (q.done ? 'решено ' + plain(q.done) : duePill(q.due, q.time)) + (e.origin ? '<span>↳ ' + e.origin + '</span>' : '') + '</div></div>' + tm + '</div>';
+  }
+  if (e.k === 'solved') {
+    const q = Q(t, e.q);
+    return '<div class="ev" data-hl="s:' + q.id + '"><span class="ico">' + I.check + '</span><div class="body"><button class="t" data-act="goq" data-t="' + t.id + '" data-q="' + q.id + '"><span class="k">Решено:</span> ' + esc(q.text) + '</button></div>' + tm + '</div>';
+  }
+  if (e.k === 'wait') {
+    const w = W(t, e.w);
+    return '<div class="ev ' + (w.got ? 'faded' : '') + '" data-hl="w:' + w.id + '"><span class="ico">' + I.wait + '</span><div class="body"><div class="t"><span class="k">Ждём от ' + w.gen + ':</span> ' + esc(w.what) + '</div><div class="meta">' + (w.got ? 'получено ' + plain(w.got) : '<span class="pill link">~' + plain(w.until) + '</span><span>напомню ' + plain(w.until) + ' утром</span>') + '</div></div>' + tm + '</div>';
+  }
+  if (e.k === 'got') {
+    const w = W(t, e.w);
+    return '<div class="ev"><span class="ico">' + I.check + '</span><div class="body"><div class="t"><span class="k">Получено от ' + w.gen + ':</span> ' + esc(w.what) + '</div></div>' + tm + '</div>';
+  }
+  if (e.k === 'became') return '<div class="sys">Задача стала темой</div>';
+  if (e.k === 'revived') return '<div class="sys">Тема вернулась из архива</div>';
+  if (e.k === 'files') return '<div class="thumbs">' + e.files.map(id => thumb(t, F(t, id))).join('') + '</div>';
+  if (e.k === 'said') {
+    let h = '<div class="said">' + esc(e.text) + '<span class="when">' + e.time + '</span></div>';
+    if (e.sub && e.sub.length) h += '<div class="thread">' + e.sub.map(x => evHTML(t, x, true)).join('') + '</div>';
+    return h;
+  }
+  return '';
+}
+
+function wrapFresh(e, html) { return fresh.has(e) ? '<div class="flash">' + html + '</div>' : html; }
+
+/* ---------- screens ---------- */
+function mainView(v) {
+  const x = dt(TODAY);
+  const todayItems = todayList();
+  let h = '<div class="hdr"><div class="bar"><button class="ib" data-act="menu" aria-label="Меню">' + I.menu + '</button><button class="ib" aria-label="Поиск">' + I.search + '</button></div>' +
+    '<h2 class="title">' + WDF[x.getDay()] + ', ' + x.getDate() + ' ' + MON[x.getMonth()] + '</h2>' +
+    '<div class="tabs">' + [['today', 'Сегодня', todayItems.filter(i => !i.cal).length], ['week', 'Неделя', ''], ['all', 'Все', '']].map(([k, n, c]) => '<button class="tab ' + (v.tab === k ? 'on' : '') + '" data-act="mtab" data-tab="' + k + '">' + n + (c !== '' ? ' <span class="n">' + c + '</span>' : '') + '</button>').join('') + '</div></div>';
+  h += '<div class="scroll">' + (v.tab === 'today' ? todayView(todayItems) : v.tab === 'week' ? weekView() : allView()) + '</div>';
+  return h;
+}
+
+function todayList() {
+  const items = [];
+  live().forEach(t => openQs(t).forEach(q => { if (q.due && diff(q.due) <= 0) items.push({ t, q, time: q.time }); }));
+  S.simple.forEach(s => { if (!s.done && s.due && diff(s.due) <= 0) items.push({ s }); });
+  S.cal.forEach(c => { if (c.day === TODAY) items.push({ cal: c, time: c.time }); });
+  return items.sort((a, b) => (a.time ? 0 : 1) - (b.time ? 0 : 1) || (a.time || '').localeCompare(b.time || ''));
+}
+
+function itemRow(it) {
+  if (it.cal) return '<div class="row"><span class="rico g">' + I.cal + '</span><div class="body"><div class="t">' + it.cal.title + '</div><div class="meta"><span class="due">' + it.cal.time + '</span><span class="dot">·</span>' + it.cal.place + '</div></div></div>';
+  if (it.s) return '<div class="row ' + (it.s.done ? 'done' : '') + '"><button class="circ ' + (it.s.done ? 'done' : '') + '" data-act="sdone" data-s="' + it.s.id + '" aria-label="Готово">' + (it.s.done ? I.check : '') + '</button><div class="body"><button class="t" data-act="opens" data-s="' + it.s.id + '">' + esc(it.s.title) + '</button>' + (it.showDate ? '<div class="meta"><span class="due">' + short(it.s.due) + '</span></div>' : '') + '</div></div>';
+  if (it.w) return '<div class="row"><span class="rico g">' + I.wait + '</span><div class="body"><button class="t" data-act="opent" data-t="' + it.t.id + '" data-tab="feed" data-hl="w:' + it.w.id + '">Ждём от ' + it.w.gen + ': ' + esc(it.w.what) + '</button><div class="meta"><button class="lnkb" data-act="opent" data-t="' + it.t.id + '" data-tab="feed">↳ ' + esc(it.t.title) + '</button></div></div></div>';
+  const q = it.q, t = it.t;
+  const when = it.showDate ? short(q.due) + (q.time ? ', ' + q.time : '') : (q.time || '');
+  return '<div class="row"><button class="circ" data-act="toggleq" data-t="' + t.id + '" data-q="' + q.id + '" aria-label="Решено"></button><div class="body"><button class="t" data-act="opent" data-t="' + t.id + '" data-tab="qs" data-hl="' + q.id + '">' + esc(q.text) + '</button><div class="meta">' + (when ? '<span class="due">' + when + '</span><span class="dot">·</span>' : '') + '<button class="lnkb" data-act="opent" data-t="' + t.id + '" data-tab="feed">↳ ' + esc(t.title) + '</button></div></div></div>';
+}
+
+function todayView(items) {
+  let h = '';
+  const prom = [];
+  live().forEach(t => openWs(t).forEach(w => { if (diff(w.until) <= 3) prom.push({ t, w }); }));
+  if (prom.length) {
+    h += '<div class="promises"><div class="sec">Обещания</div>' + prom.map(({ t, w }) => '<div class="row"><span class="rico">' + I.wait + '</span><div class="body"><button class="t" data-act="opent" data-t="' + t.id + '" data-tab="feed" data-hl="w:' + w.id + '">Вам от ' + w.gen + ' · ' + esc(w.what) + '</button><div class="meta"><span class="due">' + short(w.until) + '</span><span class="dot">·</span><button class="lnkb" data-act="opent" data-t="' + t.id + '" data-tab="feed">↳ ' + esc(t.title) + '</button><span class="dot">·</span><button class="lnkb" data-act="gotw" data-t="' + t.id + '" data-w="' + w.id + '">Получено</button></div></div></div>').join('') + '</div>';
+  }
+  const n = items.filter(i => !i.cal).length;
+  h += '<div class="sec"><span class="badge">Сегодня ' + n + '</span></div>';
+  h += items.length ? items.map(itemRow).join('') : '<div class="empty">Свободный день.</div>';
+  const week = weekItems();
+  h += foldSec('week', 'На неделе', week.length, week.map(it => itemRow({ ...it, showDate: true })).join(''));
+  const ns = live().filter(noStep);
+  h += foldSec('nostep', 'Темы без следующего шага', ns.length, ns.map(t => '<div class="row"><span class="rico">' + I.topic + '</span><div class="body"><button class="t" data-act="opent" data-t="' + t.id + '" data-tab="feed">' + esc(t.title) + '</button><div class="meta">все вопросы решены<span class="dot">·</span><button class="lnkb" data-act="opent" data-t="' + t.id + '" data-tab="feed">Что дальше?</button><span class="dot">·</span><button class="lnkb" data-act="arcask" data-t="' + t.id + '">В архив</button></div></div></div>').join(''));
+  return h;
+}
+
+function foldSec(key, title, n, body) {
+  if (!n) return '';
+  const closed = S.folded[key];
+  return '<button class="sec ' + (closed ? 'closed' : '') + '" data-act="fold" data-k="' + key + '" aria-expanded="' + !closed + '">' + title + ' · ' + n + '<span class="r chev">' + I.chev + '</span></button>' + (closed ? '' : body);
+}
+
+function weekItems() {
+  const out = [];
+  for (let i = 1; i <= 6; i++) {
+    const d = add(TODAY, i);
+    live().forEach(t => { openQs(t).forEach(q => { if (q.due === d) out.push({ t, q, day: d }); }); openWs(t).forEach(w => { if (w.until === d) out.push({ t, w, day: d }); }); });
+    S.simple.forEach(s => { if (!s.done && s.due === d) out.push({ s, day: d }); });
+  }
+  return out;
+}
+
+function weekView() {
+  const items = weekItems();
+  if (!items.length) return '<div class="empty">На неделе ничего.</div>';
+  let h = '', last = '';
+  items.forEach(it => { if (it.day !== last) { h += '<div class="day">' + dayHead(it.day) + '</div>'; last = it.day; } h += itemRow(it); });
+  return h;
+}
+
+function topicMeta(t) {
+  const p = [];
+  if (!isCase(t)) p.push('мысль', pl(entries(t), 'запись', 'записи', 'записей'));
+  else {
+    const oq = openQs(t).length, ow = openWs(t);
+    if (oq) p.push(pl(oq, 'вопрос', 'вопроса', 'вопросов'));
+    if (ow.length) p.push('ждём до ' + plain(ow[0].until));
+    if (!oq && !ow.length) p.push('всё решено');
+  }
+  if (t.files.length) p.push(pl(t.files.length, 'материал', 'материала', 'материалов'));
+  if (t.label) p.push('#' + t.label.toLowerCase());
+  return p.join(' · ');
+}
+const topicRow = t => '<div class="row"><span class="rico">' + (isCase(t) ? I.topic : I.thought) + '</span><div class="body"><button class="t" data-act="opent" data-t="' + t.id + '" data-tab="feed">' + esc(t.title) + '</button><div class="meta">' + topicMeta(t) + '</div></div></div>';
+
+function allView() {
+  const labels = ['Все'].concat([...new Set(live().map(t => t.label).filter(Boolean))]);
+  let h = '<div class="chips">' + labels.map(l => '<button class="chip ' + (S.label === l ? 'on' : '') + '" data-act="label" data-l="' + l + '">' + l + '</button>').join('') + '</div>';
+  const pool = live().filter(t => S.label === 'Все' || t.label === S.label);
+  const next = t => { const d = openQs(t).map(q => q.due).concat(openWs(t).map(w => w.until)).filter(Boolean).sort(); return d[0] || '9999'; };
+  const work = pool.filter(t => isCase(t) && !noStep(t)).sort((a, b) => next(a).localeCompare(next(b)));
+  const done = pool.filter(noStep), thoughts = pool.filter(t => !isCase(t));
+  if (work.length) h += '<div class="sec">Темы в работе</div>' + work.map(topicRow).join('');
+  if (S.label === 'Все') { const ss = S.simple.filter(s => !s.done); if (ss.length) h += '<div class="sec">Простые задачи</div>' + ss.map(s => itemRow({ s, showDate: true })).join(''); }
+  if (thoughts.length) h += '<div class="sec">Мысли</div>' + thoughts.map(topicRow).join('');
+  if (done.length) h += '<div class="sec">Без следующего шага</div>' + done.map(topicRow).join('');
+  return h;
+}
+
+function topicView(v) {
+  const t = T(v.id);
+  const oq = openQs(t).length, nf = t.files.length;
+  let h = '<div class="hdr"><div class="bar"><button class="ib" data-act="back" aria-label="Назад">' + I.back + '</button><div class="g">' +
+    (t.archived ? '' : '<button class="ib" data-act="arcask" data-t="' + t.id + '" aria-label="Решено, в архив">' + I.checkC + '</button>') + '<button class="ib" aria-label="Ещё">' + I.dots + '</button></div></div>' +
+    '<h2 class="title">' + esc(t.title) + '</h2><div class="sub">' + [t.label ? '#' + t.label.toLowerCase() : '', isCase(t) ? 'тема с ' + plain(t.since) : 'мысль с ' + plain(t.since)].filter(Boolean).join(' · ') + '</div>' +
+    '<div class="tabs">' + [['feed', 'Лента', ''], ['qs', 'Вопросы', oq || ''], ['files', 'Материалы', nf || '']].map(([k, n, c]) => '<button class="tab ' + (v.tab === k ? 'on' : '') + '" data-act="ttab" data-tab="' + k + '">' + n + (c !== '' ? ' <span class="n">' + c + '</span>' : '') + '</button>').join('') + '</div></div>';
+  h += '<div class="scroll" id="tscroll">';
+  if (t.archived) h += '<div class="banner"><span>В архиве с ' + plain(t.archived) + '</span><button class="lnkb" data-act="unarc" data-t="' + t.id + '">Вернуть</button></div>';
+  if (v.tab === 'feed') {
+    let last = '';
+    t.feed.forEach(e => { if (e.day !== last) { h += '<div class="day">' + dayHead(e.day) + '</div>'; last = e.day; } h += wrapFresh(e, evHTML(t, e)); });
+    if (noStep(t) && !t.archived) h += '<div class="endcard"><span>Похоже, всё решено.</span><button class="lnkb" data-act="arcask" data-t="' + t.id + '">В архив</button></div>';
+  } else if (v.tab === 'qs') {
+    const open = openQs(t), ws = openWs(t), done = t.qs.filter(q => q.done);
+    if (!t.qs.length && !t.waits.length) h += '<div class="empty">Вопросов нет. Напишите внизу — появится вопрос.</div>';
+    if (open.length) h += '<div class="sec">Открыто · ' + open.length + '</div>' + open.map(q => qRow(t, q)).join('');
+    if (ws.length) h += '<div class="sec">Ждём · ' + ws.length + '</div>' + ws.map(w => '<div class="row" data-hl="w:' + w.id + '"><span class="rico g">' + I.wait + '</span><div class="body"><div class="t">' + cap(w.what) + ' — от ' + w.gen + '</div><div class="meta"><span class="due">~' + plain(w.until) + '</span><span class="dot">·</span>напомню утром<span class="dot">·</span><button class="lnkb" data-act="gotw" data-t="' + t.id + '" data-w="' + w.id + '">Получено</button></div></div></div>').join('');
+    if (done.length) h += foldSec('solved', 'Решено', done.length, done.map(q => qRow(t, q)).join(''));
+  } else {
+    h += filesBlock(t.id);
+  }
+  return h + '</div>';
+}
+
+function qRow(t, q) {
+  const created = t.feed.concat(...t.feed.map(e => e.sub || [])).find(e => e.k === 'q' && e.q === q.id);
+  const day = (t.feed.find(e => e === created || (e.sub || []).includes(created)) || {}).day;
+  return '<div class="row ' + (q.done ? 'done' : '') + '" data-hl="' + q.id + '"><button class="circ ' + (q.done ? 'done' : '') + '" data-act="toggleq" data-t="' + t.id + '" data-q="' + q.id + '" aria-label="' + (q.done ? 'Вернуть' : 'Решено') + '">' + (q.done ? I.check : '') + '</button><div class="body"><div class="t ' + (q.done ? 'strike' : '') + '">' + esc(q.text) + '</div><div class="meta">' +
+    (q.done ? 'решено ' + plain(q.done) : (q.due ? '<span class="due">' + short(q.due) + (q.time ? ', ' + q.time : '') + '</span>' : 'без срока')) + (q.who ? '<span class="dot">·</span>' + q.who : '') +
+    (day ? '<span class="dot">·</span><button class="lnkb" data-act="jump" data-t="' + t.id + '" data-hl="q:' + q.id + '">в ленте ' + plain(day) + ' ›</button>' : '') + '</div></div></div>';
+}
+
+let fq = '', fkind = 'all';
+function filesBlock(tid) {
+  return '<div class="search">' + I.search + '<input id="fsearch" placeholder="Искать в материалах, и по тексту на фото" value="' + esc(fq) + '" data-t="' + (tid || '') + '"></div>' +
+    '<div class="chips">' + [['all', 'Все'], ['photo', 'Фото'], ['pdf', 'Документы'], ['voice', 'Голосовые'], ['video', 'Видео']].map(([k, n]) => '<button class="chip ' + (fkind === k ? 'on' : '') + '" data-act="fkind" data-k="' + k + '">' + n + '</button>').join('') + '</div>' +
+    '<div id="fres">' + filesResults(tid) + '</div>';
+}
+function filesResults(tid) {
+  const q = fq.trim().toLowerCase().replace(/\s/g, '');
+  const ok = f => (fkind === 'all' || f.kind === fkind) && (!q || (f.name + ' ' + (f.text || '')).toLowerCase().replace(/\s/g, '').includes(q));
+  let h = '';
+  if (tid) {
+    const t = T(tid), fs = t.files.filter(ok);
+    if (!t.files.length) return '<div class="empty">Материалов пока нет. Фото, файлы и голосовые из ленты появятся здесь.</div>';
+    if (!fs.length) return '<div class="empty">Ничего не нашлось.</div>';
+    const MONN = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+    const months = [...new Set(fs.map(f => f.day.slice(0, 7)))].sort().reverse();
+    months.forEach(m => { h += '<div class="day">' + MONN[Number(m.slice(5)) - 1] + '</div><div class="grid">' + fs.filter(f => f.day.startsWith(m)).sort((a, b) => b.day.localeCompare(a.day)).map(f => thumb(t, f)).join('') + '</div>'; });
+    if (q) h += hitNote(fs);
+    return h;
+  }
+  const all = [];
+  S.topics.filter(t => !t.archived).forEach(t => { const fs = t.files.filter(ok); if (fs.length) { h += '<button class="sec" data-act="opent" data-t="' + t.id + '" data-tab="files">' + esc(t.title) + '<span class="r lnk">открыть ›</span></button><div class="grid">' + fs.map(f => thumb(t, f)).join('') + '</div>'; all.push(...fs); } });
+  if (!h) return '<div class="empty">Ничего не нашлось.</div>';
+  if (q) h += hitNote(all);
+  return h;
+}
+function hitNote(fs) {
+  const q = fq.trim().toLowerCase().replace(/\s/g, '');
+  const byText = fs.filter(f => f.text && !f.name.toLowerCase().replace(/\s/g, '').includes(q));
+  return byText.length ? '<div class="hint">Найдено по тексту внутри: ' + byText.map(f => '«' + esc(f.text) + '»').join(', ') + '</div>' : '';
+}
+
+function simpleView(v) {
+  const s = S.simple.find(x => x.id === v.id);
+  return '<div class="hdr"><div class="bar"><button class="ib" data-act="back" aria-label="Назад">' + I.back + '</button><button class="ib" aria-label="Ещё">' + I.dots + '</button></div></div>' +
+    '<div class="scroll"><div class="ttl-row"><button class="circ ' + (s.done ? 'done' : '') + '" data-act="sdone" data-s="' + s.id + '" aria-label="Готово">' + (s.done ? I.check : '') + '</button><h2 class="title ' + (s.done ? 'strike' : '') + '">' + esc(s.title) + '</h2></div>' +
+    '<div class="props">' + duePill(s.due) + '<span class="pill">↳ ' + s.origin + '</span></div>' +
+    '<div class="hint">Пока это простая задача: галочка — и готово. Если ответить здесь, добавить запись или файл, она станет темой.</div></div>';
+}
+
+function filesView() {
+  return '<div class="hdr"><div class="bar"><button class="ib" data-act="back" aria-label="Назад">' + I.back + '</button></div><h2 class="title">Материалы</h2><div class="sub">все фото, файлы и голосовые из тем</div></div><div class="scroll nocomp">' + filesBlock('') + '</div>';
+}
+function archiveView() {
+  const a = S.topics.filter(t => t.archived);
+  return '<div class="hdr"><div class="bar"><button class="ib" data-act="back" aria-label="Назад">' + I.back + '</button></div><h2 class="title">Архив</h2><div class="sub">решённые темы вместе с материалами</div></div><div class="scroll nocomp">' +
+    (a.length ? a.map(t => '<div class="row"><span class="rico g">' + I.topic + '</span><div class="body"><button class="t" data-act="opent" data-t="' + t.id + '" data-tab="feed">' + esc(t.title) + '</button><div class="meta">в архиве с ' + plain(t.archived) + (t.files.length ? '<span class="dot">·</span>' + pl(t.files.length, 'материал', 'материала', 'материалов') : '') + '</div></div></div>').join('') : '<div class="empty">Архив пуст.</div>') + '</div>';
+}
+
+/* ---------- render & navigation ---------- */
+const key = v => v.s + ':' + (v.id || '') + ':' + (v.tab || '');
+function remember() { const sc = $('#screen .scroll'); if (sc) scrollMem[key(cur())] = sc.scrollTop; }
+function nav(v) { remember(); stack.push(v); fq = ''; render(); }
+function back() { remember(); if (stack.length > 1) stack.pop(); render(); }
+
+function render() {
+  const v = cur();
+  $('#screen').innerHTML = v.s === 'main' ? mainView(v) : v.s === 'topic' ? topicView(v) : v.s === 'simple' ? simpleView(v) : v.s === 'files' ? filesView() : archiveView();
+  const sc = $('#screen .scroll');
+  if (sc) sc.scrollTop = scrollMem[key(v)] || 0;
+  if (v.hl) {
+    const el = document.querySelector('#screen [data-hl="' + v.hl + '"]');
+    if (el) { el.scrollIntoView({ block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+    v.hl = null;
+  }
+  if (fresh.size) { const f = $('#screen .flash'); if (f && !v.hl) f.scrollIntoView({ block: 'center' }); fresh.clear(); }
+  setupComposer();
+}
+
+function setupComposer() {
+  const v = cur();
+  const dock = $('#dock');
+  const show = v.s === 'main' || v.s === 'topic' || v.s === 'simple';
+  dock.hidden = !show;
+  if (!show) return;
+  const t = v.s === 'topic' ? T(v.id) : null;
+  $('#msg').placeholder = v.s === 'simple' ? 'Написать о задаче…' : t ? (v.tab === 'qs' ? 'Новый вопрос…' : 'Написать в тему…') : 'Написать…';
+  const tries = [];
+  if (v.s === 'main') { const p = T('prikaz'); if (!p.waits[0].got) tries.push('Игорь сказал, приказ подписан'); }
+  if (t && t.id === 'prikaz' && v.tab !== 'qs') { if (!Q(t, 'q2').done) tries.push('Документы в бухгалтерию отправлены'); if (!t.waits[0].got) tries.push('Игорь сказал, приказ подписан'); }
+  if (t && v.tab === 'qs') tries.push('Уточнить, нужен ли оригинал аттестата');
+  if (v.s === 'simple' && v.id === 'zhek') tries.push('Сказали прийти с паспортом во вторник до 13:00');
+  $('#try').innerHTML = tries.length ? '<span class="lab">Попробуйте</span>' + tries.map(x => '<button data-act="try" data-x="' + esc(x) + '">' + esc(x) + '</button>').join('') : '';
+}
+
+/* ---------- actions ---------- */
+function toggleQ(t, q) {
+  undoSnap = clone(S);
+  if (q.done) { q.done = null; t.feed = t.feed.filter(e => !(e.k === 'solved' && e.q === q.id && e.day === TODAY)); }
+  else { q.done = TODAY; const e = { day: TODAY, time: now(), k: 'solved', q: q.id }; t.feed.push(e); fresh.add(e); revive(t); }
+}
+function revive(t) { if (t.archived) { t.archived = null; t.feed.push({ day: TODAY, time: now(), k: 'revived' }); } }
+
+function send(text) {
+  text = text.trim(); if (!text) return;
+  const v = cur(), low = text.toLowerCase();
+  const before = clone(S);
+  const t = v.s === 'topic' ? T(v.id) : null;
+  if (low.includes('приказ подписан') || (low.includes('приказ') && low.includes('получ'))) {
+    const p = T('prikaz'), w = p.waits[0];
+    const wasArchived = !!p.archived; revive(p);
+    w.got = TODAY;
+    const e = { day: TODAY, time: now(), k: 'said', text, sub: [{ k: 'got', w: 'w1' }] };
+    p.feed.push(e); fresh.add(e);
+    if (!t || t.id !== 'prikaz') tray({ top: 'в тему «Приказ о зачислении»', text: 'Получено от Игоря: приказ о зачислении' + (wasArchived ? '. Тема вернулась из архива.' : ''), open: 'prikaz', moved: e, from: p, before });
+    else undoSnap = before;
+  } else if (low.includes('бухгалтер') && (low.includes('отправ') || low.includes('получ') || low.includes('сдал'))) {
+    const p = T('prikaz'), q = Q(p, 'q2'); revive(p);
+    q.done = TODAY;
+    const e = { day: TODAY, time: now(), k: 'said', text, sub: [{ k: 'solved', q: 'q2' }] };
+    p.feed.push(e); fresh.add(e);
+    if (!t || t.id !== 'prikaz') tray({ top: 'в тему «Приказ о зачислении»', text: 'Решено: отправить документы об оплате в бухгалтерию', open: 'prikaz', moved: e, from: p, before });
+    else undoSnap = before;
+  } else if (v.s === 'simple') {
+    promote(v.id, text, before);
+    return;
+  } else if (t && v.tab === 'qs') {
+    revive(t);
+    const id = 'n' + Date.now(), q = { id, text: cap(text.replace(/\.$/, '')), due: null, done: null };
+    t.qs.push(q); const e = { day: TODAY, time: now(), k: 'q', q: id }; t.feed.push(e);
+    undoSnap = before; stack[stack.length - 1].hl = id;
+  } else if (t) {
+    revive(t);
+    const e = { day: TODAY, time: now(), k: 'said', text: cap(text) }; t.feed.push(e); fresh.add(e); undoSnap = before;
+  } else {
+    const id = 's' + Date.now(); S.simple.push({ id, title: cap(text.replace(/\.$/, '')), due: TODAY, origin: 'из сообщения 9 окт, ' + now(), done: false });
+    tray({ top: 'задача', text: cap(text.replace(/\.$/, '')) + ' · сегодня', before });
+  }
+  render();
+}
+
+function promote(sid, text, before) {
+  const s = S.simple.find(x => x.id === sid);
+  const isZhek = sid === 'zhek' && text.toLowerCase().includes('паспорт');
+  const tid = 't' + sid;
+  const qs = [{ id: tid + 'a', text: s.title, due: s.due, done: TODAY }];
+  const sub = [{ k: 'became' }, { k: 'solved', q: tid + 'a' }];
+  if (isZhek) { qs.push({ id: tid + 'b', text: 'Прийти в ЖЭК с паспортом', due: '2026-10-13', time: 'до 13:00', done: null }); sub.push({ k: 'q', q: tid + 'b' }); }
+  const e = { day: TODAY, time: now(), k: 'said', text: cap(text), sub };
+  const topic = { id: tid, title: isZhek ? 'Счётчики в ЖЭК' : s.title, label: isZhek ? 'Дом' : null, since: '2026-10-08', qs, waits: [], files: [],
+    feed: [{ day: '2026-10-08', time: s.origin.slice(-5), k: 'q', q: tid + 'a', origin: s.origin }, e] };
+  if (!isZhek) { topic.qs[0].done = null; sub.splice(1, 1); }
+  S.topics.splice(2, 0, topic);
+  S.simple = S.simple.filter(x => x.id !== sid);
+  fresh.add(e);
+  stack[stack.length - 1] = { s: 'topic', id: tid, tab: 'feed' };
+  tray({ top: 'тема', text: 'Задача стала темой «' + topic.title + '»' + (isZhek ? '. Новый вопрос: прийти с паспортом во вт 13 окт.' : ''), before, rename: true });
+  render();
+}
+
+function tray(o) {
+  clearTimeout(trayTimer);
+  undoSnap = o.before;
+  const acts = [];
+  if (o.open) acts.push('<button data-act="opent" data-t="' + o.open + '" data-tab="feed">Открыть</button>', '<button data-act="pick">В другую тему</button>');
+  acts.push('<button data-act="undo">Отменить</button>');
+  $('#tray').innerHTML = '<div class="tray" role="status"><div class="top">' + esc(o.top) + '</div><div>' + esc(o.text) + '</div><div class="acts">' + acts.join('') + '</div><div id="pick"></div><div class="bar2"></div></div>';
+  window._trayCtx = o;
+  trayTimer = setTimeout(() => { $('#tray').innerHTML = ''; }, 7000);
+}
+function closeTray() { clearTimeout(trayTimer); $('#tray').innerHTML = ''; }
+function toast(text, withUndo) {
+  clearTimeout(trayTimer);
+  $('#tray').innerHTML = '<div class="tray" role="status"><div>' + esc(text) + '</div>' + (withUndo ? '<div class="acts"><button data-act="undo">Отменить</button></div>' : '') + '<div class="bar2"></div></div>';
+  trayTimer = setTimeout(() => { $('#tray').innerHTML = ''; }, 6000);
+}
+
+function overlay(html) { $('#ovl').innerHTML = html ? '<div class="ovl" data-act="ovlbg">' + html + '</div>' : ''; }
+function drawer() {
+  const inbox = 0;
+  overlay('<nav class="drawer" aria-label="Меню"><div class="brand">Margin</div>' +
+    '<button class="off">' + I.inbox + 'Входящие</button>' +
+    '<button data-act="dr" data-to="main">' + I.sun + 'Сегодня</button>' +
+    '<button data-act="dr" data-to="files">' + I.files + 'Материалы<span class="n">' + live().reduce((a, t) => a + t.files.length, 0) + '</span></button>' +
+    '<button class="off">' + I.people + 'Контакты</button>' +
+    '<button class="off">' + I.cal + 'Календарь</button>' +
+    '<button data-act="dr" data-to="archive">' + I.archive + 'Архив<span class="n">' + S.topics.filter(t => t.archived).length + '</span></button>' +
+    '<button class="off" style="margin-top:auto">' + I.gear + 'Настройки</button></nav>');
+}
+
+document.addEventListener('click', ev => {
+  const el = ev.target.closest('[data-act], [data-th], #reset, #reset-m');
+  if (!el) return;
+  if (el.id === 'reset' || el.id === 'reset-m') { S = seed(); stack = [{ s: 'main', tab: 'today' }]; scrollMem = {}; fq = ''; fkind = 'all'; closeTray(); overlay(''); render(); return; }
+  if (el.dataset.th) { setTheme(el.dataset.th); return; }
+  const a = el.dataset.act, d = el.dataset;
+  if (a === 'ovlbg') { if (ev.target === el) overlay(''); return; }
+  ev.preventDefault();
+  switch (a) {
+    case 'menu': drawer(); break;
+    case 'dr': overlay(''); if (d.to === 'main') { stack = [{ s: 'main', tab: 'today' }]; render(); } else nav({ s: d.to }); break;
+    case 'mtab': remember(); cur().tab = d.tab; render(); break;
+    case 'ttab': remember(); cur().tab = d.tab; fq = ''; render(); break;
+    case 'back': back(); break;
+    case 'opent': closeTrayIfOpen(el); overlay(''); nav({ s: 'topic', id: d.t, tab: d.tab || 'feed', hl: d.hl || null }); break;
+    case 'opens': nav({ s: 'simple', id: d.s }); break;
+    case 'goq': nav({ s: 'topic', id: d.t, tab: 'qs', hl: d.q }); break;
+    case 'jump': nav({ s: 'topic', id: d.t, tab: 'feed', hl: d.hl }); break;
+    case 'toggleq': { const t = T(d.t); toggleQ(t, Q(t, d.q)); render(); break; }
+    case 'gotw': { const t = T(d.t), w = W(t, d.w); undoSnap = clone(S); w.got = TODAY; const e = { day: TODAY, time: now(), k: 'got', w: w.id }; t.feed.push(e); render(); toast('Получено: ' + w.what, true); break; }
+    case 'sdone': { const s = S.simple.find(x => x.id === d.s); s.done = !s.done; render(); break; }
+    case 'fold': S.folded[d.k] = !S.folded[d.k]; render(); break;
+    case 'label': S.label = d.l; render(); break;
+    case 'fkind': fkind = d.k; $('#fres').innerHTML = filesResults(cur().s === 'topic' ? cur().id : ''); document.querySelectorAll('[data-act="fkind"]').forEach(b => b.classList.toggle('on', b.dataset.k === fkind)); break;
+    case 'file': { const t = T(d.t), f = F(t, d.f); overlay('<div class="viewer"><div class="img">' + thumbArt(f) + '</div><div class="name">' + esc(f.name) + '</div><div class="sub" style="margin:0">' + esc(t.title) + ' · ' + plain(f.day) + '</div>' + (f.text ? '<div class="ocr">' + (f.kind === 'voice' ? 'Расшифровка: ' : f.kind === 'pdf' ? 'Текст: ' : 'Распознано на фото: ') + esc(f.text) + '</div>' : '') + '<div class="btns" style="display:flex;gap:10px"><button class="btn sec2" data-act="close">Закрыть</button>' + (cur().s !== 'topic' ? '<button class="btn pri" data-act="opent" data-t="' + t.id + '" data-tab="feed">В тему</button>' : '') + '</div></div>'); break; }
+    case 'close': overlay(''); break;
+    case 'arcask': { const t = T(d.t); overlay('<div class="sheet"><h3>Тема решена?</h3><p>«' + esc(t.title) + '» уйдёт в архив вместе с материалами' + (openQs(t).length ? ' и ' + pl(openQs(t).length, 'открытым вопросом', 'открытыми вопросами', 'открытыми вопросами') : '') + '. Новое событие вернёт её обратно.</p><div class="btns"><button class="btn sec2" data-act="close">Отмена</button><button class="btn pri" data-act="arcdo" data-t="' + t.id + '">В архив</button></div></div>'); break; }
+    case 'arcdo': { const t = T(d.t); undoSnap = clone(S); t.archived = TODAY; overlay(''); while (stack.length > 1 && cur().id === t.id) stack.pop(); render(); toast('«' + t.title + '» в архиве', true); break; }
+    case 'unarc': { const t = T(d.t); t.archived = null; t.feed.push({ day: TODAY, time: now(), k: 'revived' }); render(); break; }
+    case 'undo': if (undoSnap) { S = undoSnap; undoSnap = null; const v = cur(); if (v.s === 'topic' && !T(v.id)) stack[stack.length - 1] = { s: 'simple', id: 'zhek' }; closeTray(); render(); } break;
+    case 'pick': { const o = window._trayCtx; const opts = live().filter(t => t.id !== 'prikaz' && isCase(t)).slice(0, 3); $('#pick').innerHTML = '<div class="pick">' + opts.map(t => '<button data-act="moveto" data-t="' + t.id + '">' + esc(t.title) + '</button>').join('') + '</div>'; clearTimeout(trayTimer); break; }
+    case 'moveto': { const o = window._trayCtx, target = T(d.t); const text = o.moved.text; S = o.before; const t2 = T(d.t); const e = { day: TODAY, time: now(), k: 'said', text }; t2.feed.push(e); undoSnap = clone(S); closeTray(); render(); toast('Перенесено в «' + target.title + '»', false); break; }
+    case 'try': $('#msg').value = d.x; $('#msg').focus(); break;
+  }
+});
+function closeTrayIfOpen(el) { if (el.closest('.tray')) closeTray(); }
+
+$('#composer').addEventListener('submit', e => { e.preventDefault(); const m = $('#msg'); const x = m.value; m.value = ''; send(x); });
+document.addEventListener('input', e => { if (e.target.id === 'fsearch') { fq = e.target.value; $('#fres').innerHTML = filesResults(e.target.dataset.t); } });
+
+/* swipe between topic views */
+let sx = null, sy = null;
+document.getElementById('phone').addEventListener('touchstart', e => { if (cur().s !== 'topic' || !e.target.closest('.scroll')) return; sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+document.getElementById('phone').addEventListener('touchend', e => {
+  if (sx === null) return;
+  const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
+  if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.7) return;
+  const order = ['feed', 'qs', 'files'], v = cur(), i = order.indexOf(v.tab), j = i + (dx < 0 ? 1 : -1);
+  if (j >= 0 && j < order.length) { remember(); v.tab = order[j]; fq = ''; render(); }
+});
+
+function setTheme(m) {
+  const r = document.documentElement;
+  if (m === 'auto') delete r.dataset.theme; else r.dataset.theme = m;
+  ['light', 'dark', 'auto'].forEach(k => document.getElementById('th-' + k).classList.toggle('on', k === m));
+  try { localStorage.setItem('margin-v4-theme', m); } catch (e) {}
+}
+let saved = 'auto'; try { saved = localStorage.getItem('margin-v4-theme') || 'auto'; } catch (e) {}
+setTheme(saved);
+render();
+</script>
