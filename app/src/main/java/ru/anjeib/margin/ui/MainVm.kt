@@ -1268,7 +1268,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
      */
     private fun nameNewTopics(before: AppData) {
         val s = settings.value
-        data.value.tasks.filter { t -> t.topic && !t.thought && before.tasks.find { it.id == t.id }?.let { o -> !o.topic && o.title == t.title } == true }.forEach { t ->
+        val grown = data.value.tasks.filter { t -> t.topic && !t.thought && before.tasks.find { it.id == t.id }?.let { o -> !o.topic && o.title == t.title } == true }
+        grown.forEach { t ->
             if (!Processor.ready(s) || !Processor.online(ctx) || "name:${t.id}" in _working.value) return@forEach
             _working.value += "name:${t.id}"
             viewModelScope.launch {
@@ -1276,7 +1277,9 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                     val words = t.entries.lastOrNull { it.text.isNotBlank() }?.text.orEmpty()
                     val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.topicNamePrompt(), listOf("user" to "Task: ${t.title}\nNews: $words"))
                     prefs.addSpend(r.rub)
-                    val name = (Assistant.field(Assistant.parseObject(r.content), "title") ?: "").trim().trim('"', '«', '»', '.').trim()
+                    // JSON as asked, or — from a model that answered in plain words — its first line.
+                    val name = (Assistant.field(Assistant.parseObject(r.content), "title") ?: r.content.lineSequence().firstOrNull { it.isNotBlank() } ?: "")
+                        .trim().trim('"', '«', '»', '.', '{', '}').trim()
                     if (name.length in 3..48 && !name.contains('{')) updateTask(t.id) { cur -> if (cur.title == t.title) cur.copy(title = name.sentence()) else cur }
                 } catch (e: Exception) {
                     android.util.Log.w("Margin", "topic name failed: ${e.message}")

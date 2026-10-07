@@ -451,7 +451,21 @@ object Assistant {
 
         // «Done» goes last: adding a step reopens a task, and «созвонились, теперь нужно…» means the call is done all the same.
         var wordsKept = false
-        for (a in plan.actions.sortedBy { if (it.str("type") == "complete_task") 1 else 0 }) {
+        // «Приказ о зачислении: позвонить Игорю завтра и отправить документы» — a matter named before the colon, its steps after:
+        // one topic with those steps as questions, even when the model made separate tasks of them.
+        val matter = Regex("^\\s*([^:\\d\\n]{3,40}?)\\s*:\\s*\\S").find(source)?.groupValues?.get(1)?.trim()
+            ?.takeIf { m -> !Commands.isCommandWord(m) && Regex("(?i)^(идея|мысль|заметка|note|idea|важно|напоминание)").find(m) == null }
+        val steps = plan.actions.filter { it.str("type") == "create_task" }
+        val actions0 = if (strict && focus == null && matter != null && steps.size >= 2 && steps.none { it.str("title").equals(matter, true) } &&
+            steps.none { it.str("waiting_for") != null || it.str("promised_to") != null }) {
+            val merged = JsonObject(mapOf(
+                "type" to JsonPrimitive("create_task"), "title" to JsonPrimitive(matter.sentence()),
+                "subtasks" to JsonArray(steps.map { st -> JsonObject(listOfNotNull("title" to (st["title"] ?: JsonPrimitive("")),
+                    st["due"]?.let { "due" to it }, st["time"]?.let { "time" to it }).toMap()) }),
+            ) + listOfNotNull(steps.firstNotNullOfOrNull { it["project"] }?.let { "project" to it }, steps.firstNotNullOfOrNull { it["people"] }?.let { "people" to it }))
+            plan.actions.filterNot { it in steps } + merged
+        } else plan.actions
+        for (a in actions0.sortedBy { if (it.str("type") == "complete_task") 1 else 0 }) {
             when (a.str("type")) {
                 "create_task" -> {
                     val title = a.str("title")?.trim()?.trimEnd('.')?.cap() ?: continue
@@ -730,11 +744,21 @@ object Assistant {
                 }
             }
         }
-        // «Сказали прийти…», «Созвонились…» inside a simple task: its own call or message has happened, even if the model didn't say so.
-        if (strict && focus != null && reportCue.containsMatchIn(low) && plan.actions.none { it.str("type") == "complete_task" }) {
+        // Inside a task the model settled or renamed it but kept no words: the report itself is the record (and grows the topic).
+        if (strict && focus != null && origin != null && plan.actions.none { it.str("type") == "add_entry" && it.str("task_id") == focus } &&
+            plan.actions.any { (it.str("type") == "complete_task" || it.str("topic_title") != null || it.str("type") == "add_subtasks") && it.str("task_id") == focus }) {
             val t = d.tasks.find { it.id == focus }
             val o = data.tasks.find { it.id == focus }
-            if (t != null && o != null && !t.topic && !t.done && t.repeat == null && (t.entries.size > o.entries.size || t.subtasks.size > o.subtasks.size) && actionCue.containsMatchIn(t.title.lowercase()))
+            if (t != null && o != null && t.entries.size == o.entries.size && !wordsKept)
+                d = d.copy(tasks = d.tasks.map { if (it.id == focus) it.copy(entries = it.entries + Entry(text = origin)) else it })
+        }
+        // «Сказали прийти…», «Созвонились…» inside a simple task: its own call or message has happened, even if the model didn't say so.
+        if (strict && focus != null && plan.actions.none { it.str("type") == "complete_task" }) {
+            val t = d.tasks.find { it.id == focus }
+            val o = data.tasks.find { it.id == focus }
+            // Only the words that report THIS kind of action: a call is settled by «созвонились / сказали», a sending only by «отправил».
+            val happened = t != null && reportFor.any { (action, report) -> action.containsMatchIn(t.title.lowercase()) && report.containsMatchIn(low) }
+            if (t != null && o != null && happened && !t.topic && !t.done && t.repeat == null && (t.entries.size > o.entries.size || t.subtasks.size > o.subtasks.size))
                 d = d.copy(tasks = d.tasks.map { if (it.id == focus) it.copy(done = true, doneAt = LocalDate.now().toString()) else it })
         }
         // News from the main screen that settled or added a topic's question: the words go into its feed too.
@@ -779,8 +803,18 @@ object Assistant {
         if (d.dayOfWeek.value == wd) return date
         return LocalDate.now().with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.of(wd))).toString()
     }
-    private val reportCue = Regex("созвонил|дозвонил|поговорил|сказал|ответил|договорил|встретил|перезвонил|отправил|отдал|получил|прислал|написал|сходил|съездил|звонил|были у|был у|сдал|оплатил|we talked|called|they said|sent|replied")
-    private val actionCue = Regex("^(позвонить|созвониться|набрать|написать|связаться|уточнить|спросить|узнать|встретиться|отправить|сходить|съездить|записаться|договориться|отдать|сдать|оплатить|call|write|ask|send|email|text)")
+    /** What a task asks to do → the words that say it was done. */
+    private val reportFor = listOf(
+        Regex("^(позвонить|созвониться|набрать|перезвонить|связаться|call|phone)") to Regex("созвонил|дозвонил|поговорил|сказал|ответил|перезвонил|звонил|called|talked|spoke|they said"),
+        Regex("^(спросить|узнать|уточнить|выяснить|ask|find out|check)") to Regex("сказал|ответил|узнал|выяснил|уточнил|said|answered|found out|told"),
+        Regex("^(написать|email|text|write|message)") to Regex("написал|ответил|wrote|replied|texted|emailed"),
+        Regex("^(отправить|выслать|переслать|send)") to Regex("отправил|выслал|переслал|\\bsent\\b"),
+        Regex("^(оплатить|заплатить|pay)") to Regex("оплатил|заплатил|\\bpaid\\b"),
+        Regex("^(встретиться|meet)") to Regex("встретил|\\bmet\\b"),
+        Regex("^(сходить|съездить|записаться|go to|visit)") to Regex("сходил|съездил|записал|\\bwent\\b|visited|были у|был у"),
+        Regex("^(договориться|agree)") to Regex("договорил|agreed"),
+        Regex("^(сдать|отдать|hand)") to Regex("сдал|отдал|handed"),
+    )
     private val newTaskCue = Regex("отдельн|нов(ую|ая) задач|созда(й|ть) задач|ещё задач|еще задач|separate|new task|create a task")
     private val stepTalk = Regex("подзадач|шаг[аеиу]?\\b|пункт|subtask|step")
     private val dayParts = setOf("morning", "day", "afternoon", "evening", "night")

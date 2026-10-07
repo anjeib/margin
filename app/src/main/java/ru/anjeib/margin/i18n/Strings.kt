@@ -564,6 +564,10 @@ interface Strings {
     val noDateQ: String
     val kindTopic: String
     val kindThought: String
+    val backWord: String
+    val todayShort: String
+    fun progressOf(d: Int, n: Int): String
+    fun progressSolved(d: Int, n: Int): String
     fun movedToTopic(t: String): String
     val toOtherTopic: String
     val toTopicPick: String
@@ -1170,6 +1174,10 @@ object Ru : Strings {
     override val noDateQ = "без срока"
     override val kindTopic = "в тему"
     override val kindThought = "мысль"
+    override val backWord = "Назад"
+    override val todayShort = "сег."
+    override fun progressOf(d: Int, n: Int) = "$d из $n"
+    override fun progressSolved(d: Int, n: Int) = "$d из $n решено"
     override fun movedToTopic(t: String) = "Перенесено в «$t»"
     override val toOtherTopic = "В другую тему"
     override val toTopicPick = "В тему…"
@@ -1776,6 +1784,10 @@ object En : Strings {
     override val noDateQ = "no date"
     override val kindTopic = "to the topic"
     override val kindThought = "thought"
+    override val backWord = "Back"
+    override val todayShort = "today"
+    override fun progressOf(d: Int, n: Int) = "$d of $n"
+    override fun progressSolved(d: Int, n: Int) = "$d of $n settled"
     override fun movedToTopic(t: String) = "Moved to “$t”"
     override val toOtherTopic = "Another topic"
     override val toTopicPick = "To a topic…"

@@ -56,6 +56,9 @@ object Commands {
     /** «Исправить: перенеси созвон на пятницу» — change what exists, never make anything new. */
     private val fix = Regex("^(?:исправ\\p{L}*|поправ\\p{L}*|fix|correct)\\s*[:—–\\-]?\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
 
+    /** «Подзадача», «Место», «Исправить» before a colon are commands, not the name of a matter. */
+    fun isCommandWord(word: String): Boolean = parse("$word: x") != null
+
     fun parse(text: String): Command? {
         val t = text.trim()
         fix.find(t)?.let { return Command("fix", it.groupValues[1].trim()) }

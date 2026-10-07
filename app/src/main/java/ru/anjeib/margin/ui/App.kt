@@ -158,9 +158,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
                 TopBar(screen, view, data, onMenu = { scope.launch { drawer.open() } }, onTab = { i -> view = listOf(Views.TODAY, Views.WEEK, Views.ALL)[i] },
                     onSearch = { searching = true })
-                // Sections one tap away, without the side menu.
-                val section = when { screen == MATERIALS -> 1; screen == PEOPLE -> 2; screen == TASKS -> 0; else -> -1 }
-                if (section >= 0) SectionRow(section) { i -> when (i) { 0 -> go(TASKS, Views.TODAY); 1 -> go(MATERIALS); else -> go(PEOPLE) } }
+                // v2: no section row — almost everything happens in «Дела»; materials and contacts live in the side menu.
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     val pad = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
                     Crossfade(screen, label = "screen") { sc ->
@@ -264,6 +262,18 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 if (note == null) { openNote = null; if (data.tasks.any { it.id == id }) openId(id) }
                 else NoteEditor(note, data, vm, onBack = { openNote = null }, onOpenTask = { openTask = it })
             }
+            // v2: a topic on the whole screen, sliding in from the side; when a task grows into one, its sheet gives way to it.
+            val topicId = openTask?.takeIf { id -> data.tasks.find { it.id == id }?.topic == true }
+            var lastTopic by remember { mutableStateOf<String?>(null) }
+            if (topicId != null) lastTopic = topicId
+            AnimatedVisibility(topicId != null,
+                enter = androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { it / 3 } + fadeIn(androidx.compose.animation.core.tween(220)),
+                exit = androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(220)) { it / 3 } + fadeOut(androidx.compose.animation.core.tween(180))) {
+                data.tasks.find { it.id == (topicId ?: lastTopic) }?.let { t ->
+                    TopicScreen(t, data, vm, openTab, openHl, onClose = { openTask = null; openHl = null; openTab = 0 },
+                        onOpenPerson = { openTask = null; openPerson = it })
+                }
+            }
             // A name that isn't a contact was tapped: «Марина · + контакт», quietly, for a few seconds.
             AnimatedVisibility(contactOffer != null && undoBar == null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 84.dp)) {
                 val n = contactOffer
@@ -315,7 +325,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     openTask?.let { id ->
         val t = data.tasks.find { it.id == id }
         if (t == null) openTask = null
-        else TaskSheet(
+        // v2: a topic opens on the whole screen (below); a simple task keeps its sheet.
+        else if (!t.topic) TaskSheet(
             t, data, vm, onClose = { openTask = null; openTaskDialog = null; openHl = null; openTab = 0 },
             startTab = openTab, startHl = openHl,
             startDialog = openTaskDialog, onStartDialogUsed = { openTaskDialog = null },

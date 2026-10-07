@@ -124,4 +124,37 @@ class TopicsTest {
         assertTrue(t.subtasks.first().done)
         assertEquals("13:00", t.subtasks.last().time)
     }
+
+    @Test fun renamedAndDoneWithoutWordsStillBecomesTopic() {
+        val call = Task(title = "Позвонить Игорю по приказу о зачислении", due = today.plusDays(1).toString())
+        val said = "Созвонились, приказ будет через 2 недели"
+        val d = step(AppData(tasks = listOf(call)), said, call.id,
+            o("type" to "update_task", "task_id" to call.id, "topic_title" to "Приказ о зачислении"),
+            o("type" to "complete_task", "task_id" to call.id))
+        val t = d.tasks.single()
+        assertTrue(t.topic && !t.done)
+        assertEquals("Приказ о зачислении", t.title)
+        assertEquals(said, t.entries.single().text)
+        assertTrue(t.subtasks.single().done)
+    }
+
+    @Test fun matterWithStepsIsOneTopic() {
+        val tomorrow = today.plusDays(1).toString()
+        val d = Topics.track(AppData(), Assistant.apply(AppData(), AiPlan(null, listOf(
+            o("type" to "create_task", "title" to "Позвонить Игорю", "due" to tomorrow),
+            o("type" to "create_task", "title" to "Отправить документы об оплате в бухгалтерию"),
+        ), null), "Приказ о зачислении: позвонить Игорю завтра и отправить документы об оплате в бухгалтерию", strict = true).data)
+        val t = d.tasks.single()
+        assertEquals("Приказ о зачислении", t.title)
+        assertTrue(t.topic)
+        assertEquals(2, t.subtasks.size)
+        assertEquals(tomorrow, t.subtasks.first().due)
+    }
+
+    @Test fun commandColonIsNotAMatter() {
+        val d = Assistant.apply(AppData(), AiPlan(null, listOf(
+            o("type" to "create_task", "title" to "Купить хлеб"), o("type" to "create_task", "title" to "Купить молоко"),
+        ), null), "Завтра в 15: купить хлеб и молоко", strict = true).data
+        assertEquals(2, d.tasks.size)
+    }
 }

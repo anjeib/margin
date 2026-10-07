@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import kotlinx.coroutines.launch
+
 import androidx.compose.ui.text.withStyle
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -74,6 +76,8 @@ import ru.anjeib.margin.data.rangeLabel
 import ru.anjeib.margin.data.shortLabel
 import ru.anjeib.margin.data.weekEnd
 import ru.anjeib.margin.data.weekStart
+import ru.anjeib.margin.data.dowFull
+import ru.anjeib.margin.data.dayMonthShort
 import ru.anjeib.margin.data.listTasks
 import ru.anjeib.margin.data.materials
 import ru.anjeib.margin.data.noNextStep
@@ -189,23 +193,29 @@ fun TaskList(
 
     // v2: simple tasks and, for topics, their dated questions — the next steps.
     val tasks = remember(data) { data.listTasks() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        fun header(title: String, subtitle: String?, trailing: (@Composable () -> Unit)? = null) {
+    // «Поля»: the rule runs behind the whole list; each row puts its date or hour on the margin.
+    val pad = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
+    Box(Modifier.fillMaxSize().marginRule(c.accent.copy(alpha = 0.85f), over = true)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = pad, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        fun header(title: String, subtitle: String?, day: LocalDate? = null, trailing: (@Composable () -> Unit)? = null) {
             item("header") {
-                Row(Modifier.padding(top = 18.dp, bottom = 12.dp, start = 4.dp), verticalAlignment = Alignment.Bottom) {
-                    Column(Modifier.weight(1f)) {
-                        // Long dates shrink to one line instead of wrapping.
-                        BasicText(title, style = Type.display.copy(color = c.ink), maxLines = 1,
-                            autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 40.sp, stepSize = 1.sp))
-                        if (subtitle != null) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(subtitle, style = Type.small.copy(color = c.graphite, fontSize = 15.sp))
+                Margined(Modifier.padding(top = 14.dp, bottom = 10.dp), margin = day?.let { d -> { MarginDay(d.dayOfMonth, d.dayMonthShort().substringAfter(' ')) } }) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Column(Modifier.weight(1f).padding(top = if (day != null) 2.dp else 0.dp)) {
+                            // Long titles shrink to one line instead of wrapping.
+                            BasicText(title, style = Type.display.copy(color = c.ink), maxLines = 1,
+                                autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 40.sp, stepSize = 1.sp))
+                            if (subtitle != null) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(subtitle, style = Type.small.copy(color = c.graphite, fontSize = 15.sp))
+                            }
                         }
+                        trailing?.invoke()
                     }
-                    trailing?.invoke()
                 }
             }
         }
+        fun LazyListScope.plain(key: String, margin: (@Composable () -> Unit)? = null, body: @Composable () -> Unit) = item(key) { Margined(margin = margin) { body() } }
 
         fun LazyListScope.cards(list: List<Task>, timeColumn: Boolean = false, showProject: Boolean = true, showIdea: Boolean = false) {
             items(list, key = { it.id }) { t ->
@@ -223,7 +233,7 @@ fun TaskList(
         fun LazyListScope.rows(list: List<Task>, key: String, showProject: Boolean = true, todayBlock: Boolean = false) {
             items(list, key = { key + it.id }) { t ->
                 SwipeTask(t, onDone = { vm.completeWithUndo(t.id) }, onLater = { postponing = t.id }, modifier = Modifier.animateItem().landing(t.id in landed, 0), radius = 0) {
-                    TaskRow(t, today, showProject, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) }, todayBlock = todayBlock)
+                    TaskRow(t, today, showProject, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) }, todayBlock = todayBlock, marginLayout = true)
                 }
             }
         }
@@ -232,10 +242,11 @@ fun TaskList(
         fun LazyListScope.section(label: String, key: String, count: Int? = null, collapsible: Boolean = false, action: Pair<String, () -> Unit>? = null) {
             item(key) {
                 val rot by animateFloatAsState(if (isOpen(key)) 0f else -90f, label = "sec")
+                Margined {
                 Row(
-                    Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(8.dp))
+                    Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(8.dp))
                         .then(if (collapsible) Modifier.clickable { toggle(key) } else Modifier)
-                        .padding(start = 6.dp, end = 4.dp, top = 6.dp, bottom = 4.dp),
+                        .padding(end = 4.dp, top = 6.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SectionLabel(label)
@@ -246,6 +257,7 @@ fun TaskList(
                         modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = act).padding(horizontal = 8.dp, vertical = 2.dp)) }
                     if (collapsible) Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.faint, modifier = Modifier.size(18.dp).rotate(rot))
                 }
+                }
             }
         }
 
@@ -254,15 +266,15 @@ fun TaskList(
                 val list = tasks.filter { isToday(it, today) }
                 val running = tasks.filter { isRunning(it, today) }.sortedBy { sortKey(it) }
                 val doneToday = data.tasks.filter { !it.topic && it.done && it.doneAt == today.toString() }
-                header(today.longTitle(), null)
+                header(today.dowFull(), null, day = today)
                 // Instead of an AI retelling of the list below: whose promises fall due now — built here, free and exact.
                 val promises = tasks.filter { t -> !t.done && (t.waitingFor != null || t.promisedTo != null) && t.anchor?.let { !it.isAfter(today.plusDays(3)) } == true }
                     .sortedWith(compareBy({ it.anchor }, { it.time ?: "99" }))
-                if (promises.isNotEmpty()) item("promises") { PromisesCard(promises, today, briefQuiet, onOpen, onToggle = { vm.completeWithUndo(it) }) }
+                if (promises.isNotEmpty()) item("promises") { MarginPromises(promises, today, onOpen, onToggle = { vm.completeWithUndo(it) }) }
                 // One fact once: what the card shows isn't repeated in the lists below (a timed one stays in the day's timeline).
                 val shown = promises.map { it.id }.toSet()
                 // Written without internet: one quiet line here, the items themselves live in «Входящие».
-                if (data.queue.isNotEmpty()) item("queue") {
+                if (data.queue.isNotEmpty()) plain("queue") {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onOpenInbox).padding(horizontal = 10.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.CloudOff, null, tint = c.graphite, modifier = Modifier.size(16.dp))
@@ -276,34 +288,29 @@ fun TaskList(
                 val late = rest.filter { it.isOverdue(today) }.sortedBy { sortKey(it) }
                 val plain = (rest - late.toSet()).sortedBy { sortKey(it) }
                 val todays = events.filter { it.start.toLocalDate() == today || (it.allDay && !it.start.toLocalDate().isAfter(today) && it.end.toLocalDate().isAfter(today)) }
-                val inBlock = late.size + timed.size + plain.size
-                if (list.isEmpty() && running.isEmpty() && doneToday.isEmpty() && todays.isEmpty()) item("empty") {
+                if (list.isEmpty() && running.isEmpty() && doneToday.isEmpty() && todays.isEmpty()) plain("empty") {
                     // A day with nothing in it is a free day; the how-to text only while the app is still empty.
                     Empty(s.freeDay, if (data.tasks.none { !it.done }) s.emptyHint else s.freeDayHint)
                 }
-                if (inBlock > 0 || todays.isNotEmpty()) item("today-badge") {
-                    Row(Modifier.fillMaxWidth().padding(top = 10.dp, start = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        // Counts are quiet everywhere (like «Обещания  3»); what's late says so in its own line.
-                        Row(Modifier.clip(RoundedCornerShape(50)).background(c.linkSoft).padding(horizontal = 12.dp, vertical = 4.dp)) {
-                            Text(s.today, style = Type.small.copy(color = c.link, fontSize = 13.5.sp))
-                            if (inBlock > 0) Text("  $inBlock", style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp))
-                        }
-                        Spacer(Modifier.weight(1f))
-                        // Late ones sit at the top of the block; one quiet link brings them all to today.
-                        if (late.isNotEmpty()) Text(s.moveToToday, style = Type.small.copy(color = c.accent, fontSize = 13.5.sp),
-                            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.moveOverdue() }.padding(horizontal = 8.dp, vertical = 4.dp))
-                    }
-                }
+                // No «Сегодня 4» badge: the tab and the day on the margin already say it. Late ones get a quiet line with one action.
+                if (late.isNotEmpty()) section(s.overdue, "s-late", late.size, action = s.moveToToday to vm::moveOverdue)
                 rows(late, "late", todayBlock = true)
-                todays.filter { it.allDay }.forEach { e -> item("ev-all" + e.title + e.start) { EventRow(e) } }
+                todays.filter { it.allDay }.forEach { e -> item("ev-all" + e.title + e.start) { EventRow(e, margin = true) } }
                 // One timeline: meetings and timed tasks interleaved by time.
                 val timeline = (todays.filter { !it.allDay }.map { it.start.toLocalTime().toString().take(5) to (it as Any) } + timed.map { it.time!! to (it as Any) })
                     .sortedBy { it.first }
                 timeline.forEachIndexed { i, (_, x) ->
-                    if (x is CalEvent) item("ev$i" + x.title) { EventRow(x) }
+                    if (x is CalEvent) item("ev$i" + x.title) { EventRow(x, margin = true) }
                     else rows(listOf(x as Task), "tl", todayBlock = true)
                 }
                 rows(plain, "td", todayBlock = true)
+                // Topics moving now: their progress and next step at a glance.
+                val moving = data.tasks.filter { it.topic && !it.done && !(it.thought && it.subtasks.isEmpty()) && it.subtasks.any { q -> !q.done } }
+                    .sortedBy { t -> t.subtasks.filter { !it.done }.mapNotNull { it.due }.minOrNull() ?: "9999" }
+                if (moving.isNotEmpty()) {
+                    section(s.topicsInWork, "s-topics", moving.size, collapsible = true)
+                    if (isOpen("s-topics")) items(moving.take(6), key = { "tw" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }, lit = t.id in landed) }
+                }
                 val runningRest = running.filter { it.id !in shown }
                 if (runningRest.isNotEmpty()) {
                     section(s.inWorkThisWeek, "s-running", runningRest.size, collapsible = true)
@@ -320,7 +327,7 @@ fun TaskList(
                     section(s.noDates, "s-undated", undated.size, collapsible = true)
                     if (isOpen("s-undated")) {
                         rows(undated.take(5), "ud")
-                        if (undated.size > 5) item("ud-more") {
+                        if (undated.size > 5) plain("ud-more") {
                             Text(s.more(undated.size - 5) + " →", style = Type.small.copy(color = c.graphite),
                                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onView(Views.ALL) }.padding(8.dp))
                         }
@@ -330,11 +337,11 @@ fun TaskList(
                 val settled = data.tasks.filter { it.noNextStep }
                 if (settled.isNotEmpty()) {
                     section(s.noNextStepCaps, "s-nostep", settled.size, collapsible = true)
-                    if (isOpen("s-nostep")) items(settled, key = { "ns" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }) }
+                    if (isOpen("s-nostep")) items(settled, key = { "ns" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }, lit = t.id in landed) }
                 }
                 // Notes never mix into task lists — one quiet line says what was written today.
                 val notesToday = data.tasks.filter { t -> t.thought && !t.done && (t.createdAt == today.toString() || t.entries.any { it.at.startsWith(today.toString()) }) }
-                if (notesToday.isNotEmpty()) item("notes-today") {
+                if (notesToday.isNotEmpty()) plain("notes-today") {
                     Row(
                         Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(14.dp))
                             .clickable { if (notesToday.size == 1) onOpen(notesToday[0].id) else onView(Views.ALL) }
@@ -356,8 +363,8 @@ fun TaskList(
                 val list = if (picked == null) week else week.filter { onDay(it, picked, today) }
                 val done = data.tasks.filter { !it.topic && it.done && it.doneAt?.let { d -> !LocalDate.parse(d).isBefore(today.weekStart()) } == true }
                 header(s.thisWeekSoft, (picked?.shortLabel(today) ?: rangeLabel(today.weekStart(), today.weekEnd())) + " · " + s.tasksCount(list.size))
-                item("strip") { WeekStrip(today, picked, week) { d -> weekDay = if (d == picked) null else d.toString() } }
-                if (list.isEmpty() && done.isEmpty()) item("empty") { Empty(s.emptyWeek, s.emptyHint) }
+                plain("strip") { WeekStrip(today, picked, week) { d -> weekDay = if (d == picked) null else d.toString() } }
+                if (list.isEmpty() && done.isEmpty()) plain("empty") { Empty(s.emptyWeek, s.emptyHint) }
                 rows(list, "wk")
                 if (done.isNotEmpty()) {
                     section(s.done, "s-done-week", done.size, collapsible = true)
@@ -374,8 +381,8 @@ fun TaskList(
                 val labels = (openTopics.mapNotNull { it.project } + simple.mapNotNull { it.project } + thoughts.mapNotNull { it.project }).distinct().sorted()
                 val lb = label?.takeIf { it in labels }
                 header(s.all, s.tasksCount(simple.size + openTopics.size))
-                if (labels.isNotEmpty()) item("labels") {
-                    androidx.compose.foundation.layout.FlowRow(Modifier.padding(start = 4.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (labels.isNotEmpty()) plain("labels") {
+                    androidx.compose.foundation.layout.FlowRow(Modifier.padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         (listOf<String?>(null) + labels).forEach { l ->
                             val on = lb == l
                             Text(l?.let { "#" + projectLabel(it) } ?: s.all, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 13.5.sp),
@@ -389,10 +396,10 @@ fun TaskList(
                 val idle = openTopics.filter { ok(it.project) && it.noNextStep }
                 val plainOpen = simple.filter { ok(it.project) }
                 val thoughtsShown = thoughts.filter { ok(it.project) }
-                if (working.isEmpty() && plainOpen.isEmpty() && thoughtsShown.isEmpty() && idle.isEmpty()) item("empty") { Empty(s.emptyAll, s.emptyHint) }
+                if (working.isEmpty() && plainOpen.isEmpty() && thoughtsShown.isEmpty() && idle.isEmpty()) plain("empty") { Empty(s.emptyAll, s.emptyHint) }
                 if (working.isNotEmpty()) {
                     section(s.topicsInWork, "a-topics", working.size)
-                    items(working, key = { "at" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }) }
+                    items(working, key = { "at" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }, lit = t.id in landed) }
                 }
                 if (plainOpen.isNotEmpty()) {
                     section(s.simpleTasks, "a-simple", plainOpen.size)
@@ -400,11 +407,11 @@ fun TaskList(
                 }
                 if (thoughtsShown.isNotEmpty()) {
                     section(s.thoughts, "a-thoughts", thoughtsShown.size, collapsible = true)
-                    if (isOpen("a-thoughts")) items(thoughtsShown, key = { "an" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }) }
+                    if (isOpen("a-thoughts")) items(thoughtsShown, key = { "an" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }, lit = t.id in landed) }
                 }
                 if (idle.isNotEmpty()) {
                     section(s.noNextStepCaps, "a-idle", idle.size, collapsible = true)
-                    if (isOpen("a-idle")) items(idle, key = { "ai" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }) }
+                    if (isOpen("a-idle")) items(idle, key = { "ai" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }, lit = t.id in landed) }
                 }
                 val recent = data.tasks.filter { !it.topic && it.done && it.doneAt?.let { d -> LocalDate.parse(d).isAfter(today.minusDays(8)) } == true }
                     .sortedByDescending { it.doneAt }
@@ -412,7 +419,7 @@ fun TaskList(
                     section(s.done, "s-done", recent.size, collapsible = true)
                     if (isOpen("s-done")) {
                         rows(recent, "d")
-                        item("all-done") {
+                        plain("all-done") {
                             Text(s.showAll + " →", style = Type.small.copy(color = c.graphite),
                                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onView(Views.DONE) }.padding(8.dp))
                         }
@@ -455,6 +462,7 @@ fun TaskList(
                 }
             }
         }
+    }
     }
 }
 
@@ -549,9 +557,27 @@ fun Modifier.landing(active: Boolean, radius: Int): Modifier {
 }
 
 @Composable
-private fun EventRow(e: CalEvent) {
+private fun EventRow(e: CalEvent, margin: Boolean = false) {
     val c = M.c
     val allDay = M.s.allDay
+    if (margin) {
+        // On the margin: the hour; right of the rule: a calendar mark instead of a circle — nothing to tick.
+        Margined(margin = { MarginText(if (e.allDay) allDay else e.start.toLocalTime().toString().take(5)) }) {
+            Column {
+                Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.Top) {
+                    Box(Modifier.size(24.dp, 24.dp), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Event, null, tint = c.faint, modifier = Modifier.size(17.dp)) }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(e.title, style = Type.body.copy(fontSize = 15.5.sp, color = c.graphite), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
+                        if (!e.allDay || e.location != null) Text(listOfNotNull(if (e.allDay) null else e.start.toLocalTime().toString().take(5) + "–" + e.end.toLocalTime().toString().take(5), e.location).joinToString("  ·  "),
+                            style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Hairline()
+            }
+        }
+        return
+    }
     // A meeting from the phone calendar looks like a task row — a calendar mark instead of the circle: nothing to tick.
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(end = 6.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
@@ -593,7 +619,8 @@ private fun ToggleText(label: String, selected: Boolean, onClick: () -> Unit) {
 
 /** One-line task row for overviews: circle · title · tag · progress · date. */
 @Composable
-fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Unit, onOpen: () -> Unit, todayBlock: Boolean = false) {
+fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Unit, onOpen: () -> Unit, todayBlock: Boolean = false, marginLayout: Boolean = false) {
+    if (marginLayout) { MarginTaskRow(t, today, showProject, onToggle, onOpen, todayBlock); return }
     val c = M.c
     val overdue = t.isOverdue(today)
     val (d, n) = t.subtasks.progress()
@@ -631,36 +658,133 @@ fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Uni
     }
 }
 
+/** What a row shows on the margin: the hour on «Сегодня», a short day elsewhere; late — the day it was due. */
+private fun marginWhen(t: Task, today: LocalDate, todayBlock: Boolean): String? {
+    val day = t.dueDate ?: t.startDate
+    val hour = t.time ?: t.dayPart?.let { L.s.dayPart(it) }
+    if ((todayBlock || day == today) && (day == today || day == null) && hour != null) return hour
+    if (todayBlock && !t.isOverdue(today) && (day == today || day == null)) return hour
+    val d = day ?: return hour
+    val dayText = when {
+        d == today -> L.s.todayShort
+        d == today.plusDays(1) -> L.s.quickTomorrow.lowercase()
+        d == today.minusDays(1) -> d.shortLabel(today).lowercase()
+        !d.isBefore(today.weekStart()) && !d.isAfter(today.weekEnd()) -> d.dowShort().lowercase() + " " + d.dayOfMonth
+        else -> d.dayMonthShort()
+    }
+    return listOfNotNull(dayText, hour).joinToString("\n")
+}
+
+/** A task on the page: its when on the margin, the circle and the words right of the rule. */
+@Composable
+private fun MarginTaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Unit, onOpen: () -> Unit, todayBlock: Boolean) {
+    val c = M.c
+    val view = androidx.compose.ui.platform.LocalView.current
+    val late = t.isOverdue(today)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val motion = motionOn()
+    // Ticked here: the circle fills and the pen draws through before the row leaves the list.
+    val strike = remember(t.id) { androidx.compose.animation.core.Animatable(if (t.done && !t.dropped) 1f else 0f) }
+    var ticking by remember(t.id) { mutableStateOf(false) }
+    fun tick() {
+        if (t.done || !motion) { if (!t.done) view.confirmTick(); onToggle(); return }
+        view.confirmTick()
+        scope.launch {
+            ticking = true
+            strike.animateTo(1f, androidx.compose.animation.core.tween(320))
+            kotlinx.coroutines.delay(220)
+            onToggle()
+        }
+    }
+    Margined(Modifier.background(c.bg).clickable(onClick = onOpen), margin = { if (!t.done) marginWhen(t, today, todayBlock)?.let { MarginText(it, late = late) } }) {
+        Column {
+            Row(Modifier.fillMaxWidth().padding(top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
+                // Waiting on someone: the hourglass closes it («получено»), the circle — the user's own.
+                if (t.waitingFor != null && !t.done) Box(Modifier.size(24.dp).clip(CircleShape).clickable { tick() }, contentAlignment = Alignment.Center) {
+                    if (ticking) TickGlyph(c.ok, 19.dp) else HourglassGlyph(c.graphite, 18.dp)
+                } else Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                    CheckCircle(t.done || ticking, size = 19.dp, onToggle = ::tick)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    StrikeText(t.title + (if (t.dropped) " · " + M.s.droppedMark else ""),
+                        Type.body.copy(fontSize = 15.5.sp, color = if (t.done || ticking) c.graphite else c.ink), strike.value, c.faint,
+                        maxLines = 3, modifier = Modifier.padding(top = 1.dp))
+                    if (!t.done) {
+                        t.entries.lastOrNull { it.text.isNotBlank() }?.let { e -> Text(e.text, style = Type.small.copy(color = c.faint, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        TaskLine(t, null, showProject && t.topicTitle == null, today = today)
+                        t.topicTitle?.let { Text("↳ $it", style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
+                    }
+                }
+            }
+            Hairline(Modifier.padding(start = 36.dp))
+        }
+    }
+}
+
+/** «Обещания» on the margin: who owes what, the day on the margin, closed right here. */
+@Composable
+private fun MarginPromises(list: List<Task>, today: LocalDate, onOpen: (String) -> Unit, onToggle: (String) -> Unit) {
+    val c = M.c
+    val s = M.s
+    val view = androidx.compose.ui.platform.LocalView.current
+    Column(Modifier.padding(bottom = 6.dp)) {
+        list.take(5).forEachIndexed { i, t ->
+            val first = i == 0; val last = i == list.take(5).lastIndex
+            val shape = RoundedCornerShape(topStart = if (first) 16.dp else 0.dp, topEnd = if (first) 16.dp else 0.dp, bottomStart = if (last) 16.dp else 0.dp, bottomEnd = if (last) 16.dp else 0.dp)
+            Margined(margin = { marginWhen(t, today, false)?.let { MarginText(it, late = t.isOverdue(today)) } }) {
+                Column(Modifier.fillMaxWidth().clip(shape).background(c.linkSoft).clickable { onOpen(t.id) }
+                    .padding(start = 14.dp, end = 12.dp, top = if (first) 12.dp else 6.dp, bottom = if (last) 12.dp else 6.dp)) {
+                    if (first) Text(s.promisesTitle.uppercase(), style = Type.label.copy(color = c.link), modifier = Modifier.padding(bottom = 6.dp))
+                    Row(verticalAlignment = Alignment.Top) {
+                        Box(Modifier.size(24.dp).clip(CircleShape).clickable { view.confirmTick(); onToggle(t.id) }, contentAlignment = Alignment.Center) {
+                            if (t.waitingFor != null) HourglassGlyph(c.link, 18.dp) else CheckCircle(false, size = 17.dp, onToggle = { view.confirmTick(); onToggle(t.id) })
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(t.title, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(t.waitingFor?.let { s.promiseToYou(it) } ?: t.promisedTo?.let { s.promiseFromYou(it) } ?: "",
+                                style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1)
+                            t.topicTitle?.let { Text("↳ $it", style = Type.small.copy(color = c.link, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** A topic in «Все»: a feed mark instead of a circle — it isn't ticked off, it is settled and put away. */
 @Composable
-fun TopicRow(t: Task, onOpen: () -> Unit) {
+fun TopicRow(t: Task, onOpen: () -> Unit, lit: Boolean = false) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
-    val open = t.openQuestions.size
-    val waits = t.openWaits
-    val files = t.materials().size
     val bare = t.thought && t.subtasks.isEmpty()
-    val meta = if (bare) listOfNotNull(s.thoughtWord, t.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, files.takeIf { it > 0 }?.let { s.nMaterials(it) },
-        t.project?.let { "#" + projectLabel(it) }).joinToString("  ·  ") else buildList {
-        if (open > 0) add(s.nQuestions(open))
-        waits.mapNotNull { it.due }.minOrNull()?.let { add(s.waitUntil(LocalDate.parse(it).shortLabel(today).lowercase())) }
-        if (open == 0 && waits.isEmpty()) add(s.allDoneShort)
-        if (files > 0) add(s.nMaterials(files))
-        t.project?.let { add("#" + projectLabel(it)) }
-    }.joinToString("  ·  ")
-    Column(Modifier.fillMaxWidth().background(c.bg).clickable(onClick = onOpen)) {
-        Row(Modifier.fillMaxWidth().padding(end = 6.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.size(40.dp, 26.dp), contentAlignment = Alignment.Center) {
-                if (bare) Icon(Icons.Outlined.ChatBubbleOutline, null, tint = c.graphite, modifier = Modifier.size(18.dp))
-                else Icon(Icons.AutoMirrored.Outlined.ViewList, null, tint = c.ink, modifier = Modifier.size(19.dp))
+    val files = t.materials().size
+    val total = t.subtasks.size
+    val done = t.subtasks.count { it.done }
+    // The next step in one grey line: who we wait for and until when, or the nearest question and its hour.
+    val next = t.subtasks.filter { !it.done }.minByOrNull { it.due ?: "9999" }
+    val nextLine = when {
+        bare -> listOfNotNull(s.thoughtWord, t.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, files.takeIf { it > 0 }?.let { s.nMaterials(it) }).joinToString("  ·  ")
+        next == null -> s.allDoneShort
+        next.from != null -> s.waitPrefix(next.from).trimEnd(':') + (next.due?.let { "  ·  ~" + LocalDate.parse(it).shortLabel(today).lowercase() } ?: "")
+        else -> next.title + listOfNotNull(next.due?.let { d -> if (d == today.toString()) null else LocalDate.parse(d).shortLabel(today).lowercase() }, next.time).joinToString(" ").let { if (it.isBlank()) "" else "  ·  $it" }
+    } + (t.project?.let { "  ·  #" + projectLabel(it) } ?: "")
+    Margined(Modifier.background(c.bg).landing(lit, 0).clickable(onClick = onOpen), margin = {
+        Box(Modifier.padding(top = 3.dp)) { if (bare) ThoughtGlyph(c.graphite, 19.dp) else TopicGlyph(c.graphite, 19.dp) }
+    }) {
+        Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+            Text(t.title, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (!bare && total > 0) Row(Modifier.padding(top = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                TopicProgress(done, total, Modifier.weight(1f))
+                Spacer(Modifier.width(12.dp))
+                Text(s.progressOf(done, total), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"))
             }
-            Column(Modifier.weight(1f)) {
-                Text(t.title, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-                Text(meta, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
-            }
+            Text(nextLine, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp, bottom = 10.dp))
+            Hairline()
         }
-        Hairline(Modifier.padding(start = 40.dp))
     }
 }
 
