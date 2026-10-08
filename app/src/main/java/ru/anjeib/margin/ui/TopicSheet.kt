@@ -170,15 +170,17 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     val view = LocalView.current
     val motion = motionOn()
     val scope = rememberCoroutineScope()
-    // Two pages: the feed (or its materials) and, to the right, the questions.
-    val pager = rememberPagerState(initialPage = if (startTab == 1) 1 else 0) { 2 }
+    // One feed; the paperclip narrows it to materials, a tap on the progress — to the matters only.
     var materialsMode by remember(task.id) { mutableStateOf(startTab == 2) }
+    var dealsOnly by remember(task.id) { mutableStateOf(false) }
     val feedState = rememberLazyListState()
-    var hl by remember(task.id) { mutableStateOf(startHl) }
+    // A matter opened from the lists lights up in the feed («d:<id>»).
+    var hl by remember(task.id) { mutableStateOf(startHl?.let { if (it.contains(':')) it else "d:$it" }) }
     var dialog by remember(task.id) { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf(false) }
     var editQ by remember { mutableStateOf<Subtask?>(null) }
     var dateQ by remember { mutableStateOf<Subtask?>(null) }
+    var timeQ by remember { mutableStateOf<Subtask?>(null) }
     var viewing by remember { mutableStateOf<Attachment?>(null) }
     // The feed: the chosen line shows «+ − 🔧»; «+» turns the field into «дело под строкой».
     var selected by remember(task.id) { mutableStateOf<String?>(null) }
@@ -189,7 +191,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     val notice by vm.notice.collectAsState()
     val working by vm.working.collectAsState()
     val scopeKey = MainVm.key(Scope.InTask(task.id))
-    val feed = remember(task) { feedOf(task) }
+    val feedAll = remember(task) { feedOf(task) }
+    val feed = if (dealsOnly) feedAll.filter { it is FeedLine.Deal } else feedAll
 
     // The task just grew into a topic: the thread grows down the margin and its lines arrive one by one.
     // Played once per topic in a run of the app (event times are kept to the minute, so «just now» is a two-minute window).
@@ -206,15 +209,11 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     val fold = remember(task.id) { Animatable(0f) }
 
     LaunchedEffect(hl) { if (hl != null) { kotlinx.coroutines.delay(2200); hl = null } }
-    LaunchedEffect(task.id) { if (startTab == 0 && feed.isNotEmpty()) feedState.scrollToItem(feed.size) }
-    LaunchedEffect(feed.size) { if (pager.currentPage == 0 && feed.isNotEmpty()) feedState.animateScrollToItem(feed.size) }
-
-    fun toQuestion(id: String) { hl = id; scope.launch { pager.animateScrollToPage(1) } }
-    fun toFeedLine(key: String) {
-        val i = feed.indexOfFirst { it.key == key }
-        hl = key
-        scope.launch { pager.animateScrollToPage(0); if (i >= 0) feedState.animateScrollToItem(i + 1) }
+    LaunchedEffect(task.id) {
+        val i = hl?.let { k -> feed.indexOfFirst { it.key == k } } ?: -1
+        if (i >= 0) feedState.scrollToItem(i + 1) else if (feed.isNotEmpty()) feedState.scrollToItem(feed.size)
     }
+    LaunchedEffect(feed.size) { if (feed.isNotEmpty() && hl == null) feedState.animateScrollToItem(feed.size) }
     fun archive() {
         scope.launch {
             view.confirmTick()
@@ -224,7 +223,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         }
     }
     BackHandler { onClose() }
-    BackHandler(pager.currentPage != 0) { scope.launch { pager.animateScrollToPage(0) } }
+    BackHandler(dealsOnly || materialsMode) { dealsOnly = false; materialsMode = false }
 
     val total = task.subtasks.size
     val doneCount = task.subtasks.count { it.done }
@@ -243,9 +242,14 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             Spacer(Modifier.weight(1f))
             Box(Modifier.padding(end = 8.dp)) {
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) { Icon(Icons.Outlined.MoreHoriz, null, tint = c.graphite) }
+                // An open topic goes to the archive (it keeps everything); deleting is for one already there.
                 SoftMenu(menu, { menu = false }) {
                     SoftMenuItem(s.edit) { menu = false; dialog = "rename" }
-                    SoftMenuItem(s.delete, danger = true) { menu = false; dialog = "delete" }
+                    if (!task.done) SoftMenuItem(s.toArchive) { menu = false; dialog = "archive" }
+                    else {
+                        SoftMenuItem(s.bringBack) { menu = false; vm.reviveTopic(task.id) }
+                        SoftMenuItem(s.delete, danger = true) { menu = false; dialog = "delete" }
+                    }
                 }
             }
         }
@@ -262,23 +266,17 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                     Text(since?.let { if (task.thought && task.subtasks.isEmpty()) s.thoughtSince(it) else s.topicSince(it) } ?: "",
                         style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f))
-                    HeaderIcon(Icons.Outlined.AttachFile, s.materialsTab, count = files, on = materialsMode && pager.currentPage == 0) {
-                        materialsMode = !materialsMode
-                        if (pager.currentPage != 0) scope.launch { pager.animateScrollToPage(0) }
+                    HeaderIcon(Icons.Outlined.AttachFile, s.materialsTab, count = files, on = materialsMode) {
+                        materialsMode = !materialsMode; dealsOnly = false
                     }
-                    if (!task.done) HeaderIcon(Icons.Outlined.CheckCircle, s.toArchive, on = false, tint = if (task.noNextStep) c.link else c.graphite) { dialog = "archive" }
                 }
-                // The progress and, at its right end, the way to the questions page.
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        if (total > 0) {
-                            TopicProgress(doneCount, total)
-                            Text(s.progressSolved(doneCount, total), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(top = 5.dp))
-                        }
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    QuestionsPill(open, on = pager.currentPage == 1) { materialsMode = false; scope.launch { pager.animateScrollToPage(if (pager.currentPage == 1) 0 else 1) } }
-                }
+                // The progress; a tap shows the matters only («только дела»), another tap — the whole feed again.
+                if (total > 0) Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp).clip(RoundedCornerShape(8.dp))
+                    .clickable { dealsOnly = !dealsOnly; materialsMode = false }.padding(vertical = 2.dp)) {
+                    TopicProgress(doneCount, total)
+                    Text(s.progressSolved(doneCount, total) + if (dealsOnly) "  ·  " + s.dealsOnlyWord + "  ✕" else "",
+                        style = Type.small.copy(color = if (dealsOnly) c.link else c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(top = 5.dp))
+                } else Spacer(Modifier.height(12.dp))
                 if (task.done) Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 14.dp, vertical = 10.dp)) {
                     Text(s.inArchiveSince(task.doneAt?.let { runCatching { LocalDate.parse(it).dayMonthShort() }.getOrNull() } ?: ""), style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
                     Text(s.bringBack, style = Type.small.copy(color = c.link), modifier = Modifier.clickable { vm.reviveTopic(task.id) })
@@ -286,17 +284,16 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             }
         }
         Hairline(Modifier.padding(start = MarginW))
-        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, verticalAlignment = Alignment.Top) { page ->
-            when (page) {
-                0 -> androidx.compose.animation.Crossfade(materialsMode, animationSpec = tween(240), label = "materials") { m ->
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            run {
+                androidx.compose.animation.Crossfade(materialsMode, animationSpec = tween(240), label = "materials") { m ->
                     if (m) MaterialsFeed(task, onView = { viewing = it })
                     else FeedPage(task, feed, feedState, hl, seenAtOpen, working, selected, vm, FeedActions(
                         select = { k -> selected = if (k.isBlank() || selected == k) null else k },
                         addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
-                        editDeal = { editQ = it }, dateDeal = { dateQ = it }, editNote = { editNote = it }, view = { viewing = it },
+                        editDeal = { editQ = it }, dateDeal = { dateQ = it }, editNote = { editNote = it }, view = { viewing = it }, timeDeal = { timeQ = it },
                     ), onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
                 }
-                else -> QuestionsPage(task, hl, vm, onFeed = ::toFeedLine, onEdit = { editQ = it }, onDate = { dateQ = it })
             }
         }
         // ---- composer: words go to the feed, on «Вопросы» they become a question ----
@@ -304,10 +301,10 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> NoticeLine(nt, vm) }
             val under = addUnder
             SmartComposer(
-                vm, if (under != null) "«" + under.second.take(40) + "»" else if (pager.currentPage == 1) s.newQuestionHint else s.writeInTopic, busy == scopeKey,
+                vm, if (under != null) "«" + under.second.take(40) + "»" else if (dealsOnly) s.newQuestionHint else s.writeInTopic, busy == scopeKey,
                 onSend = { t, f ->
                     if (under != null) { vm.addChildDeal(task.id, under.first, t); addUnder = null }
-                    else vm.send(t, scope = Scope.InTask(task.id), files = f, asQuestion = pager.currentPage == 1)
+                    else vm.send(t, scope = Scope.InTask(task.id), files = f, asQuestion = dealsOnly)
                 },
                 modeLabel = under?.let { s.underLine }, onModeClose = { addUnder = null }, focusKey = focusTick.takeIf { it > 0 },
             )
@@ -340,6 +337,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     }
     editNote?.let { e -> TextDialog(s.edit, e.text, "", onDismiss = { editNote = null }) { v -> vm.editEntryText("task:${task.id}", e.id, v); editNote = null } }
     editQ?.let { q -> TextDialog(s.edit, q.title, "", onDismiss = { editQ = null }) { v -> vm.renameSubtask(task.id, q.id, v); editQ = null } }
+    timeQ?.let { q -> TimeDialog(q.time, onDismiss = { timeQ = null }) { tm -> vm.setTime("q:${task.id}:${q.id}", tm); timeQ = null } }
     dateQ?.let { q -> QuestionDateDialog(q, onDismiss = { dateQ = null }) { d -> vm.setQuestionDue(task.id, q.id, d); dateQ = null } }
 }
 
@@ -449,6 +447,7 @@ private class FeedActions(
     val dateDeal: (Subtask) -> Unit,
     val editNote: (Entry) -> Unit,
     val view: (Attachment) -> Unit,
+    val timeDeal: (Subtask) -> Unit = {},
 )
 
 @Composable
@@ -588,8 +587,13 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, stamp
                         }
                     }
                     Column(Modifier.weight(1f).clickable { if (removed) menu = true else act.select("d:" + q.id) }.padding(top = 4.dp, bottom = 4.dp)) {
-                        StrikeText(q.title, Type.body.copy(color = color, fontSize = if (depth == 0) 16.5.sp else 15.5.sp,
-                            fontWeight = if (depth == 0) FontWeight.Medium else FontWeight.Normal), strike.value, color)
+                        // As on «Сегодня»: the hour first, a petrol link to the clock; the words at the same size.
+                        Row(verticalAlignment = Alignment.Top) {
+                            if (q.time != null && !q.done && !removed) Text(q.time!!, style = Type.body.copy(color = if (due != null && due.isBefore(LocalDate.now())) c.accent else c.link,
+                                fontSize = 15.5.sp, fontWeight = FontWeight.Medium), modifier = Modifier.padding(end = 10.dp).clip(RoundedCornerShape(6.dp)).clickable { act.timeDeal(q) })
+                            StrikeText(q.title, Type.body.copy(color = color, fontSize = 15.5.sp,
+                                fontWeight = if (depth == 0) FontWeight.Medium else FontWeight.Normal), strike.value, color)
+                        }
                         // Due and who owes it, quietly; a day that's today or tomorrow is the badge above instead.
                         // Several days: each one, ticked ones in green.
                         if (q.slots.isNotEmpty() && !removed) Text(androidx.compose.ui.text.buildAnnotatedString {
@@ -602,8 +606,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, stamp
                             }
                         }, style = Type.small.copy(fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
                         val meta = if (q.slots.isNotEmpty()) listOfNotNull(q.from, q.assignee) else listOfNotNull(
-                            due?.takeIf { !isSoon(it) && !q.done }?.let { (if (q.isWait) "~" else "") + it.dayMonthShort() + (q.time?.let { t -> ", $t" } ?: "") }
-                                ?: q.time?.takeIf { !q.done }, q.from, q.assignee,
+                            due?.takeIf { !isSoon(it) && !q.done }?.let { (if (q.isWait) "~" else "") + it.dayMonthShort() }, q.from, q.assignee,
                             if (q.done) q.doneAt?.let { d -> LocalDate.parse(d).dayMonthShort().let { if (q.isWait) s.gotOn(it) else s.solvedOn(it) } } else null,
                         )
                         if (meta.isNotEmpty() && !removed) Text(meta.joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
@@ -753,7 +756,7 @@ private fun QuestionRow(task: Task, q: Subtask, lit: Boolean, vm: MainVm, onFeed
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
                     Box(Modifier.size(28.dp).clip(CircleShape).clickable(onClick = ::settle), contentAlignment = Alignment.Center) {
                         if (q.isWait && !q.done) {
-                            if (turn.value < 0.98f) HourglassGlyph(c.link, 19.dp, sand = 0.35f + 0.65f * turn.value, turn = turn.value) else TickGlyph(c.ok, 20.dp)
+                            if (turn.value < 0.98f) Box(Modifier.graphicsLayer { alpha = 1f - turn.value; translationX = -12f * turn.value }) { ArrowGlyph(c.link, 19.dp, incoming = true) } else TickGlyph(c.ok, 20.dp)
                         } else CheckCircle(q.done || settling, size = 19.dp, onToggle = ::settle)
                     }
                     Spacer(Modifier.width(10.dp))

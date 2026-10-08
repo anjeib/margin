@@ -368,18 +368,6 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
             MenuGlyph()
         }
         Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-            // The funnel: only matters, only topics, only ideas — petrol while it narrows the feed.
-            if (screen == TASKS) Box {
-                val on = filter != "all"
-                Box(Modifier.size(44.dp).clip(CircleShape).background(if (on) c.linkSoft else Color.Transparent).clickable { filterMenu = true }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.FilterList, s.filterWord, tint = if (on) c.link else c.graphite, modifier = Modifier.size(21.dp))
-                }
-                SoftMenu(filterMenu, { filterMenu = false }) {
-                    listOf("all" to s.filterAll, "deals" to s.dealsBadge, "topics" to s.topicsBadge, "ideas" to s.thoughts).forEach { (k, l) ->
-                        SoftMenuItem(l, selected = k == filter) { filterMenu = false; onFilter(k) }
-                    }
-                }
-            }
             if (screen == TASKS || screen == PEOPLE) Box(
                 Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onSearch),
                 contentAlignment = Alignment.Center,
@@ -389,7 +377,7 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
         if (screen == TASKS) Box(Modifier.align(Alignment.CenterStart).padding(start = 48.dp)) {
             val (t, w, a) = tabCounts(data)
             QuietTabs(
-                listOf(s.today, s.thisWeek, s.all), listOf(Views.TODAY, Views.WEEK, Views.ALL).indexOf(view), onTab,
+                listOf(s.today, s.thisWeek, s.monthWord), listOf(Views.TODAY, Views.WEEK, Views.ALL).indexOf(view), onTab,
                 counts = listOf(t, w, a),
             )
         }

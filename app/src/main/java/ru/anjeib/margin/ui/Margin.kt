@@ -282,9 +282,11 @@ val SoftTween = tween<Float>(240, easing = FastOutSlowInEasing)
 
 /** «Обещал»: a small arrow going out. */
 @Composable
-fun ArrowGlyph(color: Color, size: Dp = 14.dp) = Canvas(Modifier.size(size)) {
+fun ArrowGlyph(color: Color, size: Dp = 14.dp, incoming: Boolean = false) = Canvas(Modifier.size(size)) {
     val w = this.size.width; val h = this.size.height
-    drawPath(Path().apply { moveTo(w * 0.15f, h * 0.5f); lineTo(w * 0.85f, h * 0.5f); moveTo(w * 0.58f, h * 0.24f); lineTo(w * 0.85f, h * 0.5f); lineTo(w * 0.58f, h * 0.76f) }, color, style = stroke(1.4.dp))
+    // → I owe someone; ← someone owes me: one pair of arrows for both directions of a promise.
+    fun x(f: Float) = if (incoming) w * (1f - f) else w * f
+    drawPath(Path().apply { moveTo(x(0.15f), h * 0.5f); lineTo(x(0.85f), h * 0.5f); moveTo(x(0.58f), h * 0.24f); lineTo(x(0.85f), h * 0.5f); lineTo(x(0.58f), h * 0.76f) }, color, style = stroke(1.4.dp))
 }
 
 /** A repeating task: a quiet loop. */

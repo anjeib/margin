@@ -578,6 +578,10 @@ interface Strings {
     val toOtherTopic: String
     val toTopicPick: String
     val recognizeWord: String
+    val overviewWord: String
+    val monthWord: String
+    val dealsOnlyWord: String
+    fun moreDeals(n: Int): String
     fun summaryDeals(n: Int): String
     fun summaryTopics(n: Int): String
     fun summaryMeetings(n: Int): String
@@ -1246,6 +1250,10 @@ object Ru : Strings {
     override val toOtherTopic = "В другую тему"
     override val toTopicPick = "В тему…"
     override val recognizeWord = "Распознать"
+    override val overviewWord = "Обзор"
+    override val monthWord = "Месяц"
+    override val dealsOnlyWord = "только дела"
+    override fun moreDeals(n: Int) = "ещё $n " + pluralRu(n, "дело", "дела", "дел")
     override fun summaryDeals(n: Int) = "$n " + pluralRu(n, "дело", "дела", "дел")
     override fun summaryTopics(n: Int) = "$n " + pluralRu(n, "тема", "темы", "тем")
     override fun summaryMeetings(n: Int) = "$n " + pluralRu(n, "встреча", "встречи", "встреч")
@@ -1914,6 +1922,10 @@ object En : Strings {
     override val toOtherTopic = "Another topic"
     override val toTopicPick = "To a topic…"
     override val recognizeWord = "Read text"
+    override val overviewWord = "Overview"
+    override val monthWord = "Month"
+    override val dealsOnlyWord = "to-dos only"
+    override fun moreDeals(n: Int) = "$n more " + if (n == 1) "to-do" else "to-dos"
     override fun summaryDeals(n: Int) = "$n " + if (n == 1) "to-do" else "to-dos"
     override fun summaryTopics(n: Int) = "$n " + if (n == 1) "topic" else "topics"
     override fun summaryMeetings(n: Int) = "$n " + if (n == 1) "meeting" else "meetings"

@@ -18,7 +18,7 @@ private val monthsEn = listOf(
     "July", "August", "September", "October", "November", "December",
 )
 
-private val locale: Locale get() = if (L.lang == Lang.Ru) Locale.forLanguageTag("ru") else Locale.ENGLISH
+internal val locale: Locale get() = if (L.lang == Lang.Ru) Locale.forLanguageTag("ru") else Locale.ENGLISH
 private val ru get() = L.lang == Lang.Ru
 
 fun LocalDate.weekStart(): LocalDate = with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))

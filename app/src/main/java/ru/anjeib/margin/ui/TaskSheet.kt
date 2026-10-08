@@ -36,6 +36,7 @@ import ru.anjeib.margin.data.dayMonthShort
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.EditNote
@@ -277,7 +278,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     links.forEach { l ->
                         Margined(Modifier.clickable(enabled = l.noteId != null || l.taskId != null) { l.noteId?.let(onOpenNote) ?: l.taskId?.let(onOpenTask) }, margin = {
                             Box(Modifier.padding(top = 12.dp)) {
-                                Icon(when (l.kind) { "idea" -> Icons.Outlined.EditNote; "wait" -> Icons.Outlined.HourglassEmpty; else -> Icons.AutoMirrored.Outlined.ArrowForward },
+                                Icon(when (l.kind) { "idea" -> Icons.Outlined.EditNote; "wait" -> Icons.AutoMirrored.Outlined.ArrowBack; else -> Icons.AutoMirrored.Outlined.ArrowForward },
                                     null, tint = c.graphite, modifier = Modifier.size(16.dp))
                             }
                         }) {
