@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.text.buildAnnotatedString
+
 import ru.anjeib.margin.data.slotRef
 
 import ru.anjeib.margin.data.questionRow
@@ -326,12 +328,7 @@ fun TaskList(
                         Text(s.queuedLine(data.queue.size) + " →", style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
                     }
                 }
-                // Topics with nothing left to do or wait for: one tap to see what's next or to put them away.
-                val settled = data.tasks.filter { it.noNextStep }
-                if (settled.isNotEmpty()) {
-                    section(s.noNextStepCaps, "s-nostep", settled.size, collapsible = true)
-                    if (isOpen("s-nostep")) items(settled, key = { "ns" + it.id }) { t -> TopicRow(t, onOpen = { onOpen(t.id) }, lit = t.id in landed) }
-                }
+                // «Без следующего шага» lives in «Обзор · Темы» now: «Сегодня» is about today.
                 // Notes never mix into task lists — one quiet line says what was written today.
                 val notesToday = data.tasks.filter { t -> t.thought && !t.done && (t.createdAt == today.toString() || t.entries.any { it.at.startsWith(today.toString()) }) }
                 if (notesToday.isNotEmpty()) plain("notes-today") {
@@ -382,11 +379,7 @@ fun TaskList(
                   Column(Modifier.padding(top = 14.dp)) {
                     Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         // One step under the top tabs: a little smaller, the chosen one on a petrol pill.
-                        listOf("topics" to s.topicsBadge, "deals" to s.dealsBadge, "ideas" to s.thoughts).forEach { (k, l) ->
-                            val on = monthTab == k || (k == "topics" && monthTab == "overview")
-                            Text(l, style = Type.body.copy(color = if (on) c.link else c.ink.copy(alpha = 0.72f), fontSize = 16.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium),
-                                modifier = Modifier.padding(end = 6.dp).clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else Color.Transparent).clickable { monthTab = k }.padding(horizontal = 14.dp, vertical = 7.dp))
-                        }
+                        SubTabs(listOf("topics" to s.topicsBadge, "deals" to s.dealsBadge, "ideas" to s.thoughts), if (monthTab == "overview") "topics" else monthTab, { monthTab = it })
                     }
                     // Личное / работа: the same pills as on the topics; a tap narrows the month to one, another tap shows both.
                     Row(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -407,7 +400,7 @@ fun TaskList(
                     "topics", "overview" -> {
                         val list = data2.tasks.filter { it.topic && !it.done && !bare(it) }.sortedByDescending { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.createdAt) }
                         if (list.isEmpty()) plain("m-none") { Empty(s.emptyAll, s.emptyHint) }
-                        items(list, key = { "mt" + it.id }) { t -> MonthTopicRow(t, onOpen) }
+                        items(list, key = { "mt" + it.id }) { t -> MonthTopicRow(t, onOpen, onArchive = { vm.archiveTopic(t.id) }) }
                     }
                     "deals" -> {
                         val all = (data2.listTasks().filter { !it.done && !it.topic || it.topicId != null } + data2.undatedTopicMatters())
@@ -417,7 +410,7 @@ fun TaskList(
                         if (all.isEmpty()) plain("m-none") { Empty(s.emptyAll, s.emptyHint) }
                         dated.forEach { (d, l) ->
                             item("md" + d) {
-                                Margined(Modifier.padding(top = 8.dp), margin = { DayMargin(d, today, false) }) {
+                                Margined(Modifier.padding(top = 8.dp), margin = { DayMargin(d, today, false, strong = true) }) {
                                     Column { GroupedDeals(l.sortedWith(compareBy({ !it.isOverdue(today) }, { it.time ?: "99" })), today, landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                                         topicOf = { id -> data.tasks.find { it.id == id } }) }
                                 }
@@ -1012,15 +1005,15 @@ fun dayPlan(data: AppData, date: LocalDate, today: LocalDate, events: List<CalEv
 
 /** The date on the margin: the number in serif, the month and the weekday small under it; today in petrol. */
 @Composable
-internal fun DayMargin(date: LocalDate, today: LocalDate, big: Boolean, strong: Boolean = false) {
+internal fun DayMargin(date: LocalDate, today: LocalDate, big: Boolean, strong: Boolean = false, todayMark: Boolean = !strong) {
     val c = M.c
     // [strong]: a day that marks where something began or was written (a topic, an idea, a record) — never faded.
     val past = date.isBefore(today) && !strong
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (big) 2.dp else 8.dp)) {
-        Text(date.dayOfMonth.toString(), style = Type.display.copy(color = when { date == today && !big -> c.link; past -> c.faint; else -> c.ink },
+        Text(date.dayOfMonth.toString(), style = Type.display.copy(color = when { date == today && !big && todayMark -> c.link; past -> c.graphite; else -> c.ink },
             fontSize = if (big) 40.sp else 26.sp, lineHeight = if (big) 42.sp else 28.sp))
-        Text(date.dayMonthShort().substringAfter(' '), style = Type.small.copy(color = if (past) c.faint else c.graphite, fontSize = 11.5.sp, fontWeight = FontWeight.Medium))
-        if (!big) Text(if (date.year != today.year) "’" + "%02d".format(date.year % 100) else date.dowShort().lowercase(), style = Type.small.copy(color = if (strong) c.graphite else c.faint, fontSize = 11.sp))
+        Text(date.dayMonthShort().substringAfter(' '), style = Type.small.copy(color = if (past) c.graphite else c.ink, fontSize = 11.5.sp, fontWeight = FontWeight.Medium))
+        if (!big) Text(if (date.year != today.year) "’" + "%02d".format(date.year % 100) else date.dowShort().lowercase(), style = Type.small.copy(color = c.graphite, fontSize = 11.sp, fontWeight = FontWeight.Medium))
     }
 }
 
@@ -1077,7 +1070,7 @@ private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () 
             t.dayOf()?.let { (i, n) -> Text(s.dayOfDays(i, n), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp)) }
             TaskLine(t, null, true, today = today)
         }
-        age?.let { Text(it, style = Type.small.copy(color = c.faint, fontSize = 12.5.sp), modifier = Modifier.padding(start = 8.dp, top = 3.dp)) }
+        age?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 8.dp, top = 3.dp)) }
     }
 }
 
@@ -1121,9 +1114,13 @@ private fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String>
                 val others = topic.subtasks.filter { !it.done && it.parent == null && it.id !in shown }.map { topic.questionRow(it) }
                 val born = runCatching { LocalDate.parse(topic.createdAt) }.getOrNull()
                 val open = tid in unfolded.value
-                val meta = listOfNotNull(born?.let { "%02d ".format(it.dayOfMonth) + it.dayMonthShort().substringAfter(' ') + " ’" + "%02d".format(it.year % 100) },
-                    topic.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, others.size.takeIf { it > 0 }?.let { s.moreDeals(it) + if (open) " ▴" else " ▾" })
-                Text(meta.joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
+                val rest = listOfNotNull(topic.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, others.size.takeIf { it > 0 }?.let { s.moreDeals(it) + if (open) " ▴" else " ▾" })
+                val dateSp = dateSpan()
+                Text(buildAnnotatedString {
+                    born?.let { withStyle(dateSp) { append(it.dayMonthShort() + " ’" + "%02d".format(it.year % 100)) } }
+                    if (born != null && rest.isNotEmpty()) append("  ·  ")
+                    append(rest.joinToString("  ·  "))
+                }, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
                     modifier = Modifier.padding(start = 2.dp).clip(RoundedCornerShape(6.dp))
                         .clickable(enabled = others.isNotEmpty()) { unfolded.value = if (open) unfolded.value - tid else unfolded.value + tid }.padding(vertical = 2.dp))
                 androidx.compose.animation.AnimatedVisibility(open && others.isNotEmpty(), enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(240)) + androidx.compose.animation.fadeIn(),
@@ -1171,7 +1168,7 @@ private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, 
                         withStyle(SpanStyle(color = c.link)) { append(t.waitingFor ?: t.promisedTo!!.dative()) }
                         withStyle(SpanStyle(color = c.ink)) { append("  ·  " + t.title) }
                     }, style = Type.small.copy(fontSize = 14.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    d?.let { Text(if (it == today) s.todayShort else it.dayMonthShort(), style = Type.small.copy(color = if (late) c.accent else c.graphite, fontSize = 12.5.sp),
+                    d?.let { Text(if (it == today) s.quickToday.lowercase() else it.dayMonthShort(), style = dateStyle(12.5.sp, late),
                         modifier = Modifier.padding(start = 10.dp)) }
                 }
             }
@@ -1182,7 +1179,7 @@ private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, 
 
 /** «Месяц · Темы»: a topic with when it began; «N записей ▾» unfolds its records right here. */
 @Composable
-private fun MonthTopicRow(t: Task, onOpen: (String) -> Unit) {
+private fun MonthTopicRow(t: Task, onOpen: (String) -> Unit, onArchive: () -> Unit = {}) {
     val c = M.c
     val s = M.s
     var open by androidx.compose.runtime.saveable.rememberSaveable(t.id) { mutableStateOf(false) }
@@ -1199,10 +1196,16 @@ private fun MonthTopicRow(t: Task, onOpen: (String) -> Unit) {
                 Text(listOfNotNull(s.nEntries(t.entries.size) + if (t.entries.isNotEmpty()) (if (open) " ▴" else " ▾") else "", openDeals.takeIf { it > 0 }?.let { s.summaryDeals(it) }).joinToString("  ·  "),
                     style = Type.small.copy(color = c.graphite, fontSize = 13.sp),
                     modifier = Modifier.padding(start = 26.dp, top = 3.dp).clip(RoundedCornerShape(6.dp)).clickable(enabled = t.entries.isNotEmpty()) { open = !open }.padding(vertical = 2.dp))
+                // Nothing left to do or wait for: say so, and offer the archive — quietly, here and not on «Сегодня».
+                if (t.noNextStep) Row(Modifier.padding(start = 26.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(s.allDoneShort, style = Type.small.copy(color = c.ok, fontSize = 13.sp))
+                    Text("  ·  ", style = Type.small.copy(color = c.faint))
+                    PaperLink(s.toArchive, onClick = onArchive)
+                }
                 if (open) Column(Modifier.padding(start = 26.dp, top = 6.dp)) {
                     t.entries.forEach { e ->
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { onOpen(t.id) }.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
-                            Text(runCatching { LocalDate.parse(e.at.take(10)).dayMonthShort() }.getOrDefault(""), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
+                            Text(runCatching { LocalDate.parse(e.at.take(10)).dayMonthShort() }.getOrDefault(""), style = dateStyle(12.5.sp),
                                 modifier = Modifier.width(52.dp).padding(top = 1.dp))
                             Column(Modifier.weight(1f)) {
                                 if (e.text.isNotBlank()) Text(e.text, style = Type.small.copy(color = c.ink, fontSize = 14.sp), maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -1237,11 +1240,11 @@ private fun MonthIdeaRow(t: Task, grown: List<Task>, onOpen: (String) -> Unit) {
                 if (open) Column(Modifier.padding(start = 26.dp, top = 6.dp)) {
                     t.entries.forEach { e ->
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { onOpen(t.id) }.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
-                            Text(runCatching { LocalDate.parse(e.at.take(10)).dayMonthShort() }.getOrDefault(""), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
+                            Text(runCatching { LocalDate.parse(e.at.take(10)).dayMonthShort() }.getOrDefault(""), style = dateStyle(12.5.sp),
                                 modifier = Modifier.width(52.dp).padding(top = 1.dp))
                             Column(Modifier.weight(1f)) {
                                 if (e.text.isNotBlank()) Text(e.text, style = Type.small.copy(color = c.ink, fontSize = 14.sp), maxLines = 3, overflow = TextOverflow.Ellipsis)
-                                e.items.forEach { Text((if (it.done) "✓ " else "— ") + it.title, style = Type.small.copy(color = c.ink, fontSize = 14.sp)) }
+                                e.items.forEach { Text("•  " + it.title, style = Type.small.copy(color = c.ink, fontSize = 14.sp)) }
                                 attachmentsSummary(e.attachments)?.let { Text(it, style = Type.small.copy(color = c.link, fontSize = 12.5.sp)) }
                             }
                         }

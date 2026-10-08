@@ -159,10 +159,13 @@ object LocalParser {
     }
 
     /** Several matters in one message: lines, «;», sentences, «ещё», a new verb after a comma or «и». */
-    private fun split(t: String): List<String> {
+    private fun split(t0: String): List<String> {
+        // «1. …», «- …», «• …» at line starts: a list typed by hand — the marks go before anything else splits the text.
+        val t = t0.lines().joinToString("\n") { it.replace(Regex("^\\s*(\\d{1,2}[.)]|[-–—•*])\\s+"), "") }
         // «ещё» starts a new matter only after a whole one («купить хлеб, ещё позвонить»), not after «для vuzburo ещё…».
         val big = t.split(Regex("\\n+|;\\s*|(?<=[.!?])\\s+(?=\\p{Lu})|(?<=$L{1,30}\\s$L{1,30}\\s$L{1,30}),?\\s+(?:а ещё|а еще|и ещё|и еще|а также|ещё|еще|плюс)\\s+", RegexOption.IGNORE_CASE))
-            .map { it.trim().trim('.', ',', ' ') }.filter { it.isNotBlank() }
+            // «1. …», «- …», «• …»: a list typed by hand — each item one matter, without its mark.
+            .map { it.replace(Regex("^\\s*(\\d{1,2}[.)]|[-–—•*])\\s+"), "").trim().trim('.', ',', ' ') }.filter { it.isNotBlank() }
         return big.flatMap { part ->
             if (ideaCue.containsMatchIn(part)) return@flatMap listOf(part)
             val pieces = part.split(Regex(",\\s+|\\s+и\\s+"))

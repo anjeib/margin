@@ -293,7 +293,7 @@ fun SmartComposer(
             Box(Modifier.weight(1f).padding(vertical = 10.dp, horizontal = 4.dp)) {
                 if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = Type.body.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 BasicTextField(
-                    value = text, onValueChange = { text = it },
+                    value = text, onValueChange = { text = continueList(text, it) },
                     textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link), maxLines = 6,
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 )

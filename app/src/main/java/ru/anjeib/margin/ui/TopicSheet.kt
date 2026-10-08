@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.draw.drawBehind
+
+import androidx.compose.material.icons.outlined.CalendarToday
+
 import androidx.compose.ui.focus.focusRequester
 
 import androidx.compose.ui.text.withLink
@@ -154,9 +158,8 @@ private fun feedOf(t: Task): List<FeedLine> {
             // Words that only named the matter («Установить RClone») are not repeated: the matter's line says it.
             val echo = e.attachments.isEmpty() && !e.isList && made.any { (q, _) -> norm(e.text).let { w -> w == norm(q.title) || (w.contains(norm(q.title)) && w.length <= norm(q.title).length + 12) } }
             if (!echo) out += FeedLine.Said(e, rm)
-            // What was added under the words with «+» hangs right under them; what the words made follows at their level.
-            deals.filter { it.first.parent == e.id }.sortedBy { bornAt(it.first) }.forEach { (q, r) -> deal(q, r || rm, 1) }
-            made.sortedBy { bornAt(it.first) }.forEach { (q, r) -> deal(q, r, 0) }
+            // The record's matters — what its words made and what was added under it with «+» — are one block at one level.
+            (deals.filter { it.first.parent == e.id }.map { it.first to (it.second || rm) } + made).sortedBy { bornAt(it.first) }.forEach { (q, r) -> deal(q, r, 0) }
         }
     } + deals.filter { (q, _) -> (q.parent == null || (q.parent !in noteIds && q.parent !in dealIds)) && fromEntry(q).let { it == null || it !in noteIds } }
         .map { (q, rm) -> bornAt(q) to { deal(q, rm, 0) } }
@@ -269,8 +272,13 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     val since = runCatching { LocalDate.parse(task.createdAt) }.getOrNull()?.dayMonthShort()
                     SphereBadge(task.sphere, Modifier.padding(end = 8.dp)) { vm.setSphere(task.id, nextSphere(task.sphere)) }
-                    Text(since?.let { if (task.thought && task.subtasks.isEmpty()) s.thoughtSince(it) else s.topicSince(it) } ?: "",
-                        style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    val sinceText = since?.let { if (task.thought && task.subtasks.isEmpty()) s.thoughtSince(it) else s.topicSince(it) } ?: ""
+                    val dateSp = dateSpan()
+                    Text(buildAnnotatedString {
+                        // «тема с 17 авг»: the words quiet, the date in ink.
+                        val at = since?.let { sinceText.lastIndexOf(it) } ?: -1
+                        if (at >= 0) { append(sinceText.substring(0, at)); withStyle(dateSp) { append(since!!) }; append(sinceText.substring(at + since!!.length)) } else append(sinceText)
+                    }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f))
                     HeaderIcon(Icons.Outlined.AttachFile, s.materialsTab, count = files, on = materialsMode) {
                         materialsMode = !materialsMode; dealsOnly = false
@@ -487,7 +495,15 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
         }
         // As on «Сегодня»: the day on the margin (a number in serif, the month, the weekday) once for each day, a rule between days.
         var lastDay: LocalDate? = null
-        feed.forEach { line ->
+        feed.forEachIndexed { idx, line ->
+            // Matters that follow one another are one block under one badge: «ДЕЛО» or «ДЕЛА · 3».
+            // A block is one day's run of matters: a new day starts a new block with its own badge.
+            val lineDay = dateOfStamp(line.at)
+            val startsBlock = line is FeedLine.Deal && (feed.getOrNull(idx - 1) !is FeedLine.Deal || (line.depth == 0 && lineDay != lastDay))
+            val badge = if (startsBlock) {
+                val n = feed.drop(idx).withIndex().takeWhile { (i, it) -> it is FeedLine.Deal && (i == 0 || it.depth > 0 || dateOfStamp(it.at) == lineDay) }.count { it.value.depth == 0 }
+                if (n == 1) s.stepOne.uppercase() else s.dealsBadge.uppercase() + " · " + n
+            } else null
             val day = dateOfStamp(line.at)
             val firstOfDay = line.depth == 0 && day != null && day != lastDay
             val newDayAfter = firstOfDay && lastDay != null
@@ -498,8 +514,8 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
                     if (newDayAfter) Hairline(Modifier.padding(start = MarginW, top = 8.dp, bottom = 4.dp))
                     val dayMark = if (firstOfDay) day else null
                     when (line) {
-                        is FeedLine.Said -> NoteLine(task, line.e, line.removed, dayMark, selected == line.key, fresh, working, vm, act)
-                        is FeedLine.Deal -> DealLine(task, line.q, line.removed, line.depth, dayMark, selected == line.key, vm, act)
+                        is FeedLine.Said -> NoteLine(task, line.e, line.removed, dayMark, fresh, working, vm, act)
+                        is FeedLine.Deal -> DealLine(task, line.q, line.removed, line.depth, dayMark, badge, vm, act)
                     }
                 }
             }
@@ -513,6 +529,17 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
                 }
             }
         }
+    }
+}
+
+/** One action in the long-press bubble: a small icon and the words. */
+@Composable
+private fun ToolItem(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, danger: Boolean = false, onClick: () -> Unit) {
+    val c = M.c
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = if (danger) c.accent else c.graphite, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(text, style = Type.body.copy(color = if (danger) c.accent else c.ink, fontSize = 15.sp))
     }
 }
 
@@ -541,30 +568,41 @@ private fun RemovedMenu(open: Boolean, onDismiss: () -> Unit, onRestore: () -> U
 /** The user's words: plain ink on the paper, no card; files under them. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun NoteLine(task: Task, e: Entry, removed: Boolean, day: LocalDate?, selected: Boolean, fresh: Boolean, working: Set<String>, vm: MainVm, act: FeedActions) {
+private fun NoteLine(task: Task, e: Entry, removed: Boolean, day: LocalDate?, fresh: Boolean, working: Set<String>, vm: MainVm, act: FeedActions) {
     val c = M.c
     val s = M.s
     var menu by remember(e.id) { mutableStateOf(false) }
-    val sel by androidx.compose.animation.animateColorAsState(if (selected) c.chip else Color.Transparent, tween(180), label = "sel")
+    var tools by remember(e.id) { mutableStateOf(false) }
+    val sel by androidx.compose.animation.animateColorAsState(if (tools) c.chip else Color.Transparent, tween(180), label = "sel")
     Margined(Modifier.padding(top = 6.dp), margin = day?.let { d -> { DayMargin(d, LocalDate.now(), false, strong = true) } }) {
         Box {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(sel)
-                .clickable { if (removed) menu = true else act.select("n:" + e.id) }.padding(vertical = 8.dp)) {
+                .combinedClickable(onClick = { if (removed) menu = true }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
                         // What it is and when: a record — the user's own words; the matters that came of them hang under it.
                         Row(Modifier.padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(s.recordBadge.uppercase(), style = Type.label.copy(color = c.graphite, fontSize = 10.5.sp, letterSpacing = 1.1.sp),
                                 modifier = Modifier.clip(RoundedCornerShape(50)).background(c.chip).padding(horizontal = 8.dp, vertical = 2.dp))
-                            timeOfStamp(e.at).takeIf { it.isNotBlank() && it != "00:00" }?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 8.dp)) }
+                            timeOfStamp(e.at).takeIf { it.isNotBlank() && it != "00:00" }?.let { Text(it, style = dateStyle(12.5.sp), modifier = Modifier.padding(start = 8.dp)) }
                         }
-                        if (e.text.isNotBlank()) Text(e.text, style = Type.body.copy(color = if (removed) c.faint else c.ink, fontSize = 15.5.sp,
+                        if (e.text.isNotBlank()) ListAwareText(e.text, Type.body.copy(color = if (removed) c.faint else c.ink, fontSize = 15.5.sp,
                             textDecoration = if (removed) androidx.compose.ui.text.style.TextDecoration.LineThrough else null))
-                        e.items.forEach { Text((if (it.done) "✓ " else "— ") + it.title, style = Type.body.copy(color = if (it.done || removed) c.faint else c.ink, fontSize = 15.5.sp)) }
+                        // A list in a record is a list of thoughts, not matters: bullets, no ticks.
+                        e.items.forEach { Row(Modifier.padding(vertical = 1.dp)) {
+                            Text("•", style = Type.body.copy(color = c.graphite, fontSize = 15.5.sp), modifier = Modifier.width(22.dp))
+                            Text(it.title, style = Type.body.copy(color = if (removed) c.faint else c.ink, fontSize = 15.5.sp), modifier = Modifier.weight(1f))
+                        } }
                     }
                     if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 6.dp))
-                    else if (selected) LineTools(c.graphite, onAdd = { act.addUnder(e.id, e.text.ifBlank { e.attachments.firstOrNull()?.let { attachmentLabel(it) }?.ifBlank { null } ?: "…" }) },
-                        onRemove = { act.select(""); vm.removeRecord(task.id, e.id) }, onEdit = { act.editNote(e) })
+                    // Long press: a small bubble — a matter under the record, edit, remove.
+                    Box {
+                        SoftMenu(tools, { tools = false }) {
+                            ToolItem(Icons.Rounded.Add, s.underLine) { tools = false; act.addUnder(e.id, e.text.ifBlank { e.attachments.firstOrNull()?.let { attachmentLabel(it) }?.ifBlank { null } ?: "…" }) }
+                            ToolItem(Icons.Outlined.Build, s.edit) { tools = false; act.editNote(e) }
+                            ToolItem(Icons.Rounded.Remove, s.delete, danger = true) { tools = false; vm.removeRecord(task.id, e.id) }
+                        }
+                    }
                 }
                 if (e.attachments.isNotEmpty() && !removed) {
                     Spacer(Modifier.height(8.dp))
@@ -581,7 +619,8 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, day: LocalDate?, se
  * the words are struck through in green; removed — grey, struck, «удалено». Lines added under it hang indented, lighter.
  */
 @Composable
-private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: LocalDate?, selected: Boolean, vm: MainVm, act: FeedActions) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: LocalDate?, badge: String?, vm: MainVm, act: FeedActions) {
     // The same row as on «Сегодня»: the kind mark, the circle, the hour as a petrol link, the words in ink, a quiet line under.
     val c = M.c
     val s = M.s
@@ -591,7 +630,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
     var tools by remember(q.id) { mutableStateOf(false) }
     val strike = remember(q.id) { Animatable(if (q.done || removed) 1f else 0f) }
     LaunchedEffect(q.done, removed) { strike.animateTo(if (q.done || removed) 1f else 0f, tween(if (motion) 320 else 0, easing = FastOutSlowInEasing)) }
-    val sel by androidx.compose.animation.animateColorAsState(if (selected) c.chip else Color.Transparent, tween(180), label = "sel")
+    val sel by androidx.compose.animation.animateColorAsState(if (tools) c.chip else Color.Transparent, tween(180), label = "sel")
     val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     val today = LocalDate.now()
     // Late as on «Сегодня»: a day gone, or today's hour already past.
@@ -602,12 +641,25 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
         val next = q.slots.firstOrNull { !it.done }
         if (next != null) vm.toggleSlot("q:${task.id}:${q.id}", next.id) else vm.toggleQuestion(task.id, q.id)
     }
-    Margined(margin = day?.let { d -> { DayMargin(d, LocalDate.now(), false, strong = true) } }) {
-        Box {
-            Row(Modifier.fillMaxWidth().padding(start = 24.dp * depth).clip(RoundedCornerShape(10.dp)).background(sel)
-                .clickable { if (removed) menu = true else act.select("d:" + q.id) }.padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
-                KindMark(if (q.done || removed) null else task.questionRow(q))
-                Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(q.done, size = 18.dp, onToggle = ::tick) }
+    // Nested matters hang from their parent's circle: a thin guide down from it and a short elbow to each child.
+    val guideX = 29.dp + 30.dp * (depth - 1).coerceAtLeast(0)
+    val indent = if (depth == 0) 0.dp else guideX + 6.dp
+    Margined(Modifier.padding(top = if (badge != null) 10.dp else 0.dp), margin = day?.let { d -> { DayMargin(d, LocalDate.now(), false, strong = true) } }) {
+        Column {
+        // The block's badge: petrol, as the matters are what is to be done.
+        if (badge != null) Text(badge, style = Type.label.copy(color = c.link, fontSize = 10.5.sp, letterSpacing = 1.1.sp),
+            modifier = Modifier.padding(bottom = 2.dp).clip(RoundedCornerShape(50)).background(c.linkSoft).padding(horizontal = 8.dp, vertical = 2.dp))
+        Box(Modifier.drawBehind {
+            if (depth > 0) {
+                val x = guideX.toPx(); val y = 20.dp.toPx(); val col = c.hairline.copy(alpha = 1f)
+                drawLine(col, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.2.dp.toPx())
+                drawLine(col, Offset(x, y), Offset(indent.toPx() + 2.dp.toPx(), y), strokeWidth = 1.2.dp.toPx())
+            }
+        }) {
+            Row(Modifier.fillMaxWidth().padding(start = indent).clip(RoundedCornerShape(10.dp)).background(sel)
+                .combinedClickable(onClick = { if (removed) menu = true }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                if (depth == 0) KindMark(if (q.done || removed) null else task.questionRow(q))
+                Box(Modifier.size(if (depth == 0) 26.dp else 22.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(q.done, size = if (depth == 0) 18.dp else 15.dp, onToggle = ::tick) }
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     val title = buildAnnotatedString {
@@ -617,7 +669,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
                         }
                         append(q.title)
                     }
-                    Text(title, style = Type.body.copy(fontSize = 15.5.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    Text(title, style = Type.body.copy(fontSize = if (depth == 0) 15.5.sp else 14.5.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 1.dp).drawWithContent {
                             drawContent()
                             if (strike.value > 0f) { val y = 11.dp.toPx(); drawLine(c.faint, Offset(0f, y), Offset(size.width * strike.value, y), strokeWidth = 1.3.dp.toPx()) }
@@ -627,7 +679,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
                         q.slots.forEachIndexed { i, sl ->
                             if (i > 0) append("  ·  ")
                             val d = runCatching { LocalDate.parse(sl.date) }.getOrNull()
-                            withStyle(SpanStyle(color = if (sl.done) c.ok else c.graphite, textDecoration = if (sl.done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)) {
+                            withStyle(SpanStyle(color = if (sl.done) c.ok else c.ink, fontWeight = if (sl.done) null else FontWeight.Medium, fontFeatureSettings = "tnum", textDecoration = if (sl.done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)) {
                                 append((if (sl.done) "✓ " else "") + (d?.dayMonthShort() ?: sl.date) + (sl.time?.let { ", $it" } ?: ""))
                             }
                         }
@@ -637,23 +689,27 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
                         val whenText = if (q.slots.isEmpty() && !q.done) due?.let { if (it.isBefore(today)) s.lateSince(it.dayMonthShort()) else (if (it == today) s.quickToday.lowercase() else if (it == today.plusDays(1)) s.quickTomorrow.lowercase() else it.dayMonthShort()) } else null
                         val rest = listOfNotNull(q.from?.let { s.promiseToYou(it) }, q.assignee,
                             if (q.done) q.doneAt?.let { d -> LocalDate.parse(d).dayMonthShort().let { if (q.isWait) s.gotOn(it) else s.solvedOn(it) } } else null)
+                        val dateSp = dateSpan()
                         if (whenText != null || rest.isNotEmpty()) Text(buildAnnotatedString {
-                            whenText?.let { withStyle(SpanStyle(color = if (late) c.accent else c.graphite)) { append(it) } }
+                            whenText?.let { withStyle(if (late) dateSp.copy(color = c.accent) else dateSp) { append(it) } }
                             if (whenText != null && rest.isNotEmpty()) append("  ·  ")
                             append(rest.joinToString("  ·  "))
                         }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
                     }
                 }
                 if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 3.dp))
-                else if (selected) Box {
-                    LineTools(c.graphite, onAdd = { act.addUnder(q.id, q.title) }, onRemove = { act.select(""); vm.removeDeal(task.id, q.id) }, onEdit = { tools = true })
+                // Long press: a small bubble — a matter under it, edit, the day, remove.
+                Box {
                     SoftMenu(tools, { tools = false }) {
-                        SoftMenuItem(s.edit) { tools = false; act.editDeal(q) }
-                        SoftMenuItem(s.dueWord) { tools = false; act.dateDeal(q) }
+                        ToolItem(Icons.Rounded.Add, s.underLine) { tools = false; act.addUnder(q.id, q.title) }
+                        ToolItem(Icons.Outlined.Build, s.edit) { tools = false; act.editDeal(q) }
+                        ToolItem(Icons.Outlined.CalendarToday, s.dueWord) { tools = false; act.dateDeal(q) }
+                        ToolItem(Icons.Rounded.Remove, s.delete, danger = true) { tools = false; vm.removeDeal(task.id, q.id) }
                     }
                 }
             }
             RemovedMenu(menu, { menu = false }, onRestore = { vm.restoreDeal(task.id, q.id) }, onPurge = { vm.purgeDeal(task.id, q.id) })
+        }
         }
     }
 }
@@ -927,7 +983,7 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                                                 }
                                                 Text(a.caption ?: attachmentLabel(a).ifBlank { a.name }, style = Type.small.copy(color = c.ink, fontSize = 13.sp), maxLines = if (a.caption != null) 2 else 1, overflow = TextOverflow.Ellipsis,
                                                     modifier = Modifier.padding(top = 5.dp))
-                                                timeOfStamp(e.at).takeIf { it.isNotBlank() && it != "00:00" }?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.sp)) }
+                                                timeOfStamp(e.at).takeIf { it.isNotBlank() && it != "00:00" }?.let { Text(it, style = dateStyle(12.sp)) }
                                                 // Found by the words inside, not the name: say what matched.
                                                 if (needle.isNotEmpty() && !a.name.lowercase().replace(" ", "").contains(needle)) (a.ocr ?: a.transcript)?.let {
                                                     Text("«" + it.take(60) + "»", style = Type.small.copy(color = c.faint, fontSize = 11.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)

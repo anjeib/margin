@@ -94,9 +94,19 @@ fun Modifier.marginRule(color: Color, fraction: Float = 1f, top: Dp = 0.dp, over
 @Composable
 fun MarginText(text: String, late: Boolean = false, petrol: Boolean = false, faint: Boolean = false) {
     val c = M.c
-    Text(text, style = Type.small.copy(color = when { late -> c.accent; petrol -> c.link; faint -> c.faint; else -> c.graphite }, fontSize = 12.5.sp,
-        fontFeatureSettings = "tnum", textAlign = TextAlign.End, lineHeight = 15.sp), modifier = Modifier.padding(top = 3.dp))
+    // Dates and hours read first: ink and medium; only something closed (faint) steps back to graphite.
+    Text(text, style = Type.small.copy(color = when { late -> c.accent; petrol -> c.link; faint -> c.graphite; else -> c.ink }, fontSize = 12.5.sp,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End, lineHeight = 15.sp), modifier = Modifier.padding(top = 3.dp))
 }
+
+/** The one look of a date or an hour inside a line: ink, medium, figures of one width. */
+@Composable
+fun dateSpan(): androidx.compose.ui.text.SpanStyle = androidx.compose.ui.text.SpanStyle(color = M.c.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum")
+
+/** A date or an hour on its own: the same look as [dateSpan]. */
+@Composable
+fun dateStyle(size: androidx.compose.ui.unit.TextUnit = 13.sp, late: Boolean = false) =
+    Type.small.copy(color = if (late) M.c.accent else M.c.ink, fontSize = size, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum")
 
 /** The day on the margin: a big serif number and the month under it. */
 @Composable
@@ -345,12 +355,12 @@ fun PageHead(title: String, subtitle: String? = null, modifier: Modifier = Modif
 @Composable
 fun Modifier.screenRule(): Modifier = marginRule(M.c.accent.copy(alpha = 0.85f), over = true)
 
-/** A petrol word with a thin underline, like a link on paper; [quiet] — graphite, no line. */
+/** A petrol word, medium — a link as everywhere in the app (no underline); [quiet] — graphite. */
 @Composable
 fun PaperLink(text: String, quiet: Boolean = false, onClick: () -> Unit) {
     val c = M.c
     Text(text, style = Type.small.copy(color = if (quiet) c.graphite else c.link, fontSize = 14.sp,
-        textDecoration = if (quiet) null else androidx.compose.ui.text.style.TextDecoration.Underline),
+        fontWeight = if (quiet) null else androidx.compose.ui.text.font.FontWeight.Medium),
         modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(vertical = 6.dp, horizontal = 2.dp))
 }
 
@@ -405,3 +415,55 @@ fun SoonBadge(day: java.time.LocalDate?, modifier: Modifier = Modifier) {
 /** Whether [SoonBadge] shows for [day] — rows push their margin and node down by [SoonLift] then. */
 fun isSoon(day: java.time.LocalDate?): Boolean = day != null && day in setOf(java.time.LocalDate.now(), java.time.LocalDate.now().plusDays(1))
 val SoonLift = 19.dp
+
+/** The menu one step under the top tabs («Темы · Дела · Идеи», «Люди · Компании»): the chosen one on a petrol pill. */
+@Composable
+fun SubTabs(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+    val c = M.c
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        options.forEach { (k, l) ->
+            val on = selected == k
+            Text(l, style = Type.body.copy(color = if (on) c.link else c.ink.copy(alpha = 0.72f), fontSize = 16.sp,
+                fontWeight = if (on) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
+                modifier = Modifier.padding(end = 6.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(if (on) c.linkSoft else Color.Transparent)
+                    .clickable { onSelect(k) }.padding(horizontal = 14.dp, vertical = 7.dp))
+        }
+    }
+}
+
+/** A line that starts a list: «1.», «2)», «-», «–», «—», «•», «*». */
+val listMarker = Regex("^\\s*(\\d{1,2}[.)]|[-–—•*])\\s+")
+
+/**
+ * Text that knows lists: lines starting with «1.» or «-» / «•» are set as a list — the mark in its own column,
+ * the words hanging after it; other lines stay paragraphs.
+ */
+@Composable
+fun ListAwareText(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier) {
+    val lines = text.lines()
+    if (lines.count { listMarker.containsMatchIn(it) } < 2) { Text(text, style = style, modifier = modifier); return }
+    Column(modifier) {
+        lines.forEach { line ->
+            val m = listMarker.find(line)
+            if (m == null) { if (line.isNotBlank()) Text(line, style = style) }
+            else Row(Modifier.padding(vertical = 1.dp)) {
+                val mark = m.groupValues[1].let { if (it.first().isDigit()) it.trimEnd(')', '.') + "." else "•" }
+                Text(mark, style = style.copy(color = M.c.graphite, fontFeatureSettings = "tnum"), modifier = Modifier.width(22.dp))
+                Text(line.substring(m.range.last + 1), style = style, modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** While typing: Enter after a list line starts the next one («2.» after «1.», «•» after «•»); Enter on an empty item ends the list. */
+fun continueList(old: String, new: String): String {
+    if (new.length != old.length + 1 || !new.endsWith("\n") || new.dropLast(1) != old) return new
+    val last = old.substringAfterLast('\n')
+    val m = listMarker.find(last) ?: return new
+    val mark = m.groupValues[1]
+    if (last.substring(m.range.last + 1).isBlank()) return old.dropLast(last.length).trimEnd('\n') + "\n"
+    val next = if (mark.first().isDigit()) (mark.dropLast(1).toInt() + 1).toString() + mark.last() else mark
+    return new + m.value.substringBefore(mark) + next + " "
+}
+
+/** Hours and dates on the margin of lists — the same everywhere: today stays ink in lists of things (not a timeline). */

@@ -80,6 +80,8 @@ class LocalParserTest {
         Case("Купить молоко\nЗабрать костюм из химчистки в субботу\nПозвонить Олегу завтра в 11") { n -> n.size == 3 && n.any { it.dueDate == tomorrow && it.time == "11:00" && "Олег" in it.people } },
         Case("сегодня вечером тренировка; завтра в 10 стоматолог") { n -> n.size == 2 && n.any { it.dueDate == tomorrow && it.time == "10:00" } },
         Case("подготовить бриф для кофейни к четвергу") { n -> n.single().dueDate == next(DayOfWeek.THURSDAY) },
+        Case("1. Купить молоко\n2. Забрать посылку завтра\n3. Позвонить Олегу") { n -> n.size == 3 && n.none { it.title.first().isDigit() } && n.any { it.dueDate == tomorrow } },
+        Case("- хлеб купить\n- оплатить интернет 5.11") { n -> n.size == 2 && n.none { it.title.startsWith("-") } },
         Case("в субботу день рождения Кати, купить подарок") { n -> n.isNotEmpty() && n.any { it.dueDate == next(DayOfWeek.SATURDAY) } },
     )
 

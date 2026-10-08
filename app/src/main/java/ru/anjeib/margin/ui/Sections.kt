@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.text.font.FontWeight
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -137,7 +139,7 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
                 Row(Modifier.fillMaxWidth()) {
                     (1..7).forEach { d ->
                         Text(java.time.DayOfWeek.of(d).getDisplayName(TextStyle.SHORT, if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) java.util.Locale.forLanguageTag("ru") else java.util.Locale.ENGLISH).lowercase(),
-                            style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.weight(1f).padding(bottom = 6.dp),
+                            style = Type.small.copy(color = c.graphite, fontSize = 12.sp, fontWeight = FontWeight.Medium), modifier = Modifier.weight(1f).padding(bottom = 6.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     }
                 }
@@ -157,7 +159,7 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
                                         .background(if (sel) c.link else Color.Transparent)
                                         .then(if (d == today && !sel) Modifier.border(1.dp, c.link, RoundedCornerShape(12.dp)) else Modifier)
                                         .clickable { picked = d.toString() }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                        Text("$n", style = Type.body.copy(color = when { sel -> c.bg; d.isBefore(today) -> c.faint; else -> c.ink }, fontSize = 15.sp))
+                                        Text("$n", style = Type.body.copy(color = when { sel -> c.bg; d.isBefore(today) -> c.graphite; else -> c.ink }, fontSize = 15.sp, fontWeight = if (sel || d == today) FontWeight.SemiBold else FontWeight.Normal))
                                         // How busy the day is — a number, quiet, never a colour per project.
                                         Text(if (count > 0) "$count" else " ", style = Type.small.copy(color = if (sel) c.bg else if (d.isBefore(today)) c.faint else c.link, fontSize = 11.sp))
                                     }
@@ -196,7 +198,7 @@ fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpe
         if (topics.isNotEmpty()) item("th") { Margined(Modifier.padding(top = 10.dp, bottom = 6.dp)) { GroupBadge(s.topicsBadge) } }
         items(topics, key = { "t" + it.id }) { t ->
             Column(Modifier.animateItem()) {
-                Margined(Modifier.padding(vertical = 4.dp), margin = { MarginText(t.doneAt?.let { runCatching { LocalDate.parse(it.take(10)).dayMonthShort() }.getOrNull() } ?: "", faint = true) }) {
+                Margined(Modifier.padding(vertical = 4.dp), margin = { t.doneAt?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }?.let { DayMargin(it, LocalDate.now(), false, strong = true) } }) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { TopicRow(t, onOpen = { onOpenTask(t.id) }) }
                         Spacer(Modifier.width(8.dp))

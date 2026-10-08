@@ -76,16 +76,17 @@ private fun Task.involves(p: Person) = p.involvedIn(this)
 fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPadding: PaddingValues) {
     val c = M.c
     val s = M.s
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("people") }
     val people = data.persons.filter { it.isContact }.sortedByDescending { p -> data.tasks.count { !it.done && it.involves(p) } }
     Box(Modifier.fillMaxSize().screenRule()) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
         item("h") { PageHead(s.peopleTitle, s.peopleSub) }
         if (people.isEmpty()) item("empty") { Margined { Empty(s.peopleTitle, s.emptyPeople) } }
-        // People and businesses apart; the badges only when both are there.
+        // People and companies on two tabs, as «Темы · Дела · Идеи» in «Обзор».
         val orgs = people.filter { it.org }
         val humans = people.filterNot { it.org }
-        listOf(s.peopleBadge to humans, s.orgsBadge to orgs).filter { it.second.isNotEmpty() }.forEach { (badge, group) ->
-        if (orgs.isNotEmpty()) item("b" + badge) { Margined(Modifier.padding(top = 12.dp, bottom = 2.dp)) { GroupBadge(badge) } }
+        if (people.isNotEmpty()) item("tabs") { Margined(Modifier.padding(bottom = 6.dp)) { SubTabs(listOf("people" to s.peopleBadge, "orgs" to s.orgsBadge), tab, { tab = it }) } }
+        listOf(if (tab == "orgs") orgs else humans).forEach { group ->
         items(group, key = { it.id }) { p ->
             val open = data.tasks.count { !it.done && it.involves(p) }
             SwipeActions(left = s.toArchive to { vm.archivePerson(p.id) }, right = s.delete to { vm.removePerson(p.id) }, modifier = Modifier.animateItem()) {
@@ -206,31 +207,30 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             }
             // «Личная информация»: what the user told about them as a person — birthday, family, what they like.
             Column(Modifier.padding(top = 22.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { dialog = "personal" }.padding(vertical = 4.dp)) {
-                SectionLabel(s.personalTitle, Modifier.padding(start = 4.dp, bottom = 6.dp))
+                GroupBadge(s.personalTitle, Modifier.padding(bottom = 8.dp))
                 if (person.personal.isEmpty()) Text("+ " + s.personalHint, style = Type.small.copy(color = c.graphite), modifier = Modifier.padding(start = 4.dp))
                 else person.personal.forEach { Text(it, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)) }
             }
             Spacer(Modifier.height(18.dp))
             val today = LocalDate.now()
             if (open.isNotEmpty()) {
-                SectionLabel(s.tasksCaps, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 4.dp))
+                GroupBadge(s.dealsBadge, Modifier.padding(top = 24.dp, bottom = 4.dp))
                 open.forEach { t -> TaskRow(t, today, true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }) }
             }
             // A dated history, each line saying where it came from.
             val history = personHistory(person, data)
             if (history.isNotEmpty()) {
-                SectionLabel(s.historyTitle, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 6.dp))
+                GroupBadge(s.historyTitle, Modifier.padding(top = 24.dp, bottom = 6.dp))
                 history.forEach { (d, text, src) ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 4.dp)) {
-                        Text(d.dayMonthShort(),
-                            style = Type.small.copy(color = c.graphite), modifier = Modifier.width(56.dp))
+                        Text(d.dayMonthShort(), style = dateStyle(13.sp), modifier = Modifier.width(56.dp))
                         Text(text, style = Type.small.copy(color = c.ink, fontSize = 14.sp), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text("  ($src)", style = Type.small.copy(color = c.faint, fontSize = 12.sp), maxLines = 1)
                     }
                 }
             }
             if (notes.isNotEmpty()) {
-                SectionLabel(s.notes, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 8.dp))
+                GroupBadge(s.notes, Modifier.padding(top = 24.dp, bottom = 8.dp))
                 // Say why a note is here when the name isn't in its words — only their contact card is.
                 notes.forEach { n ->
                     val byCard = n.entries.any { e -> e.attachments.any { a -> a.contact?.name?.let { person.matches(it) || it.equals(person.name, true) } == true } } &&
@@ -239,7 +239,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 }
             }
             if (done.isNotEmpty()) {
-                SectionLabel(s.done, Modifier.padding(start = 4.dp, top = 24.dp, bottom = 4.dp))
+                GroupBadge(s.done, Modifier.padding(top = 24.dp, bottom = 4.dp))
                 done.forEach { t -> TaskRow(t, today, true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }) }
             }
             Spacer(Modifier.height(32.dp))

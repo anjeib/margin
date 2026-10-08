@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.text.withStyle
+
+import androidx.compose.ui.text.buildAnnotatedString
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -92,7 +96,8 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
                 }
             }
             if (note != null && note.entries.isNotEmpty()) {
-                item("n-h") { Margined(Modifier.padding(top = 16.dp, bottom = 2.dp)) { GroupBadge(s.unplacedBadge) } }
+                // Without a badge: everything here is «unplaced» — only what waits for the internet is set apart.
+                if (data.queue.isNotEmpty()) item("n-h") { Spacer(Modifier.height(10.dp)) }
                 var last: LocalDate? = null
                 note.entries.reversed().forEach { e ->
                     val d = dayOf(e.at); val first = d != last; last = d
@@ -137,7 +142,12 @@ private fun InboxRow(day: LocalDate?, today: LocalDate, icon: @Composable () -> 
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(title, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        if (meta.isNotBlank()) Text(meta, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
+                        // The hour first in ink, what else quiet after it.
+                        val dateSp = dateSpan()
+                        if (meta.isNotBlank()) Text(buildAnnotatedString {
+                            val hour = Regex("^\\d{2}:\\d{2}").find(meta)?.value
+                            if (hour != null) { withStyle(dateSp) { append(hour) }; append(meta.removePrefix(hour)) } else append(meta)
+                        }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
                     }
                     thumb?.let { a -> Box(Modifier.padding(start = 10.dp).clip(RoundedCornerShape(10.dp)).clickable { onThumb(a) }) { Thumb(a, 56.dp) } }
                 }

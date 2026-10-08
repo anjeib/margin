@@ -85,7 +85,7 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
             if (deals.isNotEmpty()) {
                 item { Margined(Modifier.padding(top = 16.dp, bottom = 4.dp)) { GroupBadge(s.dealsBadge) } }
                 items(deals, key = { "t" + it.id }) { t ->
-                    Margined(margin = { (t.dueDate ?: t.startDate)?.let { MarginText(it.dayMonthShort(), faint = t.done) } }) {
+                    Margined(margin = { (t.dueDate ?: t.startDate)?.let { DayMargin(it, LocalDate.now(), false) } }) {
                         TaskRow(t, LocalDate.now(), true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onTask(t.id) })
                     }
                 }

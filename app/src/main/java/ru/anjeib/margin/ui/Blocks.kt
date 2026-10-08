@@ -198,7 +198,7 @@ private fun Block(owner: String, e: Entry, vm: MainVm, onFill: (Fill) -> Unit, a
             style = Type.label.copy(color = c.faint, fontSize = 10.5.sp))
         if (e.text.isNotBlank()) {
             Spacer(Modifier.height(3.dp))
-            Text(e.text, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp))
+            ListAwareText(e.text, Type.body.copy(color = c.ink, fontSize = 15.5.sp))
         }
         if (e.isList) {
             Spacer(Modifier.height(4.dp))
