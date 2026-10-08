@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.text.font.FontWeight
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -201,9 +203,9 @@ fun QuietTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, coun
                     .padding(horizontal = 4.dp, vertical = 6.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(l, style = Type.tab.copy(color = if (i == selected) c.ink else c.graphite))
+                    Text(l, style = Type.tab.copy(color = if (i == selected) c.ink else c.graphite, fontWeight = if (i == selected) FontWeight.SemiBold else FontWeight.Medium))
                     counts?.getOrNull(i)?.takeIf { it > 0 }?.let { n ->
-                        Text(" $n", style = Type.small.copy(fontSize = 13.sp, color = if (i == 0 && alertFirst) c.link else c.graphite))
+                        Text(" $n", style = Type.small.copy(fontSize = 14.sp, color = if (i == 0 && alertFirst) c.link else c.graphite))
                     }
                 }
                 Spacer(Modifier.height(5.dp))

@@ -578,6 +578,7 @@ interface Strings {
     val toOtherTopic: String
     val toTopicPick: String
     val recognizeWord: String
+    fun nIdeas(n: Int): String
     val overviewWord: String
     val monthWord: String
     val dealsOnlyWord: String
@@ -1250,6 +1251,7 @@ object Ru : Strings {
     override val toOtherTopic = "В другую тему"
     override val toTopicPick = "В тему…"
     override val recognizeWord = "Распознать"
+    override fun nIdeas(n: Int) = "$n " + pluralRu(n, "идея", "идеи", "идей")
     override val overviewWord = "Обзор"
     override val monthWord = "Месяц"
     override val dealsOnlyWord = "только дела"
@@ -1922,6 +1924,7 @@ object En : Strings {
     override val toOtherTopic = "Another topic"
     override val toTopicPick = "To a topic…"
     override val recognizeWord = "Read text"
+    override fun nIdeas(n: Int) = "$n " + if (n == 1) "idea" else "ideas"
     override val overviewWord = "Overview"
     override val monthWord = "Month"
     override val dealsOnlyWord = "to-dos only"

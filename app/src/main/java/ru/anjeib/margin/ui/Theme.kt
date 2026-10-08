@@ -109,7 +109,7 @@ object Type {
     val task = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 16.5.sp, lineHeight = 22.sp)
     val small = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 13.5.sp, lineHeight = 18.sp)
     val label = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 11.5.sp, letterSpacing = 1.2.sp)
-    val tab = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 15.sp)
+    val tab = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 17.sp)
     val italic = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontSize = 15.sp, lineHeight = 21.sp)
 }
 

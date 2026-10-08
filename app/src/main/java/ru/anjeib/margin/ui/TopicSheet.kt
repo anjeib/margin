@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.text.withLink
+
+import ru.anjeib.margin.data.questionRow
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -257,7 +261,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         val files = task.materials().size
         Margined {
             Column {
-                Text(task.title, style = Type.title.copy(color = c.ink, fontSize = 28.sp, lineHeight = 34.sp),
+                Text(task.title, style = Type.display.copy(color = c.ink, fontSize = 32.sp, lineHeight = 38.sp),
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { dialog = "rename" })
                 // The label and age on the left; materials and «в архив» as two quiet icons on the right of the same line.
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -270,13 +274,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                         materialsMode = !materialsMode; dealsOnly = false
                     }
                 }
-                // The progress; a tap shows the matters only («только дела»), another tap — the whole feed again.
-                if (total > 0) Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp).clip(RoundedCornerShape(8.dp))
-                    .clickable { dealsOnly = !dealsOnly; materialsMode = false }.padding(vertical = 2.dp)) {
-                    TopicProgress(doneCount, total)
-                    Text(s.progressSolved(doneCount, total) + if (dealsOnly) "  ·  " + s.dealsOnlyWord + "  ✕" else "",
-                        style = Type.small.copy(color = if (dealsOnly) c.link else c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(top = 5.dp))
-                } else Spacer(Modifier.height(12.dp))
+                // The same soft card as the summary on «Сегодня»: how far, how much, who owes what. A tap — the matters only.
+                TopicSummary(task, dealsOnly) { dealsOnly = !dealsOnly; materialsMode = false }
                 if (task.done) Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 14.dp, vertical = 10.dp)) {
                     Text(s.inArchiveSince(task.doneAt?.let { runCatching { LocalDate.parse(it).dayMonthShort() }.getOrNull() } ?: ""), style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
                     Text(s.bringBack, style = Type.small.copy(color = c.link), modifier = Modifier.clickable { vm.reviveTopic(task.id) })
@@ -339,6 +338,38 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     editQ?.let { q -> TextDialog(s.edit, q.title, "", onDismiss = { editQ = null }) { v -> vm.renameSubtask(task.id, q.id, v); editQ = null } }
     timeQ?.let { q -> TimeDialog(q.time, onDismiss = { timeQ = null }) { tm -> vm.setTime("q:${task.id}:${q.id}", tm); timeQ = null } }
     dateQ?.let { q -> QuestionDateDialog(q, onDismiss = { dateQ = null }) { d -> vm.setQuestionDue(task.id, q.id, d); dateQ = null } }
+}
+
+/** The topic's summary: «2 из 9 сделано · 5 записей · 3 файла», the progress, and who owes what inside it. */
+@Composable
+private fun TopicSummary(task: Task, dealsOnly: Boolean, onToggle: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    val total = task.subtasks.size
+    val done = task.subtasks.count { it.done }
+    val files = task.materials().size
+    val waits = task.subtasks.filter { !it.done && it.from != null }.sortedBy { it.due ?: "9999" }
+    val today = LocalDate.now()
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 12.dp).clip(RoundedCornerShape(16.dp)).background(c.linkSoft.copy(alpha = if (c.dark) 0.5f else 0.6f))
+        .clickable(enabled = total > 0, onClick = onToggle).padding(horizontal = 14.dp, vertical = 12.dp)) {
+        Text(listOfNotNull(if (total > 0) s.progressSolved(done, total) else null, task.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, files.takeIf { it > 0 }?.let { s.nMaterials(it) },
+            if (dealsOnly) s.dealsOnlyWord + "  ✕" else null).joinToString("  ·  "), style = Type.small.copy(color = if (dealsOnly) c.link else c.graphite, fontSize = 14.sp, fontFeatureSettings = "tnum"))
+        if (total > 0) TopicProgress(done, total, Modifier.padding(top = 8.dp))
+        if (waits.isNotEmpty()) {
+            Text(s.promisesTitle.uppercase(), style = Type.label.copy(color = c.link), modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
+            waits.take(4).forEach { q ->
+                val d = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.width(22.dp), contentAlignment = Alignment.CenterStart) { ArrowGlyph(c.link, 14.dp, incoming = true) }
+                    Text(buildAnnotatedString {
+                        withStyle(SpanStyle(color = c.link)) { append(q.from!!) }
+                        withStyle(SpanStyle(color = c.ink)) { append("  ·  " + q.title) }
+                    }, style = Type.small.copy(fontSize = 14.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    d?.let { Text(if (it == today) s.todayShort else it.dayMonthShort(), style = Type.small.copy(color = if (it.isBefore(today)) c.accent else c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(start = 10.dp)) }
+                }
+            }
+        }
+    }
 }
 
 /** A quiet icon in the topic's header with an optional raised count; [on] — filled petrol. */
@@ -557,67 +588,74 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, stamp: String?, sel
  */
 @Composable
 private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, stamp: String?, selected: Boolean, vm: MainVm, act: FeedActions) {
+    // The same row as on «Сегодня»: the kind mark, the circle, the hour as a petrol link, the words in ink, a quiet line under.
     val c = M.c
     val s = M.s
     val view = LocalView.current
     val motion = motionOn()
     var menu by remember(q.id) { mutableStateOf(false) }
     var tools by remember(q.id) { mutableStateOf(false) }
-    val base = when { removed -> c.faint; q.done -> c.ok; q.isWait -> c.wait; else -> c.link }
-    val color = if (depth > 0 && !removed && !q.done) base.copy(alpha = 0.78f) else base
     val strike = remember(q.id) { Animatable(if (q.done || removed) 1f else 0f) }
     LaunchedEffect(q.done, removed) { strike.animateTo(if (q.done || removed) 1f else 0f, tween(if (motion) 320 else 0, easing = FastOutSlowInEasing)) }
     val sel by androidx.compose.animation.animateColorAsState(if (selected) c.chip else Color.Transparent, tween(180), label = "sel")
     val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-    Margined(Modifier.padding(top = if (depth == 0) 10.dp else 2.dp), margin = stamp?.let { m -> { Box(Modifier.padding(top = if (!q.done && !removed && isSoon(due)) SoonLift + 6.dp else 0.dp)) { MarginText(m) } } }) {
+    val today = LocalDate.now()
+    // Late as on «Сегодня»: a day gone, or today's hour already past.
+    val late = !q.done && !removed && due != null && (due.isBefore(today) || (due == today && q.time != null && q.time!! < java.time.LocalTime.now().toString().take(5)))
+    fun tick() {
+        if (removed) return
+        if (!q.done) view.confirmTick()
+        val next = q.slots.firstOrNull { !it.done }
+        if (next != null) vm.toggleSlot("q:${task.id}:${q.id}", next.id) else vm.toggleQuestion(task.id, q.id)
+    }
+    Margined(Modifier.padding(top = if (depth == 0) 6.dp else 0.dp), margin = stamp?.let { m -> { Box(Modifier.padding(top = 8.dp)) { MarginText(m) } } }) {
         Box {
-            Column(Modifier.padding(start = 24.dp * depth)) {
-                if (!q.done && !removed) SoonBadge(due, Modifier.padding(top = 2.dp))
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(sel), verticalAlignment = Alignment.Top) {
-                    // The dash is the switch: tapped, it turns into a tick.
-                    Box(Modifier.size(30.dp, 30.dp).clip(CircleShape).clickable(enabled = !removed) {
-                        if (!q.done) view.confirmTick()
-                        val next = q.slots.firstOrNull { !it.done }
-                        if (next != null) vm.toggleSlot("q:${task.id}:${q.id}", next.id) else vm.toggleQuestion(task.id, q.id)
-                    },
-                        contentAlignment = Alignment.Center) {
-                        androidx.compose.animation.Crossfade(q.done, animationSpec = tween(220), label = "mark") { d ->
-                            if (d) TickGlyph(c.ok, 16.dp)
-                            else Text("—", style = Type.body.copy(color = color, fontSize = 17.sp, fontWeight = FontWeight.Medium))
+            Row(Modifier.fillMaxWidth().padding(start = 24.dp * depth).clip(RoundedCornerShape(10.dp)).background(sel)
+                .clickable { if (removed) menu = true else act.select("d:" + q.id) }.padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                KindMark(if (q.done || removed) null else task.questionRow(q))
+                Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(q.done, size = 18.dp, onToggle = ::tick) }
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    val title = buildAnnotatedString {
+                        if (q.time != null && !q.done && !removed) {
+                            withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("time", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = if (late) c.accent else c.link, fontWeight = FontWeight.Medium))) { act.timeDeal(q) }) { append(q.time!!) }
+                            append("   ")
                         }
+                        append(q.title)
                     }
-                    Column(Modifier.weight(1f).clickable { if (removed) menu = true else act.select("d:" + q.id) }.padding(top = 4.dp, bottom = 4.dp)) {
-                        // As on «Сегодня»: the hour first, a petrol link to the clock; the words at the same size.
-                        Row(verticalAlignment = Alignment.Top) {
-                            if (q.time != null && !q.done && !removed) Text(q.time!!, style = Type.body.copy(color = if (due != null && due.isBefore(LocalDate.now())) c.accent else c.link,
-                                fontSize = 15.5.sp, fontWeight = FontWeight.Medium), modifier = Modifier.padding(end = 10.dp).clip(RoundedCornerShape(6.dp)).clickable { act.timeDeal(q) })
-                            StrikeText(q.title, Type.body.copy(color = color, fontSize = 15.5.sp,
-                                fontWeight = if (depth == 0) FontWeight.Medium else FontWeight.Normal), strike.value, color)
-                        }
-                        // Due and who owes it, quietly; a day that's today or tomorrow is the badge above instead.
-                        // Several days: each one, ticked ones in green.
-                        if (q.slots.isNotEmpty() && !removed) Text(androidx.compose.ui.text.buildAnnotatedString {
-                            q.slots.forEachIndexed { i, sl ->
-                                if (i > 0) append("  ·  ")
-                                val d = runCatching { LocalDate.parse(sl.date) }.getOrNull()
-                                withStyle(SpanStyle(color = if (sl.done) c.ok else c.graphite, textDecoration = if (sl.done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)) {
-                                    append((if (sl.done) "✓ " else "") + (d?.dayMonthShort() ?: sl.date) + (sl.time?.let { ", $it" } ?: ""))
-                                }
+                    Text(title, style = Type.body.copy(fontSize = 15.5.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 1.dp).drawWithContent {
+                            drawContent()
+                            if (strike.value > 0f) { val y = 11.dp.toPx(); drawLine(c.faint, Offset(0f, y), Offset(size.width * strike.value, y), strokeWidth = 1.3.dp.toPx()) }
+                        })
+                    // Several days: each, ticked ones in green.
+                    if (q.slots.isNotEmpty() && !removed) Text(buildAnnotatedString {
+                        q.slots.forEachIndexed { i, sl ->
+                            if (i > 0) append("  ·  ")
+                            val d = runCatching { LocalDate.parse(sl.date) }.getOrNull()
+                            withStyle(SpanStyle(color = if (sl.done) c.ok else c.graphite, textDecoration = if (sl.done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)) {
+                                append((if (sl.done) "✓ " else "") + (d?.dayMonthShort() ?: sl.date) + (sl.time?.let { ", $it" } ?: ""))
                             }
-                        }, style = Type.small.copy(fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
-                        val meta = if (q.slots.isNotEmpty()) listOfNotNull(q.from, q.assignee) else listOfNotNull(
-                            due?.takeIf { !isSoon(it) && !q.done }?.let { (if (q.isWait) "~" else "") + it.dayMonthShort() }, q.from, q.assignee,
-                            if (q.done) q.doneAt?.let { d -> LocalDate.parse(d).dayMonthShort().let { if (q.isWait) s.gotOn(it) else s.solvedOn(it) } } else null,
-                        )
-                        if (meta.isNotEmpty() && !removed) Text(meta.joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
-                    }
-                    if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 7.dp))
-                    else if (selected) Box {
-                        LineTools(color, onAdd = { act.addUnder(q.id, q.title) }, onRemove = { act.select(""); vm.removeDeal(task.id, q.id) }, onEdit = { tools = true })
-                        SoftMenu(tools, { tools = false }) {
-                            SoftMenuItem(s.edit) { tools = false; act.editDeal(q) }
-                            SoftMenuItem(s.dueWord) { tools = false; act.dateDeal(q) }
                         }
+                    }, style = Type.small.copy(fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
+                    // The quiet line: when (late in terracotta), who owes it, when it was done.
+                    if (!removed) {
+                        val whenText = if (q.slots.isEmpty() && !q.done) due?.let { if (it.isBefore(today)) s.lateSince(it.dayMonthShort()) else (if (it == today) s.quickToday.lowercase() else if (it == today.plusDays(1)) s.quickTomorrow.lowercase() else it.dayMonthShort()) } else null
+                        val rest = listOfNotNull(q.from?.let { s.promiseToYou(it) }, q.assignee,
+                            if (q.done) q.doneAt?.let { d -> LocalDate.parse(d).dayMonthShort().let { if (q.isWait) s.gotOn(it) else s.solvedOn(it) } } else null)
+                        if (whenText != null || rest.isNotEmpty()) Text(buildAnnotatedString {
+                            whenText?.let { withStyle(SpanStyle(color = if (late) c.accent else c.graphite)) { append(it) } }
+                            if (whenText != null && rest.isNotEmpty()) append("  ·  ")
+                            append(rest.joinToString("  ·  "))
+                        }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
+                    }
+                }
+                if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 3.dp))
+                else if (selected) Box {
+                    LineTools(c.graphite, onAdd = { act.addUnder(q.id, q.title) }, onRemove = { act.select(""); vm.removeDeal(task.id, q.id) }, onEdit = { tools = true })
+                    SoftMenu(tools, { tools = false }) {
+                        SoftMenuItem(s.edit) { tools = false; act.editDeal(q) }
+                        SoftMenuItem(s.dueWord) { tools = false; act.dateDeal(q) }
                     }
                 }
             }

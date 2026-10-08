@@ -196,7 +196,7 @@ fun TaskList(
     var byProject by rememberSaveable { mutableStateOf(false) }
     var label by rememberSaveable { mutableStateOf<String?>(null) }
     // «Месяц»: which list, and «личное» / «работа» or both.
-    var monthTab by rememberSaveable { mutableStateOf("overview") }
+    var monthTab by rememberSaveable { mutableStateOf("topics") }
     var monthSphere by rememberSaveable { mutableStateOf<String?>(null) }
     var weekDay by rememberSaveable { mutableStateOf<String?>(null) }
     // Swipe left asks «на когда?» instead of quietly moving a day.
@@ -373,14 +373,19 @@ fun TaskList(
                 // «Месяц»: the month as a feed of days (Обзор) and, behind a small menu, the lists — topics, matters, ideas.
                 fun bare(t: Task) = t.thought && t.subtasks.isEmpty()
                 fun sOk(t: Task) = monthSphere == null || (if (monthSphere == "work") t.sphere == "work" else t.sphere != "work")
-                header(today.month.getDisplayName(java.time.format.TextStyle.FULL_STANDALONE, ru.anjeib.margin.data.locale).replaceFirstChar { it.uppercase() } + " ’" + "%02d".format(today.year % 100), null)
+                // «Обзор»: what there is — topics, matters, ideas; a count of each under the title.
+                val nTopics = data.tasks.count { it.topic && !it.done && !bare(it) }
+                val nDeals = (data.listTasks().count { !it.done } + data.undatedTopicMatters().size)
+                val nIdeas = data.tasks.count { bare(it) && !it.done }
+                // The tab already says «Обзор»: no title here — the menu itself comes first.
                 plain("m-tabs") {
-                  Column {
+                  Column(Modifier.padding(top = 14.dp)) {
                     Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        listOf("overview" to s.overviewWord, "topics" to s.topicsBadge, "deals" to s.dealsBadge, "ideas" to s.thoughts).forEach { (k, l) ->
-                            val on = monthTab == k
-                            Text(l, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 14.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal),
-                                modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else Color.Transparent).clickable { monthTab = k }.padding(horizontal = 10.dp, vertical = 6.dp))
+                        // One step under the top tabs: a little smaller, the chosen one on a petrol pill.
+                        listOf("topics" to s.topicsBadge, "deals" to s.dealsBadge, "ideas" to s.thoughts).forEach { (k, l) ->
+                            val on = monthTab == k || (k == "topics" && monthTab == "overview")
+                            Text(l, style = Type.body.copy(color = if (on) c.link else c.ink.copy(alpha = 0.72f), fontSize = 16.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium),
+                                modifier = Modifier.padding(end = 6.dp).clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else Color.Transparent).clickable { monthTab = k }.padding(horizontal = 14.dp, vertical = 7.dp))
                         }
                     }
                     // Личное / работа: the same pills as on the topics; a tap narrows the month to one, another tap shows both.
@@ -391,7 +396,7 @@ fun TaskList(
                                 .border(1.dp, if (on) col.copy(alpha = 0.5f) else c.hairline, RoundedCornerShape(50))
                                 .clickable { monthSphere = if (on) null else k }.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(7.dp).clip(CircleShape).background(if (on || monthSphere == null) col else col.copy(alpha = 0.35f)))
-                                Text(if (k == "work") s.sphereWork else s.spherePersonal, style = Type.small.copy(color = if (on) c.ink else c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 6.dp))
+                                Text(if (k == "work") s.sphereWork else s.spherePersonal, style = Type.small.copy(color = if (on) c.ink else c.graphite, fontSize = 14.sp), modifier = Modifier.padding(start = 6.dp))
                             }
                         }
                     }
@@ -399,7 +404,7 @@ fun TaskList(
                 }
                 val data2 = if (monthSphere == null) data else data.copy(tasks = data.tasks.filter { sOk(it) })
                 when (monthTab) {
-                    "topics" -> {
+                    "topics", "overview" -> {
                         val list = data2.tasks.filter { it.topic && !it.done && !bare(it) }.sortedByDescending { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.createdAt) }
                         if (list.isEmpty()) plain("m-none") { Empty(s.emptyAll, s.emptyHint) }
                         items(list, key = { "mt" + it.id }) { t -> MonthTopicRow(t, onOpen) }
@@ -439,19 +444,7 @@ fun TaskList(
                             MonthIdeaRow(t, grown, onOpen)
                         }
                     }
-                    else -> {
-                        // Обзор: every day of the month that has something, today open; past days say what was done, written, attached.
-                        val first = today.withDayOfMonth(1)
-                        val plans = (0 until today.lengthOfMonth()).map { first.plusDays(it.toLong()) }.map { d ->
-                            dayPlan(data2, d, today, events).let { p -> p.copy(feed = dayNotes(data2, d), deals = if (d.isBefore(today)) emptyList() else p.deals) }
-                        }.filter { it.date == today || !it.quiet }
-                        plans.forEach { p ->
-                            item("mday" + p.date) {
-                                DayBlock(p, today, open = isDayOpen(p.date), heading = false, onToggle = { toggleDay(p.date) }, topicOf = { id -> data.tasks.find { it.id == id } },
-                                    onOpen = onOpen, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = landed)
-                            }
-                        }
-                    }
+                    else -> {}
                 }
             }
 
@@ -1032,7 +1025,7 @@ private fun DayMargin(date: LocalDate, today: LocalDate, big: Boolean) {
 
 /** The little column right of the rule: what kind of thing it is — waiting, promised, repeating, a meeting, a topic. */
 @Composable
-private fun KindMark(t: Task?) {
+internal fun KindMark(t: Task?) {
     val c = M.c
     Box(Modifier.size(20.dp, 24.dp), contentAlignment = Alignment.Center) {
         when {

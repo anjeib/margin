@@ -27,8 +27,8 @@ android {
         applicationId = "ru.anjeib.margin.v2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.8"
+        versionCode = 9
+        versionName = "0.9"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild { cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_static") } }
@@ -51,10 +51,12 @@ android {
 
     buildTypes {
         debug {
-            // Lets a debug build sit next to the signed release on the same phone.
+            // Lets a debug build sit next to the signed release on the same phone — and tells them apart by name.
             applicationIdSuffix = ".debug"
+            manifestPlaceholders["appLabel"] = "Margin 2 · тест"
         }
         release {
+            manifestPlaceholders["appLabel"] = "Margin 2"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

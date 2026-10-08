@@ -180,7 +180,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     Crossfade(screen, animationSpec = tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "screen") { sc ->
                         when (sc) {
                             TASKS -> Crossfade(view, animationSpec = tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "view") { v ->
-                                TaskList(
+                                // «Сегодня» — what now, «Календарь» — what when, «Обзор» — what there is.
+                                if (v == Views.WEEK) CalendarScreen(shown, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
+                                else TaskList(
                                     v, shown, settings, working, vm, if (feedFilter == "all" || feedFilter == "deals") events else emptyList(),
                                     briefQuiet = typing || tray != null || pending != null || busy == "main",
                                     onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
@@ -375,11 +377,8 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
         }
         // The tabs start where the content starts, leaving room on the right for the funnel and the search.
         if (screen == TASKS) Box(Modifier.align(Alignment.CenterStart).padding(start = 48.dp)) {
-            val (t, w, a) = tabCounts(data)
-            QuietTabs(
-                listOf(s.today, s.thisWeek, s.monthWord), listOf(Views.TODAY, Views.WEEK, Views.ALL).indexOf(view), onTab,
-                counts = listOf(t, w, a),
-            )
+            // No numbers on the tabs: how much is today is said in its summary.
+            QuietTabs(listOf(s.today, s.calendarTitle, s.overviewWord), listOf(Views.TODAY, Views.WEEK, Views.ALL).indexOf(view), onTab)
         }
     }
 }
@@ -402,7 +401,6 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
             NavRow(Icons.Outlined.PhotoLibrary, s.materialsTitle, "", screen == MATERIALS) { onGo(MATERIALS, null) }
             NavRow(Icons.Outlined.PeopleOutline, s.peopleTitle, "", screen == PEOPLE) { onGo(PEOPLE, null) }
             Hairline(Modifier.padding(horizontal = 26.dp, vertical = 14.dp))
-            NavRow(Icons.Outlined.CalendarMonth, s.calendarTitle, "", screen == CALENDAR) { onGo(CALENDAR, null) }
             NavRow(Icons.Outlined.Archive, s.archiveTitle, (data.notes.count { it.archived } + data.persons.count { it.archived } + data.tasks.count { it.topic && it.done }).takeIf { it > 0 }?.toString() ?: "", screen == ARCHIVE) { onGo(ARCHIVE, null) }
           }
             // Settings at the bottom, out of the way.
