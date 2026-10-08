@@ -260,8 +260,29 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     fun send(text: String, smart: Boolean = false, label: String? = null, scope: Scope = Scope.Main, files: List<Attachment> = emptyList(), asQuestion: Boolean = false, movedHere: Boolean = false) {
         // «/дело», «/тема», «/идея», «/работа», «/личное» — said by the user, so they decide; the AI only fills in the rest.
-        val (t, tagKind, tagSphere) = splitTags(text)
+        val tg = parseTags(text)
+        val t = tg.text
+        val tagKind = tg.kind
+        val tagSphere = tg.sphere
         if ((t.isEmpty() && files.isEmpty()) || _busy.value != null) return
+        if (tg.done) { doneByWords(tg, scope); return }
+        // «#тема» from the main field: the words go into that topic, as if written there.
+        if (tg.topicId != null && scope == Scope.Main) {
+            data.value.tasks.find { it.id == tg.topicId }?.let { _toast.value = L.s.movedToTopic(it.title); land(listOf(it.id)) }
+            val rest = text.replace(hashRx, " ").replace(Regex("\\s{2,}"), " ").trim()
+            send(rest, smart, label, Scope.InTask(tg.topicId), files, asQuestion = asQuestion || tg.kind == "task", movedHere = true)
+            return
+        }
+        // «/запись»: only the words, into the feed — nothing made of them.
+        if (tg.record && t.isNotEmpty()) {
+            when (scope) {
+                is Scope.InTask -> applyScoped(AiPlan(null, listOf(kotlinx.serialization.json.JsonObject(mapOf(
+                    "type" to kotlinx.serialization.json.JsonPrimitive("add_entry"), "task_id" to kotlinx.serialization.json.JsonPrimitive(scope.taskId),
+                    "text" to kotlinx.serialization.json.JsonPrimitive(t)))), null, local = true), scope, files, t, true)
+                else -> runCommand(Command("note", t), scope, files, null)
+            }
+            return
+        }
         if (scope == Scope.Main && files.isEmpty() && !smart && setupAnswer(t)) return
         if (_pending.value != null) confirm() // typing on means the preview was fine
         val s = settings.value
@@ -285,14 +306,17 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         }
         // Said in so many words («добавь подзадачу …», «место: …») — done here, no AI, works offline too.
         if (cmd != null && runCommand(cmd, scope, files, userId)) return
-        // Read on the phone: always offline or without a key, in «Телефон» mode, and in «Авто» when the phone is sure.
+        // Read on the phone: always offline or without a key, in «Телефон» mode, in «Авто» when the phone is sure,
+        // and whenever the marks said it outright (#, @, /жду, /обещал, /дело…) — then they are what counts.
         if (!smart && scope != Scope.Notes && (cmd == null || tagKind != null)) {
             // A slip in the phone's reading must never lose the words: then they go the usual way (the AI or the queue).
-            val local = runCatching { LocalParser.parse(t, data.value, kind = when (tagKind) { "note" -> "idea"; "topic" -> "topic"; "task" -> "task"; else -> null }, sphere = tagSphere) }
+            val who = tg.people.firstOrNull()
+            val local = runCatching { LocalParser.parse(t, data.value, kind = when (tagKind) { "note" -> "idea"; "topic" -> "topic"; "task" -> "task"; else -> null }, sphere = tagSphere,
+                people = tg.people, waitFor = who.takeIf { tg.wait }, promiseTo = who.takeIf { tg.promise }) }
                 .getOrElse { LocalParser.Result(emptyList(), false, "error") }
             val mode = s.parseMode
             val offline = !Processor.online(ctx) || !Processor.ready(s)
-            if (local.items.isNotEmpty() && (offline || mode == "local" || (mode == "auto" && (local.sure || tagKind != null)))) {
+            if (local.items.isNotEmpty() && (offline || mode == "local" || tg.explicit || (mode == "auto" && local.sure))) {
                 val plan = LocalParser.plan(local, scope, asQuestion, source = t)
                 if (scope == Scope.Main) propose(plan, files, userId, false, source) else applyScoped(plan, scope, files, source, movedHere)
                 return
@@ -1033,22 +1057,97 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** What the marks in the words say: «/дело», «#тема», «@Маша», «/жду», «/обещал», «/готово», «/запись», «/работа». */
+    data class Tags(
+        val text: String, val kind: String? = null, val sphere: String? = null, val topicId: String? = null,
+        val people: List<String> = emptyList(), val wait: Boolean = false, val promise: Boolean = false, val done: Boolean = false, val record: Boolean = false,
+    ) {
+        val explicit get() = kind != null || topicId != null || people.isNotEmpty() || wait || promise || record
+    }
+
+    private val slashRx = Regex("(?:^|\\s)/(дело|тема|идея|работа|личное|жду|обещал\\p{L}*|готово|запись|todo|topic|idea|work|personal|wait|promised|done|note)(?=\\s|$)", RegexOption.IGNORE_CASE)
+    private val hashRx = Regex("(?:^|\\s)#(\\[[^\\]]+]|[\\p{L}\\d_-]+)")
+    private val atRx = Regex("(?:^|\\s)@(\\[[^\\]]+]|[\\p{L}\\d_-]+)")
+
+    /** «#ремонт» → the open topic whose title has a word starting so; «#[id]» — chosen from the window. */
+    fun topicFor(token: String, d: AppData = data.value): Task? {
+        val open = d.tasks.filter { it.topic && !it.done }
+        if (token.startsWith("[")) return open.find { it.id == token.trim('[', ']') }
+        val q = token.lowercase().replace('_', ' ').replace('ё', 'е')
+        fun words(t: Task) = t.title.lowercase().replace('ё', 'е').split(Regex("[^\\p{L}\\d]+")).filter { it.isNotBlank() }
+        return open.firstOrNull { it.title.lowercase().replace('ё', 'е') == q } ?: open.filter { t -> words(t).any { it.startsWith(q) } || t.title.lowercase().replace('ё', 'е').contains(q) }
+            .maxByOrNull { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.createdAt) }
+    }
+
+    /** «@маша» → the contact; «@[Кофейня «Зерно»]» — chosen; someone new keeps the name as written. */
+    fun personFor(token: String, d: AppData = data.value): String {
+        val n = token.trim('[', ']').replace('_', ' ')
+        val people = d.persons.filter { !it.archived }
+        return people.find { it.matches(n) }?.name ?: people.firstOrNull { it.name.lowercase().startsWith(n.lowercase()) }?.name ?: n.properName()
+    }
+
+    fun parseTags(text: String): Tags {
+        val tags = slashRx.findAll(text).map { it.groupValues[1].lowercase() }.toSet()
+        fun has(vararg w: String) = tags.any { t -> w.any { t.startsWith(it) } }
+        val topic = hashRx.find(text)?.groupValues?.get(1)?.let { topicFor(it) }
+        val people = atRx.findAll(text).map { personFor(it.groupValues[1]) }.toList()
+        // «позвонить @ЖЭК» keeps the name in the words; with «/жду» / «/обещал» the person is the other side, not the title.
+        val sides = has("жду", "wait") || has("обещал", "promised")
+        var t = text.replace(slashRx, " ").replace(hashRx) { m -> if (topicFor(m.groupValues[1]) != null) " " else m.value }
+            .replace(atRx) { m -> if (sides) " " else " " + personFor(m.groupValues[1]) }
+        t = t.replace(Regex("\\s{2,}"), " ").trim()
+        return Tags(
+            text = t,
+            kind = when { has("дело", "todo") -> "task"; has("идея", "idea") -> "note"; has("тема", "topic") -> "topic"; else -> null },
+            sphere = when { has("работа", "work") -> "work"; has("личное", "personal") -> "personal"; else -> null } ?: topic?.sphere,
+            topicId = topic?.id, people = people, wait = has("жду", "wait"), promise = has("обещал", "promised"), done = has("готово", "done"), record = has("запись", "note"),
+        )
+    }
+
     /** «/дело /работа Отправить счёт» → the words, the kind (task | note | topic), the sphere. */
-    private fun splitTags(text: String): Triple<String, String?, String?> {
-        val tagRx = Regex("(?:^|\\s)/(дело|тема|идея|работа|личное|todo|topic|idea|work|personal)(?=\\s|$)", RegexOption.IGNORE_CASE)
-        val tags = tagRx.findAll(text).map { it.groupValues[1].lowercase() }.toSet()
-        val t = text.replace(tagRx, " ").replace(Regex("\\s{2,}"), " ").trim()
-        val kind = when { "дело" in tags || "todo" in tags -> "task"; "идея" in tags || "idea" in tags -> "note"; "тема" in tags || "topic" in tags -> "topic"; else -> null }
-        val sphere = when { "работа" in tags || "work" in tags -> "work"; "личное" in tags || "personal" in tags -> "personal"; else -> null }
-        return Triple(t, kind, sphere)
+    private fun splitTags(text: String): Triple<String, String?, String?> = parseTags(text).let { Triple(it.text, it.kind, it.sphere) }
+
+    /** «/готово [#тема] слова[: что сказать]» → the open matter these words name best, or null. */
+    fun matterFor(words: String, topicId: String?, d: AppData = data.value): Pair<String, String>? {
+        fun stems(x: String) = x.lowercase().replace('ё', 'е').split(Regex("[^\\p{L}\\d]+")).filter { it.length >= 3 }.map { it.take(5) }.toSet()
+        val q = stems(words)
+        if (q.isEmpty()) return null
+        val cands = buildList {
+            d.tasks.filter { it.topic && !it.done && (topicId == null || it.id == topicId) }.forEach { t -> t.subtasks.filter { !it.done }.forEach { add("q:${t.id}:${it.id}" to it.title) } }
+            if (topicId == null) d.tasks.filter { !it.topic && !it.done }.forEach { add(it.id to it.title) }
+        }
+        return cands.map { it to (stems(it.second) intersect q).size }.filter { it.second > 0 }.maxByOrNull { it.second }?.first
+    }
+
+    /** «/готово»: the matter is ticked, words after «:» go into its topic's feed — no AI, works offline. */
+    private fun doneByWords(tg: Tags, scope: Scope) {
+        val topicId = tg.topicId ?: (scope as? Scope.InTask)?.taskId
+        val what = tg.text.substringBefore(':')
+        val said = tg.text.substringAfter(':', "").trim()
+        val hit = matterFor(what, topicId) ?: matterFor(what, null)
+        if (hit == null) { _toast.value = L.s.doneNotFound; return }
+        completeWithUndo(hit.first)
+        if (said.isNotEmpty()) {
+            val owner = questionRef(hit.first)?.first ?: hit.first
+            updateTask(owner) { it.copy(entries = it.entries + Entry(text = said.sentence())) }
+        }
+        _toast.value = L.s.doneMarked(hit.second)
     }
 
     /** The line under the field while typing: what the phone understood, and whether the AI will refine it. */
     fun previewOf(text: String): String? {
-        val (t, kind, sphere) = splitTags(text)
+        val tg = parseTags(text)
+        val t = tg.text
+        val kind = tg.kind
         if (t.isBlank() || Commands.parse(t) != null) return null
-        val r = runCatching { LocalParser.parse(t, data.value, kind = when (kind) { "note" -> "idea"; "topic" -> "topic"; "task" -> "task"; else -> null }, sphere = sphere) }.getOrNull() ?: return null
-        val line = runCatching { LocalParser.describe(r) }.getOrNull() ?: return null
+        if (tg.done) return matterFor(t.substringBefore(':'), tg.topicId)?.let { L.s.previewDone(it.second) } ?: L.s.doneNotFound
+        val topic = tg.topicId?.let { id -> data.value.tasks.find { it.id == id } }
+        if (tg.record) return listOfNotNull(L.s.previewRecord, topic?.let { L.s.intoTopic(it.title) }).joinToString("  ·  ")
+        val who = tg.people.firstOrNull()
+        val r = runCatching { LocalParser.parse(t, data.value, kind = when (kind) { "note" -> "idea"; "topic" -> "topic"; "task" -> "task"; else -> null }, sphere = tg.sphere,
+            people = tg.people, waitFor = who.takeIf { tg.wait }, promiseTo = who.takeIf { tg.promise }) }.getOrNull() ?: return null
+        val line = (runCatching { LocalParser.describe(r) }.getOrNull() ?: return null) + (topic?.let { "  ·  " + L.s.intoTopic(it.title) } ?: "")
+        if (tg.explicit) return line
         val s = settings.value
         val ai = s.parseMode != "local" && Processor.online(ctx) && Processor.ready(s) && (s.parseMode == "cloud" || (!r.sure && kind == null))
         return if (ai) line + "  ·  " + L.s.previewAi else line

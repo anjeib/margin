@@ -64,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -116,9 +117,9 @@ fun SmartComposer(
     val settings by vm.settings.collectAsState()
     val working by vm.working.collectAsState()
     var text by rememberSaveable { mutableStateOf("") }
-    // Chosen «/» tags ride in front of the words when they are sent: «/дело /работа Отправить счёт».
+    // Chosen marks ride in front of the words when they are sent: «/дело #[topic] @[Маша] Отправить счёт».
     var tags by rememberSaveable { mutableStateOf(listOf<String>()) }
-    fun tagged(t: String) = (tags.joinToString(" ") { "/$it" } + " " + t).trim().also { tags = emptyList() }
+    fun tagged(t: String) = (tags.joinToString(" ") + " " + t).trim().also { tags = emptyList() }
     val files = remember { mutableStateListOf<Attachment>() }
     var menu by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<WavRecorder?>(null) }
@@ -189,38 +190,57 @@ fun SmartComposer(
     }
 
     Column(modifier.fillMaxWidth()) {
-        // «/…» at the end of the words: a small window of choices, one over another.
-        val query = if (slash && modeLabel == null) Regex("(?:^|\\s)/(\\p{L}*)$").find(text)?.groupValues?.get(1)?.lowercase() else null
+        // «/…», «#…», «@…» at the end of the words: a small window of choices, one over another.
+        val trigger = if (slash && modeLabel == null) Regex("(?:^|\\s)([/#@])([\\p{L}\\d_-]*)$").find(text) else null
+        val sign = trigger?.groupValues?.get(1)
+        val query = trigger?.groupValues?.get(2)?.lowercase()?.replace('ё', 'е')
         val kinds = listOf(s.tagDeal, s.tagTopic, s.tagIdea)
         val spheres = listOf(s.tagWork, s.tagPersonal)
-        val offer = query?.let { q -> (kinds + spheres).filter { it.startsWith(q) && it !in tags } }.orEmpty()
+        val actions = listOf(s.tagWait, s.tagPromise, s.tagDone, s.tagRecord)
+        val d = vm.data.collectAsState().value
+        // One choice: (the mark it adds, what the window shows, its group, a small sign before it).
+        data class Pick(val token: String, val label: String, val group: String, val dot: Color? = null, val topic: Boolean = false)
+        val offer: List<Pick> = when (sign) {
+            "/" -> (kinds.map { Pick("/$it", "/$it", "kind") } + spheres.map { Pick("/$it", "/$it", "sphere", if (it == s.tagWork) c.link else c.ok) } +
+                actions.map { Pick("/$it", "/$it", "action") }).filter { it.label.drop(1).startsWith(query.orEmpty()) && it.token !in tags }
+            "#" -> d.tasks.filter { it.topic && !it.done }.sortedByDescending { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.createdAt) }
+                .filter { query.isNullOrEmpty() || it.title.lowercase().replace('ё', 'е').contains(query) }.take(6).map { Pick("#[${it.id}]", it.title, "topic", topic = true) }
+            "@" -> d.persons.filter { !it.archived && !it.draft }.filter { query.isNullOrEmpty() || it.name.lowercase().replace('ё', 'е').startsWith(query) || it.name.lowercase().replace('ё', 'е').contains(" $query") }
+                .take(6).map { Pick("@[${it.name}]", it.name, "person", if (it.org) c.graphite else null) } +
+                (if (!query.isNullOrBlank() && d.persons.none { it.name.equals(query, true) }) listOf(Pick("@[" + query.replaceFirstChar { it.uppercase() } + "]", "+ " + query.replaceFirstChar { it.uppercase() }, "person")) else emptyList())
+            else -> emptyList()
+        }
         androidx.compose.animation.AnimatedVisibility(offer.isNotEmpty(), enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) +
             androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(200), initialScale = 0.92f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 1f)),
             exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))) {
-            androidx.compose.material3.Surface(Modifier.padding(start = 6.dp, bottom = 8.dp).width(196.dp), shape = RoundedCornerShape(16.dp), color = c.card,
+            androidx.compose.material3.Surface(Modifier.padding(start = 6.dp, bottom = 8.dp).widthIn(min = 196.dp, max = 300.dp), shape = RoundedCornerShape(16.dp), color = c.card,
                 shadowElevation = 8.dp, border = androidx.compose.foundation.BorderStroke(1.dp, c.hairline)) {
                 Column(Modifier.padding(vertical = 6.dp)) {
-                    Text(s.slashWhat, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 2.dp))
-                    offer.forEachIndexed { i, tag ->
-                        if (i > 0 && tag in spheres && offer[i - 1] in kinds) Hairline(Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
+                    Text(when (sign) { "#" -> s.hashWhat; "@" -> s.atWhat; else -> s.slashWhat }, style = Type.small.copy(color = c.faint, fontSize = 12.sp),
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 2.dp))
+                    offer.forEachIndexed { i, p ->
+                        if (i > 0 && p.group != offer[i - 1].group) Hairline(Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
                         Row(Modifier.fillMaxWidth().clickable {
-                            // One kind and one sphere at most: a new choice replaces the old one of its group.
-                            val group = if (tag in kinds) kinds else spheres
-                            tags = tags.filterNot { it in group } + tag
-                            text = text.replace(Regex("(?:^|\\s)/\\p{L}*$"), "").trimEnd().let { if (it.isEmpty()) "" else "$it " }
-                        }.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (tag in spheres) {
-                                Box(Modifier.size(7.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (tag == s.tagWork) c.link else c.ok))
-                                Spacer(Modifier.width(9.dp))
+                            // One of each kind of mark: a new choice replaces the old one of its group.
+                            fun groupOf(t: String) = when {
+                                t.startsWith("#") -> "topic"; t.startsWith("@") -> "person"
+                                t.drop(1) in kinds -> "kind"; t.drop(1) in spheres -> "sphere"; else -> "action"
                             }
-                            Text("/$tag", style = Type.body.copy(color = c.ink, fontSize = 15.sp))
+                            tags = tags.filterNot { groupOf(it) == p.group && p.group != "person" } + p.token
+                            text = text.replace(Regex("(?:^|\\s)[/#@][\\p{L}\\d_-]*$"), "").trimEnd().let { if (it.isEmpty()) "" else "$it " }
+                        }.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            when {
+                                p.topic -> { TopicGlyph(c.link, 13.dp); Spacer(Modifier.width(9.dp)) }
+                                p.dot != null -> { Box(Modifier.size(7.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.dot)); Spacer(Modifier.width(9.dp)) }
+                            }
+                            Text(p.label, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         }
                     }
                 }
             }
         }
         // The live reading: «дело · завтра 15:00 · Маша · работа» — what will be made, before it is sent.
-        val read = preview?.takeIf { text.isNotBlank() && offer.isEmpty() }?.invoke((tags.joinToString(" ") { "/$it" } + " " + text).trim())
+        val read = preview?.takeIf { text.isNotBlank() && offer.isEmpty() }?.invoke((tags.joinToString(" ") + " " + text).trim())
         androidx.compose.animation.AnimatedVisibility(read != null, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.expandVertically(),
             exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)) + androidx.compose.animation.shrinkVertically()) {
             var last by remember { mutableStateOf("") }
@@ -228,11 +248,19 @@ fun SmartComposer(
             Text(last, style = Type.small.copy(color = c.link, fontSize = 13.sp), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 18.dp, end = 12.dp, bottom = 6.dp))
         }
-        if (tags.isNotEmpty()) Row(Modifier.padding(start = 6.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (tags.isNotEmpty()) Row(Modifier.padding(start = 6.dp, bottom = 6.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             tags.forEach { tag ->
                 Row(Modifier.clip(RoundedCornerShape(50)).background(c.linkSoft).clickable { tags = tags - tag }.padding(start = 11.dp, end = 7.dp, top = 4.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text(tag, style = Type.small.copy(color = c.link, fontSize = 13.sp))
+                    // «дело», «≡ Ремонт ванной», «@Маша».
+                    val shown = when {
+                        tag.startsWith("#[") -> vm.data.value.tasks.find { it.id == tag.drop(2).dropLast(1) }?.title ?: tag
+                        tag.startsWith("@[") -> "@" + tag.drop(2).dropLast(1)
+                        else -> tag.removePrefix("/")
+                    }
+                    if (tag.startsWith("#")) { TopicGlyph(c.link, 11.dp); Spacer(Modifier.width(5.dp)) }
+                    Text(shown, style = Type.small.copy(color = c.link, fontSize = 13.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 180.dp))
                     Spacer(Modifier.width(4.dp))
                     Icon(Icons.Rounded.Close, s.dismiss, tint = c.link, modifier = Modifier.size(13.dp))
                 }

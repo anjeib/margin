@@ -25,21 +25,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.anjeib.margin.i18n.HelpSection
 
-/** «Помощь»: how Margin is arranged — short cards with things to say and what they do. */
+/** «Помощь»: how Margin is arranged — in the app's own look: the rule, the title, sections under petrol badges. */
 @Composable
 fun HelpScreen(contentPadding: PaddingValues) {
     val c = M.c
     val s = M.s
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item("h") {
-            Column(Modifier.padding(top = 18.dp, bottom = 8.dp, start = 4.dp)) {
-                Text(s.helpTitle, style = Type.display.copy(color = c.ink))
-                Spacer(Modifier.height(4.dp))
-                Text(s.helpIntro, style = Type.small.copy(color = c.graphite, fontSize = 15.sp))
-            }
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().screenRule()) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
+            item("h") { PageHead(s.helpTitle, s.helpIntro) }
+            items(s.helpSections, key = { it.title }) { HelpCard(it) }
+            item("end") { Spacer(Modifier.height(24.dp)) }
         }
-        items(s.helpSections, key = { it.title }) { HelpCard(it) }
-        item("end") { Spacer(Modifier.height(24.dp)) }
     }
 }
 
@@ -47,37 +43,33 @@ fun HelpScreen(contentPadding: PaddingValues) {
 @Composable
 private fun HelpCard(h: HelpSection) {
     val c = M.c
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).padding(16.dp)) {
-        Text(h.title, style = Type.cardTitle.copy(color = c.ink))
-        if (h.text.isNotBlank()) {
-            Spacer(Modifier.height(6.dp))
-            Text(h.text, style = Type.body.copy(color = c.graphite, fontSize = 15.sp))
-        }
-        if (h.examples.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            // Things to say look like what you'd type: quotes on a soft ground.
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                h.examples.forEach { Said(it) }
-            }
-        }
-        if (h.pairs.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            h.pairs.forEach { (what, does) ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
-                    Text(what, style = Type.small.copy(color = c.ink, fontSize = 14.5.sp), modifier = Modifier.weight(0.45f))
-                    Spacer(Modifier.width(10.dp))
-                    // «Обещание · Вам от Марины» is shown as the badge itself — the way it looks in the lists.
-                    val badge = M.s.promiseWord + " · "
-                    if (does.startsWith(badge)) Row(Modifier.weight(0.55f)) {
-                        Column(Modifier.clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 9.dp, vertical = 4.dp)) {
-                            Text(M.s.promiseWord, style = Type.small.copy(color = c.link, fontSize = 12.5.sp))
-                            Text(does.removePrefix(badge), style = Type.small.copy(color = c.ink, fontSize = 13.5.sp))
+    Column {
+        Margined(Modifier.padding(top = 14.dp, bottom = 14.dp)) {
+            Column {
+                GroupBadge(h.title, Modifier.padding(bottom = 8.dp))
+                if (h.text.isNotBlank()) Text(h.text, style = Type.body.copy(color = c.ink, fontSize = 15.sp))
+                if (h.examples.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    // Things to say look like what you'd type: quotes on a soft ground.
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        h.examples.forEach { Said(it) }
+                    }
+                }
+                if (h.pairs.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    h.pairs.forEach { (what, does) ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
+                            // What to type or tap — in ink; marks («/», «#», «@») in petrol, as in the field.
+                            Text(what, style = Type.body.copy(color = if (what.firstOrNull() in setOf('/', '#', '@')) c.link else c.ink, fontSize = 14.5.sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), modifier = Modifier.weight(0.42f))
+                            Spacer(Modifier.width(12.dp))
+                            Text(does, style = Type.small.copy(color = c.graphite, fontSize = 14.sp), modifier = Modifier.weight(0.58f))
                         }
                     }
-                    else Text(does, style = Type.small.copy(color = c.graphite, fontSize = 14.5.sp), modifier = Modifier.weight(0.55f))
                 }
             }
         }
+        Hairline(Modifier.padding(start = MarginW))
     }
 }
 

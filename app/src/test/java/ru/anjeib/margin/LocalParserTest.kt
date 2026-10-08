@@ -127,6 +127,17 @@ class LocalParserTest {
         println("Чужие фразы: верно ${right}/${foreign.size}, отдано ИИ $toAi, ошибся уверенно $wrongSure")
     }
 
+    /** «@Маша» with «/жду» / «/обещал»: said outright, it wins over the words. */
+    @Test fun marks() {
+        L.lang = Lang.Ru
+        val w = LocalParser.parse("ключи от квартиры до субботы", base, people = listOf("Маша"), waitFor = "Маша").items.single()
+        assertTrue(w.waitingFor == "Маша" && w.promisedTo == null && w.due == next(DayOfWeek.SATURDAY))
+        val p = LocalParser.parse("исходники баннеров завтра", base, people = listOf("Лёша"), promiseTo = "Лёша").items.single()
+        assertTrue(p.promisedTo == "Лёша" && p.waitingFor == null && "Лёша" !in p.people)
+        val n = LocalParser.parse("позвонить насчёт счётчиков", base, people = listOf("ЖЭК")).items.single()
+        assertTrue("ЖЭК" in n.people)
+    }
+
     @Test fun coverage() {
         L.lang = Lang.Ru
         var ok = 0; var sure = 0

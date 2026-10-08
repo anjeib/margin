@@ -578,6 +578,17 @@ interface Strings {
     val toOtherTopic: String
     val toTopicPick: String
     val recognizeWord: String
+    val tagWait: String
+    val tagPromise: String
+    val tagDone: String
+    val tagRecord: String
+    val hashWhat: String
+    val atWhat: String
+    fun doneMarked(t: String): String
+    val doneNotFound: String
+    fun intoTopic(t: String): String
+    fun previewDone(t: String): String
+    val previewRecord: String
     val recordBadge: String
     val openWord: String
     val readTextWord: String
@@ -645,58 +656,71 @@ interface Strings {
 
 object Ru : Strings {
     override val helpTitle = "Помощь"
-    override val helpIntro = "Коротко о том, как устроен Margin."
+    override val helpIntro = "Всё о разделах, метках и жестах"
     override val helpSections = listOf(
-        HelpSection("Как писать", "Обычными словами или голосом. В одном сообщении может быть несколько дел — Margin разложит их сам.",
-            examples = listOf("Завтра в 15 созвон с Мариной", "Лена до пятницы пришлёт график, я обещал Виктору оплату до 10-го", "Идея: на сайте нужен калькулятор цен")),
-        HelpSection("Разделы", "", pairs = listOf(
-            "Задачи" to "дела со сроком и без: Сегодня, Неделя, Все",
-            "Заметки" to "мысли, идеи, фото, голосовые, списки",
-            "Контакты" to "люди и компании, которых вы добавили: «+ контакт» в пузыре, нажатие на серое имя или «Добавить контакт: …»",
-            "Проекты" to "всё по одной теме: задачи, заметки, люди",
-            "Входящие" to "ещё не разобранное: без интернета и пересланное",
-            "Календарь" to "месяц и число дел в каждом дне",
-            "Архив" to "убранные заметки и контакты, можно вернуть",
+        HelpSection("Как это устроено", "Margin — ежедневник, в который пишут как в мессенджер. Одно поле внизу: пишете или диктуете, и из слов получаются дела, темы и идеи. Всё разбирается прямо в телефоне, без интернета; ИИ подключается только для сложного, если есть сеть.",
+            examples = listOf("Завтра в 15 созвон с Мариной", "Купить корм коту", "Идея: блог о дизайне")),
+        HelpSection("Три вида записей", "", pairs = listOf(
+            "Дело" to "одно действие: «Купить хлеб», «Стоматолог в пт в 11». Кружок — отметить сделанным",
+            "Тема" to "дело, которое разрослось: своя лента записей, файлов и дел внутри. Дело становится темой само, когда о нём появляется второе событие",
+            "Идея" to "мысль без дел: «Посмотреть выставку», «Темы для постов». Лента записей, как у темы",
         )),
-        HelpSection("Обещания", "Margin отмечает, кто кому что должен. На главной — обещания на ближайшие три дня и просроченные.", pairs = listOf(
-            "«Марина пришлёт правки до среды»" to "под задачей: Вам от Марины · ср",
-            "«Обещал Виктору оплату до 10-го»" to "под задачей: Виктору от Вас · сб",
-            "⧗ песочные часы" to "нажмите, когда получили",
+        HelpSection("Сегодня · Календарь · Обзор", "", pairs = listOf(
+            "Сегодня" to "сводка дня (сколько дел и тем, кто кому что должен), дела по времени, ниже — «Без даты» с возрастом и «Завтра — N дел»",
+            "Календарь" to "месяц сеткой, под ним выбранный день; прошедшие дни — что сделано",
+            "Обзор" to "всё, что есть: Темы, Дела, Идеи; фильтр «Личное / Работа»",
         )),
-        HelpSection("Внутри задачи", "Всё, что вы пишете в карточке, относится к этой задаче.",
-            examples = listOf("Подзадачи: купить полис, взять паспорт", "Подзадача 2 готова", "Перенеси на пятницу в 15:00", "Место: Ленина, 5", "Это у доктора Иванова, не забыть полис")),
-        HelpSection("Внутри заметки", "Написанное добавляется новым блоком.", pairs = listOf(
-            "«+»" to "фото, видео, голосовое, файл, контакт, список",
-            "нажатие на блок" to "вставить рядом",
-            "удержание" to "изменить, подпись, удалить",
-            "«В задачу»" to "сделать из идеи задачу",
+        HelpSection("Метки в поле ввода", "Метки говорят приложению точно, что вы имели в виду. Наберите знак — появится окошко с вариантами; выбранное встаёт плашкой над полем. Метки можно сочетать в любом порядке.", pairs = listOf(
+            "/дело  /тема  /идея" to "что это",
+            "/работа  /личное" to "сфера",
+            "#тема" to "в какую тему: слова лягут в её ленту, дела — в её дела",
+            "@человек" to "кто: контакт или компания; нового можно добавить из окошка",
+            "/жду @Маша" to "ждём от Маши: ← в списках и сводке",
+            "/обещал @Лёша" to "вы обещали Лёше: →",
+            "/готово слова" to "отметить сделанным дело с такими словами; после «:» — запись в его тему",
+            "/запись" to "только в ленту, без дел",
         )),
-        HelpSection("Команды", "Если Margin понял не так — скажите прямо. Команды понимаются сразу, без ИИ.", pairs = listOf(
-            "Добавить задачу: …" to "новая задача",
-            "Добавить заметку: …" to "новая заметка",
-            "Добавить контакт: …" to "человек или компания",
-            "Добавить подзадачу: …" to "в открытую задачу",
-            "Исправить: …" to "изменить существующее, ничего нового",
-            "Место / Время / Телефон: …" to "одно поле задачи",
+        HelpSection("Примеры меток", "",
+            examples = listOf("#ремонт купить затирку до пятницы", "/жду @Маша ключи до субботы", "/обещал @Лёша исходники завтра", "/готово #зерно упаковку: Олег одобрил", "#квартира /запись хозяйка согласна на кошку", "позвонить @ЖЭК насчёт счётчиков")),
+        HelpSection("Даты, время, повторы", "Пишите обычными словами — приложение поймёт без ИИ.", pairs = listOf(
+            "завтра в 15, в пятницу, 12 октября, 5.11" to "день и время",
+            "через неделю, до конца месяца, к среде" to "срок",
+            "утром, вечером" to "часть дня без точного часа",
+            "в пн и чт в 19:00" to "одно дело на несколько дней: у каждого дня своя галочка",
+            "каждый вторник, по понедельникам и средам, первого числа каждый месяц" to "повтор",
+        )),
+        HelpSection("Люди и обещания", "Имена понимаются в любом падеже. Кто кому должен — видно в сводке «Сегодня» и в строке дела.", pairs = listOf(
+            "Дима пришлёт макет в среду" to "← ждём от Димы",
+            "обещал Анне показать калькулятор" to "→ вы обещали Анне",
+            "Контакты" to "две вкладки: Люди и Компании; ⋯ в карточке — «Это компания»",
+        )),
+        HelpSection("Внутри темы", "Всё, что пишете в теме, ложится в её ленту. На полях — день, над словами — «ЗАПИСЬ · время», дела — блоками «ДЕЛА · N».", pairs = listOf(
+            "кружок у дела" to "сделано",
+            "долгое нажатие на строку" to "дело под ним, изменить, срок, удалить",
+            "нажатие на сводку" to "показать только дела",
+            "скрепка" to "только материалы, с поиском",
+            "⋯" to "изменить название, в архив",
+            "удалённое" to "остаётся зачёркнутым; нажатие — вернуть или удалить совсем",
+        )),
+        HelpSection("Списки", "Начните строку с «1.», «1)», «-» или «•» — Enter продолжит список, Enter на пустом пункте закончит. Список, отправленный с главного, — это несколько дел; в записи темы — просто список."),
+        HelpSection("Входящие и Материалы", "", pairs = listOf(
+            "Входящие" to "что записано без интернета и сохранено без слов; нажатие — открыть, в тему, распознать текст с фото, убрать",
+            "Материалы" to "все фото, файлы и голосовые по дням со ссылками на темы; лупа — поиск, в том числе по тексту на фото",
+            "Архив" to "решённые темы со всей лентой; новость в теме или «Вернуть» возвращают её",
         )),
         HelpSection("Жесты", "", pairs = listOf(
-            "вправо по задаче" to "готово",
-            "влево по задаче" to "отложить: завтра, неделя, месяц, свой срок",
-            "влево по заметке, контакту" to "в архив",
-            "вправо по заметке, контакту" to "удалить",
-            "«Отменить»" to "есть под каждым изменением несколько секунд",
-        )),
-        HelpSection("Связи", "Задача помнит, откуда пришла: «↳ из сообщения» или идея из заметки. В карточке — «Связи»: люди, их другие обещания, проект. Под задачей ссылки выделены цветом: контакт открывает его страницу, адрес — карту."),
-        HelpSection("Пересылка", "Чужое сообщение — из Telegram, MAX, почты — Margin разберёт как чужие слова: что вам обещали, о чём просят.", pairs = listOf(
-            "«Поделиться»" to "→ «В Margin»",
-            "выделить текст" to "→ «В Margin» в меню",
-            "«Копировать»" to "→ в Margin «Вставить скопированное»",
+            "вправо по делу" to "сделано",
+            "влево по делу" to "отложить: завтра, неделя, месяц, свой срок",
+            "время у дела" to "нажатие — часы, поменять время",
+            "«Отменить»" to "несколько секунд после любого изменения",
         )),
         HelpSection("Голос и файлы", "", pairs = listOf(
             "микрофон" to "диктовка — сразу текстом",
-            "«+» → «Голосовое»" to "запись сохраняется с расшифровкой",
-            "фото → «Распознать»" to "текст, визитка в контакт, доска в задачи",
+            "«+»" to "фото, камера, файл, контакт, голосовое",
+            "подпись к фото с #тема" to "файл сразу в материалы темы",
         )),
+        HelpSection("Без интернета", "Дела, даты, люди, метки разбираются в телефоне. В Настройках → «Разбор текста»: «Телефон» — только код, «Авто» — сложное (несколько дел подряд, «созвонились…», «перенеси…») отдаётся ИИ, когда есть сеть, «ИИ» — как раньше. Под полем ввода видно, что поняло приложение, ещё до отправки."),
+        HelpSection("Пример данных", "В Настройках → «Пример данных» можно загрузить два месяца жизни молодого дизайнера, чтобы всё попробовать. Ваши данные сохраняются отдельно и возвращаются кнопкой «Вернуть мои данные»."),
     )
     override val tourWriteTitle = "Пишите как думаете"
     override val tourWriteText = "Словами или голосом — Margin сам разложит на задачи, сроки и обещания."
@@ -1255,6 +1279,17 @@ object Ru : Strings {
     override val toOtherTopic = "В другую тему"
     override val toTopicPick = "В тему…"
     override val recognizeWord = "Распознать"
+    override val tagWait = "жду"
+    override val tagPromise = "обещал"
+    override val tagDone = "готово"
+    override val tagRecord = "запись"
+    override val hashWhat = "В какую тему?"
+    override val atWhat = "Кто?"
+    override fun doneMarked(t: String) = "Сделано: $t"
+    override val doneNotFound = "Не нашёл такое дело"
+    override fun intoTopic(t: String) = "в «$t»"
+    override fun previewDone(t: String) = "отметить сделанным: $t"
+    override val previewRecord = "запись"
     override val recordBadge = "Запись"
     override val openWord = "Открыть"
     override val readTextWord = "Распознать текст"
@@ -1322,58 +1357,41 @@ object Ru : Strings {
 
 object En : Strings {
     override val helpTitle = "Help"
-    override val helpIntro = "How Margin works, in short."
+    override val helpIntro = "Sections, marks and gestures"
     override val helpSections = listOf(
-        HelpSection("How to write", "In plain words or by voice. One message can hold several things — Margin sorts them out.",
-            examples = listOf("Call with Marina tomorrow at 3 pm", "Lena sends the schedule by Friday, I promised Victor the payment by the 10th", "Idea: the site needs a price calculator")),
-        HelpSection("Sections", "", pairs = listOf(
-            "Tasks" to "with or without dates: Today, Week, All",
-            "Notes" to "thoughts, ideas, photos, voice, lists",
-            "Contacts" to "people and companies you added: “+ contact” in the bubble, a tap on a grey name or “Add contact: …”",
-            "Projects" to "everything on one topic: tasks, notes, people",
-            "Inbox" to "not sorted yet: offline and forwarded",
-            "Calendar" to "the month and how much each day holds",
-            "Archive" to "notes and contacts put away, can come back",
+        HelpSection("How it works", "Margin is a planner you write to like a messenger. One field at the bottom: type or dictate, and your words become to-dos, topics and ideas. It is read right on the phone, without internet; the AI joins only for the hard parts, when online.",
+            examples = listOf("Call Marina tomorrow at 3", "Buy cat food", "Idea: a design blog")),
+        HelpSection("Three kinds", "", pairs = listOf(
+            "To-do" to "one action. The circle marks it done",
+            "Topic" to "a to-do that grew: its own feed of records, files and to-dos. A to-do becomes a topic by itself on its second event",
+            "Idea" to "a thought without to-dos; a feed like a topic's",
         )),
-        HelpSection("Promises", "Margin keeps track of who owes whom. The main screen shows promises due within three days and late ones.", pairs = listOf(
-            "“Marina sends the edits by Wednesday”" to "under the task: to you from Marina · Wed",
-            "“Promised Victor the payment by the 10th”" to "under the task: to Victor from you · Sat",
-            "⧗ hourglass" to "tap when you got it",
+        HelpSection("Today · Calendar · Overview", "", pairs = listOf(
+            "Today" to "the day's summary (how much, who owes what), to-dos by the hour, «No date» with their age, «Tomorrow — N»",
+            "Calendar" to "the month as a grid and the chosen day",
+            "Overview" to "everything: Topics, To-dos, Ideas; filter Personal / Work",
         )),
-        HelpSection("Inside a task", "Whatever you write in the card is about this task.",
-            examples = listOf("Subtasks: buy the policy, take the passport", "Subtask 2 done", "Move to Friday 3 pm", "Place: 5 Lenina St", "It’s at Dr Ivanov’s, don’t forget the policy")),
-        HelpSection("Inside a note", "What you write becomes a new block.", pairs = listOf(
-            "“+”" to "photo, video, voice, file, contact, list",
-            "tap a block" to "insert next to it",
-            "hold" to "edit, caption, delete",
-            "“To task”" to "turn an idea into a task",
+        HelpSection("Marks in the field", "Marks tell the app exactly what you meant. Type the sign — a small window offers choices; the chosen one sits over the field. Combine them in any order.", pairs = listOf(
+            "/todo  /topic  /idea" to "what it is",
+            "/work  /personal" to "the sphere",
+            "#topic" to "which topic: words go to its feed, to-dos to its to-dos",
+            "@person" to "who: a contact or a company",
+            "/wait @Masha" to "we wait from Masha: ←",
+            "/promised @Lesha" to "you promised Lesha: →",
+            "/done words" to "mark done the to-do with these words; after «:» — a record in its topic",
+            "/note" to "only into the feed, no to-dos",
         )),
-        HelpSection("Commands", "If Margin got it wrong — say it directly. Commands are understood at once, without AI.", pairs = listOf(
-            "Add task: …" to "a new task",
-            "Add note: …" to "a new note",
-            "Add contact: …" to "a person or a company",
-            "Add subtask: …" to "to the open task",
-            "Fix: …" to "change what exists, nothing new",
-            "Place / Time / Phone: …" to "one field of the task",
+        HelpSection("Examples", "", examples = listOf("#repair buy grout by Friday", "/wait @Masha keys by Saturday", "/done #coffee packaging: Oleg approved")),
+        HelpSection("Dates, times, repeats", "Plain words work without the AI: tomorrow at 3, on Friday, in a week, on Mon and Thu at 7 pm (one to-do on several days), every Tuesday (a repeat)."),
+        HelpSection("Inside a topic", "Everything written in a topic goes into its feed: the day on the margin, «RECORD · time» over the words, to-dos in blocks.", pairs = listOf(
+            "the circle" to "done",
+            "long press a line" to "a to-do under it, edit, due date, delete",
+            "tap the summary" to "to-dos only",
+            "paperclip" to "materials only",
         )),
-        HelpSection("Gestures", "", pairs = listOf(
-            "right on a task" to "done",
-            "left on a task" to "put off: tomorrow, week, month, a date",
-            "left on a note, contact" to "archive",
-            "right on a note, contact" to "delete",
-            "“Undo”" to "under every change for a few seconds",
-        )),
-        HelpSection("Links", "A task remembers where it came from: “↳ from a message” or an idea in a note. The card shows “Links”: people, their other promises, the project. Under a task, links are in colour: a contact opens their page, an address opens the map."),
-        HelpSection("Forwarding", "Someone else’s message — from Telegram, MAX, mail — Margin reads as their words: what they promised you, what they ask.", pairs = listOf(
-            "“Share”" to "→ “To Margin”",
-            "select text" to "→ “To Margin” in the menu",
-            "“Copy”" to "→ in Margin “Paste what you copied”",
-        )),
-        HelpSection("Voice and files", "", pairs = listOf(
-            "mic" to "dictation — straight to text",
-            "“+” → “Voice”" to "a recording kept with its transcript",
-            "photo → “Recognize”" to "text, a business card to a contact, a whiteboard to tasks",
-        )),
+        HelpSection("Lists", "Start a line with «1.», «-» or «•» — Enter continues the list, Enter on an empty item ends it."),
+        HelpSection("Inbox, Materials, Archive", "Inbox — what was written offline or saved without words; tap for actions. Materials — all files by day, with search. Archive — settled topics; news in one brings it back."),
+        HelpSection("Offline", "Settings → «Reading your words»: Phone — code only; Auto — hard phrases go to the AI when online; AI — as before. The line over the field shows what was understood before you send."),
     )
     override val tourWriteTitle = "Write as you think"
     override val tourWriteText = "In words or by voice — Margin turns it into tasks, dates and promises."
@@ -1932,6 +1950,17 @@ object En : Strings {
     override val toOtherTopic = "Another topic"
     override val toTopicPick = "To a topic…"
     override val recognizeWord = "Read text"
+    override val tagWait = "wait"
+    override val tagPromise = "promised"
+    override val tagDone = "done"
+    override val tagRecord = "note"
+    override val hashWhat = "Which topic?"
+    override val atWhat = "Who?"
+    override fun doneMarked(t: String) = "Done: $t"
+    override val doneNotFound = "No such to-do found"
+    override fun intoTopic(t: String) = "into «$t»"
+    override fun previewDone(t: String) = "mark done: $t"
+    override val previewRecord = "record"
     override val recordBadge = "Record"
     override val openWord = "Open"
     override val readTextWord = "Read the text"

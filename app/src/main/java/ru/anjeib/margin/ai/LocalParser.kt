@@ -136,7 +136,8 @@ object LocalParser {
 
     // ---------------- parsing ----------------
 
-    fun parse(text0: String, d: AppData, today: LocalDate = LocalDate.now(), kind: String? = null, sphere: String? = null): Result {
+    fun parse(text0: String, d: AppData, today: LocalDate = LocalDate.now(), kind: String? = null, sphere: String? = null,
+              people: List<String> = emptyList(), waitFor: String? = null, promiseTo: String? = null): Result {
         val text = text0.trim()
         if (text.isEmpty()) return Result(emptyList(), true)
         val names = Names(d)
@@ -149,7 +150,13 @@ object LocalParser {
         val chunks = split(text)
         // A long stream with no punctuation is dictation — the AI splits it better.
         if (!Regex("[\\n.;,!?]").containsMatchIn(text) && text.split(Regex("\\s+")).size > 16) { sure = false; why = why ?: "long" }
-        val items = chunks.mapNotNull { one(it, names, today, kind, sphere) }
+        // «@Маша», «/жду», «/обещал» are said outright: they win over what the words seem to say.
+        val items = chunks.mapNotNull { one(it, names, today, kind, sphere) }.map { i ->
+            if (people.isEmpty() && waitFor == null && promiseTo == null) i
+            else i.copy(people = (i.people + people).distinct().filter { it != (waitFor ?: i.waitingFor) && it != (promiseTo ?: i.promisedTo) },
+                waitingFor = waitFor ?: i.waitingFor.takeIf { promiseTo == null }, promisedTo = promiseTo ?: i.promisedTo.takeIf { waitFor == null },
+                title = if (waitFor != null && i.waitingFor == null) i.title else i.title)
+        }
         if (items.isEmpty()) return Result(emptyList(), false, "empty")
         // What someone owes, with more after a comma («Дима сделает дизайн, на мне тексты») is two matters — the AI's.
         if (items.any { it.waitingFor != null && it.title.contains(',') }) { sure = false; why = why ?: "wait-and-more" }
