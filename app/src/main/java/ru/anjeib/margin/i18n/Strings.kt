@@ -578,6 +578,14 @@ interface Strings {
     val toOtherTopic: String
     val toTopicPick: String
     val recognizeWord: String
+    val parseSection: String
+    val parseLocal: String
+    val parseAuto: String
+    val parseCloud: String
+    val parseLocalHint: String
+    val parseAutoHint: String
+    val parseCloudHint: String
+    val previewAi: String
     val demoSection: String
     val demoAskTitle: String
     val demoAskText: String
@@ -768,7 +776,7 @@ object Ru : Strings {
     override val chipEvening = "Итоги дня"
     override val promptEvening = "Сделай короткий вечерний обзор: что сделано сегодня, что не успел. Предложи, что перенести на завтра, и спроси про задачи, которые переносились 3 раза и больше, — оставить или удалить. Если на завтра задач больше, чем реально успеть, скажи об этом."
     override val notesCreated = "Сохранено в заметки"
-    override fun tasksCount(n: Int) = "$n " + pluralRu(n, "задача", "задачи", "задач")
+    override fun tasksCount(n: Int) = "$n " + pluralRu(n, "дело", "дела", "дел")
 
     override val smart = "СПИСКИ"
     override val inbox = "Без даты"
@@ -1235,6 +1243,14 @@ object Ru : Strings {
     override val toOtherTopic = "В другую тему"
     override val toTopicPick = "В тему…"
     override val recognizeWord = "Распознать"
+    override val parseSection = "РАЗБОР ТЕКСТА"
+    override val parseLocal = "Телефон"
+    override val parseAuto = "Авто"
+    override val parseCloud = "ИИ"
+    override val parseLocalHint = "Всё разбирается на телефоне — без интернета и без ИИ. Сложное уточните тегами «/» или поправьте в карточке."
+    override val parseAutoHint = "Простое — на телефоне, сразу и без интернета; сложное (несколько дел подряд, «созвонились…», «перенеси…») — ИИ, когда есть интернет."
+    override val parseCloudHint = "Всё разбирает ИИ, как раньше. Без интернета — телефон."
+    override val previewAi = "уточнит ИИ"
     override val demoSection = "ПРИМЕР ДАННЫХ"
     override val demoAskTitle = "Загрузить пример?"
     override val demoAskText = "Два месяца жизни молодого дизайнера: темы, дела всех видов, идеи, контакты, материалы. Ваши данные сохранятся отдельно — вернуть их можно в Настройках."
@@ -1263,13 +1279,13 @@ object Ru : Strings {
     override val spherePersonal = "Личное"
     override val sphereWork = "Работа"
     override val sphereAdd = "личное или работа?"
-    override val orgsBadge = "Организации"
+    override val orgsBadge = "Компании"
     override val peopleBadge = "Люди"
-    override val markOrg = "Это организация"
+    override val markOrg = "Это компания"
     override val markPerson = "Это человек"
     override val stepOne = "дело"
     override val stepHint = "с делами внутри дело станет темой"
-    override val peopleSub = "люди из ваших дел и тем"
+    override val peopleSub = "люди и компании из ваших дел и тем"
     override val archiveSub = "решённые темы — со всеми материалами"
     override val sinceWord = "с"
     override val sortsWhenOnline = "разберётся, когда появится связь"
@@ -1425,7 +1441,7 @@ object En : Strings {
     override val chipEvening = "Wrap up the day"
     override val promptEvening = "Do a short evening review: what got done today and what didn't. Suggest what to move to tomorrow, and ask about tasks postponed 3+ times — keep or delete. If tomorrow holds more than is realistic, say so."
     override val notesCreated = "Saved to notes"
-    override fun tasksCount(n: Int) = "$n " + if (n == 1) "task" else "tasks"
+    override fun tasksCount(n: Int) = "$n " + if (n == 1) "to-do" else "to-dos"
 
     override val smart = "LISTS"
     override val inbox = "No date"
@@ -1892,6 +1908,14 @@ object En : Strings {
     override val toOtherTopic = "Another topic"
     override val toTopicPick = "To a topic…"
     override val recognizeWord = "Read text"
+    override val parseSection = "READING YOUR WORDS"
+    override val parseLocal = "Phone"
+    override val parseAuto = "Auto"
+    override val parseCloud = "AI"
+    override val parseLocalHint = "Everything is read on the phone — no internet, no AI. Use «/» tags for the rest or fix it in the card."
+    override val parseAutoHint = "Simple phrases on the phone, at once and offline; hard ones (several things at once, reports, edits) by the AI when online."
+    override val parseCloudHint = "The AI reads everything, as before. Offline — the phone."
+    override val previewAi = "the AI will refine"
     override val demoSection = "SAMPLE DATA"
     override val demoAskTitle = "Load sample data?"
     override val demoAskText = "Two months of a young designer's life: topics, every kind of to-do, ideas, contacts, materials. Your data is kept aside — bring it back in Settings."
@@ -1920,13 +1944,13 @@ object En : Strings {
     override val spherePersonal = "Personal"
     override val sphereWork = "Work"
     override val sphereAdd = "personal or work?"
-    override val orgsBadge = "Businesses"
+    override val orgsBadge = "Companies"
     override val peopleBadge = "People"
-    override val markOrg = "It’s a business"
+    override val markOrg = "It’s a company"
     override val markPerson = "It’s a person"
     override val stepOne = "to-do"
     override val stepHint = "with to-dos inside a matter becomes a topic"
-    override val peopleSub = "people from your matters and topics"
+    override val peopleSub = "people and companies from your matters and topics"
     override val archiveSub = "settled topics, with all their materials"
     override val sinceWord = "since"
     override val sortsWhenOnline = "will be sorted once you’re online"

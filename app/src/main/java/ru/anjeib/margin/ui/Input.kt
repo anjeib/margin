@@ -106,6 +106,8 @@ fun SmartComposer(
     sendEmpty: Boolean = false,
     /** «/» offers what it is (дело / тема / идея) and where it belongs (работа / личное) — the main field only. */
     slash: Boolean = false,
+    /** What the phone understood of the words so far — one quiet line over the field. */
+    preview: ((String) -> String?)? = null,
 ) {
     val c = M.c
     val s = M.s
@@ -216,6 +218,15 @@ fun SmartComposer(
                     }
                 }
             }
+        }
+        // The live reading: «дело · завтра 15:00 · Маша · работа» — what will be made, before it is sent.
+        val read = preview?.takeIf { text.isNotBlank() && offer.isEmpty() }?.invoke((tags.joinToString(" ") { "/$it" } + " " + text).trim())
+        androidx.compose.animation.AnimatedVisibility(read != null, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.expandVertically(),
+            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)) + androidx.compose.animation.shrinkVertically()) {
+            var last by remember { mutableStateOf("") }
+            if (read != null) last = read
+            Text(last, style = Type.small.copy(color = c.link, fontSize = 13.sp), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 18.dp, end = 12.dp, bottom = 6.dp))
         }
         if (tags.isNotEmpty()) Row(Modifier.padding(start = 6.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             tags.forEach { tag ->

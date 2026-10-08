@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.offset
+
 import ru.anjeib.margin.data.dayOf
 
 import ru.anjeib.margin.data.undatedTopicMatters
@@ -1010,8 +1012,8 @@ private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () 
 }
 
 /**
- * Deal rows with the matters of one topic kept together under a single «↳ Тема» link — the topic is named once,
- * its matters follow as ordinary rows.
+ * Deal rows; the matters of one topic stay together and the topic is named once, under them — «↳ Тема»:
+ * the matter comes first, where it belongs comes second.
  */
 @Composable
 private fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String>, onOpen: (String) -> Unit, onDone: (String) -> Unit, onLater: (String) -> Unit, onTime: (String) -> Unit,
@@ -1022,24 +1024,22 @@ private fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String>
         val tid = t.topicId
         if (tid != null && tid in seen) return@forEach
         val group = if (tid != null) list.filter { it.topicId == tid } else listOf(t)
-        if (tid != null) {
-            seen += tid
-            Row(Modifier.padding(top = 8.dp, bottom = 0.dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(tid) }.padding(vertical = 2.dp, horizontal = 2.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                TopicGlyph(c.link, 13.dp)
-                Spacer(Modifier.width(6.dp))
-                Text(t.topicTitle ?: "", style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-        // A topic's matters sit a step in from its link, so a plain matter after the group reads as its own.
-        Column(Modifier.padding(start = if (tid != null) 16.dp else 0.dp, bottom = if (tid != null) 6.dp else 0.dp)) {
-            group.forEach { g ->
-                androidx.compose.runtime.key(g.id) {
-                    SwipeTask(g, onDone = { onDone(g.id) }, onLater = { onLater(g.id) }, modifier = Modifier.landing(g.id in landed || (tid != null && tid in landed), 0), radius = 0) {
-                        DealRow(g, today, onToggle = { onDone(g.id) }, onOpen = { onOpen(g.id) }, onTime = { onTime(g.id) }, age = age?.invoke(g), faded = faded(g))
-                    }
+        if (tid != null) seen += tid
+        group.forEach { g ->
+            androidx.compose.runtime.key(g.id) {
+                SwipeTask(g, onDone = { onDone(g.id) }, onLater = { onLater(g.id) }, modifier = Modifier.landing(g.id in landed || (tid != null && tid in landed), 0), radius = 0) {
+                    DealRow(g, today, onToggle = { onDone(g.id) }, onOpen = { onOpen(g.id) }, onTime = { onTime(g.id) }, age = age?.invoke(g), faded = faded(g))
                 }
             }
+        }
+        // The link under the topic's matters, at the words' edge: «↳ Ремонт ванной».
+        if (tid != null) Row(Modifier.padding(start = 52.dp, bottom = 6.dp).offset(y = (-4).dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(tid) }.padding(vertical = 2.dp, horizontal = 2.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("↳", style = Type.small.copy(color = c.link, fontSize = 13.sp))
+            Spacer(Modifier.width(5.dp))
+            TopicGlyph(c.link, 12.dp)
+            Spacer(Modifier.width(5.dp))
+            Text(t.topicTitle ?: "", style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

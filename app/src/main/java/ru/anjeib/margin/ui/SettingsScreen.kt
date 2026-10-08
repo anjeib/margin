@@ -144,6 +144,14 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             ) { i -> vm.updateSettings { it.copy(lang = listOf(LangMode.Ru, LangMode.En, LangMode.Auto)[i]) } }
         }
 
+        // Who reads the words: the phone, the phone with the AI for hard phrases, or the AI.
+        Group(s.parseSection) {
+            val modes = listOf("local", "auto", "cloud")
+            Segmented(listOf(s.parseLocal, s.parseAuto, s.parseCloud), modes.indexOf(settings.parseMode).coerceAtLeast(0)) { i -> vm.updateSettings { it.copy(parseMode = modes[i]) } }
+            Text(when (settings.parseMode) { "local" -> s.parseLocalHint; "cloud" -> s.parseCloudHint; else -> s.parseAutoHint },
+                style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp))
+        }
+
         // Sample data: to try everything without filling it by hand; the user's own data waits aside.
         var demoAsk by remember { mutableStateOf(false) }
         var mineKept by remember { mutableStateOf(vm.hasMine()) }

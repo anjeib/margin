@@ -256,7 +256,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         busy = busy == (if (screen == NOTES) "notes" else "main"),
                         onSend = { t, f -> vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f) },
                         prefill = prefill, onPrefillUsed = { prefill = null },
-                        onTyping = { typing = it }, slash = screen != NOTES,
+                        onTyping = { typing = it }, slash = screen != NOTES, preview = { vm.previewOf(it) },
                     )
                 }
             }

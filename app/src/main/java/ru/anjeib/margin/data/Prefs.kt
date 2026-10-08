@@ -27,6 +27,8 @@ data class Settings(
     val voiceModel: String = DEFAULT_VOICE,
     /** Send dictated text right away instead of leaving it in the composer. */
     val voiceSendNow: Boolean = true,
+    /** Who reads the words: local (the phone only) | auto (the phone, the AI for hard phrases when online) | cloud (the AI when online). */
+    val parseMode: String = "auto",
     /** Android Auto Backup to the Google account (see MarginBackupAgent). */
     val googleBackup: Boolean = true,
     /** Use the on-device Whisper model even when online. */
@@ -81,6 +83,7 @@ class Prefs private constructor(context: Context) {
         voiceAi = sp.getBoolean("voiceAi", true),
         voiceModel = sp.getString("voiceModel", null) ?: Settings.DEFAULT_VOICE,
         voiceSendNow = sp.getBoolean("voiceAutoSend", true),
+        parseMode = sp.getString("parseMode", null)?.takeIf { it in setOf("local", "auto", "cloud") } ?: "auto",
         googleBackup = sp.getBoolean("googleBackup", true),
         whisperAlways = sp.getBoolean("whisperAlways", false),
         calendar = sp.getBoolean("calendar", false),
@@ -116,6 +119,7 @@ class Prefs private constructor(context: Context) {
             putBoolean("voiceAi", s.voiceAi)
             putString("voiceModel", s.voiceModel)
             putBoolean("voiceAutoSend", s.voiceSendNow)
+            putString("parseMode", s.parseMode)
             putBoolean("googleBackup", s.googleBackup)
             putBoolean("whisperAlways", s.whisperAlways)
             putBoolean("calendar", s.calendar)

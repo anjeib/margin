@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.ai.LocalParser
+
 import ru.anjeib.margin.data.toggleSlot
 
 import ru.anjeib.margin.data.syncSlots
@@ -258,11 +260,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     fun send(text: String, smart: Boolean = false, label: String? = null, scope: Scope = Scope.Main, files: List<Attachment> = emptyList(), asQuestion: Boolean = false, movedHere: Boolean = false) {
         // «/дело», «/тема», «/идея», «/работа», «/личное» — said by the user, so they decide; the AI only fills in the rest.
-        val tagRx = Regex("(?:^|\\s)/(дело|тема|идея|работа|личное|todo|topic|idea|work|personal)(?=\\s|$)", RegexOption.IGNORE_CASE)
-        val tags = tagRx.findAll(text).map { it.groupValues[1].lowercase() }.toSet()
-        val t = text.replace(tagRx, " ").replace(Regex("\\s{2,}"), " ").trim()
-        val tagKind = when { "дело" in tags || "todo" in tags -> "task"; "идея" in tags || "idea" in tags -> "note"; "тема" in tags || "topic" in tags -> "topic"; else -> null }
-        val tagSphere = when { "работа" in tags || "work" in tags -> "work"; "личное" in tags || "personal" in tags -> "personal"; else -> null }
+        val (t, tagKind, tagSphere) = splitTags(text)
         if ((t.isEmpty() && files.isEmpty()) || _busy.value != null) return
         if (scope == Scope.Main && files.isEmpty() && !smart && setupAnswer(t)) return
         if (_pending.value != null) confirm() // typing on means the preview was fine
@@ -287,6 +285,19 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         }
         // Said in so many words («добавь подзадачу …», «место: …») — done here, no AI, works offline too.
         if (cmd != null && runCommand(cmd, scope, files, userId)) return
+        // Read on the phone: always offline or without a key, in «Телефон» mode, and in «Авто» when the phone is sure.
+        if (!smart && scope != Scope.Notes && (cmd == null || tagKind != null)) {
+            // A slip in the phone's reading must never lose the words: then they go the usual way (the AI or the queue).
+            val local = runCatching { LocalParser.parse(t, data.value, kind = when (tagKind) { "note" -> "idea"; "topic" -> "topic"; "task" -> "task"; else -> null }, sphere = tagSphere) }
+                .getOrElse { LocalParser.Result(emptyList(), false, "error") }
+            val mode = s.parseMode
+            val offline = !Processor.online(ctx) || !Processor.ready(s)
+            if (local.items.isNotEmpty() && (offline || mode == "local" || (mode == "auto" && (local.sure || tagKind != null)))) {
+                val plan = LocalParser.plan(local, scope, asQuestion, source = t)
+                if (scope == Scope.Main) propose(plan, files, userId, false, source) else applyScoped(plan, scope, files, source, movedHere)
+                return
+            }
+        }
         if (!Processor.ready(s)) {
             if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = L.s.noKey, error = true)) else _toast.value = L.s.noKey
             return
@@ -1020,6 +1031,27 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             m.copy(topic = true, subtasks = m.subtasks + ru.anjeib.margin.data.Subtask(title = t.sentence(),
                 due = if (first) m.due ?: m.start else null, time = if (first) m.time else null))
         }
+    }
+
+    /** «/дело /работа Отправить счёт» → the words, the kind (task | note | topic), the sphere. */
+    private fun splitTags(text: String): Triple<String, String?, String?> {
+        val tagRx = Regex("(?:^|\\s)/(дело|тема|идея|работа|личное|todo|topic|idea|work|personal)(?=\\s|$)", RegexOption.IGNORE_CASE)
+        val tags = tagRx.findAll(text).map { it.groupValues[1].lowercase() }.toSet()
+        val t = text.replace(tagRx, " ").replace(Regex("\\s{2,}"), " ").trim()
+        val kind = when { "дело" in tags || "todo" in tags -> "task"; "идея" in tags || "idea" in tags -> "note"; "тема" in tags || "topic" in tags -> "topic"; else -> null }
+        val sphere = when { "работа" in tags || "work" in tags -> "work"; "личное" in tags || "personal" in tags -> "personal"; else -> null }
+        return Triple(t, kind, sphere)
+    }
+
+    /** The line under the field while typing: what the phone understood, and whether the AI will refine it. */
+    fun previewOf(text: String): String? {
+        val (t, kind, sphere) = splitTags(text)
+        if (t.isBlank() || Commands.parse(t) != null) return null
+        val r = runCatching { LocalParser.parse(t, data.value, kind = when (kind) { "note" -> "idea"; "topic" -> "topic"; "task" -> "task"; else -> null }, sphere = sphere) }.getOrNull() ?: return null
+        val line = runCatching { LocalParser.describe(r) }.getOrNull() ?: return null
+        val s = settings.value
+        val ai = s.parseMode != "local" && Processor.online(ctx) && Processor.ready(s) && (s.parseMode == "cloud" || (!r.sure && kind == null))
+        return if (ai) line + "  ·  " + L.s.previewAi else line
     }
 
     // ---------------- «Пример данных» ----------------
