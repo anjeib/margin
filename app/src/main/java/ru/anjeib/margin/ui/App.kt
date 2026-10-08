@@ -194,7 +194,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             PROJECTS -> ProjectsScreen(data, onOpen = { go(TASKS, Views.project(it)) }, contentPadding = pad)
                             CALENDAR -> CalendarScreen(data, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
                             ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad, onOpenTask = { openId(it) })
-                            MATERIALS -> MaterialsGrid(data.tasks.filter { !(it.topic && it.done) }, onView = { viewing = it }, onTopic = { openId(it) }) { PageHead(s.materialsTitle, s.materialsSub) }
+                            MATERIALS -> MaterialsGrid(data.tasks.filter { !(it.topic && it.done) }, onView = { viewing = it }, onTopic = { openId(it) }) { t -> PageHead(s.materialsTitle, s.materialsSub, trailing = t) }
                             SETTINGS -> SettingsScreen(settings, vm, pad)
                             HELP -> HelpScreen(pad)
                             INBOX -> InboxScreen(data, vm, onOpenNote = { openNote = it }, contentPadding = pad)

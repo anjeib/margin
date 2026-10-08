@@ -1012,14 +1012,15 @@ fun dayPlan(data: AppData, date: LocalDate, today: LocalDate, events: List<CalEv
 
 /** The date on the margin: the number in serif, the month and the weekday small under it; today in petrol. */
 @Composable
-private fun DayMargin(date: LocalDate, today: LocalDate, big: Boolean) {
+internal fun DayMargin(date: LocalDate, today: LocalDate, big: Boolean, strong: Boolean = false) {
     val c = M.c
-    val past = date.isBefore(today)
+    // [strong]: a day that marks where something began or was written (a topic, an idea, a record) — never faded.
+    val past = date.isBefore(today) && !strong
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (big) 2.dp else 8.dp)) {
         Text(date.dayOfMonth.toString(), style = Type.display.copy(color = when { date == today && !big -> c.link; past -> c.faint; else -> c.ink },
             fontSize = if (big) 40.sp else 26.sp, lineHeight = if (big) 42.sp else 28.sp))
         Text(date.dayMonthShort().substringAfter(' '), style = Type.small.copy(color = if (past) c.faint else c.graphite, fontSize = 11.5.sp, fontWeight = FontWeight.Medium))
-        if (!big) Text(date.dowShort().lowercase(), style = Type.small.copy(color = c.faint, fontSize = 11.sp))
+        if (!big) Text(if (date.year != today.year) "’" + "%02d".format(date.year % 100) else date.dowShort().lowercase(), style = Type.small.copy(color = if (strong) c.graphite else c.faint, fontSize = 11.sp))
     }
 }
 
@@ -1187,8 +1188,8 @@ private fun MonthTopicRow(t: Task, onOpen: (String) -> Unit) {
     var open by androidx.compose.runtime.saveable.rememberSaveable(t.id) { mutableStateOf(false) }
     val born = runCatching { LocalDate.parse(t.createdAt) }.getOrNull()
     Column(Modifier.fillMaxWidth().animateContentSize(androidx.compose.animation.core.tween(240))) {
-        Margined(Modifier.padding(top = 12.dp), margin = { born?.let { MarginText(it.dayMonthShort() + "\n’" + "%02d".format(it.year % 100)) } }) {
-            Column {
+        Margined(Modifier.padding(top = 4.dp), margin = { born?.let { DayMargin(it, LocalDate.now(), false, strong = true) } }) {
+            Column(Modifier.padding(top = 8.dp)) {
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.id) }, verticalAlignment = Alignment.Top) {
                     Box(Modifier.padding(top = 3.dp)) { TopicGlyph(c.graphite, 16.dp) }
                     Spacer(Modifier.width(10.dp))
@@ -1212,35 +1213,52 @@ private fun MonthTopicRow(t: Task, onOpen: (String) -> Unit) {
                 }
             }
         }
-        Hairline(Modifier.padding(start = MarginW + MarginGap, top = 10.dp))
+        Hairline(Modifier.padding(start = MarginW, top = 10.dp))
     }
 }
 
-/** «Месяц · Идеи»: an idea, when it began, how much is written, and what grew from it. */
+/** «Обзор · Идеи»: an idea, the day it began on the margin, «N записей ▾» unfolding its records, and what grew from it. */
 @Composable
 private fun MonthIdeaRow(t: Task, grown: List<Task>, onOpen: (String) -> Unit) {
     val c = M.c
     val s = M.s
+    var open by androidx.compose.runtime.saveable.rememberSaveable(t.id) { mutableStateOf(false) }
     val born = runCatching { LocalDate.parse(t.createdAt) }.getOrNull()
-    Margined(Modifier.padding(top = 12.dp), margin = { born?.let { MarginText(it.dayMonthShort()) } }) {
-        Column(Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.id) }, verticalAlignment = Alignment.Top) {
-                Box(Modifier.padding(top = 3.dp)) { ThoughtGlyph(c.graphite, 16.dp) }
-                Spacer(Modifier.width(10.dp))
-                TitleWithSphere(t.title, t.sphere, Type.body.copy(fontSize = 16.sp, color = c.ink), Modifier.weight(1f))
-            }
-            if (t.entries.isNotEmpty()) Text(s.nEntries(t.entries.size), style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 26.dp, top = 3.dp))
-            grown.forEach { g ->
-                Row(Modifier.padding(start = 24.dp, top = 4.dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(g.id) }.padding(vertical = 2.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("↳", style = Type.small.copy(color = c.link, fontSize = 13.sp))
-                    Spacer(Modifier.width(5.dp))
-                    if (g.topic) TopicGlyph(c.link, 12.dp) else CheckCircle(g.done, size = 11.dp) {}
-                    Spacer(Modifier.width(5.dp))
-                    Text(g.title, style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Column(Modifier.fillMaxWidth().animateContentSize(androidx.compose.animation.core.tween(240))) {
+        Margined(Modifier.padding(top = 4.dp), margin = { born?.let { DayMargin(it, LocalDate.now(), false, strong = true) } }) {
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.id) }, verticalAlignment = Alignment.Top) {
+                    Box(Modifier.padding(top = 3.dp)) { ThoughtGlyph(c.graphite, 16.dp) }
+                    Spacer(Modifier.width(10.dp))
+                    TitleWithSphere(t.title, t.sphere, Type.body.copy(fontSize = 16.sp, color = c.ink), Modifier.weight(1f))
+                }
+                if (t.entries.isNotEmpty()) Text(s.nEntries(t.entries.size) + if (open) " ▴" else " ▾", style = Type.small.copy(color = c.graphite, fontSize = 13.sp),
+                    modifier = Modifier.padding(start = 26.dp, top = 3.dp).clip(RoundedCornerShape(6.dp)).clickable { open = !open }.padding(vertical = 2.dp))
+                if (open) Column(Modifier.padding(start = 26.dp, top = 6.dp)) {
+                    t.entries.forEach { e ->
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { onOpen(t.id) }.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
+                            Text(runCatching { LocalDate.parse(e.at.take(10)).dayMonthShort() }.getOrDefault(""), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
+                                modifier = Modifier.width(52.dp).padding(top = 1.dp))
+                            Column(Modifier.weight(1f)) {
+                                if (e.text.isNotBlank()) Text(e.text, style = Type.small.copy(color = c.ink, fontSize = 14.sp), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                e.items.forEach { Text((if (it.done) "✓ " else "— ") + it.title, style = Type.small.copy(color = c.ink, fontSize = 14.sp)) }
+                                attachmentsSummary(e.attachments)?.let { Text(it, style = Type.small.copy(color = c.link, fontSize = 12.5.sp)) }
+                            }
+                        }
+                    }
+                }
+                grown.forEach { g ->
+                    Row(Modifier.padding(start = 24.dp, top = 4.dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(g.id) }.padding(vertical = 2.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("↳", style = Type.small.copy(color = c.link, fontSize = 13.sp))
+                        Spacer(Modifier.width(5.dp))
+                        if (g.topic) TopicGlyph(c.link, 12.dp) else CheckCircle(g.done, size = 11.dp) {}
+                        Spacer(Modifier.width(5.dp))
+                        Text(g.title, style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
-            Hairline(Modifier.padding(top = 10.dp))
         }
+        Hairline(Modifier.padding(start = MarginW, top = 10.dp))
     }
 }
 
