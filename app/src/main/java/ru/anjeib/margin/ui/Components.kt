@@ -108,7 +108,10 @@ fun MenuGlyph(color: Color = M.c.ink) {
 @Composable
 fun CheckCircle(done: Boolean, size: Dp = 24.dp, onToggle: () -> Unit) {
     val c = M.c
-    val fill by animateColorAsState(if (done) c.ink else Color.Transparent, label = "check")
+    // Smaller and finer than the touch target: a hairline ring with a whisper of a tick; done — filled sage, the tick white.
+    val d = size * 0.8f
+    val fill by animateColorAsState(if (done) c.ok else Color.Transparent, label = "check")
+    val ring by animateColorAsState(if (done) c.ok else c.graphite.copy(alpha = 0.5f), label = "ring")
     Box(
         Modifier
             .size(size + 16.dp)
@@ -116,16 +119,8 @@ fun CheckCircle(done: Boolean, size: Dp = 24.dp, onToggle: () -> Unit) {
             .toggleable(value = done, role = androidx.compose.ui.semantics.Role.Checkbox, onValueChange = { onToggle() }),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            Modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(fill)
-                .border(1.4.dp, if (done) c.ink else c.faint, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            // A pale check waits inside the ring — it says «tap to finish»; done, the ring fills and the check turns bright.
-            Icon(Icons.Rounded.Check, null, tint = if (done) c.bg else c.faint.copy(alpha = 0.55f), modifier = Modifier.size(size * 0.62f))
+        Box(Modifier.size(d).clip(CircleShape).background(fill).border(1.1.dp, ring, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Check, null, tint = if (done) c.bg else c.graphite.copy(alpha = 0.22f), modifier = Modifier.size(d * 0.62f))
         }
     }
 }

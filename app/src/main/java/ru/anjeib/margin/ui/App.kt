@@ -121,7 +121,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     var openHl by rememberSaveable { mutableStateOf<String?>(null) }
     var viewing by remember { mutableStateOf<ru.anjeib.margin.data.Attachment?>(null) }
     /** A task, or a topic's question from the lists: then the topic opens on «Вопросы» with that one lit. */
-    fun openId(id: String) {
+    fun openId(id0: String) {
+        // A day of a matter done on several days opens the matter itself.
+        val id = ru.anjeib.margin.data.slotRef(id0)?.first ?: id0
         val q = ru.anjeib.margin.data.questionRef(id)
         if (q != null) { openTask = q.first; openTab = 1; openHl = q.second } else { openTask = id; openTab = 0; openHl = null }
     }
@@ -254,7 +256,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         busy = busy == (if (screen == NOTES) "notes" else "main"),
                         onSend = { t, f -> vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f) },
                         prefill = prefill, onPrefillUsed = { prefill = null },
-                        onTyping = { typing = it },
+                        onTyping = { typing = it }, slash = screen != NOTES,
                     )
                 }
             }
@@ -330,6 +332,15 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     viewing?.let { a -> Viewer(a, vm, onClose = { viewing = null }) }
 
     if (!settings.onboarded) Onboarding(vm, onDone = { vm.updateSettings { it.copy(onboarded = true) }; vm.startSetup() })
+    // Once per install: offer the sample data (the user's own is kept aside and comes back from Settings).
+    var demoOffer by remember { mutableStateOf(!vm.demoAsked()) }
+    if (settings.onboarded && demoOffer) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { demoOffer = false; vm.demoSkip() }, containerColor = c.card,
+        title = { Text(s.demoAskTitle, style = Type.cardTitle.copy(color = c.ink)) },
+        text = { Text(s.demoAskText, style = Type.body.copy(color = c.graphite)) },
+        confirmButton = { androidx.compose.material3.TextButton({ demoOffer = false; vm.loadDemo() }) { Text(s.demoLoad, color = c.link) } },
+        dismissButton = { androidx.compose.material3.TextButton({ demoOffer = false; vm.demoSkip() }) { Text(s.demoLater, color = c.graphite) } },
+    )
 
     openTask?.let { id ->
         val t = data.tasks.find { it.id == id }

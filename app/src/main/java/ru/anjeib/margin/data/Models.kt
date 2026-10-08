@@ -6,6 +6,10 @@ import java.util.UUID
 
 fun newId(): String = UUID.randomUUID().toString().take(8)
 
+/** One of several days a matter is done on («в пн и чт»): each with its own hour and its own tick. */
+@Serializable
+data class Slot(val id: String = newId(), val date: String, val time: String? = null, val done: Boolean = false)
+
 @Serializable
 data class Subtask(
     val id: String = newId(),
@@ -19,6 +23,10 @@ data class Subtask(
     /** Someone else owes it («ждём от Игоря: приказ»): closed as «получено», not «решено». */
     val from: String? = null,
     val doneAt: String? = null,
+    /** v2 feed: the line it was added under with «+» — another matter of the topic or one of its records (shown indented). */
+    val parent: String? = null,
+    /** Several days for this matter; [due]/[time] then follow the next open one. */
+    val slots: List<Slot> = emptyList(),
 )
 
 /**
@@ -189,6 +197,11 @@ data class Task(
     val project: String? = null,
     /** v2: «Личное» or «Работа» — the one badge a topic carries instead of a project: personal | work. */
     val sphere: String? = null,
+    /** Matters and records taken out with «−»: they stay in the feed struck through, until brought back or removed for good. */
+    val removed: List<Subtask> = emptyList(),
+    /** Several days for one matter («в пн и чт»): each its own row and tick; [due]/[time] follow the next open day. */
+    val slots: List<Slot> = emptyList(),
+    val removedEntries: List<Entry> = emptyList(),
     /** Legacy single comment — migrated into [entries]. */
     val comment: String? = null,
     /** Dated records about the task (things said, files, photos). */

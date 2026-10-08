@@ -48,6 +48,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -112,20 +115,47 @@ private val grownTopics = mutableSetOf<String>()
 
 private fun secondsSince(at: String): Long = runCatching { java.time.Duration.between(LocalDateTime.parse(at.take(16)), LocalDateTime.now()).seconds }.getOrDefault(Long.MAX_VALUE)
 
-/** One line of the feed, flattened for the thread: the user's words, then what came of them, each on its own node. */
+/**
+ * One line of the feed (design E): a record — the user's words, plain ink — or a matter — a coloured line with a dash.
+ * Each matter appears once, with its state on the line itself; [depth] — how deep it hangs under the line it was added to.
+ */
 private sealed interface FeedLine {
     val at: String
     val key: String
-    data class Said(val e: Entry) : FeedLine { override val at = e.at; override val key = "n:" + e.id }
-    data class Event(val ev: TopicEvent, val under: Boolean) : FeedLine { override val at = ev.at; override val key = "e:" + ev.id }
+    val depth: Int
+    data class Said(val e: Entry, val removed: Boolean) : FeedLine { override val at = e.at; override val key = "n:" + e.id; override val depth = 0 }
+    data class Deal(val q: Subtask, override val at: String, val removed: Boolean, override val depth: Int) : FeedLine { override val key = "d:" + q.id }
 }
 
+private fun norm(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
+
 private fun feedOf(t: Task): List<FeedLine> {
-    val byEntry = t.events.filter { ev -> ev.entry != null && t.entries.any { it.id == ev.entry } }.groupBy { it.entry }
-    val standalone = t.events.filter { ev -> ev.entry == null || t.entries.none { it.id == ev.entry } }
-    val blocks: List<Pair<String, List<FeedLine>>> = t.entries.map { e -> e.at to (listOf<FeedLine>(FeedLine.Said(e)) + byEntry[e.id].orEmpty().map { FeedLine.Event(it, true) }) } +
-        standalone.map { it.at to listOf<FeedLine>(FeedLine.Event(it, false)) }
-    return blocks.sortedBy { it.first.take(16) }.flatMap { it.second }
+    val deals = t.subtasks.map { it to false } + t.removed.map { it to true }
+    val notes = t.entries.map { it to false } + t.removedEntries.map { it to true }
+    val born = t.events.filter { it.kind == "q" || it.kind == "wait" }.associateBy { it.ref }
+    fun bornAt(q: Subtask) = born[q.id]?.at ?: (t.createdAt + "T00:00")
+    fun fromEntry(q: Subtask) = born[q.id]?.entry
+    val noteIds = notes.map { it.first.id }.toSet()
+    val dealIds = deals.map { it.first.id }.toSet()
+    val out = mutableListOf<FeedLine>()
+    fun deal(q: Subtask, rm: Boolean, depth: Int) {
+        out += FeedLine.Deal(q, bornAt(q), rm, depth)
+        deals.filter { it.first.parent == q.id }.sortedBy { bornAt(it.first) }.forEach { (c, r) -> deal(c, r || rm, depth + 1) }
+    }
+    val tops: List<Pair<String, () -> Unit>> = notes.map { (e, rm) ->
+        e.at to {
+            val made = deals.filter { (q, _) -> q.parent == null && fromEntry(q) == e.id }
+            // Words that only named the matter («Установить RClone») are not repeated: the matter's line says it.
+            val echo = e.attachments.isEmpty() && !e.isList && made.any { (q, _) -> norm(e.text).let { w -> w == norm(q.title) || (w.contains(norm(q.title)) && w.length <= norm(q.title).length + 12) } }
+            if (!echo) out += FeedLine.Said(e, rm)
+            // What was added under the words with «+» hangs right under them; what the words made follows at their level.
+            deals.filter { it.first.parent == e.id }.sortedBy { bornAt(it.first) }.forEach { (q, r) -> deal(q, r || rm, 1) }
+            made.sortedBy { bornAt(it.first) }.forEach { (q, r) -> deal(q, r, 0) }
+        }
+    } + deals.filter { (q, _) -> (q.parent == null || (q.parent !in noteIds && q.parent !in dealIds)) && fromEntry(q).let { it == null || it !in noteIds } }
+        .map { (q, rm) -> bornAt(q) to { deal(q, rm, 0) } }
+    tops.sortedBy { it.first.take(16) }.forEach { it.second() }
+    return out
 }
 
 /**
@@ -150,6 +180,11 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     var editQ by remember { mutableStateOf<Subtask?>(null) }
     var dateQ by remember { mutableStateOf<Subtask?>(null) }
     var viewing by remember { mutableStateOf<Attachment?>(null) }
+    // The feed: the chosen line shows «+ − 🔧»; «+» turns the field into «дело под строкой».
+    var selected by remember(task.id) { mutableStateOf<String?>(null) }
+    var addUnder by remember(task.id) { mutableStateOf<Pair<String, String>?>(null) }
+    var editNote by remember { mutableStateOf<Entry?>(null) }
+    var focusTick by remember { mutableStateOf(0) }
     val busy by vm.busy.collectAsState()
     val notice by vm.notice.collectAsState()
     val working by vm.working.collectAsState()
@@ -255,7 +290,11 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             when (page) {
                 0 -> androidx.compose.animation.Crossfade(materialsMode, animationSpec = tween(240), label = "materials") { m ->
                     if (m) MaterialsFeed(task, onView = { viewing = it })
-                    else FeedPage(task, feed, feedState, hl, seenAtOpen, working, onQuestion = ::toQuestion, onView = { viewing = it }, onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
+                    else FeedPage(task, feed, feedState, hl, seenAtOpen, working, selected, vm, FeedActions(
+                        select = { k -> selected = if (k.isBlank() || selected == k) null else k },
+                        addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
+                        editDeal = { editQ = it }, dateDeal = { dateQ = it }, editNote = { editNote = it }, view = { viewing = it },
+                    ), onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
                 }
                 else -> QuestionsPage(task, hl, vm, onFeed = ::toFeedLine, onEdit = { editQ = it }, onDate = { dateQ = it })
             }
@@ -263,9 +302,14 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         // ---- composer: words go to the feed, on «Вопросы» they become a question ----
         Column(Modifier.background(c.bg).padding(horizontal = 14.dp).padding(top = 6.dp, bottom = 10.dp)) {
             notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> NoticeLine(nt, vm) }
+            val under = addUnder
             SmartComposer(
-                vm, if (pager.currentPage == 1) s.newQuestionHint else s.writeInTopic, busy == scopeKey,
-                onSend = { t, f -> vm.send(t, scope = Scope.InTask(task.id), files = f, asQuestion = pager.currentPage == 1) },
+                vm, if (under != null) "«" + under.second.take(40) + "»" else if (pager.currentPage == 1) s.newQuestionHint else s.writeInTopic, busy == scopeKey,
+                onSend = { t, f ->
+                    if (under != null) { vm.addChildDeal(task.id, under.first, t); addUnder = null }
+                    else vm.send(t, scope = Scope.InTask(task.id), files = f, asQuestion = pager.currentPage == 1)
+                },
+                modeLabel = under?.let { s.underLine }, onModeClose = { addUnder = null }, focusKey = focusTick.takeIf { it > 0 },
             )
         }
     }
@@ -294,6 +338,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             confirmButton = { TextButton({ dialog = null }) { Text(s.closeWord2, color = c.graphite) } },
         )
     }
+    editNote?.let { e -> TextDialog(s.edit, e.text, "", onDismiss = { editNote = null }) { v -> vm.editEntryText("task:${task.id}", e.id, v); editNote = null } }
     editQ?.let { q -> TextDialog(s.edit, q.title, "", onDismiss = { editQ = null }) { v -> vm.renameSubtask(task.id, q.id, v); editQ = null } }
     dateQ?.let { q -> QuestionDateDialog(q, onDismiss = { dateQ = null }) { d -> vm.setQuestionDue(task.id, q.id, d); dateQ = null } }
 }
@@ -394,18 +439,21 @@ fun BigMaterial(a: Attachment, onView: (Attachment) -> Unit) {
     }
 }
 
-// ---------------- the feed: a thread on the margin ----------------
+// ---------------- the feed: a typeset list on the margin (design E) ----------------
 
-/** What sits on the margin next to an event: when we expect it, when the question is due. */
-private fun eventNote(q: Subtask?, kind: String): String? {
-    if (q == null || q.done || (kind != "wait" && kind != "q")) return null
-    val d = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return null
-    return (if (q.isWait) "~" else "") + d.dayMonthShort()
-}
+/** What a line of the feed can do, handed down from the screen. */
+private class FeedActions(
+    val select: (String) -> Unit,
+    val addUnder: (id: String, title: String) -> Unit,
+    val editDeal: (Subtask) -> Unit,
+    val dateDeal: (Subtask) -> Unit,
+    val editNote: (Entry) -> Unit,
+    val view: (Attachment) -> Unit,
+)
 
 @Composable
 private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.foundation.lazy.LazyListState, hl: String?, seen: Set<String>, working: Set<String>,
-                     onQuestion: (String) -> Unit, onView: (Attachment) -> Unit, onArchive: () -> Unit, onSource: () -> Unit) {
+                     selected: String?, vm: MainVm, act: FeedActions, onArchive: () -> Unit, onSource: () -> Unit) {
     val c = M.c
     val s = M.s
     // New lines arrive one after another, in the order they were written.
@@ -422,18 +470,18 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
             } else Spacer(Modifier.height(4.dp))
         }
         var lastDay: LocalDate? = null
-        feed.forEachIndexed { idx, line ->
+        feed.forEach { line ->
             val day = dateOfStamp(line.at)
-            val firstOfDay = day != lastDay && !(line is FeedLine.Event && line.under)
+            val firstOfDay = line.depth == 0 && day != lastDay
             if (firstOfDay) lastDay = day
-            val dayText = if (firstOfDay) day?.dayMonthShort() else null
-            val isLast = idx == feed.lastIndex || feed.drop(idx + 1).none { it is FeedLine.Said }
+            // The margin: the hour of every top line, the date with the first one of a day.
+            val stamp = if (line.depth > 0) null else listOfNotNull(if (firstOfDay) day?.dayMonthShort() else null, timeOfStamp(line.at).takeIf { it.isNotBlank() && it != "00:00" }).joinToString("\n").ifBlank { null }
             item(line.key) {
                 val fresh = line.key in freshKeys
-                Box(Modifier.arrive(fresh, freshKeys.indexOf(line.key)).landing(hl == line.key, 10)) {
+                Box(Modifier.animateItem().arrive(fresh, freshKeys.indexOf(line.key)).landing(hl == line.key, 10)) {
                     when (line) {
-                        is FeedLine.Said -> SaidLine(line.e, dayText, current = isLast && line is FeedLine.Said, fresh = fresh, working = working, onView = onView)
-                        is FeedLine.Event -> EventLine(task, line.ev, dayText, hl = hl, onQuestion = onQuestion)
+                        is FeedLine.Said -> NoteLine(task, line.e, line.removed, stamp, selected == line.key, fresh, working, vm, act)
+                        is FeedLine.Deal -> DealLine(task, line.q, line.removed, line.depth, stamp, selected == line.key, vm, act)
                     }
                 }
             }
@@ -450,22 +498,127 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
     }
 }
 
-/** The user's words: a quiet card on the thread, the day and hour on the margin; files under it. */
+/** «+ − 🔧» at the end of the chosen line. */
 @Composable
-private fun SaidLine(e: Entry, dayText: String?, current: Boolean, fresh: Boolean, working: Set<String>, onView: (Attachment) -> Unit) {
+private fun LineTools(tint: Color, onAdd: (() -> Unit)?, onRemove: () -> Unit, onEdit: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        @Composable fun tool(icon: androidx.compose.ui.graphics.vector.ImageVector, f: () -> Unit) =
+            Box(Modifier.size(34.dp).clip(CircleShape).clickable(onClick = f), contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint, modifier = Modifier.size(19.dp)) }
+        onAdd?.let { tool(Icons.Rounded.Add, it) }
+        tool(Icons.Rounded.Remove, onRemove)
+        tool(Icons.Outlined.Build, onEdit)
+    }
+}
+
+/** A removed line, tapped: bring it back or delete it for good. */
+@Composable
+private fun RemovedMenu(open: Boolean, onDismiss: () -> Unit, onRestore: () -> Unit, onPurge: () -> Unit) {
+    val s = M.s
+    SoftMenu(open, onDismiss) {
+        SoftMenuItem(s.restoreWord2) { onDismiss(); onRestore() }
+        SoftMenuItem(s.purgeWord, danger = true) { onDismiss(); onPurge() }
+    }
+}
+
+/** The user's words: plain ink on the paper, no card; files under them. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NoteLine(task: Task, e: Entry, removed: Boolean, stamp: String?, selected: Boolean, fresh: Boolean, working: Set<String>, vm: MainVm, act: FeedActions) {
     val c = M.c
-    Margined(Modifier.padding(top = 8.dp, bottom = 4.dp), node = if (current) c.accent else c.graphite.copy(alpha = 0.6f), nodeY = 14.dp,
-        margin = { MarginText(listOfNotNull(dayText, e.at.drop(11).take(5)).joinToString("\n")) }) {
-        Column {
-            if (e.text.isNotBlank() || e.isList) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(14.dp))
-                .padding(horizontal = 14.dp, vertical = 11.dp)) {
-                if (e.text.isNotBlank()) Text(e.text, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp))
-                e.items.forEach { Text((if (it.done) "✓ " else "· ") + it.title, style = Type.body.copy(color = if (it.done) c.graphite else c.ink, fontSize = 15.sp)) }
+    val s = M.s
+    var menu by remember(e.id) { mutableStateOf(false) }
+    val sel by androidx.compose.animation.animateColorAsState(if (selected) c.chip else Color.Transparent, tween(180), label = "sel")
+    Margined(Modifier.padding(top = 10.dp, bottom = 2.dp), margin = stamp?.let { m -> { MarginText(m) } }) {
+        Box {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(sel)
+                .clickable { if (removed) menu = true else act.select("n:" + e.id) }.padding(vertical = 3.dp)) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f).padding(top = 4.dp)) {
+                        if (e.text.isNotBlank()) Text(e.text, style = Type.body.copy(color = if (removed) c.faint else c.ink, fontSize = 16.sp,
+                            textDecoration = if (removed) androidx.compose.ui.text.style.TextDecoration.LineThrough else null))
+                        e.items.forEach { Text((if (it.done) "✓ " else "— ") + it.title, style = Type.body.copy(color = if (it.done || removed) c.faint else c.ink, fontSize = 15.5.sp)) }
+                    }
+                    if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 6.dp))
+                    else if (selected) LineTools(c.graphite, onAdd = { act.addUnder(e.id, e.text.ifBlank { e.attachments.firstOrNull()?.let { attachmentLabel(it) }?.ifBlank { null } ?: "…" }) },
+                        onRemove = { act.select(""); vm.removeRecord(task.id, e.id) }, onEdit = { act.editNote(e) })
+                }
+                if (e.attachments.isNotEmpty() && !removed) {
+                    Spacer(Modifier.height(8.dp))
+                    MaterialRow(e.attachments, fresh, working, act.view)
+                }
             }
-            if (e.attachments.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                MaterialRow(e.attachments, fresh, working, onView)
+            RemovedMenu(menu, { menu = false }, onRestore = { vm.restoreRecord(task.id, e.id) }, onPurge = { vm.purgeRecord(task.id, e.id) })
+        }
+    }
+}
+
+/**
+ * A matter: a coloured line with a dash — petrol to do, amber when we wait for someone; done, the dash becomes a tick and
+ * the words are struck through in green; removed — grey, struck, «удалено». Lines added under it hang indented, lighter.
+ */
+@Composable
+private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, stamp: String?, selected: Boolean, vm: MainVm, act: FeedActions) {
+    val c = M.c
+    val s = M.s
+    val view = LocalView.current
+    val motion = motionOn()
+    var menu by remember(q.id) { mutableStateOf(false) }
+    var tools by remember(q.id) { mutableStateOf(false) }
+    val base = when { removed -> c.faint; q.done -> c.ok; q.isWait -> c.wait; else -> c.link }
+    val color = if (depth > 0 && !removed && !q.done) base.copy(alpha = 0.78f) else base
+    val strike = remember(q.id) { Animatable(if (q.done || removed) 1f else 0f) }
+    LaunchedEffect(q.done, removed) { strike.animateTo(if (q.done || removed) 1f else 0f, tween(if (motion) 320 else 0, easing = FastOutSlowInEasing)) }
+    val sel by androidx.compose.animation.animateColorAsState(if (selected) c.chip else Color.Transparent, tween(180), label = "sel")
+    val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    Margined(Modifier.padding(top = if (depth == 0) 10.dp else 2.dp), margin = stamp?.let { m -> { Box(Modifier.padding(top = if (!q.done && !removed && isSoon(due)) SoonLift + 6.dp else 0.dp)) { MarginText(m) } } }) {
+        Box {
+            Column(Modifier.padding(start = 24.dp * depth)) {
+                if (!q.done && !removed) SoonBadge(due, Modifier.padding(top = 2.dp))
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(sel), verticalAlignment = Alignment.Top) {
+                    // The dash is the switch: tapped, it turns into a tick.
+                    Box(Modifier.size(30.dp, 30.dp).clip(CircleShape).clickable(enabled = !removed) {
+                        if (!q.done) view.confirmTick()
+                        val next = q.slots.firstOrNull { !it.done }
+                        if (next != null) vm.toggleSlot("q:${task.id}:${q.id}", next.id) else vm.toggleQuestion(task.id, q.id)
+                    },
+                        contentAlignment = Alignment.Center) {
+                        androidx.compose.animation.Crossfade(q.done, animationSpec = tween(220), label = "mark") { d ->
+                            if (d) TickGlyph(c.ok, 16.dp)
+                            else Text("—", style = Type.body.copy(color = color, fontSize = 17.sp, fontWeight = FontWeight.Medium))
+                        }
+                    }
+                    Column(Modifier.weight(1f).clickable { if (removed) menu = true else act.select("d:" + q.id) }.padding(top = 4.dp, bottom = 4.dp)) {
+                        StrikeText(q.title, Type.body.copy(color = color, fontSize = if (depth == 0) 16.5.sp else 15.5.sp,
+                            fontWeight = if (depth == 0) FontWeight.Medium else FontWeight.Normal), strike.value, color)
+                        // Due and who owes it, quietly; a day that's today or tomorrow is the badge above instead.
+                        // Several days: each one, ticked ones in green.
+                        if (q.slots.isNotEmpty() && !removed) Text(androidx.compose.ui.text.buildAnnotatedString {
+                            q.slots.forEachIndexed { i, sl ->
+                                if (i > 0) append("  ·  ")
+                                val d = runCatching { LocalDate.parse(sl.date) }.getOrNull()
+                                withStyle(SpanStyle(color = if (sl.done) c.ok else c.graphite, textDecoration = if (sl.done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)) {
+                                    append((if (sl.done) "✓ " else "") + (d?.dayMonthShort() ?: sl.date) + (sl.time?.let { ", $it" } ?: ""))
+                                }
+                            }
+                        }, style = Type.small.copy(fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
+                        val meta = if (q.slots.isNotEmpty()) listOfNotNull(q.from, q.assignee) else listOfNotNull(
+                            due?.takeIf { !isSoon(it) && !q.done }?.let { (if (q.isWait) "~" else "") + it.dayMonthShort() + (q.time?.let { t -> ", $t" } ?: "") }
+                                ?: q.time?.takeIf { !q.done }, q.from, q.assignee,
+                            if (q.done) q.doneAt?.let { d -> LocalDate.parse(d).dayMonthShort().let { if (q.isWait) s.gotOn(it) else s.solvedOn(it) } } else null,
+                        )
+                        if (meta.isNotEmpty() && !removed) Text(meta.joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
+                    }
+                    if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 7.dp))
+                    else if (selected) Box {
+                        LineTools(color, onAdd = { act.addUnder(q.id, q.title) }, onRemove = { act.select(""); vm.removeDeal(task.id, q.id) }, onEdit = { tools = true })
+                        SoftMenu(tools, { tools = false }) {
+                            SoftMenuItem(s.edit) { tools = false; act.editDeal(q) }
+                            SoftMenuItem(s.dueWord) { tools = false; act.dateDeal(q) }
+                        }
+                    }
+                }
             }
+            RemovedMenu(menu, { menu = false }, onRestore = { vm.restoreDeal(task.id, q.id) }, onPurge = { vm.purgeDeal(task.id, q.id) })
         }
     }
 }
@@ -508,56 +661,6 @@ private fun ScanLine() {
         drawRect(c.link.copy(alpha = 0.10f), topLeft = Offset(0f, 0f), size = androidx.compose.ui.geometry.Size(size.width, yy))
         drawLine(c.link, Offset(0f, yy), Offset(size.width, yy), strokeWidth = 2.dp.toPx())
     })
-}
-
-/** «Вопрос: …», «Решено: …», «Ждём от Игоря: …» — a node on the thread, the date we expect on the margin, a link to the question. */
-@Composable
-private fun EventLine(task: Task, ev: TopicEvent, dayText: String?, hl: String?, onQuestion: (String) -> Unit) {
-    val c = M.c
-    val s = M.s
-    val q = ev.ref?.let { r -> task.subtasks.find { it.id == r } }
-    when (ev.kind) {
-        "became", "revived" -> Margined(Modifier.padding(vertical = 4.dp), node = c.faint, nodeSize = 7.dp, nodeY = 10.dp, margin = dayText?.let { d -> { MarginText(d) } }) {
-            Text(if (ev.kind == "became") s.becameTopic else s.revivedTopic, style = Type.small.copy(color = c.graphite, fontStyle = FontStyle.Italic, fontSize = 13.sp))
-        }
-        else -> {
-            if (q == null) return
-            val faded = (ev.kind == "q" || ev.kind == "wait") && q.done
-            val nodeColor = when (ev.kind) { "solved", "got" -> c.ok; "wait" -> if (q.done) c.faint else c.link; else -> if (q.done) c.faint else c.link }
-            val who = q.from ?: ""
-            val prefix = when (ev.kind) { "q" -> s.questionPrefix; "solved" -> s.solvedPrefix; "wait" -> s.waitPrefix(who); else -> s.gotPrefix(who) }
-            val note = eventNote(q, ev.kind)
-            val soon = note != null && isSoon(q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() })
-            val lift = if (soon) SoonLift else 0.dp
-            Margined(Modifier.clip(RoundedCornerShape(8.dp)).landing(hl == "e:" + ev.id, 8).clickable { onQuestion(q.id) }.padding(vertical = 5.dp),
-                node = nodeColor, nodeSize = 7.dp, nodeY = 11.dp + lift,
-                margin = (note ?: dayText)?.let { m -> { Box(Modifier.padding(top = lift)) { MarginText(m, petrol = note != null) } } }) {
-                Column {
-                if (note != null) SoonBadge(q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, Modifier.padding(bottom = 2.dp))
-                Row(verticalAlignment = Alignment.Top) {
-                    Box(Modifier.padding(top = 1.dp)) {
-                        val tint = if (faded) c.faint else c.graphite
-                        when (ev.kind) { "q" -> QuestionGlyph(tint, 17.dp); "wait" -> HourglassGlyph(tint, 17.dp, sand = if (q.done) 1f else 0.35f); else -> TickGlyph(c.ok, 17.dp) }
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(buildAnnotatedString {
-                            withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = if (faded) c.faint else c.ink)) { append(prefix) }
-                            append(" ")
-                            withStyle(SpanStyle(color = if (faded) c.faint else if (ev.kind == "q" || ev.kind == "wait") c.link else c.ink)) { append(q.title) }
-                        }, style = Type.body.copy(fontSize = 15.sp))
-                        val meta = when {
-                            ev.kind == "q" && q.done -> q.doneAt?.let { s.solvedOn(LocalDate.parse(it).dayMonthShort()) }
-                            ev.kind == "wait" && q.done -> q.doneAt?.let { s.gotOn(LocalDate.parse(it).dayMonthShort()) }
-                            else -> null
-                        }
-                        if (meta != null) Text(meta, style = Type.small.copy(color = c.faint, fontSize = 13.sp), modifier = Modifier.padding(top = 2.dp))
-                    }
-                }
-                }
-            }
-        }
-    }
 }
 
 // ---------------- questions ----------------
@@ -664,7 +767,7 @@ private fun QuestionRow(task: Task, q: Subtask, lit: Boolean, vm: MainVm, onFeed
                             made?.let { ev ->
                                 if (parts.isNotEmpty()) Text("  ·  ", style = Type.small.copy(color = c.faint))
                                 Text(s.inFeed(dateOfStamp(ev.at)?.dayMonthShort() ?: ""), style = Type.small.copy(color = c.link, fontSize = 13.5.sp),
-                                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { onFeed(if (ev.entry != null) "n:" + ev.entry else "e:" + ev.id) })
+                                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { onFeed("d:" + q.id) })
                             }
                         }
                     }

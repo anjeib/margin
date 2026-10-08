@@ -41,6 +41,8 @@ data class Palette(
     val onBubble: Color,
     val scrim: Color,
     val ok: Color,
+    /** Amber: what we wait for from someone, in the topic feed. */
+    val wait: Color = Color(0xFFA8701A),
 )
 
 val LightPalette = Palette(
@@ -79,6 +81,7 @@ val DarkPalette = Palette(
     onBubble = Color(0xFF141210),
     scrim = Color(0x99000000),
     ok = Color(0xFF9AA886),
+    wait = Color(0xFFD9A24A),
 )
 
 @OptIn(ExperimentalTextApi::class)

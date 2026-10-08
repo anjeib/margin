@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.dayOf
+
+import ru.anjeib.margin.data.undatedTopicMatters
+
 import androidx.compose.ui.text.withLink
 
 import androidx.compose.ui.text.SpanStyle
@@ -281,10 +285,14 @@ fun TaskList(
             view == Views.TODAY -> {
                 // v2: a timeline of days. Today open — «Дела» and «Темы»; the next days with something in them, closed to one line each.
                 val plans = (0L..13L).map { dayPlan(data, today.plusDays(it), today, events) }.filter { it.date == today || !it.empty }
+                // Undated matters — simple ones and topics' — live at the end of today, oldest last.
+                val undatedAll = (tasks.filter { !it.done && it.dueDate == null && it.startDate == null && it.waitingFor == null } + data.undatedTopicMatters())
+                    .sortedByDescending { it.createdAt }
                 plans.forEach { p ->
                     item("day" + p.date) {
                         DayBlock(p, today, open = isDayOpen(p.date), heading = p.date == today, onToggle = { toggleDay(p.date) },
-                            onOpen = onOpen, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = landed)
+                            onOpen = onOpen, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = landed,
+                            undated = if (p.date == today) undatedAll else emptyList())
                     }
                 }
                 // Written without internet: one quiet line here, the items themselves live in «Входящие».
@@ -294,19 +302,6 @@ fun TaskList(
                         Icon(Icons.Outlined.CloudOff, null, tint = c.graphite, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(10.dp))
                         Text(s.queuedLine(data.queue.size) + " →", style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
-                    }
-                }
-                // Undated tasks live in «Все» — one quiet line keeps them from being forgotten.
-                val undated = tasks.filter { !it.done && it.dueDate == null && it.startDate == null && it.waitingFor == null }.sortedByDescending { it.createdAt }
-                if (undated.isNotEmpty()) {
-                    // Undated tasks live here too, so they aren't forgotten; swipe left puts one off to tomorrow.
-                    section(s.noDates, "s-undated", undated.size, collapsible = true)
-                    if (isOpen("s-undated")) {
-                        rows(undated.take(5), "ud")
-                        if (undated.size > 5) plain("ud-more") {
-                            Text(s.more(undated.size - 5) + " →", style = Type.small.copy(color = c.graphite),
-                                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onView(Views.ALL) }.padding(8.dp))
-                        }
                     }
                 }
                 // Topics with nothing left to do or wait for: one tap to see what's next or to put them away.
@@ -935,14 +930,10 @@ private fun dayOf(due: LocalDate?, start: LocalDate?, today: LocalDate): LocalDa
 }
 
 fun dayPlan(data: AppData, date: LocalDate, today: LocalDate, events: List<CalEvent>): DayPlan {
-    val deals = data.tasks.filter { !it.topic && !it.done && dayOf(it.dueDate, it.startDate, today) == date }
+    // v2: a topic shows on a day only through its matters for that day — ordinary rows, grouped under one link to the topic.
+    val deals = data.listTasks().filter { !it.done && dayOf(it.dueDate, it.startDate, today) == date }
         .sortedWith(compareBy({ !it.isOverdue(today) }, { it.time ?: "99" }, { it.title }))
-    val steps = data.tasks.filter { it.topic && !it.done }.flatMap { t ->
-        t.subtasks.filter { !it.done && it.due != null }.mapNotNull { q ->
-            val d = runCatching { LocalDate.parse(q.due) }.getOrNull()
-            if (dayOf(d, null, today) == date) TopicStep(t, q) else null
-        }
-    }.sortedWith(compareBy({ it.q.time ?: "99" }, { it.topic.title }))
+    val steps = emptyList<TopicStep>()
     val evs = events.filter { !it.allDay && it.start.toLocalDate() == date || it.allDay && it.start.toLocalDate() == date }
     val done = if (date.isBefore(today)) data.tasks.count { it.doneAt == date.toString() && !it.topic } +
         data.tasks.sumOf { t -> t.subtasks.count { it.doneAt == date.toString() } } else 0
@@ -985,7 +976,7 @@ private fun androidx.compose.ui.text.AnnotatedString.Builder.timeLink(time: Stri
 
 /** One thing to do on an open day: kind mark, the circle, the hour as a link, the words, a quiet line under. */
 @Composable
-private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () -> Unit, onTime: () -> Unit) {
+private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () -> Unit, onTime: () -> Unit, age: String? = null, faded: Boolean = false) {
     val c = M.c
     val s = M.s
     val view = androidx.compose.ui.platform.LocalView.current
@@ -1008,10 +999,47 @@ private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () 
                 t.time?.let { timeLink(it, late && t.dueDate == today, c.link, c.accent, onTime) }
                 append(t.title)
             }
-            Text(title, style = Type.body.copy(fontSize = 15.5.sp, color = if (ticking) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
+            Text(title, style = Type.body.copy(fontSize = 15.5.sp, color = if (ticking || faded) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 1.dp).drawStrike(strike.value, c.faint))
             if (late && t.dueDate?.isBefore(today) == true) Text(s.lateSince(t.dueDate!!.dayMonthShort()), style = Type.small.copy(color = c.accent, fontSize = 12.5.sp))
+            t.dayOf()?.let { (i, n) -> Text(s.dayOfDays(i, n), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp)) }
             TaskLine(t, null, true, today = today)
+        }
+        age?.let { Text(it, style = Type.small.copy(color = c.faint, fontSize = 12.5.sp), modifier = Modifier.padding(start = 8.dp, top = 3.dp)) }
+    }
+}
+
+/**
+ * Deal rows with the matters of one topic kept together under a single «↳ Тема» link — the topic is named once,
+ * its matters follow as ordinary rows.
+ */
+@Composable
+private fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String>, onOpen: (String) -> Unit, onDone: (String) -> Unit, onLater: (String) -> Unit, onTime: (String) -> Unit,
+                         age: ((Task) -> String?)? = null, faded: (Task) -> Boolean = { false }) {
+    val c = M.c
+    val seen = mutableSetOf<String>()
+    list.forEach { t ->
+        val tid = t.topicId
+        if (tid != null && tid in seen) return@forEach
+        val group = if (tid != null) list.filter { it.topicId == tid } else listOf(t)
+        if (tid != null) {
+            seen += tid
+            Row(Modifier.padding(top = 8.dp, bottom = 0.dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(tid) }.padding(vertical = 2.dp, horizontal = 2.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                TopicGlyph(c.link, 13.dp)
+                Spacer(Modifier.width(6.dp))
+                Text(t.topicTitle ?: "", style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        // A topic's matters sit a step in from its link, so a plain matter after the group reads as its own.
+        Column(Modifier.padding(start = if (tid != null) 16.dp else 0.dp, bottom = if (tid != null) 6.dp else 0.dp)) {
+            group.forEach { g ->
+                androidx.compose.runtime.key(g.id) {
+                    SwipeTask(g, onDone = { onDone(g.id) }, onLater = { onLater(g.id) }, modifier = Modifier.landing(g.id in landed || (tid != null && tid in landed), 0), radius = 0) {
+                        DealRow(g, today, onToggle = { onDone(g.id) }, onOpen = { onOpen(g.id) }, onTime = { onTime(g.id) }, age = age?.invoke(g), faded = faded(g))
+                    }
+                }
+            }
         }
     }
 }
@@ -1086,10 +1114,12 @@ private fun CompactLine(icon: (@Composable () -> Unit)?, text: String, faint: Bo
 fun DayBlock(
     plan: DayPlan, today: LocalDate, open: Boolean, heading: Boolean, onToggle: () -> Unit,
     onOpen: (String) -> Unit, onDone: (String) -> Unit, onLater: (String) -> Unit, onTime: (String) -> Unit, landed: Set<String>,
+    undated: List<Task> = emptyList(),
 ) {
     val c = M.c
     val s = M.s
     val past = plan.date.isBefore(today)
+    var undatedOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(true) }
     Column(Modifier.fillMaxWidth().animateContentSize(androidx.compose.animation.core.tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing))) {
         Margined(Modifier.padding(top = 10.dp, bottom = 10.dp), margin = {
             Box(Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle)) { DayMargin(plan.date, today, heading) }
@@ -1101,7 +1131,7 @@ fun DayBlock(
                         Column(Modifier.weight(1f)) {
                             val lines = buildList<@Composable () -> Unit> {
                                 plan.events.forEach { e -> add { CompactLine({ CalendarGlyph(c.graphite) }, e.start.toLocalTime().toString().take(5) + "  " + e.title) } }
-                                plan.deals.forEach { t -> add { CompactLine({ KindMark(t) }, t.title) } }
+                                plan.deals.forEach { t -> add { CompactLine({ KindMark(t) }, t.title + (t.topicTitle?.let { "  ·  $it" } ?: "")) } }
                                 plan.steps.forEach { st -> add { CompactLine({ if (st.q.from != null) HourglassGlyph(c.graphite, 14.dp) else TopicGlyph(c.graphite, 14.dp) },
                                     (if (st.q.from != null) s.waitPrefix(st.q.from).trimEnd(':') + ": " else "") + st.q.title + "  ·  " + st.topic.title) } }
                             }
@@ -1127,11 +1157,23 @@ fun DayBlock(
                                 }
                             }
                         }
-                        plan.deals.forEach { t ->
-                            androidx.compose.runtime.key(t.id) {
-                                SwipeTask(t, onDone = { onDone(t.id) }, onLater = { onLater(t.id) }, modifier = Modifier.landing(t.id in landed, 0), radius = 0) {
-                                    DealRow(t, today, onToggle = { onDone(t.id) }, onOpen = { onOpen(t.id) }, onTime = { onTime(t.id) })
-                                }
+                        GroupedDeals(plan.deals, today, landed, onOpen, onDone, onLater, onTime)
+                    }
+                    // Matters with no day wait at the end of today, with how long they've been lying there; older ones paler.
+                    if (undated.isNotEmpty()) {
+                        Row(Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(8.dp)).clickable { undatedOpen = !undatedOpen }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(s.noDates.uppercase() + " · " + undated.size, style = Type.label.copy(color = c.graphite), modifier = Modifier.weight(1f))
+                            val rot by androidx.compose.animation.core.animateFloatAsState(if (undatedOpen) 0f else -90f, label = "ud")
+                            Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.faint, modifier = Modifier.size(18.dp).rotate(rot))
+                        }
+                        androidx.compose.animation.AnimatedVisibility(undatedOpen, enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(240)) + androidx.compose.animation.fadeIn(),
+                            exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.fadeOut()) {
+                            Column {
+                                fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
+                                GroupedDeals(undated, today, landed, onOpen, onDone, onLater, onTime,
+                                    age = { t -> born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() } },
+                                    faded = { t -> born(t)?.isBefore(today.minusDays(7)) == true })
                             }
                         }
                     }

@@ -26,15 +26,26 @@ fun questionRef(id: String): Pair<String, String>? =
 
 fun Task.questionRow(q: Subtask) = Task(
     id = "q:$id:${q.id}", title = q.title, due = q.due, time = q.time, waitingFor = q.from,
-    people = listOfNotNull(q.assignee), project = project, createdAt = createdAt, topicId = id, topicTitle = title,
+    people = listOfNotNull(q.assignee), project = project, sphere = sphere, topicId = id, topicTitle = title,
+    // The day the matter itself appeared, not the topic — «лежит с 3 окт».
+    createdAt = events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at?.take(10) ?: createdAt,
 )
+
+/** Open matters of topics that have no day yet — they wait at the end of today, with their age. */
+fun AppData.undatedTopicMatters(): List<Task> =
+    tasks.filter { it.topic && !it.done && !it.thought }.flatMap { t -> t.subtasks.filter { !it.done && it.due == null && !it.isWait && it.parent == null }.map { t.questionRow(it) } }
 
 /**
  * What the day lists show: simple tasks as they are, and for each open topic its dated questions —
  * the next steps, each one linked back to its topic.
  */
 fun AppData.listTasks(): List<Task> =
-    tasks.filter { !it.topic } + tasks.filter { it.topic && !it.done }.flatMap { t -> t.subtasks.filter { !it.done && it.due != null }.map { t.questionRow(it) } }
+    tasks.filter { !it.topic }.flatMap { it.slotRows() } + tasks.filter { it.topic && !it.done }.flatMap { t ->
+        t.subtasks.filter { !it.done && it.due != null }.flatMap { q ->
+            val row = t.questionRow(q)
+            if (q.slots.isEmpty()) listOf(row) else q.slots.filter { !it.done }.map { s -> row.copy(id = row.id + "@" + s.id, due = s.date, time = s.time, slots = q.slots) }
+        }
+    }
 
 object Topics {
     /** The «Входящие» note (files without words) stays a note in both languages; every other note is a thought. */
@@ -71,7 +82,10 @@ object Topics {
         val new = if (new0.notes.any { !isInbox(it) }) thoughts(new0, old) else new0
         if (old.tasks === new.tasks) return new
         var changed = false
-        val tasks = new.tasks.map { n ->
+        val tasks = new.tasks.map { n0 ->
+            // Days of a matter keep its date on the next open one, whoever changed them.
+            val n = n0.syncSlots().let { t -> if (t.subtasks.any { it.slots.isNotEmpty() }) t.copy(subtasks = t.subtasks.map { it.syncSlots() }) else t }
+            if (n != n0) changed = true
             val o = old.tasks.find { it.id == n.id }
             val t = if (o == null) born(n) else grown(o, n)
             if (t !== n) changed = true

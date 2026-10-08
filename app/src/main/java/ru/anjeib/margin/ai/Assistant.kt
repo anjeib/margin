@@ -72,7 +72,7 @@ object Assistant {
         Reply with ONE JSON object only: {"reply":"…","actions":[…],"question":{"text":"…","options":["…"]}}
         Leave out every field you don't know or that is empty — never write null, [] or "". reply and question are optional too.
         Each action is an object with "type". Shapes (all fields except type/ids/title/text are optional):
-        {"type":"create_task","title":"…","start":"YYYY-MM-DD","due":"YYYY-MM-DD","time":"HH:MM","part":"morning|day|afternoon|evening","remind_at":"YYYY-MM-DDTHH:MM","people":["…"],"project":"…","sphere":"personal|work","entry":"…","waiting_for":"…","promised_to":"…","place":"…","note_id":"…","repeat":{"freq":"weekly","interval":1,"days":[2]},"subtasks":[{"title":"…","due":"YYYY-MM-DD","time":"HH:MM","from":"…","assignee":"…","children":[…]}]}
+        {"type":"create_task","title":"…","start":"YYYY-MM-DD","due":"YYYY-MM-DD","time":"HH:MM","part":"morning|day|afternoon|evening","remind_at":"YYYY-MM-DDTHH:MM","people":["…"],"project":"…","sphere":"personal|work","dates":[{"date":"YYYY-MM-DD","time":"HH:MM"}],"entry":"…","waiting_for":"…","promised_to":"…","place":"…","note_id":"…","repeat":{"freq":"weekly","interval":1,"days":[2]},"subtasks":[{"title":"…","due":"YYYY-MM-DD","time":"HH:MM","from":"…","assignee":"…","children":[…]}]}
         {"type":"add_subtasks","task_id":"…","parent_subtask_id":"…","subtasks":[{"title":"…","due":"YYYY-MM-DD","from":"…"}]}
         {"type":"update_task","task_id":"…","topic_title":"…", + only the changed fields of create_task}
         {"type":"add_entry","task_id":"…","text":"…"}   — a dated record on a task
@@ -92,6 +92,7 @@ object Assistant {
         appendLine("- Phone calendar entries are busy time: never plan tasks over them.")
         appendLine("- remind_at only when the user asks to be reminded.")
         appendLine("- people: others involved; add \"${L.s.me}\" only when work is split with others.")
+        appendLine("- dates: ONE matter on several separate days this time («тренировка в пн и чт», «звонить маме 12 и 15 октября», «во вторник и в пятницу в 10») → one create_task with dates (each day, its hour if said), not several tasks and not a repeat. «каждый пн и чт» / «по понедельникам» is a repeat. One day → due as usual.")
         appendLine("- sphere: work — the job, clients, colleagues, the user's business; personal — home, family, health, study, shopping, leisure. Set it on every create_task; change it only when the user says so.")
         appendLine("- project: when the text names a product, site, client or area (e.g. \"vuzburo\"), that name in lowercase is the project — even if it's new. Never attach an unrelated known project; no clear project → leave it out.")
         appendLine("- One message may hold several things: one action per thing. Concrete steps → subtasks (dictated steps verbatim, assignee if stated).")
@@ -153,7 +154,8 @@ object Assistant {
         append("[task_id=${t.id}] ${if (t.topic) "[topic] " else "[simple] "}${t.title}")
         val meta = listOfNotNull(t.start?.let { "start $it" }, t.due?.let { "due $it" }, t.time?.let { "at $it" }, t.project?.let { "#$it" },
             t.people.takeIf { it.isNotEmpty() }?.joinToString(), t.waitingFor?.let { "waiting for $it" }, t.promisedTo?.let { "promised to $it" }, t.noteId?.let { "note_id=$it" },
-            t.repeat?.let { "repeats ${it.freq}" + (if (it.days.isNotEmpty()) " ${it.days}" else "") }, if (t.postponed >= 2) "postponed ${t.postponed}×" else null)
+            t.repeat?.let { "repeats ${it.freq}" + (if (it.days.isNotEmpty()) " ${it.days}" else "") }, if (t.postponed >= 2) "postponed ${t.postponed}×" else null,
+            t.slots.takeIf { it.isNotEmpty() }?.joinToString(prefix = "days ") { it.date + (it.time?.let { h -> " $h" } ?: "") + if (it.done) " done" else "" })
         if (meta.isNotEmpty()) append(" | " + meta.joinToString(", "))
         appendLine()
     }
@@ -472,7 +474,7 @@ object Assistant {
                     val title = a.str("title")?.trim()?.trimEnd('.')?.cap() ?: continue
                     // Inside a topic a «new task» is its next question, unless the user asked for a separate one.
                     if (strict && focus != null && !newTaskCue.containsMatchIn(low) && d.tasks.any { it.id == focus }) {
-                        val q = Subtask(title = title, due = a.date("due") ?: a.date("start"), time = a.time("time"),
+                        val q = Subtask(title = title, due = a.date("due") ?: a.date("start"), time = a.time("time"), slots = a.slots(),
                             from = a.str("waiting_for")?.let { who(it) }?.takeIf { it.lowercase() !in me })
                         d = d.copy(tasks = d.tasks.map { if (it.id == focus) it.copy(subtasks = it.subtasks + q, done = false) else it })
                         // The words themselves belong in the feed even when the model forgot them.
@@ -498,6 +500,9 @@ object Assistant {
                             people = a.strList("people"),
                             project = a.project(),
                             sphere = a.sphere(),
+                            topic = a.str("topic") == "true",
+                            // Days and a repeat both sent: the words decide — «каждый / по понедельникам» is a repeat, otherwise these days.
+                            slots = if (everyCue.containsMatchIn(low)) emptyList() else a.slots(),
                             entries = listOfNotNull(entryText?.let { Entry(text = it.sentence()) }),
                             waitingFor = a.str("waiting_for"),
                             promisedTo = a.str("promised_to"),
@@ -506,7 +511,7 @@ object Assistant {
                             // The model links tasks to whatever note it sees in the context; keep the link only when they share words.
                             noteId = validNote(a.str("note_id"))?.takeIf { nid -> !strict || d.notes.first { it.id == nid }.let { n ->
                                 (stems(n.title + " " + n.text.take(600)) intersect stems(title + " " + source)).isNotEmpty() } },
-                            repeat = repeat(a["repeat"]),
+                            repeat = repeat(a["repeat"])?.takeIf { a.slots().isEmpty() || everyCue.containsMatchIn(low) },
                             subtasks = subtasks(a["subtasks"]),
                         ).normalized()
                     )
@@ -567,6 +572,8 @@ object Assistant {
                             people = if ("people" in a) a.strList("people").mapNotNull { who(it) }.distinct() else old.people,
                             project = if ("project" in a) a.project() else old.project,
                             sphere = if ("sphere" in a) (a.sphere() ?: old.sphere) else old.sphere,
+                            // New days replace the old ones; a day already ticked stays ticked.
+                            slots = if ("dates" in a) a.slots().map { n -> old.slots.find { it.date == n.date && it.time == n.time } ?: n } else old.slots,
                             waitingFor = newWait,
                             promisedTo = newPromise,
                             place = if ("place" in a) a.str("place")?.address() else old.place,
@@ -864,7 +871,7 @@ object Assistant {
                 is JsonObject -> {
                     val title = e.str("title")?.trim()?.trimEnd('.') ?: return@mapNotNull null
                     Subtask(title = title.cap(), assignee = e.str("assignee")?.takeIf { it.isNotBlank() }, children = subtasks(e["children"]),
-                        due = e.date("due"), time = e.time("time"), from = (e.str("from") ?: e.str("waiting_for"))?.takeIf { it.isNotBlank() && it.lowercase() !in setOf("я", "me") }?.properName())
+                        due = e.date("due"), time = e.time("time"), slots = e.slots(), from = (e.str("from") ?: e.str("waiting_for"))?.takeIf { it.isNotBlank() && it.lowercase() !in setOf("я", "me") }?.properName())
                 }
                 is JsonPrimitive -> e.contentOrNull?.takeIf { it.isNotBlank() }?.let { Subtask(title = it.trim().cap()) }
                 else -> null
@@ -916,6 +923,18 @@ object Assistant {
 
     private fun JsonObject.dateTime(k: String): String? =
         str(k)?.take(16)?.let { runCatching { LocalDateTime.parse(it).toString().take(16) }.getOrNull() }
+
+    /** Words that make several weekdays a repeat, not this week's days. */
+    private val everyCue = Regex("кажд|ежедневн|еженедел|по (понедельник|вторник|сред|четверг|пятниц|суббот|воскресень)\\p{L}*ам|every|daily|weekly|on (mondays|tuesdays|wednesdays|thursdays|fridays|saturdays|sundays)", RegexOption.IGNORE_CASE)
+
+    /** «dates»: two or more days of one matter; a single day stays a plain due date. */
+    private fun JsonObject.slots(): List<ru.anjeib.margin.data.Slot> = ((this["dates"] as? JsonArray)?.mapNotNull { e ->
+        when (e) {
+            is JsonObject -> e.date("date")?.let { ru.anjeib.margin.data.Slot(date = it, time = e.time("time")) }
+            is JsonPrimitive -> e.contentOrNull?.let { runCatching { LocalDate.parse(it.take(10)).toString() }.getOrNull() }?.let { ru.anjeib.margin.data.Slot(date = it) }
+            else -> null
+        }
+    } ?: emptyList()).distinctBy { it.date + "|" + it.time }.takeIf { it.size >= 2 } ?: emptyList()
 
     private fun JsonObject.sphere(): String? = str("sphere")?.trim()?.lowercase()?.takeIf { it == "personal" || it == "work" }
 

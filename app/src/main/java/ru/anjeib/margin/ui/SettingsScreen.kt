@@ -144,6 +144,19 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             ) { i -> vm.updateSettings { it.copy(lang = listOf(LangMode.Ru, LangMode.En, LangMode.Auto)[i]) } }
         }
 
+        // Sample data: to try everything without filling it by hand; the user's own data waits aside.
+        var demoAsk by remember { mutableStateOf(false) }
+        var mineKept by remember { mutableStateOf(vm.hasMine()) }
+        Group(s.demoSection) {
+            ValueRow(s.demoLoad, s.demoLoadHint, "", onClick = { demoAsk = true })
+            if (mineKept) { Divider(); ValueRow(s.demoRestore, s.demoRestoreHint, "", onClick = { vm.restoreMine(); mineKept = false }) }
+        }
+        if (demoAsk) androidx.compose.material3.AlertDialog(onDismissRequest = { demoAsk = false }, containerColor = c.card,
+            title = { Text(s.demoAskTitle, style = Type.cardTitle.copy(color = c.ink)) },
+            text = { Text(s.demoAskText, style = Type.body.copy(color = c.graphite)) },
+            confirmButton = { androidx.compose.material3.TextButton({ demoAsk = false; vm.loadDemo(); mineKept = vm.hasMine() }) { Text(s.demoLoad, color = c.link) } },
+            dismissButton = { androidx.compose.material3.TextButton({ demoAsk = false }) { Text(s.cancel, color = c.graphite) } })
+
         Group(s.backupSection) {
             // First the main switch and what it means, then the optional file copy.
             ToggleRow(s.googleBackup, if (settings.googleBackup) s.googleBackupHint else s.googleBackupOff, settings.googleBackup) { on ->

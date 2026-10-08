@@ -1,5 +1,11 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.toggleSlot
+
+import ru.anjeib.margin.data.syncSlots
+
+import ru.anjeib.margin.data.slotRef
+
 import ru.anjeib.margin.data.questionRef
 
 import android.app.Application
@@ -251,7 +257,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     fun send(text: String, smart: Boolean = false, label: String? = null, scope: Scope = Scope.Main, files: List<Attachment> = emptyList(), asQuestion: Boolean = false, movedHere: Boolean = false) {
-        val t = text.trim()
+        // «/дело», «/тема», «/идея», «/работа», «/личное» — said by the user, so they decide; the AI only fills in the rest.
+        val tagRx = Regex("(?:^|\\s)/(дело|тема|идея|работа|личное|todo|topic|idea|work|personal)(?=\\s|$)", RegexOption.IGNORE_CASE)
+        val tags = tagRx.findAll(text).map { it.groupValues[1].lowercase() }.toSet()
+        val t = text.replace(tagRx, " ").replace(Regex("\\s{2,}"), " ").trim()
+        val tagKind = when { "дело" in tags || "todo" in tags -> "task"; "идея" in tags || "idea" in tags -> "note"; "тема" in tags || "topic" in tags -> "topic"; else -> null }
+        val tagSphere = when { "работа" in tags || "work" in tags -> "work"; "личное" in tags || "personal" in tags -> "personal"; else -> null }
         if ((t.isEmpty() && files.isEmpty()) || _busy.value != null) return
         if (scope == Scope.Main && files.isEmpty() && !smart && setupAnswer(t)) return
         if (_pending.value != null) confirm() // typing on means the preview was fine
@@ -264,7 +275,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val chatBefore = data.value.chat
         val asked = scope == Scope.Main && chatBefore.lastOrNull()?.let { !it.fromUser && it.options.isNotEmpty() } == true
         val source = if (asked) chatBefore.dropLast(1).lastOrNull { it.fromUser }?.text?.let { "$it — $t" } ?: t else t
-        val cmd = if (smart) null else (if (scope is Scope.InTask) Commands.numbered(t) else null) ?: Commands.parse(t)
+        val cmd = if (smart) null else (tagKind?.takeIf { it != "topic" }?.let { Command(it, t) }
+            ?: (if (scope is Scope.InTask) Commands.numbered(t) else null) ?: Commands.parse(t))
 
         var userId: String? = null
         if (scope == Scope.Main) {
@@ -298,7 +310,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                     Assistant.systemPrompt(before, s, scope, query = if (smart) null else t + " " + history.joinToString(" ") { it.second }, recent = recent),
                     history + ("user" to Assistant.userMessage(t) + (cmd?.let { Commands.hint(it) }?.let { "\n$it" } ?: "") +
                         (if (asQuestion) "\n[Written on this topic's questions page: a new question → add_subtasks (due/time/from only when said), no add_entry.]" else "") +
-                        (if (movedHere) "\n[The user moved these words into this topic: add_entry with them; questions or answers only for THIS topic.]" else "")),
+                        (if (movedHere) "\n[The user moved these words into this topic: add_entry with them; questions or answers only for THIS topic.]" else "") +
+                        (if (tagKind == "topic") "\n[The user marked this as a TOPIC: exactly one create_task named by the matter, its steps as subtasks.]" else "")),
                     smart = smart, complex = Assistant.isComplex(t, scope), images = images,
                 )
                 prefs.addSpend(cost)
@@ -308,6 +321,15 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                     // Asked for in so many words: a contact at once, not a draft.
                     "contact" -> plan0.copy(actions = plan0.actions.map { a -> if (a["type"]?.toString()?.trim('"') == "person") kotlinx.serialization.json.JsonObject(a + ("keep" to kotlinx.serialization.json.JsonPrimitive("true"))) else a })
                     else -> plan0
+                }.let { p0 ->
+                    // The tags win over the model: the sphere on what is created, a topic when asked for one.
+                    if (tagSphere == null && tagKind != "topic") p0 else p0.copy(actions = p0.actions.map { a ->
+                        if (a["type"]?.toString()?.trim('"') != "create_task") a
+                        else kotlinx.serialization.json.JsonObject(a + listOfNotNull(
+                            tagSphere?.let { "sphere" to kotlinx.serialization.json.JsonPrimitive(it) },
+                            if (tagKind == "topic") "topic" to kotlinx.serialization.json.JsonPrimitive("true") else null,
+                        ))
+                    })
                 }
                 when {
                     scope != Scope.Main -> applyScoped(plan, scope, files, source, movedHere)
@@ -970,6 +992,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** The hour of a task or of a topic's question («q:…»), set from the clock that opens on its time. */
     fun setTime(id: String, time: String?) {
+        slotRef(id)?.let { (base, sid) -> moveSlot(base, sid, null, time, true); return }
         questionRef(id)?.let { (tid, qid) -> updateTask(tid) { t -> t.copy(subtasks = t.subtasks.map { if (it.id == qid) it.copy(time = time, due = it.due ?: if (time != null) LocalDate.now().toString() else null) else it }) }; return }
         updateTask(id) { t -> Assistant.withAutoReminder(t.copy(time = time, due = t.due ?: if (time != null && t.start == null) LocalDate.now().toString() else t.due, remindAt = null)) }
     }
@@ -997,6 +1020,64 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             m.copy(topic = true, subtasks = m.subtasks + ru.anjeib.margin.data.Subtask(title = t.sentence(),
                 due = if (first) m.due ?: m.start else null, time = if (first) m.time else null))
         }
+    }
+
+    // ---------------- «Пример данных» ----------------
+
+    /** The example over the user's data; theirs is put aside first (once) and comes back with [restoreMine]. */
+    fun loadDemo() {
+        ru.anjeib.margin.data.Demo.markAsked(ctx)
+        ru.anjeib.margin.data.Demo.keepMine(ctx, data.value)
+        val demo = ru.anjeib.margin.data.Demo.build(ctx)
+        store.restore { demo.copy(chat = emptyList()) }
+    }
+
+    fun restoreMine() {
+        val mine = ru.anjeib.margin.data.Demo.takeMine(ctx) ?: return
+        ru.anjeib.margin.data.Demo.dropFiles(ctx)
+        store.restore { mine }
+    }
+
+    fun demoAsked() = ru.anjeib.margin.data.Demo.asked(ctx)
+    fun demoSkip() = ru.anjeib.margin.data.Demo.markAsked(ctx)
+    fun hasMine() = ru.anjeib.margin.data.Demo.hasMine(ctx)
+
+    // ---------------- the topic feed: «+ − 🔧» on a line ----------------
+
+    /** «+» on a line of the feed: a new matter under it (another matter or a record), shown indented. */
+    fun addChildDeal(topicId: String, parentId: String, text: String) {
+        val t = text.trim().takeIf { it.isNotEmpty() } ?: return
+        updateTask(topicId) { it.copy(subtasks = it.subtasks + ru.anjeib.margin.data.Subtask(title = t.sentence(), parent = parentId)) }
+    }
+
+    /** «−» on a matter: it leaves the counts and the lists but stays in the feed struck through (with what hangs under it). */
+    fun removeDeal(topicId: String, subId: String) = updateTask(topicId) { t ->
+        fun under(id: String): List<String> = listOf(id) + t.subtasks.filter { it.parent == id }.flatMap { under(it.id) }
+        val ids = under(subId).toSet()
+        t.copy(subtasks = t.subtasks.filterNot { it.id in ids }, removed = t.removed + t.subtasks.filter { it.id in ids })
+    }
+
+    fun restoreDeal(topicId: String, subId: String) = updateTask(topicId) { t ->
+        val back = t.removed.filter { it.id == subId || it.parent == subId }
+        t.copy(removed = t.removed - back.toSet(), subtasks = t.subtasks + back)
+    }
+
+    fun purgeDeal(topicId: String, subId: String) = updateTask(topicId) { t -> t.copy(removed = t.removed.filterNot { it.id == subId || it.parent == subId }) }
+
+    /** «−» on a record of the feed: struck through, its files kept until removed for good. */
+    fun removeRecord(topicId: String, entryId: String) = updateTask(topicId) { t ->
+        val e = t.entries.find { it.id == entryId } ?: return@updateTask t
+        t.copy(entries = t.entries - e, removedEntries = t.removedEntries + e)
+    }
+
+    fun restoreRecord(topicId: String, entryId: String) = updateTask(topicId) { t ->
+        val e = t.removedEntries.find { it.id == entryId } ?: return@updateTask t
+        t.copy(removedEntries = t.removedEntries - e, entries = (t.entries + e).sortedBy { it.at })
+    }
+
+    fun purgeRecord(topicId: String, entryId: String) {
+        data.value.tasks.find { it.id == topicId }?.removedEntries?.find { it.id == entryId }?.attachments?.forEach { Files.delete(ctx, it) }
+        updateTask(topicId) { t -> t.copy(removedEntries = t.removedEntries.filterNot { it.id == entryId }) }
     }
 
     fun setSphere(id: String, sphere: String?) = updateTask(id) { it.copy(sphere = sphere) }
@@ -1051,6 +1132,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** «Отложить» to a chosen day: the task moves there whole (a range keeps its length). */
     fun postponeTo(id: String, day: LocalDate) {
         val before = data.value
+        slotRef(id)?.let { (base, sid) -> moveSlot(base, sid, day.toString(), null, false); offerUndo(before, L.s.movedTo(day.shortLabel().lowercase())); return }
         questionRef(id)?.let { (tid, qid) -> setQuestionDue(tid, qid, day.toString()); offerUndo(before, L.s.movedTo(day.shortLabel().lowercase())); return }
         val t = before.tasks.find { it.id == id } ?: return
         val base = t.dueDate ?: t.startDate ?: LocalDate.now()
@@ -1070,8 +1152,40 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         offerUndo(before, L.s.movedTo(target?.shortLabel()?.lowercase().orEmpty()))
     }
 
+    // ---------------- several days of one matter («<row>@<slot>») ----------------
+
+    /** Applies [f] to the day [slotId] of the row [base]: a task id or a topic's matter «q:<topic>:<matter>». */
+    private fun onSlotOwner(base: String, task: (Task) -> Task, sub: (Subtask) -> Subtask) {
+        questionRef(base)?.let { (tid, qid) -> updateTask(tid) { t -> t.copy(subtasks = t.subtasks.map { if (it.id == qid) sub(it) else it }) }; return }
+        updateTask(base, f = task)
+    }
+
+    /** Ticks one day of a matter done on several days; all ticked — the matter is done. */
+    fun toggleSlot(base: String, slotId: String) {
+        val before = data.value
+        onSlotOwner(base, { it.toggleSlot(slotId) }, { it.toggleSlot(slotId) })
+        offerUndo(before, L.s.markedDone)
+    }
+
+    /** «+ день»: one more day for the matter; its single date becomes the first of the days. */
+    fun addSlot(taskId: String, date: String) = updateTask(taskId) { t ->
+        val base = if (t.slots.isEmpty()) listOfNotNull((t.due ?: t.start)?.let { ru.anjeib.margin.data.Slot(date = it, time = t.time) }) else t.slots
+        t.copy(slots = base + ru.anjeib.margin.data.Slot(date = date)).syncSlots()
+    }
+
+    fun removeSlot(taskId: String, slotId: String) = updateTask(taskId) { t ->
+        val l = t.slots.filterNot { it.id == slotId }
+        if (l.size <= 1) t.copy(slots = emptyList(), due = l.firstOrNull()?.date ?: t.due, time = l.firstOrNull()?.time ?: t.time) else t.copy(slots = l).syncSlots()
+    }
+
+    private fun moveSlot(base: String, slotId: String, date: String?, time: String?, timeToo: Boolean) {
+        fun f(l: List<ru.anjeib.margin.data.Slot>) = l.map { if (it.id != slotId) it else it.copy(date = date ?: it.date, time = if (timeToo) time else it.time) }
+        onSlotOwner(base, { it.copy(slots = f(it.slots)).syncSlots() }, { it.copy(slots = f(it.slots)).syncSlots() })
+    }
+
     /** Swipe-right: done, with a few seconds to take it back. */
     fun completeWithUndo(id: String) {
+        slotRef(id)?.let { (base, sid) -> toggleSlot(base, sid); return }
         questionRef(id)?.let { (tid, qid) -> toggleQuestion(tid, qid); return }
         val before = data.value
         val t = before.tasks.find { it.id == id } ?: return

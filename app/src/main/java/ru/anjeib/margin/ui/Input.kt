@@ -104,6 +104,8 @@ fun SmartComposer(
     focusKey: Any? = null,
     /** The send button works with nothing typed (forwarding: the words are already there). */
     sendEmpty: Boolean = false,
+    /** «/» offers what it is (дело / тема / идея) and where it belongs (работа / личное) — the main field only. */
+    slash: Boolean = false,
 ) {
     val c = M.c
     val s = M.s
@@ -112,6 +114,9 @@ fun SmartComposer(
     val settings by vm.settings.collectAsState()
     val working by vm.working.collectAsState()
     var text by rememberSaveable { mutableStateOf("") }
+    // Chosen «/» tags ride in front of the words when they are sent: «/дело /работа Отправить счёт».
+    var tags by rememberSaveable { mutableStateOf(listOf<String>()) }
+    fun tagged(t: String) = (tags.joinToString(" ") { "/$it" } + " " + t).trim().also { tags = emptyList() }
     val files = remember { mutableStateListOf<Attachment>() }
     var menu by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<WavRecorder?>(null) }
@@ -151,12 +156,12 @@ fun SmartComposer(
         if (voiceWord.containsMatchIn(t)) {
             // One block: the player with what was said under it — not the same words twice.
             val said = t.replace(voiceWord, "").trim().replaceFirstChar { it.uppercaseChar() }
-            onSend(text.trim(), files.toList() + audio.copy(transcript = said.ifBlank { null })); text = ""; files.clear()
+            onSend(tagged(text.trim()), files.toList() + audio.copy(transcript = said.ifBlank { null })); text = ""; files.clear()
             return
         }
         Files.delete(ctx, audio)
         val full = (text.trimEnd() + " " + t).trim()
-        if (settings.voiceSendNow) { onSend(full, files.toList()); text = ""; files.clear() } else text = full
+        if (settings.voiceSendNow) { onSend(tagged(full), files.toList()); text = ""; files.clear() } else text = full
     }
 
     fun startRecording() {
@@ -182,6 +187,46 @@ fun SmartComposer(
     }
 
     Column(modifier.fillMaxWidth()) {
+        // «/…» at the end of the words: a small window of choices, one over another.
+        val query = if (slash && modeLabel == null) Regex("(?:^|\\s)/(\\p{L}*)$").find(text)?.groupValues?.get(1)?.lowercase() else null
+        val kinds = listOf(s.tagDeal, s.tagTopic, s.tagIdea)
+        val spheres = listOf(s.tagWork, s.tagPersonal)
+        val offer = query?.let { q -> (kinds + spheres).filter { it.startsWith(q) && it !in tags } }.orEmpty()
+        androidx.compose.animation.AnimatedVisibility(offer.isNotEmpty(), enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) +
+            androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(200), initialScale = 0.92f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 1f)),
+            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))) {
+            androidx.compose.material3.Surface(Modifier.padding(start = 6.dp, bottom = 8.dp).width(196.dp), shape = RoundedCornerShape(16.dp), color = c.card,
+                shadowElevation = 8.dp, border = androidx.compose.foundation.BorderStroke(1.dp, c.hairline)) {
+                Column(Modifier.padding(vertical = 6.dp)) {
+                    Text(s.slashWhat, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 2.dp))
+                    offer.forEachIndexed { i, tag ->
+                        if (i > 0 && tag in spheres && offer[i - 1] in kinds) Hairline(Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
+                        Row(Modifier.fillMaxWidth().clickable {
+                            // One kind and one sphere at most: a new choice replaces the old one of its group.
+                            val group = if (tag in kinds) kinds else spheres
+                            tags = tags.filterNot { it in group } + tag
+                            text = text.replace(Regex("(?:^|\\s)/\\p{L}*$"), "").trimEnd().let { if (it.isEmpty()) "" else "$it " }
+                        }.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (tag in spheres) {
+                                Box(Modifier.size(7.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (tag == s.tagWork) c.link else c.ok))
+                                Spacer(Modifier.width(9.dp))
+                            }
+                            Text("/$tag", style = Type.body.copy(color = c.ink, fontSize = 15.sp))
+                        }
+                    }
+                }
+            }
+        }
+        if (tags.isNotEmpty()) Row(Modifier.padding(start = 6.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            tags.forEach { tag ->
+                Row(Modifier.clip(RoundedCornerShape(50)).background(c.linkSoft).clickable { tags = tags - tag }.padding(start = 11.dp, end = 7.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(tag, style = Type.small.copy(color = c.link, fontSize = 13.sp))
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Rounded.Close, s.dismiss, tint = c.link, modifier = Modifier.size(13.dp))
+                }
+            }
+        }
         if (modeLabel != null) Row(Modifier.padding(start = 6.dp, bottom = 6.dp).clip(RoundedCornerShape(50)).background(c.linkSoft)
             .clickable(onClick = onModeClose).padding(start = 12.dp, end = 8.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(modeLabel, style = Type.small.copy(color = c.link, fontSize = 13.5.sp))
@@ -252,7 +297,7 @@ fun SmartComposer(
             Box(
                 Modifier.size(44.dp).clip(CircleShape)
                     .background(if (enabled || busy) c.accent else c.accent.copy(alpha = 0.35f))
-                    .clickable(enabled = enabled) { onSend(text, files.toList()); text = ""; files.clear() },
+                    .clickable(enabled = enabled) { onSend(tagged(text), files.toList()); text = ""; files.clear() },
                 contentAlignment = Alignment.Center,
             ) {
                 if (busy) CircularProgressIndicator(color = Color.White, strokeWidth = 1.8.dp, modifier = Modifier.size(18.dp))

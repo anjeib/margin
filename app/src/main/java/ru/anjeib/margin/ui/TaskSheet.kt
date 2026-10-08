@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.offset
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -199,8 +200,11 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         val ctxOpen = androidx.compose.ui.platform.LocalContext.current
                         val dates = task.whenLabel()?.substringBefore(" · ${task.time}")?.takeIf { task.dueDate != null || task.startDate != null }
                         Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            dates?.let { Prop({ CalendarGlyph(c.graphite, 15.dp) }, it, task.isOverdue()) { dialog = "dates" } }
-                            task.time?.let { Prop({ ClockGlyph(c.graphite, 15.dp) }, it, task.isOverdue()) { dialog = "time" } }
+                            if (task.slots.isNotEmpty()) DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) })
+                            else {
+                                dates?.let { Prop({ CalendarGlyph(c.graphite, 15.dp) }, it, task.isOverdue()) { dialog = "dates" } }
+                                task.time?.let { Prop({ ClockGlyph(c.graphite, 15.dp) }, it, task.isOverdue()) { dialog = "time" } }
+                            }
                             task.repeat?.let { Prop({ RepeatGlyph(c.graphite, 15.dp) }, it.label()) { dialog = "repeat" } }
                             task.place?.let { pl -> Prop({ Icon(Icons.Outlined.Place, null, tint = c.graphite, modifier = Modifier.size(15.dp)) }, pl, onLong = { fill("place") }) {
                                 runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
@@ -219,7 +223,9 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         val typed = setOf("step", "place", "people")
                         val missing = buildList {
                             if (task.dueDate == null && task.startDate == null) add(s.fieldDue to "dates")
-                            if (task.time == null) add(s.fieldTime to "time")
+                            if (task.time == null && task.slots.isEmpty()) add(s.fieldTime to "time")
+                            // Another day for the same matter («и в четверг»).
+                            if ((task.dueDate != null || task.slots.isNotEmpty()) && task.repeat == null && !task.done) add(s.addDay to "day")
                             if (task.repeat == null) add(s.fieldRepeat to "repeat")
                             if (task.people.isEmpty()) add(s.fieldPeople to "people")
                             if (task.place == null) add(s.fieldPlace to "place")
@@ -387,6 +393,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
 
     when (dialog) {
         "dates" -> DatesDialog(task, onDismiss = { dialog = null }) { st, du -> save(task.copy(start = st, due = du, remindAt = null)); dialog = null }
+        "day" -> OneDayDialog(onDismiss = { dialog = null }) { d -> vm.addSlot(task.id, d.toString()); dialog = null }
         "time" -> TimeDialog(task.time, onDismiss = { dialog = null }) { tm ->
             val due = task.due ?: if (tm != null && task.start == null) LocalDate.now().toString() else task.due
             save(task.copy(time = tm, due = due, remindAt = null)); dialog = null
@@ -455,6 +462,46 @@ private fun RepeatDialog(task: Task, onDismiss: () -> Unit, onPick: (ru.anjeib.m
         confirmButton = {},
         dismissButton = { TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
     )
+}
+
+/** The days of a matter done on several days: each a small chip with its own tick; a long press takes the day away. */
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@Composable
+private fun DaysProp(slots: List<ru.anjeib.margin.data.Slot>, onToggle: (String) -> Unit, onRemove: (String) -> Unit) {
+    val c = M.c
+    val today = LocalDate.now()
+    Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.width(22.dp).padding(top = 7.dp), contentAlignment = Alignment.CenterStart) { CalendarGlyph(c.graphite, 15.dp) }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            slots.forEach { sl ->
+                val d = runCatching { LocalDate.parse(sl.date) }.getOrNull()
+                val late = !sl.done && d != null && d.isBefore(today)
+                val fg = when { sl.done -> c.ok; late -> c.accent; else -> c.link }
+                Row(Modifier.clip(RoundedCornerShape(50)).border(1.dp, if (sl.done) c.ok.copy(alpha = 0.4f) else c.hairline, RoundedCornerShape(50))
+                    .combinedClickable(onClick = { onToggle(sl.id) }, onLongClick = { onRemove(sl.id) }).padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    if (sl.done) { TickGlyph(c.ok, 13.dp); Spacer(Modifier.width(5.dp)) }
+                    Text(listOfNotNull(d?.let { it.dowShort().lowercase() + " " + it.dayMonthShort() }, sl.time).joinToString(", "),
+                        style = Type.small.copy(color = fg, fontSize = 14.sp, textDecoration = if (sl.done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null))
+                }
+            }
+        }
+    }
+}
+
+/** One day picked for «+ день». */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OneDayDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
+    val c = M.c
+    val s = M.s
+    val st = androidx.compose.material3.rememberDatePickerState()
+    val colors = DatePickerDefaults.colors(containerColor = c.card, selectedDayContainerColor = c.link, todayDateBorderColor = c.link, todayContentColor = c.link)
+    androidx.compose.material3.DatePickerDialog(onDismissRequest = onDismiss, colors = colors,
+        confirmButton = { TextButton({ st.selectedDateMillis?.let { onPick(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) } }) { Text(s.save, color = c.link) } },
+        dismissButton = { TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } }) {
+        androidx.compose.material3.DatePicker(state = st, colors = colors, showModeToggle = false, title = null, headline = null)
+    }
 }
 
 /** One property of a matter: its glyph, then the value as a petrol link that changes it; [late] — terracotta. */
