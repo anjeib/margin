@@ -36,6 +36,7 @@ android {
         buildConfigField("String", "OPENROUTER_KEY", "\"${secrets.getProperty("OPENROUTER_KEY", "")}\"")
         buildConfigField("String", "YC_KEY", "\"${secrets.getProperty("YC_KEY", "")}\"")
         buildConfigField("String", "YC_FOLDER", "\"${secrets.getProperty("YC_FOLDER", "")}\"")
+        buildConfigField("boolean", "DEMO", "false")
     }
 
     signingConfigs {
@@ -61,6 +62,15 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
+        }
+        // A copy to show: opens with two months of the sample designer's life already in it; sits next to Margin 2.
+        create("demo") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".demo"
+            versionNameSuffix = "-demo"
+            manifestPlaceholders["appLabel"] = "Margin 2 · демо"
+            buildConfigField("boolean", "DEMO", "true")
+            matchingFallbacks += listOf("release")
         }
     }
     ndkVersion = "27.3.13750724"

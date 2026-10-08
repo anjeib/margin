@@ -128,6 +128,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     init {
+        // The demo copy opens with the sample already in it, once.
+        if (ru.anjeib.margin.BuildConfig.DEMO && !ru.anjeib.margin.data.Demo.asked(ctx)) loadDemo()
         viewModelScope.launch { store.data.collect { Reminders.syncTasks(getApplication(), it.tasks, it.notes); watchBrief(it) } }
         // A quiet line under the field says what happened — and then leaves.
         viewModelScope.launch {
