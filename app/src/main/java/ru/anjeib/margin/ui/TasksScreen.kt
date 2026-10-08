@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.questionRow
+
+import ru.anjeib.margin.data.dative
+
 import androidx.compose.foundation.layout.offset
 
 import ru.anjeib.margin.data.dayOf
@@ -286,15 +290,24 @@ fun TaskList(
         when {
             view == Views.TODAY -> {
                 // v2: a timeline of days. Today open — «Дела» and «Темы»; the next days with something in them, closed to one line each.
-                val plans = (0L..13L).map { dayPlan(data, today.plusDays(it), today, events) }.filter { it.date == today || !it.empty }
+                // «Сегодня» is today only: the next days live in «Неделя» and «Все».
+                val plans = listOf(dayPlan(data, today, today, events))
+                val tomorrowPlan = dayPlan(data, today.plusDays(1), today, events)
+                // Who owes what: late, within three days, or without a day — shown in the summary, still in their days below.
+                val topicWaits = data.tasks.filter { it.topic && !it.done }.flatMap { t -> t.subtasks.filter { !it.done && it.due == null && it.from != null }.map { t.questionRow(it) } }
+                val promises = (tasks + topicWaits).filter { !it.done && (it.waitingFor != null || it.promisedTo != null) }
+                    .filter { t -> (t.dueDate ?: t.startDate).let { it == null || !it.isAfter(today.plusDays(3)) } }
+                    .distinctBy { ru.anjeib.margin.data.slotRef(it.id)?.first ?: it.id }
+                    .sortedWith(compareBy({ (it.dueDate ?: it.startDate) ?: LocalDate.MAX }, { it.title }))
                 // Undated matters — simple ones and topics' — live at the end of today, oldest last.
                 val undatedAll = (tasks.filter { !it.done && it.dueDate == null && it.startDate == null && it.waitingFor == null } + data.undatedTopicMatters())
                     .sortedByDescending { it.createdAt }
                 plans.forEach { p ->
                     item("day" + p.date) {
-                        DayBlock(p, today, open = isDayOpen(p.date), heading = p.date == today, onToggle = { toggleDay(p.date) },
+                        DayBlock(p, today, open = true, heading = true, onToggle = {},
                             onOpen = onOpen, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = landed,
-                            undated = if (p.date == today) undatedAll else emptyList())
+                            undated = if (p.date == today) undatedAll else emptyList(),
+                            top = if (p.date == today) ({ TodaySummary(p, promises, today, onOpen) }) else null)
                     }
                 }
                 // Written without internet: one quiet line here, the items themselves live in «Входящие».
@@ -328,6 +341,12 @@ fun TaskList(
                     }
                 }
             
+                // One quiet look ahead for the evening: tomorrow's count, a tap opens the week.
+                val tomorrowCount = tomorrowPlan.deals.size + tomorrowPlan.events.size
+                if (tomorrowCount > 0) plain("tomorrow") {
+                    Text(s.quickTomorrow + " — " + s.summaryDeals(tomorrowCount) + "  ›", style = Type.small.copy(color = c.graphite, fontSize = 14.sp),
+                        modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(8.dp)).clickable { onView(Views.WEEK) }.padding(vertical = 6.dp))
+                }
             }
 
             view == Views.WEEK -> {
@@ -1044,6 +1063,41 @@ private fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String>
     }
 }
 
+/**
+ * The top of today: «7 дел · 2 темы · 1 встреча», then who owes what — the matters stay in their days below,
+ * this only gathers them so they are seen at once.
+ */
+@Composable
+private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, onOpen: (String) -> Unit) {
+    val c = M.c
+    val s = M.s
+    val topics = plan.deals.mapNotNull { it.topicId }.distinct().size
+    Column(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+        Text(listOfNotNull(s.summaryDeals(plan.deals.size), topics.takeIf { it > 0 }?.let { s.summaryTopics(it) }, plan.events.size.takeIf { it > 0 }?.let { s.summaryMeetings(it) })
+            .joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+        if (promises.isNotEmpty()) {
+            Text(s.promisesTitle.uppercase(), style = Type.label.copy(color = c.link), modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
+            promises.take(5).forEach { t ->
+                val d = t.dueDate ?: t.startDate
+                val late = d?.isBefore(today) == true
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.id) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.width(22.dp), contentAlignment = Alignment.CenterStart) {
+                        if (t.waitingFor != null) HourglassGlyph(c.link, 14.dp) else ArrowGlyph(c.link, 14.dp)
+                    }
+                    Text(androidx.compose.ui.text.buildAnnotatedString {
+                        withStyle(SpanStyle(color = c.link)) { append(t.waitingFor ?: t.promisedTo!!.dative()) }
+                        withStyle(SpanStyle(color = c.ink)) { append("  ·  " + t.title) }
+                    }, style = Type.small.copy(fontSize = 14.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    d?.let { Text(if (it == today) s.todayShort else it.dayMonthShort(), style = Type.small.copy(color = if (late) c.accent else c.graphite, fontSize = 12.5.sp),
+                        modifier = Modifier.padding(start = 10.dp)) }
+                }
+            }
+            if (promises.size > 5) Text(s.more(promises.size - 5), style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 22.dp, top = 2.dp))
+        }
+        Hairline(Modifier.padding(top = 10.dp))
+    }
+}
+
 /** A line through the whole box as [strike] goes 0→1 (for rows whose text mixes links). */
 private fun Modifier.drawStrike(strike: Float, color: Color): Modifier = if (strike <= 0f) this else this.drawWithContent {
     drawContent()
@@ -1115,6 +1169,8 @@ fun DayBlock(
     plan: DayPlan, today: LocalDate, open: Boolean, heading: Boolean, onToggle: () -> Unit,
     onOpen: (String) -> Unit, onDone: (String) -> Unit, onLater: (String) -> Unit, onTime: (String) -> Unit, landed: Set<String>,
     undated: List<Task> = emptyList(),
+    /** Over today's matters: a short summary — how much, and who owes what. */
+    top: (@Composable () -> Unit)? = null,
 ) {
     val c = M.c
     val s = M.s
@@ -1126,6 +1182,7 @@ fun DayBlock(
         }) {
             Column {
                 if (heading) Text(plan.date.dowFull(), style = Type.display.copy(color = c.ink), modifier = Modifier.padding(bottom = 8.dp))
+                if (heading && open) top?.invoke()
                 if (!open) {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle).padding(top = 8.dp), verticalAlignment = Alignment.Top) {
                         Column(Modifier.weight(1f)) {

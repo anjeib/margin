@@ -578,6 +578,9 @@ interface Strings {
     val toOtherTopic: String
     val toTopicPick: String
     val recognizeWord: String
+    fun summaryDeals(n: Int): String
+    fun summaryTopics(n: Int): String
+    fun summaryMeetings(n: Int): String
     val parseSection: String
     val parseLocal: String
     val parseAuto: String
@@ -1243,6 +1246,9 @@ object Ru : Strings {
     override val toOtherTopic = "В другую тему"
     override val toTopicPick = "В тему…"
     override val recognizeWord = "Распознать"
+    override fun summaryDeals(n: Int) = "$n " + pluralRu(n, "дело", "дела", "дел")
+    override fun summaryTopics(n: Int) = "$n " + pluralRu(n, "тема", "темы", "тем")
+    override fun summaryMeetings(n: Int) = "$n " + pluralRu(n, "встреча", "встречи", "встреч")
     override val parseSection = "РАЗБОР ТЕКСТА"
     override val parseLocal = "Телефон"
     override val parseAuto = "Авто"
@@ -1908,6 +1914,9 @@ object En : Strings {
     override val toOtherTopic = "Another topic"
     override val toTopicPick = "To a topic…"
     override val recognizeWord = "Read text"
+    override fun summaryDeals(n: Int) = "$n " + if (n == 1) "to-do" else "to-dos"
+    override fun summaryTopics(n: Int) = "$n " + if (n == 1) "topic" else "topics"
+    override fun summaryMeetings(n: Int) = "$n " + if (n == 1) "meeting" else "meetings"
     override val parseSection = "READING YOUR WORDS"
     override val parseLocal = "Phone"
     override val parseAuto = "Auto"
