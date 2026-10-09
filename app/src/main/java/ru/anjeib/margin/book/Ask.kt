@@ -61,7 +61,10 @@ object Ask {
     fun answer(q0: String, book: Book, today: LocalDate = LocalDate.now()): Answer {
         val q = norm(q0.trim().trimEnd('?', ' ', '.', '!'))
         val known = book.persons.map { it.name to it.aliases }
-        val read = runCatching { LocalParser.parse(q0.trim().trimEnd('?', ' '), known, today = today, now = null, keepWords = true) }.getOrNull()
+        val plain = q0.trim().trimEnd('?', ' ')
+        val read = runCatching {
+            if (English.isEnglish(plain)) English.parse(plain, known, today) else LocalParser.parse(plain, known, today = today, now = null, keepWords = true)
+        }.getOrNull()
         val item = read?.items?.firstOrNull()
         val names = (listOfNotNull(item?.promisedTo, item?.waitingFor) + (item?.people ?: emptyList()))
             .map { n -> book.person(n)?.name ?: n }.distinct()

@@ -16,9 +16,10 @@ object Read {
         "дедушка", "дедушке", "дедушку", "сестра", "сестре", "сестру", "брат", "брату", "жена", "жене", "жену", "муж", "мужу",
         "сын", "сыну", "дочь", "дочке", "дочери", "тётя", "тёте", "дядя", "дяде", "начальник", "начальнику", "шеф", "шефу")
 
-    private val someday = Regex("^\\s*(?:когда[- ]нибудь|потом|при случае|как[- ]нибудь)\\s*[:,—-]?\\s*", RegexOption.IGNORE_CASE)
-    private val eventCue = Regex("^\\s*(?:встреча|созвон|при[её]м|собеседование|звонок с|концерт|спектакль|день рождения|свадьба|вебинар|лекция|урок|тренировка)(?!\\p{L})", RegexOption.IGNORE_CASE)
-    private val noteCue = Regex("^\\s*(?:запись|заметка|мысль|идея|на заметку)\\s*[:—–-]\\s*", RegexOption.IGNORE_CASE)
+    private val someday = Regex("^\\s*(?:когда[- ]нибудь|потом|при случае|как[- ]нибудь|later|someday|some day|eventually)\\s*[:,—-]?\\s*", RegexOption.IGNORE_CASE)
+    private val eventCue = Regex("^\\s*(?:встреча|созвон|при[её]м|собеседование|звонок с|концерт|спектакль|день рождения|свадьба|вебинар|лекция|урок|тренировка|" +
+        "meeting|call with|appointment|interview|lunch with|dinner with|concert|webinar|lecture|lesson|class|training|birthday|wedding)(?!\\p{L})", RegexOption.IGNORE_CASE)
+    private val noteCue = Regex("^\\s*(?:запись|заметка|мысль|идея|на заметку|note|idea|thought)\\s*[:—–-]\\s*", RegexOption.IGNORE_CASE)
     private val threadTag = Regex("(?:^|\\s)#([\\p{L}\\d][\\p{L}\\d_-]*)")
     /** «до пятницы», «к среде», «до 12-го»: a deadline — the line stands on the page from now until that day. */
     private val deadline = Regex("(?<!\\p{L})(?:до|к|ко)\\s+(?:понедельник\\p{L}*|вторник\\p{L}*|сред\\p{L}*|четверг\\p{L}*|пятниц\\p{L}*|суббот\\p{L}*|воскресень\\p{L}*|" +
@@ -47,7 +48,8 @@ object Read {
         val note = noteCue.containsMatchIn(t)
         if (note) t = t.replace(noteCue, "")
         val known = book.persons.map { it.name to it.aliases }
-        val r = LocalParser.parse(t, known, today = page, now = now, keepWords = true)
+        val r = if (English.isEnglish(t)) English.parse(t, known, today = page, now = now)
+            else LocalParser.parse(t, known, today = page, now = now, keepWords = true)
         if (r.why == "question") return Draft(emptyList(), false, true, tag)
         val lines = r.items.flatMap { i ->
             val kind = when {
