@@ -113,11 +113,12 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
-    implementation("androidx.work:work-runtime-ktx:2.10.1")
     // «Сегодня» on the home screen.
     implementation("androidx.glance:glance-appwidget:1.1.1")
     // Optional fingerprint lock.
     implementation("androidx.biometric:biometric:1.1.0")
+    // FragmentActivity (for the fingerprint) with the activity-result API: fragment ≥ 1.3.
+    implementation("androidx.fragment:fragment-ktx:1.8.6")
     // IMAP for letters forwarded to the user’s own address.
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
