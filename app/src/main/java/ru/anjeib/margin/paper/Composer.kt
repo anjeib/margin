@@ -43,14 +43,15 @@ import java.time.LocalDate
  * («завтра 15:00 · с Олегом») — the live preview stands exactly where the notes will stand.
  */
 @Composable
-fun Composer(vm: BookVm, page: LocalDate, book: Book, today: LocalDate, modifier: Modifier = Modifier) {
+fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, modifier: Modifier = Modifier) {
+    val page = target.page
     val c = P.c
     val w = P.w
     var text by rememberSaveable { mutableStateOf("") }
     val said by vm.said.collectAsState()
     val handed by vm.prefill.collectAsState()
     androidx.compose.runtime.LaunchedEffect(handed) { handed?.let { text = it; vm.prefillTaken() } }
-    val draft = remember(text, page, book) { if (text.isBlank()) null else vm.preview(text, page) }
+    val draft = remember(text, target, book) { if (text.isBlank()) null else vm.preview(text, target) }
     val first = draft?.lines?.firstOrNull()
     val pencil = when {
         draft == null -> emptyList()
@@ -62,7 +63,7 @@ fun Composer(vm: BookVm, page: LocalDate, book: Book, today: LocalDate, modifier
 
     fun send() {
         if (text.isBlank()) return
-        if (vm.write(text, page)) text = ""
+        if (vm.write(text, target)) text = ""
     }
 
     Column(modifier.fillMaxWidth().background(c.paper).rule(c.rule)) {

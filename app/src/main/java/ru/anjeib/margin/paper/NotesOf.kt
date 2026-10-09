@@ -18,7 +18,9 @@ import java.time.LocalDateTime
 
 enum class Seen { Page, Tail, Trace, Sheet }
 
-fun notesOf(l: Line, page: LocalDate?, today: LocalDate, book: Book, w: Words, seen: Seen = Seen.Page): List<Note> {
+fun notesOf(l: Line, page: LocalDate?, today: LocalDate, book: Book, w: Words, seen: Seen = Seen.Page,
+            /** On a thread's own page its name is not repeated; on a person's page — their own arrow. */
+            hideThread: String? = null, hidePerson: String? = null): List<Note> {
     val out = ArrayList<Note>()
     l.ask.firstOrNull()?.let { if (l.state == State.Open) out += Note(w.ask(it), Tone.Attention) }
     if (l.state == State.Dropped) out += Note(w.dropped, Tone.Gone)
@@ -48,9 +50,10 @@ fun notesOf(l: Line, page: LocalDate?, today: LocalDate, book: Book, w: Words, s
     l.who.sortedBy { it.dir.ordinal }.forEach { who ->
         // «с Олегом» is not repeated when the words already name him; a promise always shows its direction.
         if (who.dir == Dir.With && named(l.text, who.name)) return@forEach
+        if (hidePerson != null && who.name.equals(hidePerson, true)) return@forEach
         out += Note(when (who.dir) { Dir.To -> w.to(who.name); Dir.From -> w.from(who.name); Dir.With -> w.with(who.name) }, Tone.Link)
     }
-    if (seen != Seen.Sheet) book.thread(l.threadId)?.let { out += Note(w.threadPrefix + shortTitle(it.title), Tone.Link) }
+    if (seen != Seen.Sheet && l.threadId != hideThread) book.thread(l.threadId)?.let { out += Note(w.threadPrefix + shortTitle(it.title), Tone.Link) }
     l.place?.let { out += Note(it, Tone.Link) }
     if (l.files.isNotEmpty()) out += Note(when {
         l.files.any { it.kind == "photo" || it.kind == "video" } -> w.photo

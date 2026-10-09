@@ -136,17 +136,20 @@ fun Book.threadLines(threadId: String): List<Pair<LocalDate?, List<Line>>> {
         listOfNotNull(mine.filter { it.date == null && it.until == null }.takeIf { it.isNotEmpty() }?.let { null to it.sortedBy { l -> l.writtenAt } })
 }
 
-/** A thread's quiet line: how many open, how many waited for, how many files, since when. */
-data class ThreadStats(val open: Int, val waiting: Int, val files: Int, val since: LocalDate, val last: LocalDate)
+/** A thread's quiet line: how many open, waited for, notes, files; since when, and the last day something happened. */
+data class ThreadStats(val open: Int, val waiting: Int, val notes: Int, val files: Int, val since: LocalDate, val last: LocalDate)
 
-fun Book.threadStats(threadId: String): ThreadStats {
+fun Book.threadStats(threadId: String, today: LocalDate = LocalDate.now()): ThreadStats {
     val mine = lines.filter { it.threadId == threadId }
     val t = thread(threadId)
-    val since = t?.createdAt?.let { runCatching { java.time.LocalDateTime.parse(it).toLocalDate() }.getOrNull() } ?: LocalDate.now()
-    val last = mine.maxOfOrNull { maxOf(it.written.toLocalDate(), it.date ?: it.written.toLocalDate()) } ?: since
+    val since = t?.createdAt?.let { runCatching { java.time.LocalDateTime.parse(it).toLocalDate() }.getOrNull() } ?: today
+    // The last thing that happened — written or done; a day still ahead is not activity.
+    val last = mine.flatMap { l -> listOfNotNull(l.written.toLocalDate(), l.doneAt?.let { d -> runCatching { java.time.LocalDateTime.parse(d).toLocalDate() }.getOrNull() }) }
+        .filter { !it.isAfter(today) }.maxOrNull() ?: since
     return ThreadStats(
         open = mine.count { it.isTodo && it.open && it.from() == null },
         waiting = mine.count { it.open && it.from() != null },
+        notes = mine.count { it.kind == Kind.Note },
         files = mine.sumOf { it.files.size },
         since = since, last = last,
     )

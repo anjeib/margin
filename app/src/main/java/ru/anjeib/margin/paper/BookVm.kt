@@ -21,6 +21,8 @@ import ru.anjeib.margin.book.move
 import ru.anjeib.margin.book.setThread
 import ru.anjeib.margin.book.toggle
 import ru.anjeib.margin.book.withSamples
+import ru.anjeib.margin.book.withoutSamples
+import ru.anjeib.margin.book.carryAll
 import java.time.LocalDate
 
 /**
@@ -78,23 +80,36 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         _said.value = null
     }
 
-    /** What the field holds, read on the phone — for the live margin next to it. */
-    fun preview(text: String, page: LocalDate): Read.Draft = Read.draft(text, book.value, page, today.value)
+    /** Where the field writes: a day's page, a thread, a person's page or «Потом». */
+    data class Target(val page: LocalDate, val threadId: String? = null, val person: String? = null, val later: Boolean = false)
 
-    /** The words become lines on [page] (or on their own day); Margin says where they went if not here. */
-    fun write(text: String, page: LocalDate, threadId: String? = null): Boolean {
-        val d = Read.draft(text, book.value, page, today.value, threadId = threadId)
+    /** What the field holds, read on the phone — for the live margin next to it. */
+    fun preview(text: String, t: Target): Read.Draft = draft(text, t)
+
+    private fun draft(text: String, t: Target): Read.Draft {
+        val d = Read.draft(text, book.value, t.page, today.value, threadId = t.threadId, noDay = t.later)
+        if (t.person == null) return d
+        // Written on a person's page: the person is on every line, unless the words already name them another way.
+        return d.copy(lines = d.lines.map { l -> if (l.who.any { it.name.equals(t.person, true) }) l else l.copy(who = l.who + ru.anjeib.margin.book.Who(t.person)) })
+    }
+
+    /** The words become lines on the target (or on their own day); Margin says where they went if not here. */
+    fun write(text: String, t: Target): Boolean {
+        val page = t.page
+        val d = draft(text, t)
         if (d.question) { say(words.askLater); return false }
         if (d.lines.isEmpty()) return false
         val before = book.value
         store.update { b ->
             var x = b.add(d.lines)
-            d.threadTitle?.let { t -> d.lines.forEach { l -> x = x.setThread(l.id, t) } }
+            d.threadTitle?.let { tt -> d.lines.forEach { l -> x = x.setThread(l.id, tt) } }
             x
         }
         _fresh.value = d.lines.map { it.id }.toSet()
         viewModelScope.launch { delay(1200); _fresh.value = emptySet() }
-        val away = d.lines.filter { it.date != page }
+        // Margin says where the words went only when they left the page in front of you.
+        val here = t.threadId != null || t.person != null
+        val away = if (here) emptyList() else d.lines.filter { if (t.later) it.date != null else it.date != page }
         when {
             d.lines.size > 1 -> say(words.writtenN(d.lines.size), before)
             away.isNotEmpty() -> say(words.writtenOn(away.first().date, today.value), before)
@@ -113,17 +128,32 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         store.update { it.addChild(id, text, if (Read.isStep(text)) ru.anjeib.margin.book.Kind.Todo else ru.anjeib.margin.book.Kind.Note) }
     }
 
-    fun move(id: String, to: LocalDate?) {
+    fun move(id: String, to: LocalDate?, quiet: Boolean = false) {
         val before = book.value
         store.update { it.move(id, to, today.value) }
+        if (!quiet) say(words.movedOn(to, today.value), before)
+    }
+
+    fun drop(id: String, quiet: Boolean = false) {
+        val before = book.value
+        store.update { it.drop(id) }
+        if (!quiet) say(words.dropped, before)
+    }
+
+    /** «Остальное → завтра» in the evening ritual. */
+    fun carryAll(date: LocalDate, to: LocalDate) {
+        val before = book.value
+        store.update { it.carryAll(date, to, today.value) }
         say(words.movedOn(to, today.value), before)
     }
 
-    fun drop(id: String) {
-        val before = book.value
-        store.update { it.drop(id) }
-        say(words.dropped, before)
-    }
+    private val polya = app.getSharedPreferences("polya", android.content.Context.MODE_PRIVATE)
+    /** The hour of «перелистнуть день»: the link on the page appears from it, the reminder rings at it. */
+    fun eveningHour(): Int = polya.getInt("eveningHour", 21)
+    fun setEveningHour(h: Int) = polya.edit().putInt("eveningHour", h.coerceIn(17, 23)).apply()
+
+    /** «Примеры» on and off. */
+    fun toggleExamples() = store.update { if (it.hasSamples()) it.withoutSamples() else it.withSamples(Examples.build(today.value)) }
 
     fun delete(id: String) {
         val before = book.value

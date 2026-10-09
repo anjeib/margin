@@ -1,0 +1,195 @@
+package ru.anjeib.margin.paper
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.unit.dp
+import ru.anjeib.margin.book.Book
+import ru.anjeib.margin.book.Dir
+import ru.anjeib.margin.book.Kind
+import ru.anjeib.margin.book.Line
+import ru.anjeib.margin.book.Repeat
+import ru.anjeib.margin.book.State
+import ru.anjeib.margin.book.Who
+import java.time.LocalDate
+
+/*
+ * Search, settings and «Как читать поля» — the same paper and grid, so nothing in the notebook looks like another app.
+ */
+
+/** Search: lines, threads, people — by any words; results by day, as the notebook keeps them. */
+@Composable
+fun SearchPage(book: Book, today: LocalDate, onMark: (String) -> Unit, onOpen: (String) -> Unit, onThread: (String) -> Unit, onPerson: (String) -> Unit) {
+    val c = P.c
+    val w = P.w
+    var q by rememberSaveable { mutableStateOf("") }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val key = q.trim().lowercase().replace('ё', 'е')
+    fun has(s: String?) = s != null && key.isNotEmpty() && s.lowercase().replace('ё', 'е').contains(key)
+    val lines = if (key.length < 2) emptyList() else book.lines.filter { l -> has(l.text) || has(l.place) || l.who.any { has(it.name) } || has(l.source) }
+    val threads = if (key.length < 2) emptyList() else book.threads.filter { has(it.title) }
+    val people = if (key.length < 2) emptyList() else book.persons.filter { has(it.name) || has(it.about) }
+    LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item {
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp, end = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(Grid.text - 6.dp))
+                val shape = RoundedCornerShape(22.dp)
+                Box(Modifier.weight(1f).heightIn(min = 44.dp).clip(shape).background(c.sheet).border(1.dp, c.hairline, shape).padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    if (q.isEmpty()) Text(w.searchHint, style = Voice.words.copy(color = c.graphite))
+                    BasicTextField(q, { q = it }, textStyle = Voice.words.copy(color = c.ink), cursorBrush = SolidColor(c.link),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus), singleLine = true)
+                }
+            }
+        }
+        if (threads.isNotEmpty()) {
+            item { SectionHead(w.threads) }
+            items(threads, key = { "t" + it.id }) { t -> IndexRow(emptyList(), t.title, null, { onThread(t.id) }) }
+        }
+        if (people.isNotEmpty()) {
+            item { SectionHead(w.people) }
+            items(people, key = { "p" + it.id }) { p -> IndexRow(emptyList(), p.name, p.about, { onPerson(p.name) }) }
+        }
+        if (lines.isNotEmpty()) {
+            val groups = lines.groupBy { it.date ?: it.written.toLocalDate() }.toSortedMap(compareByDescending { it }).map { (d, l) -> d to l }
+            linesByDay(groups, book, today, w, w.noDay, onMark, onOpen)
+        }
+        if (key.length >= 2 && lines.isEmpty() && threads.isEmpty() && people.isEmpty()) item { MarginSays(w.nothingFound, Modifier.padding(top = 12.dp)) }
+    }
+}
+
+/** «Как читать поля»: the page explains itself — each mark and note shown as it looks, with what it means. */
+@Composable
+fun HelpPage(book: Book, today: LocalDate) {
+    val c = P.c
+    val w = P.w
+    fun line(text: String, kind: Kind = Kind.Todo, state: State = State.Open) = Line(id = "help-$text", text = text, kind = kind, state = state, day = today.toString())
+    val rows: List<Pair<String, Line>> = w.helpRows().map { (lineText, note, k) ->
+        val l = when (k) {
+            "done" -> line(lineText, state = State.Done)
+            "event" -> line(lineText, Kind.Event)
+            "note" -> line(lineText, Kind.Note)
+            "time" -> line(lineText).copy(time = "15:00")
+            "tail" -> line(lineText).copy(day = today.minusDays(2).toString())
+            "repeat" -> line(lineText).copy(repeat = Repeat("weekly", 1, listOf(1, 3, 5)), time = "08:00")
+            "to" -> line(lineText).copy(who = listOf(Who("Лёша", Dir.To)))
+            "from" -> line(lineText).copy(who = listOf(Who("Дима", Dir.From)))
+            "ask" -> line(lineText).copy(ask = listOf("when"))
+            else -> line(lineText)
+        }
+        note to l
+    }
+    LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { PageHead(marginTop = "", marginBottom = null, title = w.helpTitle, line = w.helpLine) }
+        items(rows, key = { it.second.id }) { (explain, l) ->
+            Column {
+                LineOnPage(l, today, today, book, if (l.day == today.minusDays(2).toString()) Seen.Tail else Seen.Page, false, {}, {})
+                Row(Modifier.fillMaxWidth().padding(end = Grid.right, bottom = 10.dp)) {
+                    Spacer(Modifier.width(Grid.text))
+                    Text(explain, style = Voice.reply.copy(color = c.graphite))
+                }
+            }
+        }
+        item { SectionHead(w.helpWriting) }
+        item { MarginSays(w.helpWritingText) }
+        item { SectionHead(w.helpEvening) }
+        item { MarginSays(w.helpEveningText) }
+    }
+}
+
+/** Settings as a page: the name of each on the right, its value in Margin's voice; a tap changes it. */
+@Composable
+fun SettingsPage(vm: BookVm, onExamples: () -> Unit) {
+    val c = P.c
+    val w = P.w
+    val prefs = remember { ru.anjeib.margin.data.Prefs.get(vm.getApplication()) }
+    var s by remember { mutableStateOf(prefs.settings.value) }
+    fun set(f: (ru.anjeib.margin.data.Settings) -> ru.anjeib.margin.data.Settings) { prefs.update(f); s = prefs.settings.value }
+    val evening = remember { mutableStateOf(vm.eveningHour()) }
+    LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { PageHead(marginTop = "", marginBottom = null, title = w.settingsTitle, line = null) }
+        item {
+            SettingRow(w.theme, when (s.theme) { ru.anjeib.margin.data.ThemeMode.Light -> w.themeLight; ru.anjeib.margin.data.ThemeMode.Dark -> w.themeDark; else -> w.themeAuto }) {
+                set { it.copy(theme = when (it.theme) { ru.anjeib.margin.data.ThemeMode.Auto -> ru.anjeib.margin.data.ThemeMode.Light; ru.anjeib.margin.data.ThemeMode.Light -> ru.anjeib.margin.data.ThemeMode.Dark; else -> ru.anjeib.margin.data.ThemeMode.Auto }) }
+            }
+        }
+        item {
+            SettingRow(w.language, when (s.lang) { ru.anjeib.margin.data.LangMode.Ru -> "Русский"; ru.anjeib.margin.data.LangMode.En -> "English"; else -> w.themeAuto }) {
+                set { it.copy(lang = when (it.lang) { ru.anjeib.margin.data.LangMode.Auto -> ru.anjeib.margin.data.LangMode.Ru; ru.anjeib.margin.data.LangMode.Ru -> ru.anjeib.margin.data.LangMode.En; else -> ru.anjeib.margin.data.LangMode.Auto }) }
+            }
+        }
+        item {
+            SettingRow(w.eveningSetting, "%02d:00".format(evening.value)) {
+                val next = if (evening.value >= 23) 18 else evening.value + 1
+                vm.setEveningHour(next); evening.value = next
+            }
+        }
+        item { SettingRow(w.examples, if (vm.samplesShown()) w.examplesRemove else w.examplesBack, onExamples) }
+        item {
+            Row(Modifier.fillMaxWidth().padding(top = 24.dp, end = Grid.right)) {
+                Spacer(Modifier.width(Grid.text))
+                Text(w.settingsNote, style = Voice.reply.copy(color = c.graphite))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingRow(name: String, value: String, onClick: () -> Unit) {
+    val c = P.c
+    Row(Modifier.fillMaxWidth().heightIn(min = Grid.line).clickable(onClick = onClick).padding(end = Grid.right), verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.width(Grid.text))
+        Text(name, style = Voice.words.copy(color = c.ink), modifier = Modifier.weight(1f))
+        Text(value, style = Voice.reply.copy(color = c.link))
+    }
+}
+
+/** «Отзыв»: a letter to the developer with the crash log and the misread phrases attached; the notebook itself is not sent. */
+fun sendFeedback(ctx: android.content.Context, w: Words) {
+    val fb = ru.anjeib.margin.data.Feedback
+    val version = ru.anjeib.margin.BuildConfig.VERSION_NAME + " (" + ru.anjeib.margin.BuildConfig.VERSION_CODE + ")"
+    val device = android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE
+    val files = fb.attachments(ctx)
+    val uris = ArrayList(files.map { androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", it) })
+    val i = android.content.Intent(if (uris.size > 1) android.content.Intent.ACTION_SEND_MULTIPLE else android.content.Intent.ACTION_SEND)
+        .setType("text/plain")
+        .putExtra(android.content.Intent.EXTRA_EMAIL, arrayOf(fb.EMAIL))
+        .putExtra(android.content.Intent.EXTRA_SUBJECT, w.feedbackSubject(version))
+        .putExtra(android.content.Intent.EXTRA_TEXT, w.feedbackBody(version, device))
+        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        .apply {
+            if (uris.size > 1) putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, uris)
+            else uris.firstOrNull()?.let { putExtra(android.content.Intent.EXTRA_STREAM, it) }
+        }
+    val mail = android.content.Intent(i).apply { selector = android.content.Intent(android.content.Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:")) }
+    runCatching { ctx.startActivity(mail) }
+        .recoverCatching { ctx.startActivity(android.content.Intent.createChooser(i, w.feedback).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}

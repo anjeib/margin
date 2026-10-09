@@ -28,7 +28,9 @@ object Read {
      * «потом …» — on «Потом»; «#Зерно» puts them in the thread.
      */
     fun draft(text: String, book: Book, page: LocalDate, today: LocalDate = LocalDate.now(), now: LocalTime? = LocalTime.now().takeIf { page == today },
-              threadId: String? = null): Draft {
+              threadId: String? = null,
+              /** Written on «Потом»: lines without a day of their own get none. */
+              noDay: Boolean = false): Draft {
         var t = text.trim()
         if (t.isEmpty()) return Draft(emptyList(), true, false, null)
         val tag = threadTag.find(t)?.groupValues?.get(1)
@@ -54,7 +56,7 @@ object Read {
             when {
                 // «в пн и чт» without «каждый» — one line on each of those pages.
                 i.days.size >= 2 -> i.days.map { (d, h) -> base.copy(id = newId(), day = d.toString(), time = h ?: i.time) }
-                later && i.due == null && i.start == null -> listOf(base.copy(day = null))
+                (later || noDay) && i.due == null && i.start == null && i.time == null -> listOf(base.copy(day = null))
                 // A thread's line written without a day stays in the thread — on its page, not on a day's.
                 threadId != null && tag == null && i.due == null && i.start == null && i.time == null && repeat == null -> listOf(base.copy(day = null))
                 i.start != null && i.due != null && i.start != i.due -> listOf(base.copy(day = i.start.toString(), until = i.due.toString()))

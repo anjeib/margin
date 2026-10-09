@@ -74,7 +74,8 @@ import java.time.temporal.TemporalAdjusters
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
-fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalDate, onClose: () -> Unit) {
+fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalDate, onClose: () -> Unit,
+              onThread: (String) -> Unit = {}, onPerson: (String) -> Unit = {}) {
     val c = P.c
     val w = P.w
     val l = book.line(id)
@@ -105,7 +106,15 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                 Triple("place", l.place, w.propPlace),
                 Triple("thread", book.thread(l.threadId)?.let { w.threadPrefix + it.title }, w.propThread),
             )
-            props.filter { it.second != null }.forEach { (k, v, name) -> Prop(v, name) { ask = k } }
+            props.filter { it.second != null }.forEach { (k, v, name) ->
+                // A person or a thread on the margin is a link: its page; the name of the property changes it.
+                val go: (() -> Unit)? = when (k) {
+                    "thread" -> l.threadId?.let { t -> { commit(); onThread(t) } }
+                    "who" -> l.who.firstOrNull()?.name?.let { n -> { commit(); onPerson(n) } }
+                    else -> null
+                }
+                Prop(v, name, onValue = go) { ask = k }
+            }
             val unset = props.filter { it.second == null && (it.first != "when" || l.kind != Kind.Note) }
             if (unset.isNotEmpty()) FlowRow(Modifier.fillMaxWidth().padding(start = Grid.text, end = Grid.right), verticalArrangement = Arrangement.Center) {
                 unset.forEachIndexed { i, (k, _, name) ->
@@ -175,10 +184,11 @@ private fun whenOf(l: Line, today: LocalDate, w: Words): String? = listOfNotNull
 /** One property: its value on the margin (or a quiet dash), its name in Margin's voice right of the rule; a tap asks. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Prop(value: String?, name: String, onClick: () -> Unit) {
+private fun Prop(value: String?, name: String, onValue: (() -> Unit)? = null, onClick: () -> Unit) {
     val c = P.c
     Row(Modifier.fillMaxWidth().heightIn(min = Grid.line).combinedClickable(onClick = onClick).padding(end = Grid.right), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp), contentAlignment = Alignment.CenterEnd) {
+        Box(Modifier.width(Grid.margin - Grid.noteGap).heightIn(min = Grid.line).then(if (onValue != null) Modifier.combinedClickable(onClick = onValue) else Modifier)
+            .padding(start = 4.dp), contentAlignment = Alignment.CenterEnd) {
             // The whole value: on the sheet it may take two lines (day over hour).
             val link = value != null && (value.startsWith("≡") || value.startsWith("→") || value.startsWith("←") || value.startsWith("с ") || value.startsWith("with"))
             if (value != null) Text(value, style = Voice.note.copy(color = if (link) c.link else c.graphite,

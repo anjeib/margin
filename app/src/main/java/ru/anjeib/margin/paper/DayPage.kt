@@ -44,6 +44,7 @@ fun DayPage(
     onOpen: (String) -> Unit,
     onMonth: () -> Unit,
     onTurn: () -> Unit,
+    eveningHour: Int = 21,
 ) {
     val c = P.c
     val w = P.w
@@ -73,7 +74,7 @@ fun DayPage(
             MarginSays(if (date == today) w.emptyToday else w.emptyDay, Modifier.padding(top = 8.dp))
         }
         // The evening: one quiet way to close the day — every open line gets a decision.
-        if (date == today && LocalTime.now().hour >= 18 && page.open.isNotEmpty()) item("turn") {
+        if (date == today && LocalTime.now().hour.let { it >= eveningHour - 3 || it < 4 } && page.open.isNotEmpty()) item("turn") {
             MarginLink(w.turnDay, Modifier.padding(top = 8.dp), onTurn)
         }
     }
@@ -81,11 +82,13 @@ fun DayPage(
 
 /** One line on a page: its notes, its mark, your words; a fresh one is written in with the pen. */
 @Composable
-fun LineOnPage(l: Line, page: LocalDate, today: LocalDate, book: Book, seen: Seen, fresh: Boolean,
-               onMark: (String) -> Unit, onOpen: (String) -> Unit) {
+fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Seen, fresh: Boolean,
+               onMark: (String) -> Unit, onOpen: (String) -> Unit, lead: Note? = null, hideThread: String? = null, hidePerson: String? = null) {
     val c = P.c
     val w = P.w
-    val notes = remember(l, page, today, book.threads, seen, w) { notesOf(l, page, today, book, w, seen).take(3) }
+    val notes = remember(l, page, today, book.threads, seen, w, lead) {
+        (listOfNotNull(lead) + notesOf(l, page, today, book, w, seen, hideThread, hidePerson)).take(3)
+    }
     val trace = seen == Seen.Trace
     val ink = when {
         trace -> c.graphite

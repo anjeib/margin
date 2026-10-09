@@ -79,6 +79,56 @@ interface Words {
     val dirWith: String
     val newThread: String
     val outOfThread: String
+    val indexTitle: String
+    fun indexLine(threads: Int, people: Int): String
+    val threads: String
+    val noThreads: String
+    fun threadLine(st: ru.anjeib.margin.book.ThreadStats): String
+    val people: String
+    val noPeople: String
+    val laterTitle: String
+    val laterLine: String
+    val closedThreads: String
+    val search: String
+    val settings: String
+    val help: String
+    val feedback: String
+    fun since(d: LocalDate): String
+    val noDay: String
+    val emptyThread: String
+    val youPromised: String
+    val theyPromised: String
+    val withThem: String
+    val emptyPerson: String
+    val emptyLater: String
+    val ritualTitle: String
+    fun ritualLine(n: Int): String
+    val ritualDone: String
+    val restTomorrow: String
+    val pickDayShort: String
+    val searchHint: String
+    val nothingFound: String
+    val back: String
+    fun helpRows(): List<Triple<String, String, String>>
+    val helpTitle: String
+    val helpLine: String
+    val helpWriting: String
+    val helpWritingText: String
+    val helpEvening: String
+    val helpEveningText: String
+    val settingsTitle: String
+    val theme: String
+    val themeLight: String
+    val themeDark: String
+    val themeAuto: String
+    val language: String
+    val eveningSetting: String
+    val examples: String
+    val examplesRemove: String
+    val examplesBack: String
+    val settingsNote: String
+    fun feedbackSubject(version: String): String
+    fun feedbackBody(version: String, device: String): String
 }
 
 private fun plural(n: Int, one: String, few: String, many: String): String {
@@ -206,6 +256,71 @@ object WordsRu : Words {
     override val dirWith = "вместе"
     override val newThread = "Новая нить…"
     override val outOfThread = "Убрать из нити"
+    override val indexTitle = "Оглавление"
+    override fun indexLine(threads: Int, people: Int) = "$threads " + plural(threads, "нить", "нити", "нитей") + " · $people " + plural(people, "человек", "человека", "человек")
+    override val threads = "Нити"
+    override val noThreads = "Нить появится, когда напишете «#Название» или сделаете нитью строку."
+    override fun threadLine(st: ru.anjeib.margin.book.ThreadStats) = listOfNotNull(
+        st.open.takeIf { it > 0 }?.let { "$it " + plural(it, "дело", "дела", "дел") + " открыто" },
+        st.waiting.takeIf { it > 0 }?.let { "жду $it" },
+        st.notes.takeIf { it > 0 }?.let { "$it " + plural(it, "запись", "записи", "записей") },
+        st.files.takeIf { it > 0 }?.let { "$it " + plural(it, "файл", "файла", "файлов") },
+    ).joinToString(" · ")
+    override val people = "Люди"
+    override val noPeople = "Люди появятся, когда вы их назовёте."
+    override val laterTitle = "Потом"
+    override val laterLine = "отложено без дня — вернётся, когда скажете"
+    override val closedThreads = "Закрытые нити"
+    override val search = "поиск"
+    override val settings = "настройки"
+    override val help = "как читать поля"
+    override val feedback = "отзыв"
+    override fun since(d: LocalDate) = "с " + dayMonth(d)
+    override val noDay = "без дня"
+    override val emptyThread = "Пока пусто. Напишите в поле — строка ляжет в нить."
+    override val youPromised = "Вы обещали"
+    override val theyPromised = "Вам обещали"
+    override val withThem = "Вместе"
+    override val emptyPerson = "Строк с этим человеком пока нет."
+    override val emptyLater = "Ничего не отложено."
+    override val ritualTitle = "Перелистнуть день"
+    override fun ritualLine(n: Int) = "$n " + plural(n, "строка открыта", "строки открыты", "строк открыто") + " — решите каждую"
+    override val ritualDone = "День закрыт."
+    override val restTomorrow = "всё остальное — на завтра"
+    override val pickDayShort = "› день…"
+    override val searchHint = "Что найти?"
+    override val nothingFound = "Ничего не нашлось."
+    override val back = "Назад"
+    override fun helpRows() = listOf(
+        Triple("Купить хлеб", "Точка на линии — дело. Нажмите на неё — сделано.", "todo"),
+        Triple("Сдать отчёт", "Крест — сделано. Нажмите ещё раз — вернётся.", "done"),
+        Triple("Созвон со студией", "Кружок — встреча: её не делают, на неё приходят.", "event"),
+        Triple("Олег просит зерно круглее", "Тире — запись: мысль, факт, заметка.", "note"),
+        Triple("Показать логотип", "Слева — пометки Margin: время, повтор, люди, нить, место.", "time"),
+        Triple("Спортзал", "↻ — повтор. Сделали — следующий появится на своей странице.", "repeat"),
+        Triple("Продлить подписку", "Красной ручкой — хвост: не сделано вовремя. Решите, что с ним.", "tail"),
+        Triple("Исходники баннеров", "→ Лёше — вы обещали. ← Дима — обещали вам.", "to"),
+        Triple("Купить лампу", "«когда?» — Margin не уверен. Нажмите строку и ответьте.", "ask"),
+    )
+    override val helpTitle = "Как читать поля"
+    override val helpLine = "справа ваши слова, на линии знак, слева пометки Margin"
+    override val helpWriting = "Как писать"
+    override val helpWritingText = "Пишите как думаете: «завтра в 15 позвонить Олегу», «Дима пришлёт смету до пт», «каждый вторник бассейн». Слова времени уйдут на поля, остальное останется вашим. «#Зерно» — в нить, «потом» — без дня."
+    override val helpEvening = "Вечером"
+    override val helpEveningText = "Перелистните день: у каждой открытой строки — решение. Завтра, другой день, потом или «не делаем». Ничего не копится."
+    override val settingsTitle = "Настройки"
+    override val theme = "Оформление"
+    override val themeLight = "светлое"
+    override val themeDark = "тёмное"
+    override val themeAuto = "как в системе"
+    override val language = "Язык"
+    override val eveningSetting = "Перелистнуть день в"
+    override val examples = "Примеры"
+    override val examplesRemove = "убрать"
+    override val examplesBack = "вернуть"
+    override val settingsNote = "Ваши записи хранятся на телефоне и в резервной копии Google."
+    override fun feedbackSubject(version: String) = "Margin «Поля» $version — отзыв"
+    override fun feedbackBody(version: String, device: String) = "Что понравилось, что мешает:\n\n\n— \nMargin $version · $device"
 }
 
 object WordsEn : Words {
@@ -307,4 +422,69 @@ object WordsEn : Words {
     override val dirWith = "together"
     override val newThread = "New thread…"
     override val outOfThread = "Out of the thread"
+    override val indexTitle = "Contents"
+    override fun indexLine(threads: Int, people: Int) = "$threads thread" + (if (threads == 1) "" else "s") + " · $people " + if (people == 1) "person" else "people"
+    override val threads = "Threads"
+    override val noThreads = "A thread appears when you write «#Name» or turn a line into one."
+    override fun threadLine(st: ru.anjeib.margin.book.ThreadStats) = listOfNotNull(
+        st.open.takeIf { it > 0 }?.let { "$it open" },
+        st.waiting.takeIf { it > 0 }?.let { "waiting $it" },
+        st.notes.takeIf { it > 0 }?.let { "$it note" + if (it == 1) "" else "s" },
+        st.files.takeIf { it > 0 }?.let { "$it file" + if (it == 1) "" else "s" },
+    ).joinToString(" · ")
+    override val people = "People"
+    override val noPeople = "People appear when you name them."
+    override val laterTitle = "Later"
+    override val laterLine = "put off with no day — back when you say"
+    override val closedThreads = "Closed threads"
+    override val search = "search"
+    override val settings = "settings"
+    override val help = "how to read the margin"
+    override val feedback = "feedback"
+    override fun since(d: LocalDate) = "since " + dayMonth(d)
+    override val noDay = "no day"
+    override val emptyThread = "Nothing yet. Write in the field — the line goes into the thread."
+    override val youPromised = "You promised"
+    override val theyPromised = "Promised to you"
+    override val withThem = "Together"
+    override val emptyPerson = "No lines with them yet."
+    override val emptyLater = "Nothing put off."
+    override val ritualTitle = "Turn the page"
+    override fun ritualLine(n: Int) = "$n line" + (if (n == 1) " is" else "s are") + " open — decide each"
+    override val ritualDone = "The day is closed."
+    override val restTomorrow = "all the rest — tomorrow"
+    override val pickDayShort = "› a day…"
+    override val searchHint = "Find…"
+    override val nothingFound = "Nothing found."
+    override val back = "Back"
+    override fun helpRows() = listOf(
+        Triple("Buy bread", "A dot on the rule is a to-do. Tap it — done.", "todo"),
+        Triple("Send the report", "A cross — done. Tap again to undo.", "done"),
+        Triple("Call with the studio", "A ring — an event: you attend it, you don't do it.", "event"),
+        Triple("Oleg wants the bean rounder", "A dash — a note: a thought, a fact.", "note"),
+        Triple("Show the logo", "On the left — Margin's notes: time, repeat, people, thread, place.", "time"),
+        Triple("Gym", "↻ — a repeat. Done — the next one appears on its page.", "repeat"),
+        Triple("Renew the subscription", "In red pen — left over: not done in time. Decide what to do.", "tail"),
+        Triple("Banner sources", "→ Lyosha — you promised. ← Dima — promised to you.", "to"),
+        Triple("Buy a lamp", "«when?» — Margin isn't sure. Tap the line and answer.", "ask"),
+    )
+    override val helpTitle = "How to read the margin"
+    override val helpLine = "your words on the right, the mark on the rule, Margin's notes on the left"
+    override val helpWriting = "How to write"
+    override val helpWritingText = "Write as you think: «call Oleg tomorrow at 3», «Dima sends the estimate by Fri», «pool every Tuesday». Words of time go to the margin, the rest stays yours. «#Name» — into a thread, «later» — no day."
+    override val helpEvening = "In the evening"
+    override val helpEveningText = "Turn the page: every open line gets a decision — tomorrow, another day, later or not doing. Nothing piles up."
+    override val settingsTitle = "Settings"
+    override val theme = "Theme"
+    override val themeLight = "light"
+    override val themeDark = "dark"
+    override val themeAuto = "as the system"
+    override val language = "Language"
+    override val eveningSetting = "Turn the page at"
+    override val examples = "Examples"
+    override val examplesRemove = "remove"
+    override val examplesBack = "bring back"
+    override val settingsNote = "Your notes live on the phone and in the Google backup."
+    override fun feedbackSubject(version: String) = "Margin «Pages» $version — feedback"
+    override fun feedbackBody(version: String, device: String) = "What works, what gets in the way:\n\n\n— \nMargin $version · $device"
 }
