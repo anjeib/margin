@@ -328,9 +328,10 @@ fun TaskList(
                     }
                 }
                 // Sunday: the week in one quiet card — gathered by code, gone with «×» until next Sunday.
-                if (today.dayOfWeek == java.time.DayOfWeek.SUNDAY || settings.devMode) {
-                    val wk = today.minusDays(today.dayOfWeek.value - 1L).toString()
-                    if (weekSeen != wk) plain("week") { WeekCard(data.weekReview(today), onOpen) { weekSeen = wk; ui.edit().putString("weekSeen", wk).apply() } }
+                val wk = today.minusDays(today.dayOfWeek.value - 1L).toString()
+                val weekShown = (today.dayOfWeek == java.time.DayOfWeek.SUNDAY || settings.devMode) && weekSeen != wk
+                run {
+                    if (weekShown) plain("week") { WeekCard(data.weekReview(today), data.inboxNote()?.entries?.size ?: 0, onOpen, onOpenInbox) { weekSeen = wk; ui.edit().putString("weekSeen", wk).apply() } }
                 }
                 // Nothing written yet: three phrases to try — a tap puts one into the field, the user sends it.
                 if (data.tasks.isEmpty() && data.queue.isEmpty()) plain("try") {
@@ -348,7 +349,8 @@ fun TaskList(
                 }
                 // Shared or saved without a place: one line here while there is something to put away.
                 val unplaced = data.inboxNote()?.entries?.size ?: 0
-                if (unplaced > 0) plain("inbox") {
+                // While the week's card is up it already says this — once on the screen is enough.
+                if (unplaced > 0 && !weekShown) plain("inbox") {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onOpenInbox).padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Inbox, null, tint = c.link, modifier = Modifier.size(16.dp))
@@ -1533,7 +1535,7 @@ fun remindAbout(ctx: android.content.Context, data: AppData, t: Task) {
 
 /** The week's card on Sunday: done · owed to you · you owe, and the topics that stood still (a tap opens one). */
 @Composable
-private fun WeekCard(w: ru.anjeib.margin.data.WeekReview, onOpen: (String) -> Unit, onClose: () -> Unit) {
+private fun WeekCard(w: ru.anjeib.margin.data.WeekReview, inbox: Int, onOpen: (String) -> Unit, onInbox: () -> Unit, onClose: () -> Unit) {
     val c = M.c
     val s = M.s
     Column(Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(16.dp)).background(c.card).padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 12.dp)) {
@@ -1546,5 +1548,7 @@ private fun WeekCard(w: ru.anjeib.margin.data.WeekReview, onOpen: (String) -> Un
             Text(s.weekStill, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 8.dp))
             w.still.take(4).forEach { t -> PaperLink("↳ " + t.title) { onOpen(t.id) } }
         }
+        // The week is a good moment to put away what came in unsorted.
+        if (inbox > 0) PaperLink(s.inboxLine(inbox) + " ›", onClick = onInbox)
     }
 }

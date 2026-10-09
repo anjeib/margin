@@ -35,15 +35,65 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.anjeib.margin.i18n.HelpSection
 
-/** «Помощь»: how Margin is arranged — in the app's own look: the rule, the title, sections under petrol badges, screenshots, legends. */
+/**
+ * «Помощь»: an index of six groups and a search over all of it; a group opens its sections in the app's own look —
+ * the rule, sections under petrol badges, screenshots, legends.
+ */
 @Composable
 fun HelpScreen(contentPadding: PaddingValues) {
     val s = M.s
+    val c = M.c
     var zoom by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    var group by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    var q by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    val named = s.helpGroups.flatMap { it.second }.toSet()
+    // Every section belongs somewhere: those no group names go to the last one.
+    fun sectionsOf(g: String): List<HelpSection> {
+        val titles = s.helpGroups.firstOrNull { it.first == g }?.second.orEmpty()
+        val listed = titles.mapNotNull { t -> s.helpSections.firstOrNull { it.title == t } }
+        return if (g == s.helpGroups.last().first) listed + s.helpSections.filter { it.title !in named } else listed
+    }
+    val words = q.lowercase().split(' ').filter { it.isNotBlank() }
+    fun HelpSection.hay() = (title + " " + text + " " + examples.joinToString(" ") + " " + pairs.joinToString(" ") { it.first + " " + it.second }).lowercase()
+    androidx.activity.compose.BackHandler(group != null || q.isNotEmpty()) { if (q.isNotEmpty()) q = "" else group = null }
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().screenRule()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
-            item("h") { PageHead(s.helpTitle, s.helpIntro) }
-            items(s.helpSections, key = { it.title }) { HelpCard(it) { zoom = it } }
+            val g = group
+            if (g != null) {
+                item("h") {
+                    Column {
+                        Margined(Modifier.padding(top = 8.dp)) { PaperLink("← " + s.helpTitle) { group = null } }
+                        PageHead(g, null)
+                    }
+                }
+                items(sectionsOf(g), key = { it.title }) { HelpCard(it) { zoom = it } }
+            } else {
+                item("h") { PageHead(s.helpTitle, s.helpIntro) }
+                item("q") {
+                    Margined(Modifier.padding(bottom = 8.dp)) {
+                        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.chip).padding(horizontal = 16.dp, vertical = 12.dp)) {
+                            if (q.isEmpty()) Text(s.helpSearch, style = Type.body.copy(color = c.graphite))
+                            androidx.compose.foundation.text.BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink),
+                                cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link), modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+                if (words.isNotEmpty()) {
+                    val found = s.helpSections.filter { h -> words.all { it in h.hay() } }
+                    if (found.isEmpty()) item("none") { Margined { Empty(s.nothing, "") } }
+                    items(found, key = { "f" + it.title }) { HelpCard(it) { zoom = it } }
+                } else items(s.helpGroups, key = { "g" + it.first }) { (title, _) ->
+                    // A group: its name and, quietly, what is inside.
+                    Margined(Modifier.clickable { group = title }.padding(vertical = 12.dp)) {
+                        Column {
+                            Text(title, style = Type.cardTitle.copy(color = c.ink))
+                            Text(sectionsOf(title).joinToString(" · ") { it.title }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                        }
+                    }
+                    Hairline(Modifier.padding(start = MarginW))
+                }
+            }
             item("end") { Spacer(Modifier.height(24.dp)) }
         }
     }

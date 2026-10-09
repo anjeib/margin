@@ -261,12 +261,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(s.overdueWaiting, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.weight(1f))
-                            Pill(s.remindPerson(who), filled = true, onClick = {
-                                val text = s.nudgeText(task.title)
-                                val i = if (phone != null) android.content.Intent(android.content.Intent.ACTION_SENDTO, android.net.Uri.parse("smsto:" + phone.filter { it.isDigit() || it == '+' })).putExtra("sms_body", text)
-                                else android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, text), null)
-                                runCatching { ctx.startActivity(i) }
-                            })
+                            // The same message as «напомнить» on «Сегодня»: «Привет, Дима. Напоминаю про макет…», not the to-do's own title.
+                            Pill(s.remindPerson(who), filled = true, onClick = { remindAbout(ctx, data, task) })
                         }
                     }
                 }

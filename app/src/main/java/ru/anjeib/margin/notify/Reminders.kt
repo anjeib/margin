@@ -127,7 +127,7 @@ object Reminders {
         nm.createNotificationChannel(NotificationChannel(CHANNEL, L.s.notifChannel, NotificationManager.IMPORTANCE_DEFAULT))
     }
 
-    fun show(ctx: Context, id: Int, title: String, text: String?, taskId: String? = null) {
+    fun show(ctx: Context, id: Int, title: String, text: String?, taskId: String? = null, evening: Boolean = false) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         ensureChannel(ctx)
@@ -158,6 +158,9 @@ object Reminders {
                     addAction(0, L.s.markDone, act("done", 1))
                     addAction(0, L.s.snoozeHour, act("snooze", 2))
                 }
+                // The end of the day: what's left of today moves to tomorrow in one tap.
+                if (evening) addAction(0, L.s.toTomorrow, PendingIntent.getBroadcast(ctx, REQ_EVENING + 7,
+                    Intent(ctx, AlarmReceiver::class.java).putExtra(KIND, "tomorrow"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
             }
             .build()
         NotificationManagerCompat.from(ctx).notify(id, n)
@@ -221,8 +224,23 @@ object Reminders {
             "evening" -> {
                 val done = data.tasks.count { it.doneAt == today.toString() }
                 val left = data.tasks.count { !it.done && it.dueDate?.let { d -> !d.isAfter(today) } == true }
-                show(ctx, REQ_EVENING, L.s.notifEveningTitle, L.s.notifEveningText(done, left))
+                show(ctx, REQ_EVENING, L.s.notifEveningTitle, L.s.notifEveningText(done, left), evening = left > 0)
                 scheduleDaily(ctx)
+            }
+            "tomorrow" -> {
+                // Only today's open matters, not older overdue ones and not repeats or several-day matters — they keep their own rhythm.
+                val next = today.plusDays(1).toString()
+                val t0 = today.toString()
+                Store.get(ctx).update { d -> d.copy(tasks = d.tasks.map { t ->
+                    when {
+                        t.done -> t
+                        t.topic -> t.copy(subtasks = t.subtasks.map { q -> if (!q.done && q.due == t0 && q.slots.isEmpty()) q.copy(due = next) else q })
+                        t.due == t0 && t.repeat == null && t.slots.isEmpty() -> t.copy(due = next).logged(t, "you")
+                        else -> t
+                    }
+                }) }
+                NotificationManagerCompat.from(ctx).cancel(REQ_EVENING)
+                syncTasks(ctx, Store.get(ctx).data.value.tasks)
             }
         }
     }

@@ -14,7 +14,7 @@ object Commands {
     // Order matters: «подзадачу» before «задачу».
     private val objects = listOf(
         "subtask" to "подзадач\\p{L}*|шаг(?:и|а|ов)?|пункт(?:ы|а|ов)?|subtasks?|steps?",
-        "task" to "задач\\p{L}*|tasks?|to-?dos?",
+        "task" to "задач\\p{L}*|дел[оау]|tasks?|to-?dos?",
         "note" to "заметк\\p{L}*|идею|идея|мысль|notes?|ideas?",
         "place" to "мест[оау]|адрес\\p{L}*|place|address|location",
         "time" to "время|времени|time",
