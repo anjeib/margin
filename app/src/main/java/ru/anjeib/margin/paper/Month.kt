@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -89,6 +90,7 @@ fun MonthSheet(book: Book, today: LocalDate, shown: LocalDate, onPick: (LocalDat
 private fun DayCell(book: Book, d: LocalDate, today: LocalDate, selected: Boolean, onClick: () -> Unit) {
     val c = P.c
     val m = remember(book, d, today) { book.marks(d, today) }
+    val stamped = book.closed.containsKey(d.toString())
     val shape = RoundedCornerShape(12.dp)
     Column(Modifier.fillMaxWidth().padding(2.dp).clip(shape)
         .then(if (selected) Modifier.background(c.linkWash) else Modifier)
@@ -118,7 +120,15 @@ private fun DayCell(book: Book, d: LocalDate, today: LocalDate, selected: Boolea
                     else -> drawCircle(c.red, r, o)
                 }
             }
-            if (m.closed && dots.isEmpty()) {
+            if (stamped && dots.isEmpty()) {
+                // Closed with the evening ritual: the page's stamp in miniature — a small red frame, a little askew.
+                val cx = size.width / 2; val cy = size.height / 2
+                rotate(-8f, Offset(cx, cy)) {
+                    drawRoundRect(c.red.copy(alpha = 0.8f), topLeft = Offset(cx - 7.dp.toPx(), cy - 3.5.dp.toPx()),
+                        size = androidx.compose.ui.geometry.Size(14.dp.toPx(), 7.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5.dp.toPx()),
+                        style = Stroke(1.1.dp.toPx()))
+                }
+            } else if (m.closed && dots.isEmpty()) {
                 val a = 3.dp.toPx()
                 val cx = size.width / 2; val cy = size.height / 2
                 drawLine(c.pencil, Offset(cx - a, cy), Offset(cx - a / 3, cy + a * 0.7f), 1.2.dp.toPx())
