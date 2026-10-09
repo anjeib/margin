@@ -31,6 +31,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -984,14 +985,16 @@ internal fun KindMark(t: Task?) {
 }
 
 /** The hour as a petrol link that opens the clock; late in terracotta. */
+// In the lists the hour is coloured, not a separate target: a tap anywhere on the row opens the matter (the hour — by a long press).
+@Suppress("UNUSED_PARAMETER")
 private fun androidx.compose.ui.text.AnnotatedString.Builder.timeLink(time: String, late: Boolean, link: Color, accent: Color, onTime: () -> Unit) {
-    withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("time", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = if (late) accent else link, fontWeight = FontWeight.Medium))) { onTime() }) { append(time) }
+    withStyle(SpanStyle(color = if (late) accent else link, fontWeight = FontWeight.Medium)) { append(time) }
     append("   ")
 }
 
 /** One thing to do on an open day: kind mark, the circle, the hour as a link, the words, a quiet line under. */
 @Composable
-private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () -> Unit, onTime: () -> Unit, age: String? = null, faded: Boolean = false) {
+private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () -> Unit, onTime: () -> Unit, age: String? = null, faded: Boolean = false, onLater: (() -> Unit)? = null) {
     val c = M.c
     val s = M.s
     val view = androidx.compose.ui.platform.LocalView.current
@@ -1005,7 +1008,15 @@ private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () 
         scope.launch { ticking = true; strike.animateTo(1f, androidx.compose.animation.core.tween(320)); kotlinx.coroutines.delay(220); onToggle() }
     }
     val late = t.isOverdue(today)
-    Row(Modifier.fillMaxWidth().background(c.bg).clickable(onClick = onOpen).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+    var quick by remember(t.id) { mutableStateOf(false) }
+    // A tap anywhere opens the matter; a long press — the few things done most: done, the day, the hour.
+    Box {
+    SoftMenu(quick, { quick = false }) {
+        SoftMenuItem(s.markDone) { quick = false; tick() }
+        if (onLater != null) SoftMenuItem(s.dateWord) { quick = false; onLater() }
+        SoftMenuItem(s.fieldTime) { quick = false; onTime() }
+    }
+    Row(Modifier.fillMaxWidth().background(c.bg).combinedClickable(onClick = onOpen, onLongClick = { view.confirmTick(); quick = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
         KindMark(t)
         Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(ticking, size = 18.dp, onToggle = ::tick) }
         Spacer(Modifier.width(8.dp))
@@ -1018,9 +1029,10 @@ private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () 
                 modifier = Modifier.padding(top = 1.dp).drawStrike(strike.value, c.faint))
             if (late && t.dueDate?.isBefore(today) == true) Text(s.lateSince(t.dueDate!!.dayMonthShort()), style = Type.small.copy(color = c.accent, fontSize = 12.5.sp))
             t.dayOf()?.let { (i, n) -> Text(s.dayOfDays(i, n), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp)) }
-            TaskLine(t, null, true, today = today)
+            TaskLine(t, null, true, today = today, tappable = false)
         }
         age?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 8.dp, top = 3.dp)) }
+    }
     }
 }
 
@@ -1042,23 +1054,23 @@ private fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String>
         if (tid != null && tid in seen) return@forEach
         val group = if (tid != null) list.filter { it.topicId == tid } else listOf(t)
         if (tid != null) seen += tid
-        group.forEach { g ->
-            androidx.compose.runtime.key(g.id) {
-                SwipeTask(g, onDone = { onDone(g.id) }, onLater = { onLater(g.id) }, modifier = Modifier.landing(g.id in landed || (tid != null && tid in landed), 0), radius = 0) {
-                    DealRow(g, today, onToggle = { onDone(g.id) }, onOpen = { onOpen(g.id) }, onTime = { onTime(g.id) }, age = age?.invoke(g), faded = faded(g))
+        // Several or one: the topic's matters come as one block under its name — whose they are is seen before what they are.
+        if (tid != null) Row(Modifier.fillMaxWidth().heightIn(min = 40.dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(tid) }.padding(top = 6.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            TopicGlyph(c.link, 13.dp)
+            Spacer(Modifier.width(7.dp))
+            Text((t.topicTitle ?: "") + "  ›", style = Type.small.copy(color = c.link, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Column(Modifier.padding(start = if (tid != null) 12.dp else 0.dp)) {
+            group.forEach { g ->
+                androidx.compose.runtime.key(g.id) {
+                    SwipeTask(g, onDone = { onDone(g.id) }, onLater = { onLater(g.id) }, modifier = Modifier.landing(g.id in landed || (tid != null && tid in landed), 0), radius = 0) {
+                        DealRow(g, today, onToggle = { onDone(g.id) }, onOpen = { onOpen(g.id) }, onTime = { onTime(g.id) }, age = age?.invoke(g), faded = faded(g), onLater = { onLater(g.id) })
+                    }
                 }
             }
         }
-        // The link under the topic's matters, at the words' edge: «↳ Ремонт ванной».
-        // The whole line is the target, 44 dp high — a 13 sp word was too small to hit on the go.
-        if (tid != null) Column(Modifier.padding(start = 52.dp, bottom = 2.dp).offset(y = (-10).dp)) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(tid) }.padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("↳", style = Type.small.copy(color = c.link, fontSize = 13.sp))
-                Spacer(Modifier.width(5.dp))
-                TopicGlyph(c.link, 12.dp)
-                Spacer(Modifier.width(5.dp))
-                Text(t.topicTitle ?: "", style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+        if (tid != null) Column(Modifier.padding(start = 12.dp + 52.dp, bottom = 6.dp).offset(y = (-4).dp)) {
             // Small under it: when the topic began, how much is written, and its other matters — a tap unfolds them here.
             topicOf(tid)?.let { topic ->
                 val shown = group.map { (slotRef(it.id)?.first ?: it.id).substringAfterLast(':') }.toSet()
@@ -1081,7 +1093,7 @@ private fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String>
                         others.forEach { g ->
                             androidx.compose.runtime.key("o" + g.id) {
                                 SwipeTask(g, onDone = { onDone(g.id) }, onLater = { onLater(g.id) }, modifier = Modifier, radius = 0) {
-                                    DealRow(g, today, onToggle = { onDone(g.id) }, onOpen = { onOpen(g.id) }, onTime = { onTime(g.id) }, faded = true)
+                                    DealRow(g, today, onToggle = { onDone(g.id) }, onOpen = { onOpen(g.id) }, onTime = { onTime(g.id) }, faded = true, onLater = { onLater(g.id) })
                                 }
                             }
                         }
@@ -1311,10 +1323,10 @@ fun DayBlock(
     val c = M.c
     val s = M.s
     val past = plan.date.isBefore(today)
-    // «Без даты»: open while it is short; past five it starts folded. Whatever the user chose last is kept.
+    // «Без даты»: open unless the user folded it — that choice is kept (the owner's call, 0.18).
     val uiPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
     var undatedOpen by androidx.compose.runtime.saveable.rememberSaveable {
-        mutableStateOf(if (uiPrefs.contains("undatedOpen")) uiPrefs.getBoolean("undatedOpen", true) else undated.size <= 5)
+        mutableStateOf(uiPrefs.getBoolean("undatedOpen", true))
     }
     Column(Modifier.fillMaxWidth().animateContentSize(androidx.compose.animation.core.tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing))) {
         Margined(Modifier.padding(top = 10.dp, bottom = 10.dp), margin = {

@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.combinedClickable
+
 import ru.anjeib.margin.data.likelyTopic
 
 import androidx.compose.ui.text.withStyle
@@ -73,6 +75,7 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
     val c = M.c
     val s = M.s
     val note = data.inboxNote()
+    var editing by remember { mutableStateOf<ru.anjeib.margin.data.Entry?>(null) }
     var viewing by remember { mutableStateOf<Attachment?>(null) }
     val working by vm.working.collectAsState()
     val topics = remember(data.tasks) {
@@ -93,7 +96,8 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
                     item("q" + q.id) {
                         InboxRow(day = if (first) d else null, today = today, icon = { Icon(Icons.Outlined.CloudOff, null, tint = c.graphite, modifier = Modifier.size(15.dp)) },
                             title = q.text.ifBlank { attachmentsSummary(q.files) ?: "" }, meta = listOfNotNull(q.at.drop(11).take(5), s.sortsWhenOnline).joinToString("  ·  "),
-                            thumb = null, onThumb = {}, menu = { close -> SoftMenuItem(s.removeWord, danger = true) { close(); vm.dropQueued(q.id) } })
+                            thumb = null, onThumb = {}, onRemove = { vm.dropQueued(q.id) },
+                            menu = { close, _ -> SoftMenuItem(s.removeWord, danger = true) { close(); vm.dropQueued(q.id) } })
                     }
                 }
             }
@@ -112,8 +116,10 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
                             meta = listOfNotNull(e.at.drop(11).take(5), attachmentsSummary(e.attachments)?.takeIf { e.attachments.size > 1 || e.text.isNotBlank() },
                                 if (a != null && "ocr:${a.id}" in working) "…" else null).joinToString("  ·  "),
                             thumb = a?.takeIf { it.kind == "photo" || it.kind == "video" }, onThumb = { viewing = it },
-                            menu = { close ->
-                                var picking by remember { mutableStateOf(false) }
+                            onOpen = { if (a != null) viewing = a else editing = e },
+                            onRemove = { vm.removeEntry("note:${note.id}", e.id) }, canPick = topics.isNotEmpty(),
+                            menu = { close, pick ->
+                                var picking by remember(pick) { mutableStateOf(pick) }
                                 if (!picking) {
                                     if (a != null) SoftMenuItem(s.openWord) { close(); viewing = a } else SoftMenuItem(s.openWord) { close(); onOpenNote(note.id) }
                                     // The topic it most likely belongs to, by name — then the full list.
@@ -122,7 +128,11 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
                                     if (topics.isNotEmpty()) SoftMenuItem(s.toTopicPick) { picking = true }
                                     e.attachments.firstOrNull { it.kind == "photo" && it.ocr == null }?.let { ph -> SoftMenuItem(s.readTextWord) { close(); vm.photoText("note:${note.id}", e.id, ph, "insert") } }
                                     SoftMenuItem(s.removeWord, danger = true) { close(); vm.removeEntry("note:${note.id}", e.id) }
-                                } else topics.forEach { t -> SoftMenuItem(t.title) { close(); vm.inboxToTopic(e.id, t.id) } }
+                                } else {
+                                    // The likely topic first, then the rest.
+                                    val likely = remember(e.id) { data.likelyTopic(e.text + " " + e.attachments.joinToString(" ") { it.caption ?: it.name }) }
+                                    (listOfNotNull(likely) + topics.filter { it.id != likely?.id }).forEach { t -> SoftMenuItem(t.title) { close(); vm.inboxToTopic(e.id, t.id) } }
+                                }
                             })
                     }
                 }
@@ -130,19 +140,28 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
         }
     }
     viewing?.let { a -> Viewer(a, vm, onClose = { viewing = null }) }
+    // A text without a file: a tap opens it to read and correct.
+    editing?.let { e -> data.inboxNote()?.let { n -> TextDialog(s.edit, e.text, "", onDismiss = { editing = null }) { v -> vm.editEntryText("note:${n.id}", e.id, v); editing = null } } }
 }
 
 /** One thing in «Входящие»: the day on the margin (the first of the day), the kind mark, the words, a quiet line; a tap — its menu. */
 @Composable
 private fun InboxRow(day: LocalDate?, today: LocalDate, icon: @Composable () -> Unit, title: String, meta: String, thumb: Attachment?, onThumb: (Attachment) -> Unit,
-                     menu: @Composable (close: () -> Unit) -> Unit) {
+                     onOpen: (() -> Unit)? = null, onRemove: (() -> Unit)? = null, canPick: Boolean = false,
+                     menu: @Composable (close: () -> Unit, pick: Boolean) -> Unit) {
     val c = M.c
+    val s = M.s
     var open by remember { mutableStateOf(false) }
+    // The swipe to the right asks «в какую тему» at once.
+    var pick by remember { mutableStateOf(false) }
     Column {
         if (day != null) Hairline(Modifier.padding(start = MarginW, top = 6.dp))
         Margined(margin = day?.let { d -> { DayMargin(d, today, false, strong = true) } }) {
             Box {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { open = true }.padding(vertical = 10.dp), verticalAlignment = Alignment.Top) {
+                // A tap opens the thing itself; a long press — what can be done with it; swipes — away or into a topic.
+                SwipeActions(left = onRemove?.let { s.removeWord to it }, right = if (canPick) (s.toTopicPick to { pick = true; open = true }) else null, radius = 10) {
+                Row(Modifier.fillMaxWidth().background(c.bg).clip(RoundedCornerShape(10.dp)).combinedClickable(onClick = { if (onOpen != null) onOpen() else open = true }, onLongClick = { open = true })
+                    .padding(vertical = 10.dp), verticalAlignment = Alignment.Top) {
                     Box(Modifier.size(20.dp, 22.dp), contentAlignment = Alignment.Center) { icon() }
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
@@ -156,7 +175,8 @@ private fun InboxRow(day: LocalDate?, today: LocalDate, icon: @Composable () -> 
                     }
                     thumb?.let { a -> Box(Modifier.padding(start = 10.dp).clip(RoundedCornerShape(10.dp)).clickable { onThumb(a) }) { Thumb(a, 56.dp) } }
                 }
-                SoftMenu(open, { open = false }) { menu { open = false } }
+                }
+                SoftMenu(open, { open = false; pick = false }) { menu({ open = false; pick = false }, pick) }
             }
         }
     }

@@ -45,10 +45,18 @@ fun AppData.setPersonField(id: String, field: String, value: String) = editPerso
         "address" -> p.copy(address = v?.address())
         "max" -> p.copy(max = v)
         "telegram" -> p.copy(telegram = v?.removePrefix("https://t.me/")?.removePrefix("@")?.let { "@$it" })
+        // «social» adds a page, «social:2» changes or (empty) removes the third one.
+        "social" -> if (v == null) p else p.copy(social = (p.social + socialLink(v)).distinct())
         "personal" -> p.copy(personal = value.lines().map { it.trim() }.filter { it.isNotEmpty() }.map { it.sentence() })
-        else -> p
+        else -> field.removePrefix("social:").toIntOrNull()?.takeIf { field.startsWith("social:") && it in p.social.indices }?.let { i ->
+            p.copy(social = if (v == null) p.social.filterIndexed { j, _ -> j != i } else p.social.mapIndexed { j, l -> if (j == i) socialLink(v) else l }.distinct())
+        } ?: p
     }
 }
+
+/** A pasted page kept short: «https://www.instagram.com/zerno.coffee/» → «instagram.com/zerno.coffee». */
+fun socialLink(v: String) = v.trim().replace(Regex("^https?://", RegexOption.IGNORE_CASE), "").removePrefix("www.").trimEnd('/')
+
 
 /** Renames a person everywhere their name is used; the old name stays as an alias. */
 fun AppData.renamePerson(id: String, newName: String): AppData {

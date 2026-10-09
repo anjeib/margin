@@ -88,6 +88,11 @@ interface Strings {
     val tryExamples: List<String>
     val tryHint: String
     val toStart: String
+    val orderAz: String
+    val orderNew: String
+    val frequentBadge: String
+    val allBadge: String
+    val dateWord: String
     val toTomorrow: String
     val privacySection: String
     val lockTitle: String
@@ -423,6 +428,8 @@ interface Strings {
     val fieldPhone: String
     val fieldEmail: String
     val fieldAddress: String
+    val fieldSocial: String
+    val socialHint: String
     val personalTitle: String
     val personalHint: String
     val copied: String
@@ -741,8 +748,8 @@ object Ru : Strings {
         HelpSection("Сегодня", "Что делать сейчас. Слева на полях — сегодняшнее число.", image = "today", pairs = listOf(
             "сводка" to "синяя карточка: сколько дел и тем сегодня и «Обещания» — кто кому что должен (просрочено, на 3 дня вперёд, без даты)",
             "дела дня" to "по времени; просроченное стягивается сюда с пометкой «с 6 окт»",
-            "↳ Тема" to "под делом темы — ссылка на неё и мелко «17 авг ’26 · 5 записей · ещё 3 дела ▾»: нажатие раскрывает остальные дела темы",
-            "Без даты" to "дела без срока, с возрастом «с 3 окт»; старше недели — бледнее",
+            "≡ Тема ›" to "дела одной темы — блоком под её названием; нажатие на название — тема, на дело — его карточка. Под блоком мелко «17 авг ’26 · 5 записей · ещё 3 дела ▾» — раскрывает остальные дела темы",
+            "Без даты" to "дела без срока, с возрастом «с 3 окт»; старше недели — бледнее; раскрыт, нажатие на заголовок сворачивает",
             "Завтра — N дел ›" to "внизу; открывает «Календарь»",
         )),
         HelpSection("Календарь", "Что когда. Месяц сеткой: число под днём — сколько дел; сегодня — в рамке, выбранный день — залит. Под сеткой — выбранный день, как на «Сегодня». Стрелки — другой месяц.", image = "calendar"),
@@ -765,8 +772,9 @@ object Ru : Strings {
             "Дата" to "день дела",
             "Удалить" to "зачеркнуть; вернуть можно",
         )),
-        HelpSection("Карточка дела", "Открывается нажатием на дело. Всё, что пишете в её поле, относится к этому делу.", image = "deal", pairs = listOf(
+        HelpSection("Карточка дела", "Открывается нажатием на любое место строки — и у простого дела, и у дела темы. Высота — по содержимому. Название и комментарий правятся прямо в карточке; поле внизу — для правок словами («перенеси на пятницу»).", image = "deal", pairs = listOf(
             "кружок у названия" to "сделано",
+            "Добавить комментарий" to "свой текст к делу; у дела в списках появляется значок 💬",
             "Личное / Работа" to "сфера; нажатие переключает",
             "📅 Сегодня, 🕓 19:30" to "срок и время — синие ссылки, нажатие меняет",
             "+ день · + повтор · + контакты · + место" to "добавить, что не заполнено",
@@ -786,9 +794,9 @@ object Ru : Strings {
         )),
         HelpSection("Окошко тем", "«#» показывает ваши темы — свежие сверху; начните печатать название, чтобы сузить.", image = "composer_hash",
             examples = listOf("#ремонт купить затирку до пятницы", "/жду @Маша ключи до субботы", "/обещал @Лёша исходники завтра", "/готово #зерно упаковку: Олег одобрил", "#квартира /запись хозяйка согласна на кошку", "позвонить @ЖЭК насчёт счётчиков")),
-        HelpSection("Входящие", "Что ещё не разложено: записанное без интернета (разберётся, когда появится связь) и сохранённое без слов. Нажатие на строку — меню: Открыть, В тему…, Распознать текст (у фото), Убрать.", image = "inbox"),
+        HelpSection("Входящие", "Что ещё не разложено: записанное без интернета (разберётся, когда появится связь) и сохранённое без слов. Нажатие на строку — сам материал (фото, файл, текст); влево — «Убрать», вправо — «В тему…». В просмотре фото значок «Распознать» добавляет под фото текст с него — его можно поправить.", image = "inbox"),
         HelpSection("Материалы", "Все фото, файлы и голосовые по дням. Над файлами — ссылка на тему или дело. Лупа — поиск, в том числе по тексту на фото и в голосовых; чипы — Фото, Документы, Голосовые.", image = "materials"),
-        HelpSection("Контакты", "Две вкладки: Люди и Компании. В строке — кто это и что открыто с ним (ждём, обещали), справа — сколько дел. В карточке человека: телефон, почта, адрес (нажатие — позвонить, написать, открыть карту; долгое — изменить), личная информация, дела, история. ⋯ — переименовать, объединить, «Это компания».", image = "contacts"),
+        HelpSection("Контакты", "Две вкладки: Люди и Компании. Сверху — «Часто»: с кем больше всего дел за месяц; ниже — все, по алфавиту или «Новые». В строке — кто это и что открыто с ним (ждём, обещали), справа — сколько дел. В карточке человека: телефон, почта, адрес, MAX, Telegram и соц. сети — одной ссылкой, сеть узнаётся по адресу (нажатие — позвонить, написать, открыть; долгое — изменить), личная информация, дела, история. ⋯ — переименовать, объединить, «Это компания».", image = "contacts"),
         HelpSection("Архив", "Решённые темы со всей лентой и материалами. «Вернуть» — снова в работе; новость в теме тоже возвращает её.", image = "archive"),
         HelpSection("Настройки", "", image = "settings", pairs = listOf(
             "Голос" to "распознавать речь на телефоне (без интернета) или в облаке; отправлять сразу после диктовки",
@@ -818,8 +826,11 @@ object Ru : Strings {
         HelpSection("Жесты", "", pairs = listOf(
             "вправо по делу" to "сделано",
             "влево по делу" to "отложить: завтра, неделя, месяц, свой срок",
-            "время у дела" to "нажатие — часы",
+            "нажатие на дело" to "его карточка (в любом месте строки)",
+            "долгое нажатие на дело" to "Готово · Дата · Время",
             "долгое нажатие в теме" to "меню строки",
+            "во «Входящих»: влево / вправо" to "Убрать / В тему…",
+            "телефон, почта, ссылка в тексте" to "звонок, письмо или приложение по адресу (Telegram, MAX, Instagram…); «@ник» — Telegram",
             "«Отменить»" to "несколько секунд после любого изменения",
         )),
         HelpSection("Голос и файлы", "", pairs = listOf(
@@ -904,6 +915,11 @@ object Ru : Strings {
     override val tryExamples = listOf("Завтра в 15 созвон с Олегом", "Маша вернёт 3000 к пятнице", "Идея: подкаст про дизайн")
     override val tryHint = "Попробуйте — нажатие вставит фразу в поле"
     override val toStart = "↑ к началу"
+    override val orderAz = "А–Я"
+    override val orderNew = "Новые"
+    override val frequentBadge = "Часто"
+    override val allBadge = "Все"
+    override val dateWord = "Дата"
     override val toTomorrow = "Перенести на завтра"
     override val privacySection = "Приватность"
     override val lockTitle = "Вход по отпечатку"
@@ -1195,7 +1211,7 @@ object Ru : Strings {
     override fun inboxLine(n: Int) = "Во «Входящих»: " + n + " — разложить"
     override val nothingFound = "Ничего не нашлось"
     override val entryAdded = "Добавлена запись"
-    override val addOrChange = "Добавить или изменить…"
+    override val addOrChange = "Изменить словами…"
     override fun more(n: Int) = "ещё $n"
     override fun doneCount(n: Int) = "Выполнено · $n"
     override val records = "Записи"
@@ -1286,6 +1302,8 @@ object Ru : Strings {
     override val fieldPhone = "Телефон"
     override val fieldEmail = "Почта"
     override val fieldAddress = "Адрес"
+    override val fieldSocial = "Соц. сеть"
+    override val socialHint = "Ссылка на страницу"
     override val personalTitle = "ЛИЧНАЯ ИНФОРМАЦИЯ"
     override val personalHint = "день рождения, семья, что любит"
     override val copied = "Скопировано"
@@ -1548,7 +1566,9 @@ object En : Strings {
         HelpSection("Calendar", "The month as a grid; the chosen day below.", image = "calendar"),
         HelpSection("Overview", "Topics, To-dos, Ideas; filter Personal / Work.", image = "overview"),
         HelpSection("Today · Calendar · Overview", "", pairs = listOf(
-            "Today" to "the day's summary (how much, who owes what), to-dos by the hour, «No date» with their age, «Tomorrow — N»",
+            "Today" to "the day's summary (how much, who owes what), to-dos by the hour (a topic's to-dos as one block under its name), «No date» with their age, «Tomorrow — N»",
+            "tap a to-do" to "its card, anywhere on the line; a long press — Done · Date · Time",
+            "the card" to "as tall as it needs; the title and a comment are edited in place, the field below takes changes in words; a to-do with a comment shows 💬",
             "Calendar" to "the month as a grid and the chosen day",
             "Overview" to "everything: Topics, To-dos, Ideas; filter Personal / Work",
         )),
@@ -1576,8 +1596,9 @@ object En : Strings {
         HelpSection("Quick entry and feedback", "The “Write” tile in quick settings (add it with the pencil there) and a long press on the app icon — “Write” / “Dictate”. Understood wrong — “Understood wrong” under the result. “Send feedback” in the menu opens an e-mail to the developer with the error logs; your records are not sent."),
         HelpSection("The week, reminders, widget", "On Sundays «Today» shows a quiet card of the week: done, who owes whom, topics that stood still; «×» hides it until next Sunday. When someone's promise is late, «remind» next to it prepares a message (SMS if the phone is known, otherwise Share); you send it. The «Margin · Today» widget shows the day and opens the field or dictation. A whole topic can be shared as text: ⋯ → Share."),
         HelpSection("Privacy", "Settings → Privacy: a fingerprint (or screen lock) when Margin opens, and «Where your data is» — where the records live and what leaves the phone. On the lock screen reminders show without the to-do's words."),
+        HelpSection("Contacts", "«Often» on top — who you have most to-dos with this month; then everyone, A–Z or «New». A phone, an e-mail or a link anywhere in your words opens its app (a bare «@name» — Telegram). A person's social pages are one field: paste the link, the network is told by the address."),
         HelpSection("Lists", "Start a line with «1.», «-» or «•» — Enter continues the list, Enter on an empty item ends it."),
-        HelpSection("Inbox, Materials, Archive", "Inbox — what was written offline or saved without words; tap for actions. Materials — all files by day, with search. Archive — settled topics; news in one brings it back."),
+        HelpSection("Inbox, Materials, Archive", "Inbox — what was written offline or saved without words; a tap opens it, swipe left — Remove, right — To a topic…; on a photo «Recognize» puts its text under it. Materials — all files by day, with search. Archive — settled topics; news in one brings it back."),
         HelpSection("Offline", "Settings → «Reading your words»: Phone — code only; Auto — hard phrases go to the AI when online; AI — as before. The line over the field shows what was understood before you send."),
     )
     override val tourWriteTitle = "Write as you think"
@@ -1643,6 +1664,11 @@ object En : Strings {
     override val tryExamples = listOf("Call with Oleg tomorrow at 3", "Masha returns 3000 by Friday", "Idea: a podcast about design")
     override val tryHint = "Try one — a tap puts the phrase into the field"
     override val toStart = "↑ to the start"
+    override val orderAz = "A–Z"
+    override val orderNew = "New"
+    override val frequentBadge = "Often"
+    override val allBadge = "All"
+    override val dateWord = "Date"
     override val toTomorrow = "Move to tomorrow"
     override val privacySection = "Privacy"
     override val lockTitle = "Fingerprint lock"
@@ -1934,7 +1960,7 @@ object En : Strings {
     override fun inboxLine(n: Int) = "In the Inbox: $n — sort out"
     override val nothingFound = "Nothing found"
     override val entryAdded = "Record added"
-    override val addOrChange = "Add or change…"
+    override val addOrChange = "Change in words…"
     override fun more(n: Int) = "$n more"
     override fun doneCount(n: Int) = "Done · $n"
     override val records = "Records"
@@ -2025,6 +2051,8 @@ object En : Strings {
     override val fieldPhone = "Phone"
     override val fieldEmail = "Email"
     override val fieldAddress = "Address"
+    override val fieldSocial = "Social"
+    override val socialHint = "Link to the page"
     override val personalTitle = "PERSONAL"
     override val personalHint = "birthday, family, what they like"
     override val copied = "Copied"

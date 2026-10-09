@@ -184,6 +184,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     // One feed; the paperclip narrows it to materials, a tap on the progress — to the matters only.
     var materialsMode by remember(task.id) { mutableStateOf(startTab == 2) }
     var dealsOnly by remember(task.id) { mutableStateOf(false) }
+    /** A matter opened in its own card, over the feed. */
+    var dealQ by remember(task.id) { mutableStateOf<String?>(null) }
     /** Only the records (what was written), as «5 записей» in the summary asks. */
     var saidOnly by remember(task.id) { mutableStateOf(false) }
     val feedState = rememberLazyListState()
@@ -312,6 +314,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                         select = { k -> selected = if (k.isBlank() || selected == k) null else k },
                         addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
                         editDeal = { editQ = it }, dateDeal = { dateQ = it }, editNote = { editNote = it }, view = { viewing = it }, timeDeal = { timeQ = it },
+                        openDeal = { dealQ = it.id },
                     ), onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
                 }
             }
@@ -363,6 +366,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             dismissButton = { TextButton({ vm.misparsed(task.source.orEmpty(), "card", listOfNotNull(task.title, task.whenLabel()).joinToString(" · ")); dialog = null }) { Text(s.misparsed, color = c.link) } },
         )
     }
+    dealQ?.let { id -> DealSheet(task, id, vm, onClose = { dealQ = null }, onOpenTopic = null) }
     editNote?.let { e -> TextDialog(s.edit, e.text, "", onDismiss = { editNote = null }) { v -> vm.editEntryText("task:${task.id}", e.id, v); editNote = null } }
     editQ?.let { q -> TextDialog(s.edit, q.title, "", onDismiss = { editQ = null }) { v -> vm.renameSubtask(task.id, q.id, v); editQ = null } }
     timeQ?.let { q -> TimeDialog(q.time, onDismiss = { timeQ = null }) { tm -> vm.setTime("q:${task.id}:${q.id}", tm); timeQ = null } }
@@ -507,6 +511,8 @@ private class FeedActions(
     val editNote: (Entry) -> Unit,
     val view: (Attachment) -> Unit,
     val timeDeal: (Subtask) -> Unit = {},
+    /** A tap on a matter: its own card. */
+    val openDeal: (Subtask) -> Unit = {},
 )
 
 @Composable
@@ -613,7 +619,7 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, day: LocalDate?, fr
     Margined(Modifier.padding(top = 6.dp), margin = day?.let { d -> { DayMargin(d, LocalDate.now(), false, strong = true) } }) {
         Box {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(sel)
-                .combinedClickable(onClick = { if (removed) menu = true }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp)) {
+                .combinedClickable(onClick = { if (removed) menu = true else act.editNote(e) }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
                         // What it is and when: a record — the user's own words; the matters that came of them hang under it.
@@ -693,7 +699,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
             }
         }) {
             Row(Modifier.fillMaxWidth().padding(start = indent).clip(RoundedCornerShape(10.dp)).background(sel)
-                .combinedClickable(onClick = { if (removed) menu = true }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                .combinedClickable(onClick = { if (removed) menu = true else act.openDeal(q) }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
                 if (depth == 0) KindMark(if (q.done || removed) null else task.questionRow(q))
                 Box(Modifier.size(if (depth == 0) 26.dp else 22.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(q.done, size = if (depth == 0) 18.dp else 15.dp, onToggle = ::tick) }
                 Spacer(Modifier.width(8.dp))
@@ -912,7 +918,7 @@ private fun QuestionRow(task: Task, q: Subtask, lit: Boolean, vm: MainVm, onFeed
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun QuestionDateDialog(q: Subtask, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
+internal fun QuestionDateDialog(q: Subtask, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()

@@ -61,7 +61,7 @@ fun questionRef(id: String): Pair<String, String>? =
     if (id.startsWith("q:")) id.removePrefix("q:").split(':').takeIf { it.size == 2 }?.let { it[0] to it[1] } else null
 
 fun Task.questionRow(q: Subtask) = Task(
-    id = "q:$id:${q.id}", title = q.title, due = q.due, time = q.time, waitingFor = q.from,
+    id = "q:$id:${q.id}", title = q.title, due = q.due, time = q.time, waitingFor = q.from, note = q.note,
     people = listOfNotNull(q.assignee), project = project, sphere = sphere, topicId = id, topicTitle = title,
     // The day the matter itself appeared, not the topic — «лежит с 3 окт».
     createdAt = events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at?.take(10) ?: createdAt,

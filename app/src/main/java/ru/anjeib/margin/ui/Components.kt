@@ -1,5 +1,8 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.foundation.text.appendInlineContent
+
 import androidx.compose.ui.text.font.FontWeight
 
 import androidx.compose.animation.AnimatedVisibility
@@ -239,7 +242,9 @@ val LocalPeopleLinks = androidx.compose.runtime.compositionLocalOf { PeopleLinks
  * stays grey and a tap offers «+ контакт». Late dates — terracotta, the one colour of attention. No pills — they live in the card.
  */
 @Composable
-fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: Boolean = false, today: java.time.LocalDate = java.time.LocalDate.now()) {
+fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: Boolean = false, today: java.time.LocalDate = java.time.LocalDate.now(),
+             /** false in the day lists: names and places are coloured words, the whole row is the one target. */
+             tappable: Boolean = true) {
     val c = M.c
     val s = M.s
     val links = LocalPeopleLinks.current
@@ -249,8 +254,10 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
     val text = androidx.compose.ui.text.buildAnnotatedString {
         var first = true
         fun next() { if (!first) append(sep); first = false }
-        fun link(tag: String, shown: String, color: Color, onClick: () -> Unit) =
+        fun link(tag: String, shown: String, color: Color, onClick: () -> Unit) {
+            if (!tappable) { withStyle(androidx.compose.ui.text.SpanStyle(color = color)) { append(shown) }; return }
             withLink(androidx.compose.ui.text.LinkAnnotation.Clickable(tag, androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = color))) { onClick() }) { append(shown) }
+        }
         fun name(n0: String, shown: String = n0) = link("p:$n0", shown, if (links.isContact(n0)) c.link else c.graphite) { links.onName(n0) }
         // When first, darker than the rest — the eye finds it without looking; late in accent.
         whenText?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = if (t.isOverdue(today)) c.accent else c.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)) { append(it) } }
@@ -271,9 +278,15 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         if (files > 0) { next(); append("📎 $files") }
         if (showIdea && t.noteId != null) { next(); append("✎ " + s.ideaMark) }
         if (showProject) t.project?.let { next(); append("#" + projectLabel(it)) }
+        // The user left a comment: a small mark says it is there (the words are in the card).
+        if (!t.note.isNullOrBlank()) { next(); appendInlineContent("note", "≡") }
     }
+    val inline = mapOf("note" to androidx.compose.foundation.text.InlineTextContent(
+        androidx.compose.ui.text.Placeholder(14.sp, 14.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {
+        Icon(Icons.Outlined.ChatBubbleOutline, s.commentHint, tint = c.graphite, modifier = Modifier.fillMaxSize())
+    })
     if (text.isNotEmpty()) Text(text, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.padding(top = 3.dp))
+        inlineContent = inline, modifier = Modifier.padding(top = 3.dp))
 }
 
 /** «Обещание · Виктору от вас» / «Обещание · вам от Марины»: who owes whom, in one badge. */

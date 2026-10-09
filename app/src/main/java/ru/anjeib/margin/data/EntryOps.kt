@@ -112,3 +112,16 @@ fun AppData.removeNote(id: String) = copy(notes = notes.filterNot { it.id == id 
 fun AppData.dropEmptyNote(id: String) = copy(notes = notes.filterNot { it.id == id && it.title.isBlank() && it.entries.isEmpty() })
 
 fun AppData.dropQueued(id: String) = copy(queue = queue.filterNot { it.id == id })
+
+/** Text recognised on a photo (or corrected by the user), wherever that photo lives — a matter, a topic, a note. */
+fun AppData.setOcr(attachmentId: String, text: String?): AppData {
+    val v = text?.trim()?.ifBlank { null }
+    fun List<Entry>.fix() = map { e -> if (e.attachments.none { it.id == attachmentId }) e else e.copy(attachments = e.attachments.map { if (it.id == attachmentId) it.copy(ocr = v) else it }) }
+    return copy(tasks = tasks.map { t -> if (t.entries.none { e -> e.attachments.any { it.id == attachmentId } }) t else t.copy(entries = t.entries.fix()) },
+        notes = notes.map { n -> if (n.entries.none { e -> e.attachments.any { it.id == attachmentId } }) n else n.copy(entries = n.entries.fix()) })
+}
+
+/** The attachment as it is now in the data (its recognised text may have arrived after it was opened). */
+fun AppData.attachment(id: String): Attachment? =
+    (tasks.asSequence().flatMap { it.entries } + notes.asSequence().flatMap { it.entries }).flatMap { it.attachments }.firstOrNull { it.id == id }
+

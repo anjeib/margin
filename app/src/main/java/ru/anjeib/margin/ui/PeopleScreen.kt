@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.material.icons.outlined.Public
+
+
+
 import androidx.compose.foundation.layout.offset
 
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -78,7 +82,11 @@ fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddi
     val c = M.c
     val s = M.s
     var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("people") }
-    val people = data.persons.filter { it.isContact }.sortedByDescending { p -> data.tasks.count { !it.done && it.involves(p) } }
+    // «А–Я» or «Новые» (the order they were added); the most used ones on top in «Часто».
+    var order by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("az") }
+    val people = data.persons.filter { it.isContact }
+    val since = java.time.LocalDate.now().minusDays(30).toString()
+    fun used(p: Person) = data.tasks.count { t -> t.involves(p) && (!t.done || (t.doneAt ?: "") >= since || t.createdAt >= since) }
     Box(Modifier.fillMaxSize().screenRule()) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
         item("h") { PageHead(s.peopleTitle, s.peopleSub) }
@@ -86,9 +94,27 @@ fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddi
         // People and companies on two tabs, as «Темы · Дела · Идеи» in «Обзор».
         val orgs = people.filter { it.org }
         val humans = people.filterNot { it.org }
-        if (people.isNotEmpty()) item("tabs") { Margined(Modifier.padding(bottom = 6.dp)) { SubTabs(listOf("people" to s.peopleBadge, "orgs" to s.orgsBadge), tab, { tab = it }) } }
-        listOf(if (tab == "orgs") orgs else humans).forEach { group ->
-        items(group, key = { it.id }) { p ->
+        if (people.isNotEmpty()) item("tabs") {
+            Margined(Modifier.padding(bottom = 6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { SubTabs(listOf("people" to s.peopleBadge, "orgs" to s.orgsBadge), tab, { tab = it }) }
+                    // The order of the rest: quiet words, the chosen one in ink.
+                    listOf("az" to s.orderAz, "new" to s.orderNew).forEach { (k, label) ->
+                        Text(label, style = Type.small.copy(color = if (order == k) c.ink else c.graphite, fontSize = 13.sp,
+                            fontWeight = if (order == k) androidx.compose.ui.text.font.FontWeight.Medium else null),
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { order = k }.padding(horizontal = 6.dp, vertical = 6.dp))
+                    }
+                }
+            }
+        }
+        val shown = if (tab == "orgs") orgs else humans
+        // «Часто»: up to five, only when the list is long enough for a shortcut to matter; they are not repeated below.
+        val frequent = if (shown.size > 6) shown.map { it to used(it) }.filter { it.second > 0 }.sortedByDescending { it.second }.take(5).map { it.first } else emptyList()
+        val rest = (shown - frequent.toSet()).let { l -> if (order == "az") l.sortedBy { it.name.lowercase().replace('ё', 'е') } else l.sortedByDescending { p -> data.persons.indexOf(p) } }
+        if (frequent.isNotEmpty()) item("fh") { Margined(Modifier.padding(top = 6.dp, bottom = 2.dp)) { GroupBadge(s.frequentBadge) } }
+        listOf(frequent, rest).forEachIndexed { gi, group ->
+        if (gi == 1 && frequent.isNotEmpty() && group.isNotEmpty()) item("rh") { Margined(Modifier.padding(top = 14.dp, bottom = 2.dp)) { GroupBadge(s.allBadge) } }
+        items(group, key = { "g$gi" + it.id }) { p ->
             val open = data.tasks.count { !it.done && it.involves(p) }
             SwipeActions(left = s.toArchive to { vm.archivePerson(p.id) }, right = s.delete to { vm.removePerson(p.id) }, modifier = Modifier.animateItem()) {
             Column(Modifier.fillMaxWidth().background(c.bg).clickable { onOpen(p.id) }) {
@@ -176,9 +202,11 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 val i = when (kind) {
                     "phone" -> Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + person.phone))
                     "email" -> Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + person.email))
-                    "telegram" -> person.telegram?.removePrefix("@")?.let { h -> Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/" + (if (h.all { it.isDigit() || it == '+' }) "+" + h.trimStart('+') else h))) }
+                    "telegram" -> person.telegram?.let { Reach.intent("telegram", it) }
+                    "max" -> person.max?.let { Reach.intent("max", it) }
                     "address" -> Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(person.address)))
-                    else -> null
+                    // A page opens in whatever app the phone gives its address to.
+                    else -> kind.removePrefix("social:").toIntOrNull()?.let { person.social.getOrNull(it) }?.let { Reach.intent("url", it) }
                 }
                 if (i != null) runCatching { ctx.startActivity(i) }
                 else (ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)?.let { cb ->
@@ -192,7 +220,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 person.telegram?.let { Triple(Icons.AutoMirrored.Outlined.Send, it, "telegram") },
                 person.max?.let { Triple(Icons.Outlined.ChatBubbleOutline, "MAX · $it", "max") },
                 person.address?.let { Triple(Icons.Outlined.Place, it, "address") },
-            )
+            ) + person.social.mapIndexed { i, l -> Reach.socialName(l).let { (net, who) -> Triple(Icons.Outlined.Public, if (who.isEmpty()) net else "$net · $who", "social:$i") } }
             if (contacts.isNotEmpty()) FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 contacts.forEach { (icon, label, kind) -> ContactChip(icon, label, onClick = { reach(kind) }, onLong = { dialog = kind }) }
             }
@@ -200,12 +228,13 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 (s.fieldRole to "about").takeIf { person.about == null }, (s.fieldCompany to "company").takeIf { person.company == null },
                 (s.fieldPhone to "phone").takeIf { person.phone == null }, (s.fieldEmail to "email").takeIf { person.email == null },
                 (s.fieldAddress to "address").takeIf { person.address == null }, ("MAX" to "max").takeIf { person.max == null },
-                ("Telegram" to "telegram").takeIf { person.telegram == null },
+                ("Telegram" to "telegram").takeIf { person.telegram == null }, s.fieldSocial to "social",
             )
             if (missing.isNotEmpty()) FlowRow(Modifier.padding(top = 10.dp)) {
                 missing.forEachIndexed { i, (label, d) ->
                     if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.faint))
-                    Text("+ " + (if (label.first().isUpperCase() && label.length <= 8 && label.any { it in 'A'..'Z' }) label else label.lowercase()),
+                    // Service names keep their own spelling (MAX, Telegram); field names go small.
+                    Text("+ " + (if (d in setOf("max", "telegram")) label else label.lowercase()),
                         style = Type.small.copy(color = c.graphite), modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { dialog = d }.padding(2.dp))
                 }
             }
@@ -260,6 +289,8 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             }
             TextDialog(title, value.orEmpty(), if (k == "telegram") "@username" else "", onDismiss = { dialog = null }) { v -> vm.setPersonField(person.id, k, v); dialog = null }
         }
+        // «+ соц. сеть» adds a page; a long press on one changes it (emptied — removed).
+        "social" -> TextDialog(s.fieldSocial, "", s.socialHint, onDismiss = { dialog = null }) { v -> vm.setPersonField(person.id, "social", v); dialog = null }
         "personal" -> TextDialog(s.personalTitle.lowercase().replaceFirstChar { it.uppercase() }, person.personal.joinToString("\n"), s.personalHint, onDismiss = { dialog = null }) { v ->
             vm.setPersonField(person.id, "personal", v); dialog = null
         }
@@ -282,6 +313,10 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             confirmButton = {},
             dismissButton = { TextButton({ dialog = null }) { Text(s.cancel, color = c.graphite) } },
         )
+    }
+    dialog?.takeIf { it.startsWith("social:") }?.let { k ->
+        TextDialog(s.fieldSocial, person.social.getOrNull(k.removePrefix("social:").toIntOrNull() ?: -1).orEmpty(), s.socialHint,
+            onDismiss = { dialog = null }) { v -> vm.setPersonField(person.id, k, v); dialog = null }
     }
 }
 

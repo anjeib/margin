@@ -152,10 +152,10 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
         // The sheet itself lifts above the keyboard, so the content gives up exactly the keyboard's height.
         val ime = androidx.compose.foundation.layout.WindowInsets.ime.asPaddingValues().calculateBottomPadding()
 
-        // Always the same height: the fields sit in the same place for every task, the input stays at the bottom.
-        Column(Modifier.fillMaxWidth().height((maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
+        // As tall as what is in it (a short matter — about half the screen), growing up to nearly all of it; the input at the bottom.
+        Column(Modifier.fillMaxWidth().heightIn(min = 320.dp, max = (maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
             // «Поля»: the rule down the card, the day and hour on the margin, everything else right of it.
-            Column(Modifier.weight(1f).screenRule().verticalScroll(rememberScrollState())) {
+            Column(Modifier.weight(1f, fill = false).screenRule().verticalScroll(rememberScrollState())) {
                 Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
                     Spacer(Modifier.width(MarginW + MarginGap))
                     androidx.compose.animation.AnimatedVisibility(savedAt > 0, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
@@ -246,6 +246,18 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             Text("↳ " + s.fromMessage(stamp), style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp),
                                 modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(6.dp)).clickable { dialog = "source" }.padding(vertical = 2.dp))
                         }
+                    }
+                }
+                // The user's own comment: typed right here, kept as is, no AI.
+                Margined(Modifier.padding(top = 10.dp)) {
+                    var note by remember(task.id) { mutableStateOf(task.note.orEmpty()) }
+                    androidx.compose.runtime.LaunchedEffect(note) {
+                        if (note.trim() != task.note.orEmpty().trim()) { kotlinx.coroutines.delay(700); vm.setNote(task.id, note) ; savedAt = System.currentTimeMillis() }
+                    }
+                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 12.dp, vertical = 10.dp)) {
+                        if (note.isEmpty()) Text(s.commentHint, style = Type.body.copy(color = c.graphite, fontSize = 15.sp))
+                        BasicTextField(note, { note = it }, textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp), cursorBrush = SolidColor(c.link),
+                            modifier = Modifier.fillMaxWidth())
                     }
                 }
                 Hairline(Modifier.padding(start = MarginW, top = 14.dp))
@@ -506,7 +518,7 @@ private fun OneDayDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
 /** One property of a matter: its glyph, then the value as a petrol link that changes it; [late] — terracotta. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Prop(glyph: @Composable () -> Unit, text: String, late: Boolean = false, onLong: (() -> Unit)? = null, onClick: () -> Unit) {
+internal fun Prop(glyph: @Composable () -> Unit, text: String, late: Boolean = false, onLong: (() -> Unit)? = null, onClick: () -> Unit) {
     val c = M.c
     Row(Modifier.clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = onClick, onLongClick = onLong).padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(22.dp), contentAlignment = Alignment.CenterStart) { glyph() }

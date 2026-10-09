@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.attachment
+
+import androidx.compose.material.icons.outlined.TextFields
+
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -265,10 +269,24 @@ fun Viewer(a: Attachment, vm: MainVm, onClose: () -> Unit) {
                     val bmp by produceState<Bitmap?>(null, a.id) { value = Files.thumb(ctx, a, 2400) }
                     var zoom by remember { mutableFloatStateOf(1f) }
                     var pan by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-                    bmp?.let {
-                        Image(it.asImageBitmap(), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()
-                            .pointerInput(Unit) { detectTransformGestures { _, p, z, _ -> zoom = (zoom * z).coerceIn(1f, 5f); pan = if (zoom == 1f) androidx.compose.ui.geometry.Offset.Zero else pan + p } }
-                            .graphicsLayer(scaleX = zoom, scaleY = zoom, translationX = pan.x, translationY = pan.y))
+                    // The recognised text, when there is some, sits under the photo as a field one can correct.
+                    val live = vm.data.collectAsState().value.attachment(a.id) ?: a
+                    Column(Modifier.fillMaxSize()) {
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            bmp?.let {
+                                Image(it.asImageBitmap(), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()
+                                    .pointerInput(Unit) { detectTransformGestures { _, p, z, _ -> zoom = (zoom * z).coerceIn(1f, 5f); pan = if (zoom == 1f) androidx.compose.ui.geometry.Offset.Zero else pan + p } }
+                                    .graphicsLayer(scaleX = zoom, scaleY = zoom, translationX = pan.x, translationY = pan.y))
+                            }
+                        }
+                        live.ocr?.let { ocr ->
+                            var text by remember(a.id, ocr) { mutableStateOf(ocr) }
+                            LaunchedEffect(text) { if (text != ocr) { kotlinx.coroutines.delay(800); vm.setOcr(a.id, text) } }
+                            Box(Modifier.fillMaxWidth().heightIn(max = 260.dp).background(M.c.card).padding(16.dp).verticalScroll(rememberScrollState())) {
+                                androidx.compose.foundation.text.BasicTextField(text, { text = it }, textStyle = Type.body.copy(color = M.c.ink, fontSize = 15.sp),
+                                    cursorBrush = androidx.compose.ui.graphics.SolidColor(M.c.link), modifier = Modifier.fillMaxWidth())
+                            }
+                        }
                     }
                 }
                 a.kind == "video" -> {
@@ -295,6 +313,14 @@ fun Viewer(a: Attachment, vm: MainVm, onClose: () -> Unit) {
             Row(Modifier.fillMaxWidth().background(M.c.overlay.copy(alpha = 0.5f)).padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 ViewerAction(Icons.Rounded.Close, s.closeWord2, onClose)
                 Spacer(Modifier.weight(1f))
+                // A photo's words, once: then they stay under it.
+                if (a.kind == "photo") {
+                    val working by vm.working.collectAsState()
+                    val has = vm.data.collectAsState().value.attachment(a.id)?.ocr != null
+                    if ("ocr:${a.id}" in working) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator(color = M.c.onAccent, strokeWidth = 1.6.dp, modifier = Modifier.size(18.dp))
+                    } else if (!has) ViewerAction(Icons.Outlined.TextFields, s.readTextWord) { vm.recognize(a) }
+                }
                 if (a.file != null) ViewerAction(Icons.Outlined.Download, s.saveToPhone) { scope.launch { vm.say(if (Files.saveToPhone(ctx, a)) s.savedToPhone else s.saveFailed) } }
                 ViewerAction(Icons.Outlined.Share, s.shareWord) { Files.shareIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } } }
             }

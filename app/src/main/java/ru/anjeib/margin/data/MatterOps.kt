@@ -205,3 +205,13 @@ fun AppData.matterFor(words: String, topicId: String?): Pair<String, String>? {
     }
     return cands.map { it to (stems(it.second) intersect q).size }.filter { it.second > 0 }.maxByOrNull { it.second }?.first
 }
+
+/** The user's comment on a matter or on a topic's matter («q:<topic>:<matter>»); blank clears it. */
+fun AppData.setNote(id: String, text: String): AppData {
+    val v = text.trim().ifBlank { null }
+    questionRef(slotRef(id)?.first ?: id)?.let { (tid, qid) ->
+        return copy(tasks = tasks.map { t -> if (t.id != tid) t else t.copy(subtasks = t.subtasks.mapTree(qid) { it.copy(note = v) }) })
+    }
+    return copy(tasks = tasks.map { if (it.id == id) it.copy(note = v) else it })
+}
+

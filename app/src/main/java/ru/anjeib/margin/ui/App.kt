@@ -122,12 +122,14 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     var openTab by rememberSaveable { mutableStateOf(0) }
     var openHl by rememberSaveable { mutableStateOf<String?>(null) }
     var viewing by remember { mutableStateOf<ru.anjeib.margin.data.Attachment?>(null) }
+    var openDeal by rememberSaveable { mutableStateOf<String?>(null) }
     /** A task, or a topic's question from the lists: then the topic opens on «Вопросы» with that one lit. */
     fun openId(id0: String) {
         // A day of a matter done on several days opens the matter itself.
         val id = ru.anjeib.margin.data.slotRef(id0)?.first ?: id0
         val q = ru.anjeib.margin.data.questionRef(id)
-        if (q != null) { openTask = q.first; openTab = 1; openHl = q.second } else { openTask = id; openTab = 0; openHl = null }
+        // A topic's matter opens its own card (the topic is one tap further, from the card).
+        if (q != null) openDeal = id else { openTask = id; openTab = 0; openHl = null }
     }
     var openNote by rememberSaveable { mutableStateOf<String?>(null) }
     var openPerson by rememberSaveable { mutableStateOf<String?>(null) }
@@ -382,6 +384,14 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         confirmButton = { androidx.compose.material3.TextButton({ demoOffer = false; vm.loadDemo() }) { Text(s.demoLoad, color = c.link) } },
         dismissButton = { androidx.compose.material3.TextButton({ demoOffer = false; vm.demoSkip() }) { Text(s.demoLater, color = c.graphite) } },
     )
+
+    openDeal?.let { ref ->
+        val qr = ru.anjeib.margin.data.questionRef(ref)
+        val topic = qr?.let { (tid, _) -> data.tasks.find { it.id == tid } }
+        if (qr == null || topic == null) openDeal = null
+        else DealSheet(topic, qr.second, vm, onClose = { openDeal = null },
+            onOpenTopic = { openDeal = null; openTask = topic.id; openTab = 1; openHl = qr.second })
+    }
 
     openTask?.let { id ->
         val t = data.tasks.find { it.id == id }

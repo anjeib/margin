@@ -441,15 +441,15 @@ val listMarker = Regex("^\\s*(\\d{1,2}[.)]|[-–—•*])\\s+")
 @Composable
 fun ListAwareText(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier) {
     val lines = text.lines()
-    if (lines.count { listMarker.containsMatchIn(it) } < 2) { Text(text, style = style, modifier = modifier); return }
+    if (lines.count { listMarker.containsMatchIn(it) } < 2) { Text(linked(text), style = style, modifier = modifier); return }
     Column(modifier) {
         lines.forEach { line ->
             val m = listMarker.find(line)
-            if (m == null) { if (line.isNotBlank()) Text(line, style = style) }
+            if (m == null) { if (line.isNotBlank()) Text(linked(line), style = style) }
             else Row(Modifier.padding(vertical = 1.dp)) {
                 val mark = m.groupValues[1].let { if (it.first().isDigit()) it.trimEnd(')', '.') + "." else "•" }
                 Text(mark, style = style.copy(color = M.c.graphite, fontFeatureSettings = "tnum"), modifier = Modifier.width(22.dp))
-                Text(line.substring(m.range.last + 1), style = style, modifier = Modifier.weight(1f))
+                Text(linked(line.substring(m.range.last + 1)), style = style, modifier = Modifier.weight(1f))
             }
         }
     }

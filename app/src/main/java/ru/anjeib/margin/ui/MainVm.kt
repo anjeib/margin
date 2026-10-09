@@ -472,6 +472,30 @@ class MainVm(app: Application) : AndroidViewModel(app) {
      * Text on a photo, only when asked («Текст с фото»): read once (Yandex Vision), remembered, then used —
      * put in as a text block, turned into a contact (a business card), or into tasks (a whiteboard, a paper list).
      */
+    /** «Распознать» in the photo viewer: the text is kept on the photo itself (searchable, seen by the AI) and shown under it. */
+    fun recognize(a: Attachment) {
+        val s = settings.value
+        if (!Processor.ready(s)) { _toast.value = L.s.noKey; return }
+        if (!Processor.online(ctx)) { _toast.value = L.s.errNet; return }
+        viewModelScope.launch {
+            _working.value += "ocr:${a.id}"
+            try {
+                val jpeg = Files.jpeg(ctx, a) ?: return@launch
+                val url = Files.imageDataUrl(ctx, a) ?: return@launch
+                val r = ru.anjeib.margin.ai.Llm.ocr(s, jpeg, url)
+                prefs.addSpend(r.rub)
+                val text = r.content.trim()
+                if (text.isBlank()) _toast.value = L.s.noTextOnPhoto else store.update { it.setOcr(a.id, text) }
+            } catch (e: Exception) {
+                _toast.value = (e as? AiException)?.message ?: e.message
+            } finally {
+                _working.value -= "ocr:${a.id}"
+            }
+        }
+    }
+
+    fun setOcr(attachmentId: String, text: String) = store.update { it.setOcr(attachmentId, text) }
+
     fun photoText(owner: String, entryId: String, a: Attachment, action: String) {
         val s = settings.value
         if (!Processor.ready(s)) { _toast.value = L.s.noKey; return }
@@ -899,6 +923,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** The hour of a task, one of its days or a topic's question («q:…»), set from the clock that opens on its time. */
     fun setTime(id: String, time: String?) = store.update { it.setTime(id, time) }
+
+    fun setNote(id: String, text: String) = store.update { it.setNote(id, text) }
 
     fun setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null) = store.update { it.setQuestionDue(taskId, subId, due, time) }
 

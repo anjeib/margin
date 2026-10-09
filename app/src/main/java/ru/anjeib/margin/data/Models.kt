@@ -27,6 +27,8 @@ data class Subtask(
     val parent: String? = null,
     /** Several days for this matter; [due]/[time] then follow the next open one. */
     val slots: List<Slot> = emptyList(),
+    /** The user's own comment, written as is (no AI) — «код домофона 45», «взять чек». */
+    val note: String? = null,
 )
 
 /**
@@ -105,6 +107,8 @@ data class Person(
     val telegram: String? = null,
     /** MAX messenger: a username or a phone. */
     val max: String? = null,
+    /** Pages elsewhere (Instagram, VK, a site…) as links: the phone opens each in its own app by the address. */
+    val social: List<String> = emptyList(),
     val archived: Boolean = false,
     /** «Личная информация»: short facts the user told about them (birthday, family, what they like). */
     val personal: List<String> = emptyList(),
@@ -222,6 +226,8 @@ data class Task(
     val sourceFixed: Boolean = false,
     /** Where it happens: an address or a place («Ленина 5», «кафе Зерно»). */
     val place: String? = null,
+    /** The user's own comment, written as is (no AI); a small mark in the lists says it is there. */
+    val note: String? = null,
     val subtasks: List<Subtask> = emptyList(),
     val repeat: Repeat? = null,
     /** How many times the task was pushed to a later day — lets reviews spot what never happens. */
