@@ -24,6 +24,8 @@ import ru.anjeib.margin.book.withSamples
 import ru.anjeib.margin.book.withoutSamples
 import ru.anjeib.margin.book.carryAll
 import ru.anjeib.margin.book.closeDay
+import ru.anjeib.margin.book.closeThread
+import ru.anjeib.margin.book.reopenThread
 import ru.anjeib.margin.book.Ask
 import ru.anjeib.margin.book.AiRead
 import ru.anjeib.margin.book.Line
@@ -336,6 +338,13 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         store.update { it.closeDay(date) }
         _stamping.value = date
         viewModelScope.launch { delay(2500); if (_stamping.value == date) _stamping.value = null }
+    }
+
+    /** A thread closed (to the end of the index) or opened again. */
+    fun closeThread(id: String, close: Boolean) {
+        val before = book.value
+        store.update { if (close) it.closeThread(id) else it.reopenThread(id) }
+        say(if (close) words.threadClosed else words.threadOpened, before)
     }
 
     /** «Остальное → завтра» in the evening ritual. */

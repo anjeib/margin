@@ -188,6 +188,12 @@ interface Words {
     val inviteShared: String
     val inviteNone: String
     val inviteHint: String
+    val threadClosed: String
+    val threadOpened: String
+    val closeThread: String
+    val reopenThread: String
+    val remind: String
+    fun remindText(name: String, what: String): String
     val calendarSetting: String
     val calendarOn: String
     val calendarOff: String
@@ -487,6 +493,12 @@ object WordsRu : Words {
     override val inviteShared = "общий"
     override val inviteNone = "нет"
     override val inviteHint = "Код открывает ИИ: перечитывание сложных фраз, ответы на вопросы, голос. Пустое поле — общий код."
+    override val threadClosed = "нить закрыта"
+    override val threadOpened = "нить открыта снова"
+    override val closeThread = "закрыть нить ›"
+    override val reopenThread = "открыть нить снова ›"
+    override val remind = "напомнить"
+    override fun remindText(name: String, what: String) = "$name, привет! Напоминаю: ${what.replaceFirstChar { it.lowercase() }}."
     override val calendarSetting = "Календарь телефона"
     override val calendarOn = "на страницах"
     override val calendarOff = "не показывать"
@@ -764,6 +776,12 @@ object WordsEn : Words {
     override val inviteShared = "shared"
     override val inviteNone = "none"
     override val inviteHint = "The code opens the AI: re-reading hard phrases, answers, voice. Leave it empty for the shared code."
+    override val threadClosed = "thread closed"
+    override val threadOpened = "thread open again"
+    override val closeThread = "close the thread ›"
+    override val reopenThread = "open the thread again ›"
+    override val remind = "remind"
+    override fun remindText(name: String, what: String) = "Hi $name, a reminder: ${what.replaceFirstChar { it.lowercase() }}."
     override val calendarSetting = "Phone calendar"
     override val calendarOn = "on the pages"
     override val calendarOff = "hidden"

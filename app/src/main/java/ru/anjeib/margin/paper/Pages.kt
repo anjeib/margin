@@ -135,15 +135,21 @@ fun LazyListScope.linesByDay(groups: List<Pair<LocalDate?, List<Line>>>, book: B
 
 /** A thread's page: its name, Margin's line about it, its lines by day; the field writes into it. */
 @Composable
-fun ThreadPage(book: Book, id: String, today: LocalDate, onMark: (String) -> Unit, onOpen: (String) -> Unit, bottom: androidx.compose.ui.unit.Dp) {
+fun ThreadPage(book: Book, id: String, today: LocalDate, onMark: (String) -> Unit, onOpen: (String) -> Unit, bottom: androidx.compose.ui.unit.Dp,
+               onClose: (Boolean) -> Unit = {}) {
     val c = P.c
     val w = P.w
     val t = book.thread(id) ?: return
     val st = book.threadStats(id)
     LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = bottom)) {
-        item { PageHead(marginTop = "≡", marginBottom = null, title = t.title, line = w.threadLine(st) + " · " + w.since(st.since)) }
+        item {
+            PageHead(marginTop = "≡", marginBottom = null, title = t.title,
+                line = (if (t.closedAt != null) w.threadClosed + " · " else "") + w.threadLine(st).let { if (it.isBlank()) "" else "$it · " } + w.since(st.since))
+        }
         linesByDay(book.threadLines(id), book, today, w, w.noDay, onMark, onOpen, hideThread = id)
         if (book.threadLines(id).isEmpty()) item { MarginSays(w.emptyThread) }
+        // A thread that has run its course is closed: it goes to the end of the index; its lines stay where they are.
+        item { MarginLink(if (t.closedAt == null) w.closeThread else w.reopenThread, Modifier.padding(top = 12.dp)) { onClose(t.closedAt == null) } }
     }
 }
 

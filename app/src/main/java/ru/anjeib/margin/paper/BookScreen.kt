@@ -131,7 +131,8 @@ private fun Notebook(vm: BookVm) {
                         r == "index" -> IndexPage(book, today, onThread = { push("thread:$it") }, onPerson = { push("person:$it") }, onLater = { push("later") },
                             onSettings = { push("settings") }, onHelp = { push("help") }, onSearch = { push("search") },
                             onFeedback = { sendFeedback(ctx, w) })
-                        r.startsWith("thread:") -> ThreadPage(book, r.removePrefix("thread:"), today, vm::toggle, onOpen, bottom = 24.dp)
+                        r.startsWith("thread:") -> ThreadPage(book, r.removePrefix("thread:"), today, vm::toggle, onOpen, bottom = 24.dp,
+                            onClose = { close -> vm.closeThread(r.removePrefix("thread:"), close) })
                         r.startsWith("person:") -> PersonPage(book, r.removePrefix("person:"), today, vm::toggle, onOpen,
                             onCall = { ph -> runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:$ph"))) } },
                             bottom = 24.dp)

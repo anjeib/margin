@@ -146,6 +146,13 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
             }
             // Margin's offers for this line.
             FlowRow(Modifier.fillMaxWidth().padding(start = Grid.text, end = Grid.right, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                // Waiting for someone: a ready message to remind them — sent by you, from your messenger.
+                val from = l.from()
+                if (from != null && l.state == State.Open) Offer(w.remind) {
+                    val i = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                        .putExtra(android.content.Intent.EXTRA_TEXT, w.remindText(from, l.text))
+                    runCatching { ctx.startActivity(android.content.Intent.createChooser(i, w.remind).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                }
                 if (l.kind == Kind.Todo && l.state == State.Open) {
                     Offer(w.offerTomorrow) { vm.move(id, today.plusDays(1)); onClose() }
                     Offer(w.offerLater) { vm.move(id, null); onClose() }
