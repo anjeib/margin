@@ -51,10 +51,15 @@ fun DayPage(
     eveningHour: Int = 21,
     /** The day whose stamp is being pressed right now. */
     stamping: LocalDate? = null,
+    /** Meetings from the phone's calendar for this day: read only, among the hours. */
+    calendar: List<Line> = emptyList(),
 ) {
     val c = P.c
     val w = P.w
-    val page = remember(book, date, today) { book.page(date, today) }
+    val page = remember(book, date, today, calendar) { book.page(date, today).let { p ->
+        if (calendar.isEmpty()) p else p.copy(timed = (p.timed + calendar.filter { it.time != null }).sortedBy { it.time },
+            rest = calendar.filter { it.time == null } + p.rest)
+    } }
     val sum = remember(book, date, today) { book.summary(date, today) }
     var showDone by rememberSaveable(date) { mutableStateOf(false) }
     val doneRest = page.rest.filter { it.state != State.Open && it.isTodo }

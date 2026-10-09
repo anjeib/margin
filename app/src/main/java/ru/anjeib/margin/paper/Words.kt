@@ -164,6 +164,17 @@ interface Words {
     val propFile: String
     val share: String
     val removeFile: String
+    val welcomeLine: String
+    /** The title page's rows: the note on the margin, the mark, the words. */
+    fun welcomeRows(): List<Triple<String?, String, String>>
+    val welcomeTry: String
+    val welcomeTried: String
+    val welcomeExamples: String
+    val welcomeClean: String
+    val welcomeBegin: String
+    val calendarSetting: String
+    val calendarOn: String
+    val calendarOff: String
     val stampTitle: String
     fun stampLine(at: String, s: ru.anjeib.margin.book.DayStats): String
 }
@@ -430,6 +441,23 @@ object WordsRu : Words {
     override val propFile = "файл"
     override val share = "Поделиться"
     override val removeFile = "убрать из строки"
+    override val welcomeLine = "ежедневник, который пишет на полях"
+    override fun welcomeRows() = listOf(
+        Triple("Margin", "none", "Слева пишет Margin: когда, кто, к чему относится."),
+        Triple(null, "note", "Справа — ваши слова. Пишите как думаете, в одно поле внизу."),
+        Triple("завтра", "open", "Точка на линии — дело. Нажмите на неё."),
+        Triple("17:00", "event", "Кружок — встреча, тире — запись."),
+        Triple("→ пн", "moved", "Вечером перелистните день: у каждой открытой строки — своё решение."),
+        Triple("?", "none", "Спросите «что я обещал Лёше?» — ответ появится над полем."),
+    )
+    override val welcomeTry = "Нажмите на точку — дело сделано. Ещё раз — вернётся."
+    override val welcomeTried = "Так и устроено. Остальное — так же просто."
+    override val welcomeExamples = "посмотреть на примере ›"
+    override val welcomeClean = "начать с чистой страницы ›"
+    override val welcomeBegin = "начать ›"
+    override val calendarSetting = "Календарь телефона"
+    override val calendarOn = "на страницах"
+    override val calendarOff = "не показывать"
     override val stampTitle = "день закрыт"
     override fun stampLine(at: String, s: ru.anjeib.margin.book.DayStats) = listOfNotNull(
         at,
@@ -674,6 +702,23 @@ object WordsEn : Words {
     override val propFile = "file"
     override val share = "Share"
     override val removeFile = "remove from the line"
+    override val welcomeLine = "a planner that writes in the margin"
+    override fun welcomeRows() = listOf(
+        Triple("Margin", "none", "On the left Margin writes: when, who, what it belongs to."),
+        Triple(null, "note", "On the right — your words. Write as you think, in one field below."),
+        Triple("tomorrow", "open", "A dot on the rule is a to-do. Tap it."),
+        Triple("17:00", "event", "A ring is a meeting, a dash is a note."),
+        Triple("→ Mon", "moved", "In the evening turn the page: every open line gets its decision."),
+        Triple("?", "none", "Ask «what did I promise Lyosha?» — the answer appears over the field."),
+    )
+    override val welcomeTry = "Tap the dot — done. Tap again — it comes back."
+    override val welcomeTried = "That's how it works. The rest is as simple."
+    override val welcomeExamples = "see an example ›"
+    override val welcomeClean = "start with a clean page ›"
+    override val welcomeBegin = "begin ›"
+    override val calendarSetting = "Phone calendar"
+    override val calendarOn = "on the pages"
+    override val calendarOff = "hidden"
     override val stampTitle = "day closed"
     override fun stampLine(at: String, s: ru.anjeib.margin.book.DayStats) = listOfNotNull(
         at,

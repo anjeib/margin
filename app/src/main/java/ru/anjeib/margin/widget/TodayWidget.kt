@@ -25,6 +25,7 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxHeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
@@ -42,73 +43,96 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.anjeib.margin.MainActivity
 import ru.anjeib.margin.R
+import ru.anjeib.margin.book.BookStore
+import ru.anjeib.margin.book.Kind
+import ru.anjeib.margin.book.lastDay
+import ru.anjeib.margin.book.page
 import ru.anjeib.margin.data.Prefs
-import ru.anjeib.margin.data.Store
-import ru.anjeib.margin.data.listTasks
-import ru.anjeib.margin.i18n.L
+import ru.anjeib.margin.i18n.Lang
 import ru.anjeib.margin.i18n.resolveLang
+import ru.anjeib.margin.paper.Words
+import ru.anjeib.margin.paper.WordsEn
+import ru.anjeib.margin.paper.WordsRu
 import java.time.LocalDate
-import java.time.format.TextStyle as DateStyle
-import java.util.Locale
 
 /**
- * «Сегодня» on the home screen, in the paper look: the day, up to six matters for today (overdue first, then by the hour),
- * and two ways in — «Записать» (the field with the keyboard up) and the microphone. A widget can't hold a text field;
- * a tap opens the app straight into it.
+ * Today's page on the home screen, in miniature: the weekday and the date, the open lines with their notes on a little
+ * margin and their marks on the rule (tails first, in red ink), and two ways in — the field and the microphone. A widget
+ * can't hold a text field; a tap opens the notebook straight into it. The numbers come from the same page function.
  */
 class TodayWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        L.lang = resolveLang(Prefs.get(context).settings.value.lang)
-        val data = Store.get(context).data.value
+        val w = if (resolveLang(Prefs.get(context).settings.value.lang) == Lang.Ru) WordsRu else WordsEn
+        val book = BookStore.get(context).book.value
         val today = LocalDate.now()
-        val due = data.listTasks().filter { !it.done && (it.dueDate ?: it.startDate)?.let { d -> !d.isAfter(today) } == true }
-            .sortedWith(compareBy({ (it.dueDate ?: it.startDate)?.isBefore(today) != true }, { it.time ?: "99" }))
-        val s = L.s
-        val locale = if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) Locale.forLanguageTag("ru") else Locale.ENGLISH
-        val dayName = today.dayOfWeek.getDisplayName(DateStyle.FULL_STANDALONE, locale).replaceFirstChar { it.uppercase() }
-        val dayDate = today.dayOfMonth.toString() + " " + today.month.getDisplayName(DateStyle.SHORT, locale).trimEnd('.')
-        provideContent {
-            Body(context, dayName, dayDate, due.take(6).map { (it.time?.let { t -> "$t  " } ?: "") + it.title to ((it.dueDate ?: it.startDate)?.isBefore(today) == true) },
-                (due.size - 6).coerceAtLeast(0), s.tileWrite, s.widgetFree, s.moreWord)
-        }
+        val page = book.page(today, today)
+        val rows = (page.tails.map { it to true } + (page.timed + page.rest).filter { (it.isTodo && it.open) || it.kind == Kind.Event }.map { it to false })
+            .map { (l, tail) ->
+                Row(note = if (tail) w.tailSince(l.lastDay() ?: today) else (l.time ?: l.part?.let { w.part(it) } ?: ""),
+                    mark = when (l.kind) { Kind.Event -> "○"; Kind.Note -> "–"; else -> "•" }, text = l.text, tail = tail)
+            }
+        provideContent { Body(context, w.weekday(today), w.dayMonth(today), rows.take(6), (rows.size - 6).coerceAtLeast(0), w) }
     }
 
+    private data class Row(val note: String, val mark: String, val text: String, val tail: Boolean)
+
     @Composable
-    private fun Body(ctx: Context, dayName: String, dayDate: String, rows: List<Pair<String, Boolean>>, more: Int, write: String, free: String, moreWord: String) {
-        val bg = ColorProvider(day = Color(0xFFF6F3EE), night = Color(0xFF141210))
+    private fun Body(ctx: Context, dayName: String, dayDate: String, rows: List<Row>, more: Int, w: Words) {
+        val paper = ColorProvider(day = Color(0xFFF6F3EE), night = Color(0xFF141210))
         val ink = ColorProvider(day = Color(0xFF1A1A1A), night = Color(0xFFEDE7DD))
         val graphite = ColorProvider(day = Color(0xFF6B665E), night = Color(0xFFADA596))
-        val accent = ColorProvider(day = Color(0xFFC8643B), night = Color(0xFFD9774E))
-        val chip = ColorProvider(day = Color(0xFFECE6DC), night = Color(0xFF2A2622))
+        val red = ColorProvider(day = Color(0xFFA9502C), night = Color(0xFFE08A62))
+        val redFill = ColorProvider(day = Color(0xFFC8643B), night = Color(0xFFD9774E))
+        val rule = ColorProvider(day = Color(0xFFDFAC94), night = Color(0xFF76442F))
+        val sheet = ColorProvider(day = Color(0xFFFCFAF7), night = Color(0xFF1E1B18))
         fun open(action: String?) = actionStartActivity(Intent(ctx, MainActivity::class.java).apply { if (action != null) setAction(action) }
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
-        Column(GlanceModifier.fillMaxSize().background(bg).cornerRadius(20.dp).padding(14.dp)) {
+        val margin = 54.dp
+        Column(GlanceModifier.fillMaxSize().background(paper).cornerRadius(20.dp).padding(vertical = 12.dp)) {
             Row(GlanceModifier.fillMaxWidth().clickable(open(null)), verticalAlignment = Alignment.Bottom) {
+                Box(GlanceModifier.width(margin).padding(end = 8.dp), contentAlignment = Alignment.BottomEnd) {
+                    Text(dayDate, style = TextStyle(color = graphite, fontSize = 12.sp))
+                }
+                Box(GlanceModifier.width(1.dp).height(26.dp).background(rule)) {}
+                Spacer(GlanceModifier.width(10.dp))
                 Text(dayName, style = TextStyle(color = ink, fontSize = 20.sp, fontFamily = FontFamily.Serif))
-                Spacer(GlanceModifier.width(8.dp))
-                Text(dayDate, style = TextStyle(color = graphite, fontSize = 13.sp))
             }
-            Spacer(GlanceModifier.height(8.dp))
             Column(GlanceModifier.defaultWeight().fillMaxWidth().clickable(open(null))) {
-                if (rows.isEmpty()) Text(free, style = TextStyle(color = graphite, fontSize = 14.sp))
-                rows.forEach { (line, late) ->
-                    Row(GlanceModifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        // A thin terracotta margin rule, as in the app; late matters marked by its colour.
-                        Box(GlanceModifier.width(2.dp).height(16.dp).background(if (late) accent else chip)) {}
-                        Spacer(GlanceModifier.width(8.dp))
-                        Text(line, maxLines = 1, style = TextStyle(color = ink, fontSize = 14.sp))
+                if (rows.isEmpty()) Row(GlanceModifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(GlanceModifier.width(margin))
+                    Box(GlanceModifier.width(1.dp).fillMaxHeight().background(rule)) {}
+                    Spacer(GlanceModifier.width(10.dp))
+                    Text(w.emptyDay, style = TextStyle(color = graphite, fontSize = 14.sp, fontStyle = androidx.glance.text.FontStyle.Italic, fontFamily = FontFamily.Serif))
+                }
+                rows.forEach { r ->
+                    Row(GlanceModifier.fillMaxWidth().height(26.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // The margin: the hour, or since when a tail has waited — in red.
+                        Box(GlanceModifier.width(margin).padding(end = 6.dp), contentAlignment = Alignment.CenterEnd) {
+                            Text(r.note, maxLines = 1, style = TextStyle(color = if (r.tail) red else graphite, fontSize = 11.sp,
+                                fontStyle = androidx.glance.text.FontStyle.Italic, fontFamily = FontFamily.Serif))
+                        }
+                        Box(GlanceModifier.width(1.dp).fillMaxHeight().background(rule)) {}
+                        Spacer(GlanceModifier.width(5.dp))
+                        Text(r.mark, style = TextStyle(color = ink, fontSize = 12.sp))
+                        Spacer(GlanceModifier.width(6.dp))
+                        Text(r.text, maxLines = 1, style = TextStyle(color = ink, fontSize = 14.sp))
                     }
                 }
-                if (more > 0) Text("$moreWord $more", style = TextStyle(color = graphite, fontSize = 12.sp), modifier = GlanceModifier.padding(start = 10.dp, top = 2.dp))
+                if (more > 0) Row(GlanceModifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(GlanceModifier.width(margin))
+                    Box(GlanceModifier.width(1.dp).fillMaxHeight().background(rule)) {}
+                    Spacer(GlanceModifier.width(10.dp))
+                    Text(w.more(more), style = TextStyle(color = graphite, fontSize = 12.sp, fontStyle = androidx.glance.text.FontStyle.Italic, fontFamily = FontFamily.Serif))
+                }
             }
-            Row(GlanceModifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(GlanceModifier.defaultWeight().height(40.dp).background(chip).cornerRadius(20.dp).padding(horizontal = 14.dp).clickable(open(MainActivity.ACTION_WRITE)),
+            Row(GlanceModifier.fillMaxWidth().padding(start = margin - 4.dp, end = 12.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(GlanceModifier.defaultWeight().height(40.dp).background(sheet).cornerRadius(20.dp).padding(horizontal = 14.dp).clickable(open(MainActivity.ACTION_WRITE)),
                     contentAlignment = Alignment.CenterStart) {
-                    Text(write + "…", style = TextStyle(color = graphite, fontSize = 14.sp))
+                    Text(w.composerHint, maxLines = 1, style = TextStyle(color = graphite, fontSize = 14.sp))
                 }
                 Spacer(GlanceModifier.width(8.dp))
-                Box(GlanceModifier.size(40.dp).background(accent).cornerRadius(20.dp).clickable(open(MainActivity.ACTION_DICTATE)), contentAlignment = Alignment.Center) {
-                    Image(ImageProvider(R.drawable.ic_mic_white), contentDescription = null, modifier = GlanceModifier.size(20.dp))
+                Box(GlanceModifier.size(40.dp).background(redFill).cornerRadius(20.dp).clickable(open(MainActivity.ACTION_DICTATE)), contentAlignment = Alignment.Center) {
+                    Image(ImageProvider(R.drawable.ic_mic_white), contentDescription = w.a11yMic, modifier = GlanceModifier.size(20.dp))
                 }
             }
         }

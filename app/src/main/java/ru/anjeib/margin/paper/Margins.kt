@@ -119,11 +119,12 @@ private const val SIGNS = "←→↻≡›"
 fun Mark(kind: MarkKind, modifier: Modifier = Modifier, size: Dp = Grid.node) {
     if (kind == MarkKind.None) { Spacer(modifier.size(size)); return }
     val c = P.c
+    val ground = LocalGround.current ?: c.paper
     val done by animateFloatAsState(if (kind == MarkKind.Done || kind == MarkKind.Dropped) 1f else 0f, tween(250), label = "mark")
     Canvas(modifier.size(size)) {
         val w = this.size.width; val h = this.size.height
         val cx = w / 2; val cy = h / 2
-        drawCircle(c.paper, radius = w / 2, center = Offset(cx, cy))
+        drawCircle(ground, radius = w / 2, center = Offset(cx, cy))
         val ink = if (kind == MarkKind.Dropped) c.pencil else c.ink
         when (kind) {
             MarkKind.Open, MarkKind.Done, MarkKind.Dropped -> {

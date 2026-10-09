@@ -39,8 +39,9 @@ fun HandedSheet(vm: BookVm, from: String?, onDone: () -> Unit, onOpen: (String?)
     val today by vm.today.collectAsState()
     val written by vm.written.collectAsState()
     ModalBottomSheet(onDismissRequest = onDone, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.paper, scrimColor = c.scrim,
+        containerColor = c.lifted, scrimColor = c.scrim,
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) }) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalGround provides c.lifted) {
         Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().rule(c.rule)) {
             Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 10.dp, end = Grid.right), verticalAlignment = Alignment.Bottom) {
                 Box(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp, bottom = 4.dp), contentAlignment = Alignment.CenterEnd) {
@@ -64,6 +65,7 @@ fun HandedSheet(vm: BookVm, from: String?, onDone: () -> Unit, onOpen: (String?)
                         modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onDone).padding(vertical = 12.dp, horizontal = 8.dp))
                 }
             }
+        }
         }
     }
 }

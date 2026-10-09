@@ -103,7 +103,34 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun refreshToday() { _today.value = LocalDate.now() }
+    fun refreshToday() { _today.value = LocalDate.now(); refreshCalendar() }
+
+    /**
+     * Meetings from the phone's calendar, read only, as ○ lines on their pages (never stored in the notebook): from a week
+     * back to a month ahead. Shown when the person allowed it in the settings.
+     */
+    private val _calendar = MutableStateFlow<Map<LocalDate, List<Line>>>(emptyMap())
+    val calendar: StateFlow<Map<LocalDate, List<Line>>> = _calendar
+
+    fun refreshCalendar() {
+        val ctx = getApplication<Application>()
+        if (!prefs.settings.value.calendar || !ru.anjeib.margin.data.PhoneCalendar.allowed(ctx)) { _calendar.value = emptyMap(); return }
+        viewModelScope.launch {
+            val from = LocalDate.now().minusDays(7)
+            val events = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ru.anjeib.margin.data.PhoneCalendar.events(ctx, from, 38) }
+            _calendar.value = events.map { e ->
+                val d = e.start.toLocalDate()
+                d to Line(id = "cal:" + (e.title + e.start).hashCode().toUInt().toString(36), text = e.title, kind = ru.anjeib.margin.book.Kind.Event,
+                    day = d.toString(), time = if (e.allDay) null else "%02d:%02d".format(e.start.hour, e.start.minute), place = e.location, source = "calendar",
+                    writtenAt = e.start.withSecond(0).withNano(0).toString())
+            }.groupBy({ it.first }, { it.second })
+        }
+    }
+
+    fun setCalendar(on: Boolean) {
+        prefs.update { it.copy(calendar = on) }
+        refreshCalendar()
+    }
 
     private fun say(text: String, undo: Book? = null) {
         val s = Said(text, undo)
@@ -174,6 +201,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     // ---------------- the AI ----------------
 
     private val prefs = Prefs.get(app)
+    private val polya = app.getSharedPreferences("polya", android.content.Context.MODE_PRIVATE)
     private fun online() = ru.anjeib.margin.ai.Processor.online(getApplication())
     /** The AI can be asked: a key or an invite code, and a network. */
     fun aiReady() = Llm.ready(prefs.settings.value) && online()
@@ -314,7 +342,6 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         say(words.movedOn(to, today.value), before)
     }
 
-    private val polya = app.getSharedPreferences("polya", android.content.Context.MODE_PRIVATE)
     /** The hour of «перелистнуть день»: the link on the page appears from it, the reminder rings at it. */
     fun eveningHour(): Int = polya.getInt("eveningHour", 21)
     fun setEveningHour(h: Int) = polya.edit().putInt("eveningHour", h.coerceIn(17, 23)).apply()
@@ -329,4 +356,13 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     }
 
     fun samplesShown() = book.value.hasSamples()
+
+    /** The title page is seen once; «с чистой страницы» takes the examples away. */
+    private val _welcomed = MutableStateFlow(polya.getBoolean("welcomed", false))
+    val welcomed: StateFlow<Boolean> = _welcomed
+    fun welcome(keepExamples: Boolean) {
+        if (!keepExamples && samplesShown()) store.update { it.withoutSamples() }
+        polya.edit().putBoolean("welcomed", true).apply()
+        _welcomed.value = true
+    }
 }

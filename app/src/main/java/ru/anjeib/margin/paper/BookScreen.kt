@@ -60,6 +60,16 @@ private const val MIDDLE = 5000
 
 @Composable
 fun BookScreen(vm: BookVm) {
+    val welcomed by vm.welcomed.collectAsState()
+    if (!welcomed) {
+        WelcomePage(withExamples = vm.samplesShown(), onExamples = { vm.welcome(keepExamples = true) }, onClean = { vm.welcome(keepExamples = false) })
+        return
+    }
+    Notebook(vm)
+}
+
+@Composable
+private fun Notebook(vm: BookVm) {
     val c = P.c
     val w = P.w
     val ctx = LocalContext.current
@@ -67,6 +77,7 @@ fun BookScreen(vm: BookVm) {
     val today by vm.today.collectAsState()
     val fresh by vm.fresh.collectAsState()
     val stamping by vm.stamping.collectAsState()
+    val cal by vm.calendar.collectAsState()
     val pager = rememberPagerState(initialPage = MIDDLE) { MIDDLE * 2 }
     val scope = rememberCoroutineScope()
     fun dateOf(i: Int): LocalDate = today.plusDays((i - MIDDLE).toLong())
@@ -103,7 +114,9 @@ fun BookScreen(vm: BookVm) {
             )
             Box(Modifier.weight(1f)) {
                 AnimatedContent(targetState = route to ritual, transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) }, label = "page") { (r, rit) ->
-                    val onOpen: (String) -> Unit = { open = it }
+                    val onOpen: (String) -> Unit = { id ->
+                        if (id.startsWith("cal:")) cal.values.flatten().find { it.id == id }?.let { l -> openCalendar(ctx, l) } else open = id
+                    }
                     when {
                         // The ritual ends on today's page: the stamp is pressed, a breath, then the page turns.
                         rit -> RitualPage(book, today, vm, bottom = 24.dp, onDone = {
@@ -112,7 +125,8 @@ fun BookScreen(vm: BookVm) {
                         })
                         r == null -> HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { it }) { i ->
                             DayPage(dateOf(i), book, today, fresh, bottom = 24.dp, onMark = vm::toggle, onOpen = onOpen,
-                                onMonth = { month = true }, onTurn = { ritual = true }, eveningHour = vm.eveningHour(), stamping = stamping)
+                                onMonth = { month = true }, onTurn = { ritual = true }, eveningHour = vm.eveningHour(), stamping = stamping,
+                                calendar = cal[dateOf(i)].orEmpty())
                         }
                         r == "index" -> IndexPage(book, today, onThread = { push("thread:$it") }, onPerson = { push("person:$it") }, onLater = { push("later") },
                             onSettings = { push("settings") }, onHelp = { push("help") }, onSearch = { push("search") },
@@ -161,6 +175,14 @@ fun BookScreen(vm: BookVm) {
             if (LocalDate.now() != vm.today.value) vm.refreshToday()
         }
     }
+}
+
+/** A meeting from the phone's calendar opens there, at its hour. */
+private fun openCalendar(ctx: android.content.Context, l: ru.anjeib.margin.book.Line) {
+    val at = runCatching { java.time.LocalDateTime.parse(l.writtenAt) }.getOrNull() ?: return
+    val ms = at.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val uri = android.provider.CalendarContract.CONTENT_URI.buildUpon().appendPath("time").appendPath(ms.toString()).build()
+    runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 /** The line above every page: the index (or back) on the margin, the way to today, search at the right. */

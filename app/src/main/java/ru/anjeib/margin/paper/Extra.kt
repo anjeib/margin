@@ -152,6 +152,18 @@ fun SettingsPage(vm: BookVm, onExamples: () -> Unit) {
                 vm.setEveningHour(next); evening.value = next
             }
         }
+        item {
+            // The phone's calendar: its meetings stand on the pages as ○ lines (read only).
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val ask = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+                vm.setCalendar(ok); s = prefs.settings.value
+            }
+            SettingRow(w.calendarSetting, if (s.calendar && ru.anjeib.margin.data.PhoneCalendar.allowed(ctx)) w.calendarOn else w.calendarOff) {
+                if (s.calendar) { vm.setCalendar(false); s = prefs.settings.value }
+                else if (ru.anjeib.margin.data.PhoneCalendar.allowed(ctx)) { vm.setCalendar(true); s = prefs.settings.value }
+                else ask.launch(android.Manifest.permission.READ_CALENDAR)
+            }
+        }
         item { SettingRow(w.examples, if (vm.samplesShown()) w.examplesRemove else w.examplesBack, onExamples) }
         item {
             Row(Modifier.fillMaxWidth().padding(top = 24.dp, end = Grid.right)) {

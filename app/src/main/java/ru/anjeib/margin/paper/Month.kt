@@ -52,7 +52,7 @@ fun MonthSheet(book: Book, today: LocalDate, shown: LocalDate, onPick: (LocalDat
     val w = P.w
     var ym by remember { mutableStateOf(YearMonth.from(shown)) }
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.paper, scrimColor = c.scrim,
+        containerColor = c.lifted, scrimColor = c.scrim,
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) }) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

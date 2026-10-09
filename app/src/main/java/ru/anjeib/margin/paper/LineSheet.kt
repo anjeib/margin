@@ -96,8 +96,9 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
     DisposableEffect(id) { onDispose { commit() } }
 
     ModalBottomSheet(onDismissRequest = { commit(); onClose() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.paper, scrimColor = c.scrim,
+        containerColor = c.lifted, scrimColor = c.scrim,
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) }) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalGround provides c.lifted) {
         Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().rule(c.rule).verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
             // The line itself.
             MarginRow(notes = emptyList(), mark = markOf(l), markLabel = w.a11yMark(l.state == State.Done),
@@ -176,6 +177,7 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { vm.writeUnder(id, more); more = "" }))
                 }
             }
+        }
         }
     }
 

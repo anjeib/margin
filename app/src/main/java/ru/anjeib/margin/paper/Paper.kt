@@ -47,7 +47,10 @@ data class Ink(
     val rule: Color,
     val hairline: Color,
     val scrim: Color,
-)
+) {
+    /** A sheet over the page: the same paper by day; at night a little lighter, as paper lifted toward the lamp. */
+    val lifted: Color get() = if (dark) sheet else paper
+}
 
 val PaperLight = Ink(
     dark = false,
@@ -104,6 +107,8 @@ object Grid {
 
 val LocalInk = staticCompositionLocalOf { PaperLight }
 val LocalWords = staticCompositionLocalOf<Words> { WordsRu }
+/** The paper under the marks right here: the page, or a sheet lifted over it — the mark's node is cut out of it. */
+val LocalGround = androidx.compose.runtime.compositionLocalOf<Color?> { null }
 
 object P {
     val c: Ink @Composable get() = LocalInk.current
