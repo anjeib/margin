@@ -952,7 +952,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val explicit get() = kind != null || topicId != null || people.isNotEmpty() || wait || promise || record
     }
 
-    private val slashRx = Regex("(?:^|\\s)/(дело|тема|идея|работа|личное|жду|обещал\\p{L}*|готово|запись|todo|topic|idea|work|personal|wait|promised|done|note)(?=\\s|$)", RegexOption.IGNORE_CASE)
+    private val slashRx = Regex("(?:^|\\s)/(дело|тема|идея|работа|личное|жду|обеща[лю]\\p{L}*|готово|запись|todo|topic|idea|work|personal|wait|promised|done|note)(?=\\s|$)", RegexOption.IGNORE_CASE)
     private val hashRx = Regex("(?:^|\\s)#(\\[[^\\]]+]|[\\p{L}\\d_-]+)")
     private val atRx = Regex("(?:^|\\s)@(\\[[^\\]]+]|[\\p{L}\\d_-]+)")
 
@@ -963,7 +963,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val topic = hashRx.find(text)?.groupValues?.get(1)?.let { d.topicFor(it) }
         val people = atRx.findAll(text).map { d.personFor(it.groupValues[1]) }.toList()
         // «позвонить @ЖЭК» keeps the name in the words; with «/жду» / «/обещал» the person is the other side, not the title.
-        val sides = has("жду", "wait") || has("обещал", "promised")
+        val sides = has("жду", "wait") || has("обеща", "promised")
         var t = text.replace(slashRx, " ").replace(hashRx) { m -> if (d.topicFor(m.groupValues[1]) != null) " " else m.value }
             .replace(atRx) { m -> if (sides) " " else " " + d.personFor(m.groupValues[1]) }
         t = t.replace(Regex("\\s{2,}"), " ").trim()
@@ -971,7 +971,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             text = t,
             kind = when { has("дело", "todo") -> "task"; has("идея", "idea") -> "note"; has("тема", "topic") -> "topic"; else -> null },
             sphere = when { has("работа", "work") -> "work"; has("личное", "personal") -> "personal"; else -> null } ?: topic?.sphere,
-            topicId = topic?.id, people = people, wait = has("жду", "wait"), promise = has("обещал", "promised"), done = has("готово", "done"), record = has("запись", "note"),
+            topicId = topic?.id, people = people, wait = has("жду", "wait"), promise = has("обеща", "promised"), done = has("готово", "done"), record = has("запись", "note"),
         )
     }
 
