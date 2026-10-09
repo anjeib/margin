@@ -36,6 +36,8 @@ class ForwardActivity : ComponentActivity() {
     private val vm: ru.anjeib.margin.ui.MainVm by viewModels()
     private val files = mutableStateListOf<Attachment>()
     private val loading = mutableStateOf(false)
+    private val sorting = mutableStateOf(false)
+    private val result = mutableStateOf<Processor.Sorted?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,15 +87,41 @@ class ForwardActivity : ComponentActivity() {
                     loading = loading.value,
                     onAddContact = { sender?.let { Forward.addContact(this, it) } },
                     onSend = { comment, extra ->
-                        Processor.enqueue(this, Queued(
+                        val q = Queued(
                             text = text, files = files.toList() + extra, via = via, comment = comment.ifBlank { null }, subject = subject,
                             from = sender?.let { it.name ?: it.company ?: it.address },
-                        ))
-                        Toast.makeText(this, strings.forwardDone, Toast.LENGTH_SHORT).show()
-                        finish()
+                        )
+                        Processor.enqueue(this, q)
+                        currentFocus?.let { v -> getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.hideSoftInputFromWindow(v.windowToken, 0) }
+                        // Online: read it here and show what it became. Offline: it waits in «Входящие», as before.
+                        if (!Processor.ready(prefs.settings.value) || !Processor.online(this)) {
+                            Toast.makeText(this, strings.forwardDone, Toast.LENGTH_SHORT).show(); finish()
+                        } else {
+                            sorting.value = true
+                            lifecycleScope.launch {
+                                // A slow network must not hold the user here: after 20 s the words simply wait in the queue
+                                // (leaving cancels the request; the worker sorts it later and says so).
+                                val r = kotlinx.coroutines.withTimeoutOrNull(20_000) {
+                                    runCatching { Processor.drainItems(this@ForwardActivity) }.getOrDefault(emptyList()).find { it.queueId == q.id }
+                                }
+                                sorting.value = false
+                                // Sorted elsewhere meanwhile (the worker) — it will say so in a notification.
+                                if (r == null) { Toast.makeText(this@ForwardActivity, strings.forwardDone, Toast.LENGTH_SHORT).show(); finish() } else result.value = r
+                            }
+                        }
                     },
                     onDismiss = {
-                        files.forEach { Files.delete(this, it) }
+                        // Files belong to the queued item once sent; only an unsent share drops them.
+                        if (result.value == null && !sorting.value) files.forEach { Files.delete(this, it) }
+                        finish()
+                    },
+                    sorting = sorting.value,
+                    result = result.value,
+                    onOpen = {
+                        result.value?.open?.let { id ->
+                            startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN).putExtra(MainActivity.EXTRA_ID, id)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                        }
                         finish()
                     },
                 )

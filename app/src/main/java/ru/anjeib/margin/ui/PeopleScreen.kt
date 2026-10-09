@@ -225,7 +225,8 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 contacts.forEach { (icon, label, kind) -> ContactChip(icon, label, onClick = { reach(kind) }, onLong = { dialog = kind }) }
             }
             val missing = listOfNotNull(
-                (s.fieldRole to "about").takeIf { person.about == null }, (s.fieldCompany to "company").takeIf { person.company == null },
+                // A company has no post and no company of its own: it says what it does.
+                ((if (person.org) s.fieldOrgKind else s.fieldRole) to "about").takeIf { person.about == null }, (s.fieldCompany to "company").takeIf { person.company == null && !person.org },
                 (s.fieldPhone to "phone").takeIf { person.phone == null }, (s.fieldEmail to "email").takeIf { person.email == null },
                 (s.fieldAddress to "address").takeIf { person.address == null }, ("MAX" to "max").takeIf { person.max == null },
                 ("Telegram" to "telegram").takeIf { person.telegram == null }, s.fieldSocial to "social",
@@ -240,8 +241,9 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             }
             // «Личная информация»: what the user told about them as a person — birthday, family, what they like.
             Column(Modifier.padding(top = 22.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { dialog = "personal" }.padding(vertical = 4.dp)) {
-                GroupBadge(s.personalTitle, Modifier.padding(bottom = 8.dp))
-                if (person.personal.isEmpty()) Text("+ " + s.personalHint, style = Type.small.copy(color = c.graphite), modifier = Modifier.padding(start = 4.dp))
+                // A company has no birthday or family: the same block asks for what a company has.
+                GroupBadge(if (person.org) s.orgAboutTitle else s.personalTitle, Modifier.padding(bottom = 8.dp))
+                if (person.personal.isEmpty()) Text("+ " + (if (person.org) s.orgAboutHint else s.personalHint), style = Type.small.copy(color = c.graphite), modifier = Modifier.padding(start = 4.dp))
                 else person.personal.forEach { Text(it, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)) }
             }
             Spacer(Modifier.height(18.dp))
@@ -283,7 +285,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
         "about", "company", "phone", "email", "address", "max", "telegram" -> {
             val k = dialog!!
             val (title, value) = when (k) {
-                "about" -> s.fieldRole to person.about; "company" -> s.fieldCompany to person.company; "phone" -> s.fieldPhone to person.phone
+                "about" -> (if (person.org) s.fieldOrgKind else s.fieldRole) to person.about; "company" -> s.fieldCompany to person.company; "phone" -> s.fieldPhone to person.phone
                 "email" -> s.fieldEmail to person.email; "address" -> s.fieldAddress to person.address; "max" -> "MAX" to person.max
                 else -> "Telegram" to person.telegram
             }
@@ -291,7 +293,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
         }
         // «+ соц. сеть» adds a page; a long press on one changes it (emptied — removed).
         "social" -> TextDialog(s.fieldSocial, "", s.socialHint, onDismiss = { dialog = null }) { v -> vm.setPersonField(person.id, "social", v); dialog = null }
-        "personal" -> TextDialog(s.personalTitle.lowercase().replaceFirstChar { it.uppercase() }, person.personal.joinToString("\n"), s.personalHint, onDismiss = { dialog = null }) { v ->
+        "personal" -> TextDialog((if (person.org) s.orgAboutTitle else s.personalTitle).lowercase().replaceFirstChar { it.uppercase() }, person.personal.joinToString("\n"), if (person.org) s.orgAboutHint else s.personalHint, onDismiss = { dialog = null }) { v ->
             vm.setPersonField(person.id, "personal", v); dialog = null
         }
         "rename" -> TextDialog(s.rename, person.name, "", onDismiss = { dialog = null }) { v -> vm.renamePerson(person.id, v); dialog = null }

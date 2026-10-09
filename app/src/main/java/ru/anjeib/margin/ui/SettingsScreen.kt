@@ -346,7 +346,8 @@ private fun Segmented(labels: List<String>, selected: Int, onSelect: (Int) -> Un
         horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         labels.forEachIndexed { i, l ->
             Box(
-                Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (i == selected) c.linkSoft else c.chip)
+                // Width by the words: «Как в системе» needs more room than «Тёмная».
+                Modifier.weight(l.length + 4f).clip(RoundedCornerShape(10.dp)).background(if (i == selected) c.linkSoft else c.chip)
                     .clickable { onSelect(i) }.padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center,
             ) { Text(l, style = Type.small.copy(color = if (i == selected) c.link else c.graphite, fontSize = 14.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }

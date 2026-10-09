@@ -114,13 +114,18 @@ object Processor {
     private val draining = kotlinx.coroutines.sync.Mutex()
 
     /** The app (forward while open) and the worker may both start sorting: one at a time, never the same item twice. */
-    suspend fun drain(ctx: Context): List<String> = draining.withLock { drainNow(ctx) }
+    suspend fun drain(ctx: Context): List<String> = drainItems(ctx).map { it.line }
 
-    private suspend fun drainNow(ctx: Context): List<String> {
+    /** What one queued item became: the line for the user and what to open (the matter or topic it touched). */
+    data class Sorted(val queueId: String, val line: String, val open: String?)
+
+    suspend fun drainItems(ctx: Context): List<Sorted> = draining.withLock { drainNow(ctx) }
+
+    private suspend fun drainNow(ctx: Context): List<Sorted> {
         val store = Store.get(ctx)
         val prefs = Prefs.get(ctx)
         L.lang = resolveLang(prefs.settings.value.lang)
-        val done = mutableListOf<String>()
+        val done = mutableListOf<Sorted>()
         while (true) {
             val q = store.data.value.queue.firstOrNull() ?: break
             val s = prefs.settings.value
@@ -145,7 +150,7 @@ object Processor {
             store.replace(next.copy(queue = next.queue.filterNot { it.id == q.id }))
             val said2 = Forward.summary(current, applied, plan)
             q.reply?.let { Forward.reply(ctx, it, said2) }
-            done += said2
+            done += Sorted(q.id, said2, applied.touchedTasks.firstOrNull { id -> next.tasks.any { it.id == id } })
         }
         return done
     }

@@ -132,8 +132,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         when (i?.action) {
             ACTION_WRITE -> launch.value = "write" to System.currentTimeMillis()
             ACTION_DICTATE -> launch.value = "dictate" to System.currentTimeMillis()
+            // «Открыть в Margin» from the «В Margin» sheet: straight to what the shared words became.
+            ACTION_OPEN -> i.getStringExtra(EXTRA_ID)?.let { launch.value = "open:$it" to System.currentTimeMillis() }
         }
-        if (i?.action == ACTION_WRITE || i?.action == ACTION_DICTATE) setIntent(Intent(i).setAction(Intent.ACTION_MAIN))
+        if (i?.action == ACTION_WRITE || i?.action == ACTION_DICTATE || i?.action == ACTION_OPEN) setIntent(Intent(i).setAction(Intent.ACTION_MAIN))
         if (i?.action != Intent.ACTION_SEND) return
         shared.value = i.getStringExtra(Intent.EXTRA_TEXT)
         // Taken once: whatever recreates the activity later gets an intent with nothing to share.
@@ -156,6 +158,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     companion object {
         const val ACTION_WRITE = "ru.anjeib.margin.WRITE"
         const val ACTION_DICTATE = "ru.anjeib.margin.DICTATE"
+        const val ACTION_OPEN = "ru.anjeib.margin.OPEN"
+        const val EXTRA_ID = "id"
     }
 }
 

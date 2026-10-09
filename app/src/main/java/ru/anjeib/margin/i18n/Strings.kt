@@ -64,6 +64,9 @@ interface Strings {
     val forwardTitle: String
     val forwardCommentHint: String
     val forwardHint: String
+    val forwardSorting: String
+    val forwardResult: String
+    val forwardOpen: String
     val forwardSend: String
     val forwardDone: String
     val pasteCopied: String
@@ -439,6 +442,9 @@ interface Strings {
     val socialHint: String
     val personalTitle: String
     val personalHint: String
+    val orgAboutTitle: String
+    val fieldOrgKind: String
+    val orgAboutHint: String
     val copied: String
     val placeHint: String
     val historyTitle: String
@@ -898,6 +904,9 @@ object Ru : Strings {
     override val forwardTitle = "В Margin"
     override val forwardCommentHint = "Что с этим сделать — или просто отправьте"
     override val forwardHint = "Margin разберёт: дела, обещания, идеи"
+    override val forwardSorting = "Разбираю…"
+    override val forwardResult = "Вот что получилось"
+    override val forwardOpen = "Открыть в Margin"
     override val forwardSend = "Отправить"
     override val forwardDone = "Отправлено в Margin"
     override val pasteCopied = "Вставить скопированное"
@@ -1320,6 +1329,9 @@ object Ru : Strings {
     override val socialHint = "Ссылка на страницу"
     override val personalTitle = "О ЧЕЛОВЕКЕ"
     override val personalHint = "день рождения, семья, что любит"
+    override val orgAboutTitle = "О КОМПАНИИ"
+    override val fieldOrgKind = "Чем занимается"
+    override val orgAboutHint = "сайт, часы работы, реквизиты"
     override val copied = "Скопировано"
     override val placeHint = "Адрес или название, например «Ленина 5»"
     override val historyTitle = "ИСТОРИЯ"
@@ -1654,6 +1666,9 @@ object En : Strings {
     override val forwardTitle = "To Margin"
     override val forwardCommentHint = "What to do with it — or just send"
     override val forwardHint = "Margin will sort it: to-dos, promises, ideas"
+    override val forwardSorting = "Sorting…"
+    override val forwardResult = "Here is what came of it"
+    override val forwardOpen = "Open in Margin"
     override val forwardSend = "Send"
     override val forwardDone = "Sent to Margin"
     override val pasteCopied = "Paste what you copied"
@@ -2076,6 +2091,9 @@ object En : Strings {
     override val socialHint = "Link to the page"
     override val personalTitle = "PERSONAL"
     override val personalHint = "birthday, family, what they like"
+    override val orgAboutTitle = "ABOUT THE COMPANY"
+    override val fieldOrgKind = "What it does"
+    override val orgAboutHint = "website, opening hours, details"
     override val copied = "Copied"
     override val placeHint = "Address or name, e.g. “5 Lenin St”"
     override val historyTitle = "HISTORY"

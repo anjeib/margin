@@ -149,7 +149,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         val (what, at) = launch ?: return@LaunchedEffect
         searching = false; openTask = null; openPerson = null; openNote = null; screen = TASKS
         scope.launch { drawer.close() }
-        if (what == "dictate") micKey = at else focusKey = at
+        if (what.startsWith("open:")) openId(what.removePrefix("open:")) else if (what == "dictate") micKey = at else focusKey = at
         onLaunchUsed()
     }
     // Margin closed with an error last time: offer once to send what happened.

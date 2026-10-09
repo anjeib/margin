@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -52,6 +53,10 @@ fun ForwardSheet(
     onAddContact: () -> Unit,
     onSend: (comment: String, files: List<Attachment>) -> Unit,
     onDismiss: () -> Unit,
+    /** Read right here while online: «Разбираю…», then what it became and the way to it. */
+    sorting: Boolean = false,
+    result: ru.anjeib.margin.ai.Processor.Sorted? = null,
+    onOpen: () -> Unit = {},
 ) {
     val c = M.c
     val s = M.s
@@ -106,12 +111,26 @@ fun ForwardSheet(
                     }
                 }
             }
-            Text(s.forwardHint, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp))
+            if (result != null) {
+                // What the words became, the way the result bubble says it in the app — and a door to it.
+                Column(Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(16.dp)).background(c.linkSoft.copy(alpha = if (c.dark) 0.5f else 0.6f))
+                    .padding(horizontal = 14.dp, vertical = 12.dp)) {
+                    Text(s.forwardResult.uppercase(), style = Type.label.copy(color = c.link))
+                    Spacer(Modifier.height(6.dp))
+                    Text(result.line, style = Type.body.copy(color = c.ink, fontSize = 15.sp, lineHeight = 21.sp))
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+                    Pill(s.close, onClick = onDismiss)
+                    if (result.open != null) Pill(s.forwardOpen, filled = true, onClick = onOpen)
+                }
+                return@Column
+            }
+            Text(if (sorting) s.forwardSorting else s.forwardHint, style = Type.small.copy(color = if (sorting) c.link else c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp))
             // The same live field as everywhere: words, voice, «+» — what to do with it, or just send.
             SmartComposer(
                 vm,
                 hint = s.forwardCommentHint,
-                busy = loading,
+                busy = loading || sorting,
                 onSend = { t, f -> onSend(t.trim(), f) },
                 focusKey = Unit,
                 sendEmpty = true,
