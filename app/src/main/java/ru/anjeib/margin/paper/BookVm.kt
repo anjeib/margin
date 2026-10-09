@@ -23,6 +23,7 @@ import ru.anjeib.margin.book.toggle
 import ru.anjeib.margin.book.withSamples
 import ru.anjeib.margin.book.withoutSamples
 import ru.anjeib.margin.book.carryAll
+import ru.anjeib.margin.book.closeDay
 import ru.anjeib.margin.book.Ask
 import ru.anjeib.margin.book.AiRead
 import ru.anjeib.margin.book.Line
@@ -294,6 +295,16 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         val before = book.value
         store.update { it.drop(id) }
         if (!quiet) say(words.dropped, before)
+    }
+
+    /** The day just closed with the ritual — its page shows the stamp being pressed. */
+    private val _stamping = MutableStateFlow<LocalDate?>(null)
+    val stamping: StateFlow<LocalDate?> = _stamping
+
+    fun closeDay(date: LocalDate) {
+        store.update { it.closeDay(date) }
+        _stamping.value = date
+        viewModelScope.launch { delay(2500); if (_stamping.value == date) _stamping.value = null }
     }
 
     /** «Остальное → завтра» in the evening ritual. */

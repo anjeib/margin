@@ -66,6 +66,7 @@ fun BookScreen(vm: BookVm) {
     val book by vm.book.collectAsState()
     val today by vm.today.collectAsState()
     val fresh by vm.fresh.collectAsState()
+    val stamping by vm.stamping.collectAsState()
     val pager = rememberPagerState(initialPage = MIDDLE) { MIDDLE * 2 }
     val scope = rememberCoroutineScope()
     fun dateOf(i: Int): LocalDate = today.plusDays((i - MIDDLE).toLong())
@@ -104,10 +105,14 @@ fun BookScreen(vm: BookVm) {
                 AnimatedContent(targetState = route to ritual, transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) }, label = "page") { (r, rit) ->
                     val onOpen: (String) -> Unit = { open = it }
                     when {
-                        rit -> RitualPage(book, today, vm, bottom = 24.dp, onDone = { ritual = false; go(today.plusDays(1)) })
+                        // The ritual ends on today's page: the stamp is pressed, a breath, then the page turns.
+                        rit -> RitualPage(book, today, vm, bottom = 24.dp, onDone = {
+                            vm.closeDay(today); ritual = false
+                            scope.launch { pager.scrollToPage(MIDDLE); kotlinx.coroutines.delay(2600); go(today.plusDays(1)) }
+                        })
                         r == null -> HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { it }) { i ->
                             DayPage(dateOf(i), book, today, fresh, bottom = 24.dp, onMark = vm::toggle, onOpen = onOpen,
-                                onMonth = { month = true }, onTurn = { ritual = true }, eveningHour = vm.eveningHour())
+                                onMonth = { month = true }, onTurn = { ritual = true }, eveningHour = vm.eveningHour(), stamping = stamping)
                         }
                         r == "index" -> IndexPage(book, today, onThread = { push("thread:$it") }, onPerson = { push("person:$it") }, onLater = { push("later") },
                             onSettings = { push("settings") }, onHelp = { push("help") }, onSearch = { push("search") },

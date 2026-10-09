@@ -20,7 +20,7 @@ import java.time.format.DateTimeFormatter
  * The notebook in one JSON file (filesDir/polya.json) — the same care as Margin 0.29: writes go tmp → rename, the
  * previous file stays as .bak, an unreadable file is moved aside and never overwritten.
  */
-class BookStore internal constructor(private val file: File) {
+class BookStore internal constructor(private val file: File, private val legacy: (() -> Book?)? = null) {
     private val dir: File = file.absoluteFile.parentFile
     private val bak = File(dir, file.name + ".bak")
     private val tmp = File(dir, file.name + ".tmp")
@@ -28,6 +28,10 @@ class BookStore internal constructor(private val file: File) {
 
     private val _problem = MutableStateFlow<LoadProblem?>(null)
     val problem: StateFlow<LoadProblem?> = _problem
+
+    /** The notebook came from Margin 0.29 on this start: it is written down at once. */
+    var imported = false
+        private set
 
     private val _book = MutableStateFlow(load())
     val book: StateFlow<Book> = _book
@@ -37,6 +41,7 @@ class BookStore internal constructor(private val file: File) {
     private val dirty = Channel<Unit>(Channel.CONFLATED)
 
     init {
+        if (imported) dirty.trySend(Unit)
         scope.launch {
             for (u in dirty) {
                 val upTo = changed
@@ -61,7 +66,12 @@ class BookStore internal constructor(private val file: File) {
     fun dismissProblem() { _problem.value = null }
 
     private fun load(): Book {
-        if (!file.exists() && !bak.exists()) return Book()
+        if (!file.exists() && !bak.exists()) {
+            // The first start after Margin 0.29: its notebook is read in once; its own file stays untouched.
+            val old = runCatching { legacy?.invoke() }.getOrNull()
+            if (old != null && (old.lines.isNotEmpty() || old.persons.isNotEmpty())) { imported = true; return old }
+            return Book()
+        }
         if (file.exists()) {
             runCatching { decode(file) }.getOrNull()?.let { b ->
                 if (b.v > SCHEMA) {
@@ -106,7 +116,14 @@ class BookStore internal constructor(private val file: File) {
         @Volatile var onSaved: (() -> Unit)? = null
         @Volatile private var instance: BookStore? = null
         fun get(context: Context): BookStore = instance ?: synchronized(this) {
-            instance ?: BookStore(File(context.applicationContext.filesDir, "polya.json")).also { instance = it }
+            instance ?: BookStore(File(context.applicationContext.filesDir, "polya.json")) { legacy(context.applicationContext.filesDir) }.also { instance = it }
+        }
+
+        /** Margin 0.29's notebook (margin.json, else its .bak) in the shape of «Поля»; null when there is none. */
+        private fun legacy(dir: File): Book? {
+            val f = listOf(File(dir, "margin.json"), File(dir, "margin.json.bak")).firstOrNull { it.exists() } ?: return null
+            val old = AppJson.decodeFromString(ru.anjeib.margin.data.AppData.serializer(), f.readText()).migrated()
+            return Import.from(old)
         }
     }
 }

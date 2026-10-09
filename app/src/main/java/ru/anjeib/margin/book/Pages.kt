@@ -92,6 +92,13 @@ fun Book.page(date: LocalDate, today: LocalDate = LocalDate.now()): Page {
     return Page(date, tails, timed, rest, traces)
 }
 
+/**
+ * What the evening asks a decision for: open to-dos whose last day is [today] or before. A soft window still open
+ * («до ср») rides on by itself; a repeat's coming occurrence is not a line yet.
+ */
+fun Book.toDecide(today: LocalDate = LocalDate.now()): List<Line> =
+    page(today, today).open.filter { l -> splitOccurrence(l.id) == null && l.lastDay()?.let { !it.isAfter(today) } != false }
+
 /** How many open to-dos the day holds (with tails on today) — the one number for every screen. */
 fun Book.openCount(date: LocalDate, today: LocalDate = LocalDate.now()): Int = page(date, today).open.size
 
@@ -165,6 +172,18 @@ fun Book.personLines(name: String): PersonLines {
     val promised = all.filter { l -> l.open && l.who.any { mine(it) && it.dir == Dir.To } }
     val waited = all.filter { l -> l.open && l.who.any { mine(it) && it.dir == Dir.From } }
     return PersonLines(promised, waited, (all - promised.toSet() - waited.toSet()).sortedByDescending { it.writtenAt })
+}
+
+/** What a closed day came to: done, not doing, moved on — for the stamp on its page. */
+data class DayStats(val done: Int, val dropped: Int, val moved: Int)
+
+fun Book.dayStats(date: LocalDate, today: LocalDate = LocalDate.now()): DayStats {
+    fun on(s: String?) = s?.take(10) == date.toString()
+    return DayStats(
+        done = lines.count { it.state == State.Done && it.isTodo && on(it.doneAt) },
+        dropped = lines.count { it.state == State.Dropped && on(it.doneAt) },
+        moved = page(date, today).traces.size,
+    )
 }
 
 /** How many days between two dates — for «3-й перенос» and the age of a tail. */

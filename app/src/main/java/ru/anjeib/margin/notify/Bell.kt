@@ -23,6 +23,7 @@ import ru.anjeib.margin.book.Kind
 import ru.anjeib.margin.book.page
 import ru.anjeib.margin.book.setWhen
 import ru.anjeib.margin.book.toggle
+import ru.anjeib.margin.book.toDecide
 import ru.anjeib.margin.data.Prefs
 import ru.anjeib.margin.i18n.Lang
 import ru.anjeib.margin.i18n.resolveLang
@@ -141,7 +142,7 @@ object Bell {
                 nm.cancel(id.hashCode())
             }
             "evening" -> {
-                val open = book.page(today, today).open.size
+                val open = book.toDecide(today).size
                 if (open > 0) runCatching {
                     nm.notify(REQ_EVENING, NotificationCompat.Builder(ctx, DAY).setSmallIcon(R.drawable.ic_write)
                         .setContentTitle(w.ritualTitle).setContentText(w.ritualLine(open)).setAutoCancel(true)

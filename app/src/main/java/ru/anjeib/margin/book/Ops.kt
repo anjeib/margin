@@ -147,7 +147,11 @@ fun Book.dismissAsk(id: String, what: String): Book = edit(id) { it.copy(ask = i
 
 /** «Перелистнуть день»: every open to-do of the day that is not decided yet goes to [to] (usually tomorrow). */
 fun Book.carryAll(date: LocalDate, to: LocalDate, today: LocalDate = LocalDate.now()): Book =
-    page(date, today).open.filter { splitOccurrence(it.id) == null }.fold(this) { b, l -> b.move(l.id, to, today) }
+    toDecide(date).fold(this) { b, l -> b.move(l.id, to, today) }
+
+/** The day is closed: every open line has its decision. The page keeps the stamp with the hour. */
+fun Book.closeDay(date: java.time.LocalDate, at: java.time.LocalTime = java.time.LocalTime.now()): Book =
+    copy(closed = closed + (date.toString() to "%02d:%02d".format(at.hour, at.minute)))
 
 /** How many times a line has been put off — the margin says «3-й перенос» from the third on. */
 fun Line.moves(): Int = trail.size

@@ -32,7 +32,7 @@ import kotlinx.coroutines.delay
 import ru.anjeib.margin.book.Book
 import ru.anjeib.margin.book.lastDay
 import ru.anjeib.margin.book.page
-import ru.anjeib.margin.book.splitOccurrence
+import ru.anjeib.margin.book.toDecide
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -46,7 +46,7 @@ import java.time.ZoneOffset
 fun RitualPage(book: Book, today: LocalDate, vm: BookVm, bottom: Dp, onDone: () -> Unit) {
     val c = P.c
     val w = P.w
-    val open = book.page(today, today).open.filter { splitOccurrence(it.id) == null }
+    val open = book.toDecide(today)
     var picking by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = bottom)) {

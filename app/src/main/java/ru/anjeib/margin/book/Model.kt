@@ -116,6 +116,8 @@ data class Book(
     val lines: List<Line> = emptyList(),
     val threads: List<Thread> = emptyList(),
     val persons: List<Person> = emptyList(),
+    /** Days closed with «перелистнуть день»: the date → the hour it was closed (the stamp on the page). */
+    val closed: Map<String, String> = emptyMap(),
 ) {
     fun line(id: String) = lines.find { it.id == id }
     fun thread(id: String?) = id?.let { i -> threads.find { it.id == i } }

@@ -164,6 +164,8 @@ interface Words {
     val propFile: String
     val share: String
     val removeFile: String
+    val stampTitle: String
+    fun stampLine(at: String, s: ru.anjeib.margin.book.DayStats): String
 }
 
 private fun plural(n: Int, one: String, few: String, many: String): String {
@@ -428,6 +430,13 @@ object WordsRu : Words {
     override val propFile = "файл"
     override val share = "Поделиться"
     override val removeFile = "убрать из строки"
+    override val stampTitle = "день закрыт"
+    override fun stampLine(at: String, s: ru.anjeib.margin.book.DayStats) = listOfNotNull(
+        at,
+        s.done.takeIf { it > 0 }?.let { "сделано $it" },
+        s.moved.takeIf { it > 0 }?.let { "перенесено $it" },
+        s.dropped.takeIf { it > 0 }?.let { "не делаем $it" },
+    ).joinToString(" · ")
 }
 
 object WordsEn : Words {
@@ -665,4 +674,11 @@ object WordsEn : Words {
     override val propFile = "file"
     override val share = "Share"
     override val removeFile = "remove from the line"
+    override val stampTitle = "day closed"
+    override fun stampLine(at: String, s: ru.anjeib.margin.book.DayStats) = listOfNotNull(
+        at,
+        s.done.takeIf { it > 0 }?.let { "$it done" },
+        s.moved.takeIf { it > 0 }?.let { "$it moved on" },
+        s.dropped.takeIf { it > 0 }?.let { "$it not doing" },
+    ).joinToString(" · ")
 }

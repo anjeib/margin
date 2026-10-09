@@ -37,7 +37,8 @@ fun notesOf(l: Line, page: LocalDate?, today: LocalDate, book: Book, w: Words, s
     val hourText = l.time ?: l.part?.let { w.part(it) }
     if (dayText != null || hourText != null) {
         // A correction made today shows what it was («~~чт~~ пт»): seen once, gone tomorrow.
-        val e = l.edits.lastOrNull { it.what == "when" || it.what == "day" }
+        // A move is not a correction: its trace stays on the page it left; only a changed «when» shows the old value.
+        val e = l.edits.lastOrNull { it.what == "when" || it.what == "day" }?.takeIf { it.what == "when" }
         val fresh = e?.let { runCatching { LocalDateTime.parse(it.at).toLocalDate() == today }.getOrDefault(false) } == true && e?.old != null
         val was = if (fresh) e?.old?.let { old -> shortWhen(old, page, today, w) }?.takeIf { it.isNotBlank() && it != listOfNotNull(dayText, hourText).joinToString(" ") } else null
         when {

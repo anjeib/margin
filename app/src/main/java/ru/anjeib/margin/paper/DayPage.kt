@@ -2,7 +2,9 @@ package ru.anjeib.margin.paper
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +28,8 @@ import ru.anjeib.margin.book.Line
 import ru.anjeib.margin.book.State
 import ru.anjeib.margin.book.page
 import ru.anjeib.margin.book.summary
+import ru.anjeib.margin.book.dayStats
+import ru.anjeib.margin.book.toDecide
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -45,6 +49,8 @@ fun DayPage(
     onMonth: () -> Unit,
     onTurn: () -> Unit,
     eveningHour: Int = 21,
+    /** The day whose stamp is being pressed right now. */
+    stamping: LocalDate? = null,
 ) {
     val c = P.c
     val w = P.w
@@ -58,12 +64,20 @@ fun DayPage(
     LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = bottom)) {
         item("head") {
             val near = if (date != today) w.near(date, today).takeIf { it != w.dayMonth(date) && it != w.dow(date) } else null
-            PageHead(
-                marginTop = date.dayOfMonth.toString(), marginBottom = w.mon(date.monthValue),
-                title = w.weekday(date),
-                line = listOfNotNull(near, w.summary(sum).ifBlank { null }).joinToString(" · ").ifBlank { null },
-                onMargin = onMonth,
-            )
+            Box {
+                PageHead(
+                    marginTop = date.dayOfMonth.toString(), marginBottom = w.mon(date.monthValue),
+                    title = w.weekday(date),
+                    line = listOfNotNull(near, w.summary(sum).ifBlank { null }).joinToString(" · ").ifBlank { null },
+                    onMargin = onMonth,
+                )
+                // A day closed in the evening keeps its stamp in the corner: the hour, what was done, what moved on.
+                book.closed[date.toString()]?.let { at ->
+                    val st = remember(book, date) { book.dayStats(date, today) }
+                    DayStamp(w.stampTitle, at, st, w.stampTitle + ". " + w.stampLine(at, st), fresh = stamping == date,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 22.dp))
+                }
+            }
         }
         items(page.tails, key = { "t" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Tail, l.id in fresh, onMark, onOpen) }
         items(page.timed, key = { "h" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Page, l.id in fresh, onMark, onOpen) }
@@ -74,7 +88,7 @@ fun DayPage(
             MarginSays(if (date == today) w.emptyToday else w.emptyDay, Modifier.padding(top = 8.dp))
         }
         // The evening: one quiet way to close the day — every open line gets a decision.
-        if (date == today && LocalTime.now().hour.let { it >= eveningHour - 3 || it < 4 } && page.open.isNotEmpty()) item("turn") {
+        if (date == today && LocalTime.now().hour.let { it >= eveningHour - 3 || it < 4 } && book.toDecide(today).isNotEmpty()) item("turn") {
             MarginLink(w.turnDay, Modifier.padding(top = 8.dp), onTurn)
         }
     }
@@ -105,7 +119,6 @@ fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Se
         onMark = if (l.kind == Kind.Todo && !trace) ({ onMark(l.id) }) else null,
         onOpen = { onOpen(l.id) },
     ) {
-        Text(l.text, style = Voice.words.copy(color = ink,
-            textDecoration = if (!trace && l.state != State.Open && l.kind == Kind.Todo) TextDecoration.LineThrough else null))
+        PenText(l.text, Voice.words.copy(color = ink), struck = !trace && l.state != State.Open && l.kind == Kind.Todo, lineColor = c.graphite)
     }
 }
