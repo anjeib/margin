@@ -172,6 +172,22 @@ interface Words {
     val welcomeExamples: String
     val welcomeClean: String
     val welcomeBegin: String
+    val voiceSetting: String
+    val voiceNow: String
+    val voiceField: String
+    val offlineVoice: String
+    val offlineReady: String
+    val offlineRetry: String
+    fun offlineGet(mb: Int): String
+    val lockSetting: String
+    val backupSetting: String
+    val on: String
+    val off: String
+    val inviteSetting: String
+    val inviteOwn: String
+    val inviteShared: String
+    val inviteNone: String
+    val inviteHint: String
     val calendarSetting: String
     val calendarOn: String
     val calendarOff: String
@@ -455,6 +471,22 @@ object WordsRu : Words {
     override val welcomeExamples = "посмотреть на примере ›"
     override val welcomeClean = "начать с чистой страницы ›"
     override val welcomeBegin = "начать ›"
+    override val voiceSetting = "Голос"
+    override val voiceNow = "сразу записывать"
+    override val voiceField = "сначала в поле"
+    override val offlineVoice = "Голос без интернета"
+    override val offlineReady = "готов"
+    override val offlineRetry = "ещё раз"
+    override fun offlineGet(mb: Int) = "скачать, $mb МБ"
+    override val lockSetting = "Вход по отпечатку"
+    override val backupSetting = "Копия в Google"
+    override val on = "вкл"
+    override val off = "выкл"
+    override val inviteSetting = "Код приглашения"
+    override val inviteOwn = "свой"
+    override val inviteShared = "общий"
+    override val inviteNone = "нет"
+    override val inviteHint = "Код открывает ИИ: перечитывание сложных фраз, ответы на вопросы, голос. Пустое поле — общий код."
     override val calendarSetting = "Календарь телефона"
     override val calendarOn = "на страницах"
     override val calendarOff = "не показывать"
@@ -716,6 +748,22 @@ object WordsEn : Words {
     override val welcomeExamples = "see an example ›"
     override val welcomeClean = "start with a clean page ›"
     override val welcomeBegin = "begin ›"
+    override val voiceSetting = "Voice"
+    override val voiceNow = "write at once"
+    override val voiceField = "into the field first"
+    override val offlineVoice = "Voice offline"
+    override val offlineReady = "ready"
+    override val offlineRetry = "try again"
+    override fun offlineGet(mb: Int) = "download, $mb MB"
+    override val lockSetting = "Fingerprint lock"
+    override val backupSetting = "Google backup"
+    override val on = "on"
+    override val off = "off"
+    override val inviteSetting = "Invite code"
+    override val inviteOwn = "your own"
+    override val inviteShared = "shared"
+    override val inviteNone = "none"
+    override val inviteHint = "The code opens the AI: re-reading hard phrases, answers, voice. Leave it empty for the shared code."
     override val calendarSetting = "Phone calendar"
     override val calendarOn = "on the pages"
     override val calendarOff = "hidden"

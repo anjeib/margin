@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -165,6 +166,38 @@ fun SettingsPage(vm: BookVm, onExamples: () -> Unit) {
             }
         }
         item { SettingRow(w.examples, if (vm.samplesShown()) w.examplesRemove else w.examplesBack, onExamples) }
+        // Voice: written straight away, or into the field first; and words without a network (a model on the phone).
+        item { SettingRow(w.voiceSetting, if (s.voiceSendNow) w.voiceNow else w.voiceField) { set { it.copy(voiceSendNow = !it.voiceSendNow) } } }
+        item {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val whisper = ru.anjeib.margin.voice.LocalWhisper
+            val st by whisper.state.collectAsState()
+            androidx.compose.runtime.LaunchedEffect(Unit) { whisper.refresh(ctx) }
+            if (whisper.supported) SettingRow(w.offlineVoice, when (val x = st) {
+                is ru.anjeib.margin.voice.LocalWhisper.State.Ready -> w.offlineReady
+                is ru.anjeib.margin.voice.LocalWhisper.State.Downloading -> "${(x.progress * 100).toInt()} %"
+                is ru.anjeib.margin.voice.LocalWhisper.State.Failed -> w.offlineRetry
+                else -> w.offlineGet(ru.anjeib.margin.voice.LocalWhisper.Model.Base.mb)
+            }) {
+                if (st is ru.anjeib.margin.voice.LocalWhisper.State.Missing || st is ru.anjeib.margin.voice.LocalWhisper.State.Failed)
+                    vm.downloadWhisper()
+            }
+        }
+        // The lock and the copy: who can open the notebook, and where it is kept besides the phone.
+        item {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            if (ru.anjeib.margin.Lock.available(ctx)) SettingRow(w.lockSetting, if (s.lock) w.on else w.off) { set { it.copy(lock = !it.lock) } }
+        }
+        item { SettingRow(w.backupSetting, if (s.googleBackup) w.on else w.off) { set { it.copy(googleBackup = !it.googleBackup) } } }
+        // The invite code lets this phone through Margin's door to the AI; the shared one comes with the app.
+        item {
+            var asking by remember { mutableStateOf(false) }
+            val own = s.invite.isNotBlank() && s.invite != ru.anjeib.margin.BuildConfig.ALPHA_CODE
+            SettingRow(w.inviteSetting, if (own) w.inviteOwn else if (s.invite.isNotBlank()) w.inviteShared else w.inviteNone) { asking = true }
+            if (asking) InviteDialog(if (own) s.invite else "", onDismiss = { asking = false }) { code ->
+                set { it.copy(invite = code.trim().ifBlank { ru.anjeib.margin.BuildConfig.ALPHA_CODE }) }; asking = false
+            }
+        }
         item {
             Row(Modifier.fillMaxWidth().padding(top = 24.dp, end = Grid.right)) {
                 Spacer(Modifier.width(Grid.text))
@@ -172,6 +205,25 @@ fun SettingsPage(vm: BookVm, onExamples: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun InviteDialog(value: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    val c = P.c
+    val w = P.w
+    var v by remember { mutableStateOf(value) }
+    androidx.compose.material3.AlertDialog(onDismissRequest = onDismiss, containerColor = c.sheet,
+        title = { Text(w.inviteSetting, style = Voice.section.copy(color = c.ink)) },
+        text = {
+            Column {
+                Text(w.inviteHint, style = Voice.reply.copy(color = c.graphite))
+                Box(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.paper).border(1.dp, c.hairline, RoundedCornerShape(10.dp)).padding(12.dp)) {
+                    BasicTextField(v, { v = it }, textStyle = Voice.words.copy(color = c.ink), cursorBrush = SolidColor(c.link), singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton({ onPick(v) }) { Text(w.ok, color = c.link) } },
+        dismissButton = { androidx.compose.material3.TextButton(onDismiss) { Text(w.cancel, color = c.graphite) } })
 }
 
 @Composable

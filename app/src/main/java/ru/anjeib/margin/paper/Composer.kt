@@ -127,7 +127,7 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
     var recorder by remember { mutableStateOf<WavRecorder?>(null) }
     var level by remember { mutableFloatStateOf(0f) }
     var hearing by remember { mutableStateOf(false) }
-    val sendNow = remember { ru.anjeib.margin.data.Prefs.get(ctx).settings.value.voiceSendNow }
+    val sendNow = remember { ru.anjeib.margin.data.Prefs.get(ctx) }.settings.collectAsState().value.voiceSendNow
     fun gotWords(t: String?) {
         hearing = false
         if (t.isNullOrBlank()) return

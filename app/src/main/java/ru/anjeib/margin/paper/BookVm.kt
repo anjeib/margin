@@ -270,6 +270,9 @@ class BookVm(app: Application) : AndroidViewModel(app) {
 
     // ---------------- voice and files ----------------
 
+    /** The speech model for words without a network (60 MB, once). */
+    fun downloadWhisper() { viewModelScope.launch { runCatching { ru.anjeib.margin.voice.LocalWhisper.download(getApplication(), ru.anjeib.margin.voice.LocalWhisper.Model.Base) } } }
+
     /** Words from a recording: SpeechKit through the AI door when online, Whisper on the phone otherwise. */
     fun canHear(): Boolean = aiReady() || ru.anjeib.margin.voice.LocalWhisper.ready(getApplication())
 
