@@ -4,6 +4,15 @@
 
 Владелец общается по-русски — отвечать по-русски.
 
+## Ветка `polya` — Margin «Поля» (с 10 окт 2026)
+
+Переделка с нуля вокруг одной идеи: **пишете вы — на полях пишет Margin**. Полная система (зоны, знаки, пометки, ввод, лист строки, нити, люди, ритуалы, шрифты, цвета, движение, «интересно», модель, импорт) — `docs/polya/DESIGN.md`; всё новое сверять с ним. Решения на ветке владелец доверил мне («все решения принимай сам»), сборки по этапам — можно; версия/тег/выпуск — только по команде.
+- Код: `book/` — модель и чистые операции без Android (`Model`, `Pages` — что стоит на странице, `toDecide`, `dayStats`; `Ops`; `Read` — фраза → строки на телефоне через `ai/LocalParser`; `Ask` — ответы на вопросы; `AiRead` — промпты, разбор и наложение ответа ИИ; `Import` — перенос из 0.29; `Examples`; `BookStore` — `polya.json`, при первом запуске читает `margin.json`). `paper/` — экраны в одной сетке (`Paper` палитра/Voice/Grid, `Margins` строка с полями и знаком, `NotesOf` — пометки строки, `DayPage`, `Composer` поле с «+», голосом и ответом, `LineSheet`, `Pages` оглавление/нить/человек/потом, `Ritual`, `Month`, `Extra` поиск/настройки/«как читать поля», `Ink` перо и штамп, `Welcome`, `Handed` лист «В Margin», `Viewer`, `Words` — все слова RU/EN). `notify/Bell` — уведомления, `widget/TodayWidget`, `ForwardActivity` — «Поделиться». Из 0.29 остались только чтение старого файла (`data/Models`, `Topics.thoughts`, `Samples` для теста), файлы, голос, календарь и ИИ-клиент (`ai/Llm`, `Yandex`, `OpenRouter`, ошибки — коды `AiErr`).
+- debug ставится рядом: `applicationIdSuffix .polya`, ярлык «Margin · поля». Release на ветке — тот же `ru.margin.app`: поверх 0.29 данные переносятся сами.
+- Тесты: `./gradlew :app:testDebugUnitTest` (book: `AskTest`, `AiReadTest`, `ImportTest`, `PagesTest`; разбор: `LocalParserTest`, `ParseCorpusTest`, holdout). Живое перечитывание: `YA_LIVE=1 MODELS=aliceai-llm-flash ./gradlew :app:testDebugUnitTest --tests '*AiReadLiveTest*' --rerun-tasks -i` (ключ `~/.yc_margin_key`).
+- Эмулятор: если `margin35` виснет на старте («hanging thread QEMU2») — это окно отчёта о сбое ждёт ответа: `rm -rf /tmp/android-anjeib/emu-crash-*.db`, убрать `*.lock` в `~/.android/avd/margin35.avd/` и запускать с `-no-snapshot-load`.
+- Всё ниже про 0.29 описывает ветку `main`.
+
 ## Margin — «Темы вместо задач» (ветка `main` с 9 окт 2026)
 
 С 9 окт 2026 по команде владельца бывшая ветка `Margin_v2` стала `main`, а прежний Margin 3.x убран в архив: ветка и тег `archive/margin-3` (последний коммит 36f64a5, его APK — `releases/Margin-3.*.apk`). Приложение для публикации — **«Margin»**, `applicationId ru.margin.app` (до 0.22 сборки назывались «Margin 2», `ru.anjeib.margin.v2` — это другое приложение, данные из него сами не переезжают), versionName 0.x. Концепция и решения — `TODO.md` («Темы вместо задач»), кликабельный прототип — `design/v4-topics.html`. План по этапам и отчёты — документ «Margin 2: план работ по этапам» (claude.ai artifact eac3f0ae-…).
