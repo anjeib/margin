@@ -195,8 +195,12 @@ fun AppData.topicFor(token: String): Task? {
 }
 
 /** «/готово [#тема] слова[: что сказать]» → the open matter these words name best (row id to title), or null. */
+private val joinWords = setOf("для", "под", "над", "при", "про", "без", "или", "что", "как", "это", "все", "уже", "еще", "она", "они", "оно", "его", "мне",
+    "так", "там", "где", "кто", "чем", "нам", "вам", "мой", "моя", "наш", "тот", "эта", "эти", "раз", "the", "and", "for", "with")
+
 fun AppData.matterFor(words: String, topicId: String?): Pair<String, String>? {
-    fun stems(x: String) = x.lowercase().replace('ё', 'е').split(Regex("[^\\p{L}\\d]+")).filter { it.length >= 3 }.map { it.take(5) }.toSet()
+    // Short words count («API», «НПД», «кот»), the little ones that join words don't: «подарок для Кати» is not «макет для типографии».
+    fun stems(x: String) = x.lowercase().replace('ё', 'е').split(Regex("[^\\p{L}\\d]+")).filter { it.length >= 3 && it !in joinWords }.map { it.take(5) }.toSet()
     val q = stems(words)
     if (q.isEmpty()) return null
     val cands = buildList {

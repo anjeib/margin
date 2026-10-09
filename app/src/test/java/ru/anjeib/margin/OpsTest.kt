@@ -289,5 +289,9 @@ class OpsTest {
         assertEquals("q:p:a" to "Купить плитку", d.matterFor("плитку купили", null))
         assertEquals("c", d.matterFor("позвонил в банк", null)?.first)
         assertNull(d.matterFor("банк", "p"))
+        // EmbeddingGemma test, 9 окт: «для» alone sent «подарок для Кати» to «Макет упаковки для типографии».
+        val gift = AppData(tasks = listOf(Task(id = "m", title = "Макет упаковки для типографии"), Task(id = "g", title = "Подарок Кате на день рождения")))
+        assertEquals("g", gift.matterFor("подарок для Кати купила", null)?.first)
+        assertNull(gift.matterFor("для", null))
     }
 }
