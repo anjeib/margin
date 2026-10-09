@@ -234,6 +234,7 @@ object Forward {
 
     /** Checks the token from @BotFather and remembers the bot; the first person to write to it becomes its owner. */
     suspend fun connectTelegram(ctx: Context, token: String): String? = withContext(Dispatchers.IO) {
+        if (!ru.anjeib.margin.BuildConfig.FORWARD_CHANNELS) return@withContext "off"
         val t = token.trim()
         try {
             val me = tg(t, "getMe")?.get("result")?.jsonObject ?: return@withContext L.s.tgBadToken
@@ -250,6 +251,7 @@ object Forward {
     fun disconnectTelegram(ctx: Context) = save(ctx) { it.copy(tgToken = "", tgBot = "", tgOwner = 0, tgOffset = 0, error = null) }
 
     fun reply(ctx: Context, to: String, text: String) {
+        if (!ru.anjeib.margin.BuildConfig.FORWARD_CHANNELS) return
         val s = load(ctx)
         if (!to.startsWith("tg:") || s.tgToken.isBlank()) return
         val chat = to.removePrefix("tg:")
@@ -334,6 +336,7 @@ object Forward {
      * a plain message right before them is the user's comment on them. Returns how many items were queued.
      */
     suspend fun pollTelegram(ctx: Context, waitSec: Int = 0): Int = withContext(Dispatchers.IO) {
+        if (!ru.anjeib.margin.BuildConfig.FORWARD_CHANNELS) return@withContext 0
         if (!load(ctx).telegram) return@withContext 0
         lock.withLock {
             val token = load(ctx).tgToken
@@ -444,6 +447,7 @@ object Forward {
 
     /** Signs in once to check the app password; only letters that arrive from now on are taken. */
     suspend fun connectMail(ctx: Context, address: String, password: String): String? = withContext(Dispatchers.IO) {
+        if (!ru.anjeib.margin.BuildConfig.FORWARD_CHANNELS) return@withContext "off"
         val a = address.trim().lowercase()
         val host = imapHost(a)
         try {
@@ -498,6 +502,7 @@ object Forward {
      * Read-only: nothing is marked or moved in the mailbox.
      */
     suspend fun pollMail(ctx: Context): Int = withContext(Dispatchers.IO) {
+        if (!ru.anjeib.margin.BuildConfig.FORWARD_CHANNELS) return@withContext 0
         val s = load(ctx)
         if (!s.mail) return@withContext 0
         lock.withLock {
@@ -574,7 +579,8 @@ object Forward {
     fun schedule(ctx: Context) {
         val s = load(ctx)
         val wm = WorkManager.getInstance(ctx)
-        if (!s.telegram && !s.mail) { wm.cancelUniqueWork("forward"); return }
+        // The own bot and IMAP live only in builds that carry them (see FORWARD_CHANNELS); the rest is cut out by R8.
+        if (!ru.anjeib.margin.BuildConfig.FORWARD_CHANNELS || (!s.telegram && !s.mail)) { wm.cancelUniqueWork("forward"); return }
         wm.enqueueUniquePeriodicWork(
             "forward", ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<ForwardWorker>(15, java.util.concurrent.TimeUnit.MINUTES)

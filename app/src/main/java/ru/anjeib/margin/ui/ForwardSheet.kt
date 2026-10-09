@@ -56,7 +56,7 @@ fun ForwardSheet(
     val c = M.c
     val s = M.s
     Box(
-        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.32f))
+        Modifier.fillMaxSize().background(M.c.overlay.copy(alpha = 0.32f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
         contentAlignment = Alignment.BottomCenter,
     ) {

@@ -43,6 +43,10 @@ data class Palette(
     val ok: Color,
     /** Amber: what we wait for from someone, in the topic feed. */
     val wait: Color = Color(0xFFA8701A),
+    /** On the terracotta button and over photos — the same in both themes. */
+    val onAccent: Color = Color.White,
+    /** Behind a photo or video in the viewer, under a sheet. */
+    val overlay: Color = Color.Black,
 )
 
 val LightPalette = Palette(

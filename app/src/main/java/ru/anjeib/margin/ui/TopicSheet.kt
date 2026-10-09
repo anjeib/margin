@@ -178,6 +178,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     val c = M.c
     val s = M.s
     val view = LocalView.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val motion = motionOn()
     val scope = rememberCoroutineScope()
     // One feed; the paperclip narrows it to materials, a tap on the progress — to the matters only.
@@ -257,6 +258,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 // An open topic goes to the archive (it keeps everything); deleting is for one already there.
                 SoftMenu(menu, { menu = false }) {
                     SoftMenuItem(s.edit) { menu = false; dialog = "rename" }
+                    // «что сделано и что ждём» as plain text — for a client, a colleague, a note to self.
+                    SoftMenuItem(s.shareWord) { menu = false; shareTopic(ctx, task) }
                     if (!task.done) SoftMenuItem(s.toArchive) { menu = false; dialog = "archive" }
                     else {
                         SoftMenuItem(s.bringBack) { menu = false; vm.reviveTopic(task.id) }
@@ -1033,4 +1036,25 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
             }
         }
     }
+}
+
+/** A topic as text for someone else: done, waiting for, still to do, and the last records. */
+fun topicText(t: Task): String {
+    val s = ru.anjeib.margin.i18n.L.s
+    fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it) + flat(it.children) }
+    val all = flat(t.subtasks)
+    fun day(d: String?) = d?.let { runCatching { LocalDate.parse(it.take(10)).dayMonthShort() }.getOrNull() }
+    return buildString {
+        appendLine(t.title)
+        all.filter { it.done }.takeIf { it.isNotEmpty() }?.let { l -> appendLine(); appendLine(s.exportDone); l.forEach { appendLine("✓ " + it.title + (day(it.doneAt)?.let { d -> " ($d)" } ?: "")) } }
+        all.filter { !it.done && it.from != null }.takeIf { it.isNotEmpty() }?.let { l -> appendLine(); appendLine(s.exportWaiting); l.forEach { appendLine("← " + it.title + " — " + it.from + (day(it.due)?.let { d -> ", $d" } ?: "")) } }
+        all.filter { !it.done && it.from == null }.takeIf { it.isNotEmpty() }?.let { l -> appendLine(); appendLine(s.exportOpen); l.forEach { appendLine("— " + it.title + (day(it.due)?.let { d -> " ($d)" } ?: "")) } }
+        t.entries.filter { it.text.isNotBlank() }.takeLast(3).takeIf { it.isNotEmpty() }?.let { l -> appendLine(); appendLine(s.exportNotes); l.forEach { appendLine((day(it.at)?.let { d -> "$d: " } ?: "") + it.text.trim()) } }
+    }.trim()
+}
+
+private fun shareTopic(ctx: android.content.Context, t: Task) {
+    val i = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+        .putExtra(android.content.Intent.EXTRA_SUBJECT, t.title).putExtra(android.content.Intent.EXTRA_TEXT, topicText(t))
+    runCatching { ctx.startActivity(android.content.Intent.createChooser(i, t.title).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }

@@ -116,8 +116,25 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
         val cur = ru.anjeib.margin.data.questionRef(id)?.let { (tid, qid) -> data.tasks.find { it.id == tid }?.subtasks?.find { it.id == qid }?.time } ?: data.tasks.find { it.id == id }?.time
         TimeDialog(cur, onDismiss = { timeFor = null }) { tm -> vm.setTime(id, tm); timeFor = null }
     }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // Once the month has scrolled away, the picked day's week stays pinned on top — the month folds into a week.
+    val folded by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex >= 2 } }
+    // One day of the grid: the number, how many matters; weekends quieter; the picked day in petrol, today outlined.
+    @Composable fun cell(d: LocalDate, mod: Modifier) {
+        val count = open.count { on(it, d) }
+        val sel = d == day
+        val weekend = d.dayOfWeek.value >= 6
+        Column(mod.clip(RoundedCornerShape(12.dp))
+            .background(if (sel) c.link else Color.Transparent)
+            .then(if (d == today && !sel) Modifier.border(1.dp, c.link, RoundedCornerShape(12.dp)) else Modifier)
+            .clickable { picked = d.toString(); if (YearMonth.from(d) != ym) month = YearMonth.from(d).toString() }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("${d.dayOfMonth}", style = Type.body.copy(color = when { sel -> c.bg; d.isBefore(today) || weekend -> c.graphite; else -> c.ink }, fontSize = 15.sp, fontWeight = if (sel || d == today) FontWeight.SemiBold else FontWeight.Normal))
+            // How busy the day is — a number, quiet, never a colour per project.
+            Text(if (count > 0) "$count" else " ", style = Type.small.copy(color = if (sel) c.bg else if (d.isBefore(today)) c.faint else c.link, fontSize = 11.sp))
+        }
+    }
     Box(Modifier.fillMaxSize().screenRule()) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = contentPadding.vertical()) {
         item("h") {
             Margined(Modifier.padding(top = 14.dp, bottom = 10.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -139,7 +156,7 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
                 Row(Modifier.fillMaxWidth()) {
                     (1..7).forEach { d ->
                         Text(java.time.DayOfWeek.of(d).getDisplayName(TextStyle.SHORT, if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) java.util.Locale.forLanguageTag("ru") else java.util.Locale.ENGLISH).lowercase(),
-                            style = Type.small.copy(color = c.graphite, fontSize = 12.sp, fontWeight = FontWeight.Medium), modifier = Modifier.weight(1f).padding(bottom = 6.dp),
+                            style = Type.small.copy(color = if (d >= 6) c.faint else c.graphite, fontSize = 12.sp, fontWeight = FontWeight.Medium), modifier = Modifier.weight(1f).padding(bottom = 6.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     }
                 }
@@ -151,19 +168,7 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
                         (0..6).forEach { i ->
                             val n = w * 7 + i - lead + 1
                             Box(Modifier.weight(1f).aspectRatio(0.9f).padding(2.dp), contentAlignment = Alignment.Center) {
-                                if (n in 1..ym.lengthOfMonth()) {
-                                    val d = ym.atDay(n)
-                                    val count = open.count { on(it, d) }
-                                    val sel = d == day
-                                    Column(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp))
-                                        .background(if (sel) c.link else Color.Transparent)
-                                        .then(if (d == today && !sel) Modifier.border(1.dp, c.link, RoundedCornerShape(12.dp)) else Modifier)
-                                        .clickable { picked = d.toString() }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                        Text("$n", style = Type.body.copy(color = when { sel -> c.bg; d.isBefore(today) -> c.graphite; else -> c.ink }, fontSize = 15.sp, fontWeight = if (sel || d == today) FontWeight.SemiBold else FontWeight.Normal))
-                                        // How busy the day is — a number, quiet, never a colour per project.
-                                        Text(if (count > 0) "$count" else " ", style = Type.small.copy(color = if (sel) c.bg else if (d.isBefore(today)) c.faint else c.link, fontSize = 11.sp))
-                                    }
-                                }
+                                if (n in 1..ym.lengthOfMonth()) cell(ym.atDay(n), Modifier.fillMaxSize())
                             }
                         }
                     }
@@ -175,6 +180,16 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
         item("day") {
             DayBlock(dayPlan(data, day, today, events), today, open = true, heading = false, onToggle = {},
                 onOpen = onOpenTask, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = emptySet())
+        }
+    }
+    androidx.compose.animation.AnimatedVisibility(folded, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(200)),
+        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(200))) {
+        Column(Modifier.fillMaxWidth().background(c.bg)) {
+            Margined(Modifier.padding(top = 6.dp, bottom = 4.dp)) {
+                val monday = day.minusDays(day.dayOfWeek.value - 1L)
+                Row(Modifier.fillMaxWidth()) { (0L..6L).forEach { i -> cell(monday.plusDays(i), Modifier.weight(1f).height(52.dp).padding(2.dp)) } }
+            }
+            Hairline(Modifier.padding(start = MarginW))
         }
     }
     }

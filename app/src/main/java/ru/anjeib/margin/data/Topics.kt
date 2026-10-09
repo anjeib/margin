@@ -38,6 +38,24 @@ fun AppData.likelyTopic(words: String, people: Collection<String> = emptyList(),
     return best.first.takeIf { scored.getOrNull(1)?.second != best.second }
 }
 
+/** The last day anything happened in a topic: a record, an event, a matter added or settled. */
+fun Task.lastActivity(): LocalDate? = (entries.map { it.at } + events.map { it.at } + subtasks.mapNotNull { it.doneAt } + listOf(createdAt))
+    .mapNotNull { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }.maxOrNull()
+
+/** The week on Sunday, gathered by code: what got done, who owes whom, which topics stood still for a week. */
+data class WeekReview(val done: Int, val owedToYou: Int, val youOwe: Int, val still: List<Task>)
+
+fun AppData.weekReview(today: LocalDate): WeekReview {
+    val monday = today.minusDays(today.dayOfWeek.value - 1L)
+    fun inWeek(d: String?) = d?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.let { !it.isBefore(monday) && !it.isAfter(today) } == true
+    val done = tasks.count { !it.topic && it.done && inWeek(it.doneAt) } + tasks.filter { it.topic }.sumOf { t -> t.subtasks.count { it.done && inWeek(it.doneAt) } }
+    val open = tasks.filter { !it.done }
+    val owedToYou = open.count { it.waitingFor != null } + open.filter { it.topic }.sumOf { t -> t.subtasks.count { !it.done && it.from != null } }
+    val youOwe = open.count { it.promisedTo != null }
+    val still = open.filter { it.topic && !it.thought && it.subtasks.any { q -> !q.done } && (it.lastActivity()?.isBefore(today.minusDays(7)) ?: true) }
+    return WeekReview(done, owedToYou, youOwe, still)
+}
+
 /** Ids of question rows in the lists: «q:<topic>:<question>». */
 fun questionRef(id: String): Pair<String, String>? =
     if (id.startsWith("q:")) id.removePrefix("q:").split(':').takeIf { it.size == 2 }?.let { it[0] to it[1] } else null

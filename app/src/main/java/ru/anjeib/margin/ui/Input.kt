@@ -309,7 +309,7 @@ fun SmartComposer(
                         if (audio != null) vm.transcribe(audio) { gotSpeech(it, audio) }
                     },
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.Check, null, tint = Color.White) }
+                ) { Icon(Icons.Rounded.Check, null, tint = M.c.onAccent) }
                 return@Row
             }
             Box {
@@ -349,8 +349,8 @@ fun SmartComposer(
                     .clickable(enabled = enabled) { onSend(tagged(text), files.toList()); text = ""; files.clear() },
                 contentAlignment = Alignment.Center,
             ) {
-                if (busy) CircularProgressIndicator(color = Color.White, strokeWidth = 1.8.dp, modifier = Modifier.size(18.dp))
-                else Icon(Icons.AutoMirrored.Outlined.Send, s.a11ySend, tint = Color.White, modifier = Modifier.size(19.dp))
+                if (busy) CircularProgressIndicator(color = M.c.onAccent, strokeWidth = 1.8.dp, modifier = Modifier.size(18.dp))
+                else Icon(Icons.AutoMirrored.Outlined.Send, s.a11ySend, tint = M.c.onAccent, modifier = Modifier.size(19.dp))
             }
         }
     }
@@ -416,8 +416,8 @@ fun Thumb(a: Attachment, size: Dp, modifier: Modifier = Modifier) {
     val bmp by produceState<Bitmap?>(null, a.id) { value = Files.thumb(ctx, a) }
     Box(modifier.size(size).clip(RoundedCornerShape(12.dp)).background(c.chip), contentAlignment = Alignment.Center) {
         bmp?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.size(size)) }
-        if (a.kind == "video") Box(Modifier.size(24.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.PlayArrow, null, tint = Color.White, modifier = Modifier.size(16.dp))
+        if (a.kind == "video") Box(Modifier.size(24.dp).clip(CircleShape).background(M.c.overlay.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.PlayArrow, null, tint = M.c.onAccent, modifier = Modifier.size(16.dp))
         }
     }
 }

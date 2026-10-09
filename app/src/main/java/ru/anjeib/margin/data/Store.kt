@@ -57,6 +57,7 @@ class Store internal constructor(private val file: File) {
                 val upTo = changed
                 runCatching { write(_data.value) }.onFailure { lastWriteError = it }
                 saved.value = upTo
+                onSaved?.invoke()
             }
         }
     }
@@ -135,6 +136,9 @@ class Store internal constructor(private val file: File) {
     companion object {
         /** Bump with every change of [AppData] that an older build would read wrongly; migrate by number. */
         const val SCHEMA = 1
+
+        /** After every save (the home-screen widget follows the records); set once by the app. */
+        @Volatile var onSaved: (() -> Unit)? = null
 
         @Volatile private var instance: Store? = null
         fun get(context: Context): Store =

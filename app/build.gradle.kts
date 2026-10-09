@@ -37,6 +37,8 @@ android {
         buildConfigField("String", "YC_KEY", "\"${secrets.getProperty("YC_KEY", "")}\"")
         buildConfigField("String", "YC_FOLDER", "\"${secrets.getProperty("YC_FOLDER", "")}\"")
         buildConfigField("boolean", "DEMO", "false")
+        // The developer's own Telegram bot and IMAP: only in debug builds — they need setup and a server-side redo.
+        buildConfigField("boolean", "FORWARD_CHANNELS", "false")
     }
 
     signingConfigs {
@@ -55,6 +57,7 @@ android {
             // Lets a debug build sit next to the signed release on the same phone — and tells them apart by name.
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appLabel"] = "Margin 2 · тест"
+            buildConfigField("boolean", "FORWARD_CHANNELS", "true")
         }
         release {
             manifestPlaceholders["appLabel"] = "Margin 2"
@@ -108,6 +111,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
+    // «Сегодня» on the home screen.
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+    // Optional fingerprint lock.
+    implementation("androidx.biometric:biometric:1.1.0")
     // IMAP for letters forwarded to the user’s own address.
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")

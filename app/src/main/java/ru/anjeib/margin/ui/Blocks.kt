@@ -259,7 +259,7 @@ fun Viewer(a: Attachment, vm: MainVm, onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
     if (a.kind == "file" && !Files.isText(a) && !Files.isPdf(a)) { LaunchedEffect(a.id) { open(ctx, a); onClose() }; return }
     androidx.compose.ui.window.Dialog(onDismissRequest = onClose, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Box(Modifier.fillMaxSize().background(M.c.overlay)) {
             when {
                 a.kind == "photo" -> {
                     val bmp by produceState<Bitmap?>(null, a.id) { value = Files.thumb(ctx, a, 2400) }
@@ -289,10 +289,10 @@ fun Viewer(a: Attachment, vm: MainVm, onClose: () -> Unit) {
                 }
                 else -> {
                     val text by produceState<String?>(null, a.id) { value = Files.text(ctx, a) }
-                    Text(text.orEmpty(), style = Type.small.copy(color = Color.White, fontSize = 14.sp), modifier = Modifier.fillMaxSize().padding(top = 64.dp, start = 16.dp, end = 16.dp).verticalScroll(rememberScrollState()))
+                    Text(text.orEmpty(), style = Type.small.copy(color = M.c.onAccent, fontSize = 14.sp), modifier = Modifier.fillMaxSize().padding(top = 64.dp, start = 16.dp, end = 16.dp).verticalScroll(rememberScrollState()))
                 }
             }
-            Row(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().background(M.c.overlay.copy(alpha = 0.5f)).padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 ViewerAction(Icons.Rounded.Close, s.closeWord2, onClose)
                 Spacer(Modifier.weight(1f))
                 if (a.file != null) ViewerAction(Icons.Outlined.Download, s.saveToPhone) { scope.launch { vm.say(if (Files.saveToPhone(ctx, a)) s.savedToPhone else s.saveFailed) } }
@@ -305,7 +305,7 @@ fun Viewer(a: Attachment, vm: MainVm, onClose: () -> Unit) {
 @Composable
 private fun ViewerAction(icon: ImageVector, label: String, onClick: () -> Unit) {
     Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, label, tint = Color.White, modifier = Modifier.size(22.dp))
+        Icon(icon, label, tint = M.c.onAccent, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -349,11 +349,11 @@ private fun VideoBlock(a: Attachment, onView: () -> Unit, onCaption: () -> Unit)
     Column {
         Box(Modifier.size(width = 200.dp, height = 150.dp).clip(RoundedCornerShape(14.dp)).background(c.chip).clickable(onClick = onView), contentAlignment = Alignment.Center) {
             bmp?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.size(width = 200.dp, height = 150.dp)) }
-            Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp))
+            Box(Modifier.size(48.dp).clip(CircleShape).background(M.c.overlay.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.PlayArrow, null, tint = M.c.onAccent, modifier = Modifier.size(28.dp))
             }
-            Text(a.durationLabel(), style = Type.small.copy(color = Color.White, fontSize = 12.5.sp),
-                modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 6.dp, vertical = 2.dp))
+            Text(a.durationLabel(), style = Type.small.copy(color = M.c.onAccent, fontSize = 12.5.sp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp).clip(RoundedCornerShape(6.dp)).background(M.c.overlay.copy(alpha = 0.45f)).padding(horizontal = 6.dp, vertical = 2.dp))
         }
         Caption(a.caption, onCaption)
     }

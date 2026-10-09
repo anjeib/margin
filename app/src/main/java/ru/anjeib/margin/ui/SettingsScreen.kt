@@ -124,7 +124,7 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         }
 
         // How to share into Margin is a matter for «Помощь»; here only the developer's own bot and mail, which need setup.
-        if (settings.devMode) Group(s.forwardSection) { ForwardSettings(vm) }
+        if (settings.devMode && ru.anjeib.margin.BuildConfig.FORWARD_CHANNELS) Group(s.forwardSection) { ForwardSettings(vm) }
 
         Group(s.appearance) {
             Segmented(
@@ -171,6 +171,20 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                 runCatching { android.app.backup.BackupManager(ctx).dataChanged() }
             }
         }
+
+        // Privacy: an optional lock and, in plain words, where the records live and what leaves the phone.
+        var dataInfo by remember { mutableStateOf(false) }
+        Group(s.privacySection) {
+            if (ru.anjeib.margin.Lock.available(ctx)) {
+                ToggleRow(s.lockTitle, s.lockHint, settings.lock) { on -> vm.updateSettings { it.copy(lock = on) } }
+                Divider()
+            }
+            ValueRow(s.whereDataTitle, null, "", onClick = { dataInfo = true })
+        }
+        if (dataInfo) androidx.compose.material3.AlertDialog(onDismissRequest = { dataInfo = false }, containerColor = c.card,
+            title = { Text(s.whereDataTitle, style = Type.cardTitle.copy(color = c.ink)) },
+            text = { Text(s.whereDataText, style = Type.body.copy(color = c.graphite, fontSize = 14.5.sp), modifier = Modifier.verticalScroll(rememberScrollState())) },
+            confirmButton = { androidx.compose.material3.TextButton({ dataInfo = false }) { Text(s.close, color = c.link) } })
         if (settings.devMode) {
         Group(s.devSection) {
             val ya = settings.provider == "yandex"

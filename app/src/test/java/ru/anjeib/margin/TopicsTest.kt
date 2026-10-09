@@ -11,6 +11,7 @@ import ru.anjeib.margin.ai.AiPlan
 import ru.anjeib.margin.ai.Assistant
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.likelyTopic
+import ru.anjeib.margin.data.weekReview
 import ru.anjeib.margin.data.Entry
 import ru.anjeib.margin.data.Task
 import ru.anjeib.margin.data.Topics
@@ -170,5 +171,26 @@ class TopicsTest {
         assertEquals("f", d.likelyTopic("Ирина пришлёт варианты", listOf("Ирина"))?.id)
         assertEquals(null, d.likelyTopic("купить хлеб"))
         assertEquals(null, d.likelyTopic("Олегу отправить счёт", listOf("Олег"), except = setOf("z")))
+    }
+
+    /** Sunday's card: done this week, who owes whom, topics that stood still for a week. */
+    @Test fun weekReview() {
+        val sun = java.time.LocalDate.of(2026, 10, 11)
+        val d = AppData(tasks = listOf(
+            Task(title = "Купить хлеб", done = true, doneAt = "2026-10-07"),
+            Task(title = "Старое", done = true, doneAt = "2026-10-01"),
+            Task(title = "Получить макет от Димы", waitingFor = "Дима"),
+            Task(title = "Отправить счёт", promisedTo = "Олег"),
+            Task(id = "z", title = "Ремонт", topic = true, createdAt = "2026-09-20", subtasks = listOf(
+                ru.anjeib.margin.data.Subtask(title = "Плитка", done = true, doneAt = "2026-10-06"),
+                ru.anjeib.margin.data.Subtask(title = "Мастер"),
+                ru.anjeib.margin.data.Subtask(title = "Смета", from = "Олег"))),
+        ))
+        val w = d.weekReview(sun)
+        assertEquals(2, w.done)
+        assertEquals(2, w.owedToYou)
+        assertEquals(1, w.youOwe)
+        assertEquals(listOf<String>(), w.still.map { it.id })
+        assertEquals(listOf("z"), d.weekReview(sun.plusDays(7)).still.map { it.id })
     }
 }

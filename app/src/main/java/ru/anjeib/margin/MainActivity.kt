@@ -28,14 +28,19 @@ import ru.anjeib.margin.i18n.stringsFor
 import ru.anjeib.margin.notify.Reminders
 import ru.anjeib.margin.ui.App
 import ru.anjeib.margin.ui.MainVm
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import ru.anjeib.margin.ui.MarginTheme
 import java.io.File
 
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
     private val vm: MainVm by viewModels()
     private val shared = mutableStateOf<String?>(null)
     /** «Записать» / «Надиктовать» from the quick-settings tile or a long press on the icon; the time makes each one new. */
     private val launch = mutableStateOf<Pair<String, Long>?>(null)
+    /** The optional lock (Settings → Приватность): closed on start and after a minute away. */
+    private val locked = mutableStateOf(false)
+    private var awayAt = 0L
     /** A message copied in another app a moment ago (MAX, Telegram «Копировать»): offered as «Вставить скопированное». */
     private val copied = mutableStateOf<Long?>(null)
 
@@ -45,6 +50,7 @@ class MainActivity : ComponentActivity() {
         // Recreated (rotation, theme) or reopened from recents: the shared text was already taken in.
         if (savedInstanceState == null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) readShare(intent)
         publishShortcuts()
+        if (vm.settings.value.lock && Lock.available(this)) locked.value = true
         // Permissions are asked in onboarding (first run) — no system dialog on top of it.
         Reminders.scheduleDaily(this)
         // The daily file copy is gone (3.10): drop its job where earlier versions scheduled it.
@@ -73,6 +79,7 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.runtime.CompositionLocalProvider(ru.anjeib.margin.ui.LocalPeopleLinks provides ru.anjeib.margin.ui.PeopleLinks(
                     isContact = { n -> d.persons.any { it.isContact && it.matches(n) } }, onName = vm::nameTapped,
                 )) {
+                if (locked.value) LockScreen(strings.lockOpen) { unlock() } else
                 App(vm, shared.value, onSharedConsumed = { shared.value = null },
                     launch = launch.value, onLaunchUsed = { launch.value = null },
                     copied = copied.value != null,
@@ -83,8 +90,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() { super.onResume(); vm.foreground(true) }
+    override fun onResume() {
+        super.onResume(); vm.foreground(true)
+        if (vm.settings.value.lock && awayAt > 0 && System.currentTimeMillis() - awayAt > Lock.GRACE_MS && Lock.available(this)) locked.value = true
+        if (locked.value) unlock()
+    }
     override fun onPause() { vm.foreground(false); super.onPause() }
+    override fun onStop() { super.onStop(); if (!isChangingConfigurations) awayAt = System.currentTimeMillis() }
+
+    private fun unlock() {
+        val s = stringsFor(resolveLang(vm.settings.value.lang))
+        Lock.ask(this, "Margin", s.cancel) { locked.value = false; awayAt = 0 }
+    }
 
     // Only the clip's description is looked at (no «вставлено из буфера» message); the text is read on a tap.
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -139,5 +156,17 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val ACTION_WRITE = "ru.anjeib.margin.WRITE"
         const val ACTION_DICTATE = "ru.anjeib.margin.DICTATE"
+    }
+}
+
+/** What a locked Margin shows: the paper and one way in. */
+@androidx.compose.runtime.Composable
+private fun LockScreen(open: String, onOpen: () -> Unit) {
+    val c = ru.anjeib.margin.ui.M.c
+    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(c.bg), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+            androidx.compose.material3.Text("Margin", style = ru.anjeib.margin.ui.Type.display.copy(color = c.ink))
+            androidx.compose.material3.TextButton(onOpen) { androidx.compose.material3.Text(open, color = c.link) }
+        }
     }
 }

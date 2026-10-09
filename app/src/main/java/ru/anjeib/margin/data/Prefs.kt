@@ -35,6 +35,8 @@ data class Settings(
     val whisperAlways: Boolean = false,
     /** Read the phone calendar so plans see meetings. */
     val calendar: Boolean = false,
+    /** Ask for the fingerprint (or the screen lock) when the app opens. */
+    val lock: Boolean = false,
     val onboarded: Boolean = false,
     /** First-run questions in the chat: 0 not yet, 1 brief asked, 2 name asked, 3 done. */
     val setupStep: Int = 0,
@@ -87,6 +89,7 @@ class Prefs private constructor(context: Context) {
         googleBackup = sp.getBoolean("googleBackup", true),
         whisperAlways = sp.getBoolean("whisperAlways", false),
         calendar = sp.getBoolean("calendar", false),
+        lock = sp.getBoolean("lock", false),
         onboarded = sp.getBoolean("onboarded", false),
         setupStep = sp.getInt("setupStep", if (sp.getBoolean("onboarded", false)) 3 else 0),
         briefCollapsed = sp.getString("briefCollapsed", "") ?: "",
@@ -122,6 +125,7 @@ class Prefs private constructor(context: Context) {
             putString("parseMode", s.parseMode)
             putBoolean("googleBackup", s.googleBackup)
             putBoolean("whisperAlways", s.whisperAlways)
+            putBoolean("lock", s.lock)
             putBoolean("calendar", s.calendar)
             putBoolean("onboarded", s.onboarded)
             putInt("setupStep", s.setupStep)

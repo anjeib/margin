@@ -85,6 +85,23 @@ interface Strings {
     val tryExamples: List<String>
     val tryHint: String
     val toStart: String
+    val privacySection: String
+    val lockTitle: String
+    val lockHint: String
+    val lockOpen: String
+    val whereDataTitle: String
+    val whereDataText: String
+    val widgetFree: String
+    val moreWord: String
+    val exportDone: String
+    val exportWaiting: String
+    val exportOpen: String
+    val exportNotes: String
+    val weekTitle: String
+    fun weekLine(done: Int, owed: Int, owe: Int): String
+    val weekStill: String
+    val remindLink: String
+    fun remindText(name: String, what: String, date: String?): String
     fun likelyTopic(title: String): String
     val misparsed: String
     val misparsedThanks: String
@@ -344,6 +361,7 @@ interface Strings {
     val inboxEmptyHint: String
     val savedUnsorted: String
     fun queuedLine(n: Int): String
+    fun inboxLine(n: Int): String
     val nothingFound: String
     val entryAdded: String
     val addOrChange: String
@@ -871,6 +889,28 @@ object Ru : Strings {
     override val tryExamples = listOf("Завтра в 15 созвон с Олегом", "Маша вернёт 3000 к пятнице", "Идея: подкаст про дизайн")
     override val tryHint = "Попробуйте — нажатие вставит фразу в поле"
     override val toStart = "↑ к началу"
+    override val privacySection = "Приватность"
+    override val lockTitle = "Вход по отпечатку"
+    override val lockHint = "При открытии Margin спросит отпечаток или код экрана"
+    override val lockOpen = "Открыть"
+    override val whereDataTitle = "Где ваши данные"
+    override val whereDataText = "Записи хранятся на этом телефоне — в памяти приложения, других копий у Margin нет.\n\n" +
+        "Резервная копия: если включена, раз в день уходит в ваш аккаунт Google (Google Диск) и доступна только вам.\n\n" +
+        "Разбор фраз: простые разбираются на телефоне и никуда не отправляются. Сложные — когда есть интернет — отправляются в Yandex AI Studio (серверы в России) вместе с нужной частью записей: связанными делами и именами. Яндекс эти запросы не сохраняет.\n\n" +
+        "Голос: на телефоне (Whisper) или в Yandex SpeechKit.\n\n" +
+        "Журналы ошибок уходят разработчику только письмом, которое вы отправляете сами; ваших записей в них нет.\n\n" +
+        "На экране блокировки напоминания показываются без текста дел."
+    override val widgetFree = "На сегодня дел нет"
+    override val moreWord = "ещё"
+    override val exportDone = "Сделано:"
+    override val exportWaiting = "Ждём:"
+    override val exportOpen = "Осталось:"
+    override val exportNotes = "Последние записи:"
+    override val weekTitle = "Неделя"
+    override fun weekLine(done: Int, owed: Int, owe: Int) = "Сделано: $done  ·  ждёте: $owed  ·  обещали вы: $owe"
+    override val weekStill = "Темы без движения неделю:"
+    override val remindLink = "напомнить"
+    override fun remindText(name: String, what: String, date: String?) = "$name, привет! Напоминаю про $what" + (date?.let { " — договаривались на $it" } ?: "") + "."
     override fun likelyTopic(title: String) = "к теме «${title.take(28)}»?"
     override val misparsed = "Разобрало не так"
     override val misparsedThanks = "Спасибо — фраза сохранена для разработчика"
@@ -1136,6 +1176,7 @@ object Ru : Strings {
     override val inboxEmptyHint = "Сюда попадает записанное без интернета — разберётся само, когда связь вернётся, — и присланное через «Поделиться → В Margin»."
     override val savedUnsorted = "СОХРАНЕНО БЕЗ РАЗБОРА"
     override fun queuedLine(n: Int) = "Ждут интернета: " + n + " " + pluralRu(n, "запись", "записи", "записей")
+    override fun inboxLine(n: Int) = "Во «Входящих»: " + n + " — разложить"
     override val nothingFound = "Ничего не найдено"
     override val entryAdded = "Добавлена запись"
     override val addOrChange = "Добавить или изменить…"
@@ -1575,6 +1616,28 @@ object En : Strings {
     override val tryExamples = listOf("Call with Oleg tomorrow at 3", "Masha returns 3000 by Friday", "Idea: a podcast about design")
     override val tryHint = "Try one — a tap puts the phrase into the field"
     override val toStart = "↑ to the start"
+    override val privacySection = "Privacy"
+    override val lockTitle = "Fingerprint lock"
+    override val lockHint = "Margin asks for your fingerprint or screen lock when it opens"
+    override val lockOpen = "Open"
+    override val whereDataTitle = "Where your data is"
+    override val whereDataText = "Your records live on this phone, in the app's own storage — Margin keeps no other copy.\n\n" +
+        "Backup: when on, once a day to your Google account (Google Drive), visible only to you.\n\n" +
+        "Reading phrases: simple ones are read on the phone and go nowhere. Harder ones, when online, go to Yandex AI Studio (servers in Russia) with the part of your records they need — related to-dos and names. Yandex does not store these requests.\n\n" +
+        "Voice: on the phone (Whisper) or Yandex SpeechKit.\n\n" +
+        "Error logs reach the developer only in an e-mail you send yourself; your records are not in them.\n\n" +
+        "On the lock screen reminders show without the to-do's words."
+    override val widgetFree = "Nothing for today"
+    override val moreWord = "more:"
+    override val exportDone = "Done:"
+    override val exportWaiting = "Waiting for:"
+    override val exportOpen = "Still to do:"
+    override val exportNotes = "Latest records:"
+    override val weekTitle = "The week"
+    override fun weekLine(done: Int, owed: Int, owe: Int) = "Done: $done  ·  waiting for: $owed  ·  you promised: $owe"
+    override val weekStill = "Topics with no news for a week:"
+    override val remindLink = "remind"
+    override fun remindText(name: String, what: String, date: String?) = "Hi $name! A reminder about $what" + (date?.let { " — we agreed on $it" } ?: "") + "."
     override fun likelyTopic(title: String) = "to «${title.take(28)}»?"
     override val misparsed = "Understood wrong"
     override val misparsedThanks = "Thanks — the phrase is saved for the developer"
@@ -1840,6 +1903,7 @@ object En : Strings {
     override val inboxEmptyHint = "What you write without internet lands here and sorts itself once you’re back online — and so does what you share to Margin."
     override val savedUnsorted = "SAVED UNSORTED"
     override fun queuedLine(n: Int) = "Waiting for internet: $n"
+    override fun inboxLine(n: Int) = "In the Inbox: $n — sort out"
     override val nothingFound = "Nothing found"
     override val entryAdded = "Record added"
     override val addOrChange = "Add or change…"

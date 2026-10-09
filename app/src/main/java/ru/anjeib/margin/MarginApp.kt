@@ -8,5 +8,6 @@ class MarginApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Feedback.installCrashLog(this)
+        ru.anjeib.margin.data.Store.onSaved = { ru.anjeib.margin.widget.TodayWidget.refresh(this) }
     }
 }
