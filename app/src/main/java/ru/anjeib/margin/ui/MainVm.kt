@@ -91,6 +91,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     val keyStatus: StateFlow<String?> = _keyStatus
 
     companion object {
+        /** Bumped when the «Знакомство с Margin» words change: 2 — the owner's edits after the first test (0.26). */
+        const val INTRO_VERSION = 2
         const val AUTO_CONFIRM_MS = 5000L
         fun key(scope: Scope) = when (scope) { Scope.Main -> "main"; Scope.Notes -> "notes"; is Scope.InTask -> "task:" + scope.taskId }
     }
@@ -98,6 +100,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     init {
         // The demo copy opens with the sample already in it, once.
         if (ru.anjeib.margin.BuildConfig.DEMO && !ru.anjeib.margin.data.Demo.asked(ctx)) loadDemo()
+        refreshSamples()
         viewModelScope.launch { store.data.collect { Reminders.syncTasks(getApplication(), it.tasks, it.notes) } }
         // A quiet line under the field says what happened — and then leaves.
         viewModelScope.launch {
@@ -1039,7 +1042,16 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val ui = ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
         if (ui.getBoolean("introAdded", false) || ru.anjeib.margin.BuildConfig.DEMO) return
         ui.edit().putBoolean("introAdded", true).apply()
+        ui.edit().putInt("introVersion", INTRO_VERSION).apply()
         if (data.value.tasks.none { !it.sample }) store.update { it.withSamples(L.s.intro) }
+    }
+
+    /** The examples' words change between versions: ones left from an older version are replaced with today's. */
+    fun refreshSamples() {
+        val ui = ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
+        if (ui.getInt("introVersion", 1) >= INTRO_VERSION) return
+        ui.edit().putInt("introVersion", INTRO_VERSION).apply()
+        if (data.value.tasks.any { it.sample }) store.update { it.withSamples(L.s.intro) }
     }
 
     fun removeSamples() = store.update { it.withoutSamples() }
