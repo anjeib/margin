@@ -58,10 +58,8 @@ import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.HourglassEmpty
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SwipeToDismissBox
@@ -69,7 +67,6 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
@@ -150,9 +147,6 @@ fun isThisWeek(t: Task, today: LocalDate = LocalDate.now()): Boolean {
     return !s.isAfter(today.weekEnd()) && (!e.isBefore(today) || t.isOverdue(today))
 }
 
-/** A window running now that isn't "for today" — shown as «В работе на неделе». */
-fun isRunning(t: Task, today: LocalDate = LocalDate.now()) = isThisWeek(t, today) && !isToday(t, today)
-
 /** Counters for the top tabs: today, week, all open. */
 fun tabCounts(d: AppData): Triple<Int, Int, Int> {
     val today = LocalDate.now()
@@ -188,7 +182,6 @@ fun TaskList(
     working: Set<String>,
     vm: MainVm,
     events: List<CalEvent>,
-    briefQuiet: Boolean,
     onOpen: (String) -> Unit,
     onView: (String) -> Unit,
     onOpenNote: (String) -> Unit,
@@ -910,89 +903,6 @@ private fun PromisesCard(list: List<Task>, today: LocalDate, quiet: Boolean, onO
         }
         if (list.size > 5 && !all) Text(s.more(list.size - 5), style = Type.small.copy(color = c.link, fontSize = 13.5.sp),
             modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { all = true }.padding(vertical = 6.dp))
-    }
-}
-
-/**
- * Morning brief: full in the morning, then a single line. It folds as soon as the user starts typing
- * or the assistant answers ([quiet]); × hides it until tomorrow.
- */
-@Composable
-private fun BriefCard(data: AppData, settings: Settings, loading: Boolean, quiet: Boolean, vm: MainVm, onFocus: () -> Unit) {
-    val c = M.c
-    val s = M.s
-    val today = LocalDate.now().toString()
-    val brief = data.brief?.takeIf { it.date == today && it.lang == L.lang.name }
-    var userOpen by rememberSaveable { mutableStateOf(false) }
-    val autoFold = settings.briefCollapsed == today || LocalTime.now().hour >= 12
-    val folded = brief != null && (quiet || (autoFold && !userOpen))
-    LaunchedEffect(quiet) { if (quiet) { userOpen = false; vm.collapseBrief() } }
-
-    run {
-        val openNow = data.tasks.any { isToday(it) || isRunning(it) }
-        val late = (brief?.at ?: LocalTime.now().toString().take(5)) >= "18:00"
-        if (!openNow && !late && data.tasks.none { it.done && it.doneAt == today }) return
-    }
-    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(18.dp)).background(c.linkSoft)) {
-        // Nothing left for today → say so without asking the AI.
-        val openToday = data.tasks.any { isToday(it) || isRunning(it) }
-        val evening = (brief?.at ?: LocalTime.now().toString().take(5)) >= "18:00"
-        val live = openToday || evening
-        // Rebuilt by itself when the day changes; only after the daily limit does it say so.
-        if (folded || (brief != null && !live)) {
-            Row(
-                Modifier.fillMaxWidth().clickable { userOpen = true }.padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Spark(); Spacer(Modifier.width(10.dp))
-                val head = brief?.headline ?: brief?.text?.substringBefore('.')
-                Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
-                    Text(
-                        if (!live) (if (data.tasks.any { it.done && it.doneAt == today }) s.allDoneToday else s.nothingToday)
-                        else s.mainThing + ": " + (head ?: ""),
-                        style = Type.small.copy(color = c.ink, fontSize = 14.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                    if (live) Text(
-                        brief?.at?.let { s.briefAt(it) }.orEmpty(),
-                        style = Type.small.copy(color = c.graphite, fontSize = 11.5.sp),
-                    )
-                }
-                if (live) Box(Modifier.size(40.dp).clip(CircleShape).clickable(enabled = !loading) { vm.makeBrief(force = true) }, contentAlignment = Alignment.Center) {
-                    if (loading) CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
-                    else Icon(Icons.Outlined.Refresh, s.refresh, tint = c.graphite, modifier = Modifier.size(18.dp))
-                }
-            }
-            return@Column
-        }
-        Column(Modifier.padding(start = 18.dp, end = 6.dp, top = 8.dp, bottom = 16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Spark(); Spacer(Modifier.width(8.dp))
-                Text((if (evening) s.eveningBrief else s.morningBrief) + (brief?.at?.let { " · " + s.briefAt(it) } ?: ""), style = Type.small.copy(color = c.link, fontSize = 14.sp), modifier = Modifier.weight(1f))
-                Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !loading) { vm.makeBrief(force = true) }, contentAlignment = Alignment.Center) {
-                    if (loading) CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
-                    else Icon(Icons.Outlined.Refresh, s.refresh, tint = c.graphite, modifier = Modifier.size(18.dp))
-                }
-                Box(Modifier.size(36.dp).clip(CircleShape).clickable { vm.hideBrief() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Close, s.dismiss, tint = c.graphite, modifier = Modifier.size(18.dp))
-                }
-            }
-            Column(Modifier.padding(end = 12.dp)) {
-                if (brief == null) Text(if (loading) s.thinking else s.makeBrief, style = Type.body.copy(color = c.graphite),
-                    modifier = Modifier.clickable(enabled = !loading) { vm.makeBrief(force = true) })
-                else {
-                    Text(brief.text, style = Type.body.copy(color = c.ink))
-                    brief.focus?.let {
-                        Spacer(Modifier.height(6.dp))
-                        Text("${s.focusWindow}: $it", style = Type.small.copy(color = c.graphite))
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Pill(s.startFocus, filled = true, onClick = onFocus)
-                        Pill(s.collapse, onClick = { userOpen = false; vm.collapseBrief() })
-                    }
-                }
-            }
-        }
     }
 }
 

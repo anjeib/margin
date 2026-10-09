@@ -41,9 +41,6 @@ data class Settings(
     /** First-run questions in the chat: 0 not yet, 1 brief asked, 2 name asked, 3 done. */
     val setupStep: Int = 0,
     /** A document (e.g. on Google Drive) the app keeps overwriting with a full backup. */
-    /** Brief collapsed / hidden for this date (yyyy-MM-dd). */
-    val briefCollapsed: String = "",
-    val briefHidden: String = "",
     val spentMonth: String = "",
     /** AI spend this month, roubles (OpenRouter dollars converted at Llm.USD_RUB). */
     val spentRub: Double = 0.0,
@@ -92,8 +89,6 @@ class Prefs private constructor(context: Context) {
         lock = sp.getBoolean("lock", false),
         onboarded = sp.getBoolean("onboarded", false),
         setupStep = sp.getInt("setupStep", if (sp.getBoolean("onboarded", false)) 3 else 0),
-        briefCollapsed = sp.getString("briefCollapsed", "") ?: "",
-        briefHidden = sp.getString("briefHidden", "") ?: "",
         spentMonth = sp.getString("spentMonth", "") ?: "",
         spentRub = sp.getFloat("spentRub", 0f).toDouble(),
         provider = sp.getString("provider", null) ?: if (ru.anjeib.margin.BuildConfig.YC_KEY.isNotBlank()) "yandex" else "openrouter",
@@ -129,8 +124,6 @@ class Prefs private constructor(context: Context) {
             putBoolean("calendar", s.calendar)
             putBoolean("onboarded", s.onboarded)
             putInt("setupStep", s.setupStep)
-            putString("briefCollapsed", s.briefCollapsed)
-            putString("briefHidden", s.briefHidden)
             putString("spentMonth", s.spentMonth)
             putFloat("spentRub", s.spentRub.toFloat())
             putString("provider", s.provider)

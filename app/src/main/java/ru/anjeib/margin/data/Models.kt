@@ -296,33 +296,15 @@ data class ChatMsg(
 )
 
 @Serializable
-data class ProjectSummary(val text: String, val at: String, val fp: String? = null)
-
-@Serializable
-data class Brief(
-    val date: String, val text: String, val focus: String? = null, val lang: String? = null, val headline: String? = null,
-    /** The task the headline is about — when it's done or moved, the brief is rebuilt. */
-    val mainTaskId: String? = null,
-    /** HH:mm of the last rebuild, shown as «обновлено 14:20». */
-    val at: String? = null,
-    /** Today's open task ids at build time: a different set means the brief may be stale. */
-    val fingerprint: String? = null,
-    val revisions: Int = 0,
-)
-
-@Serializable
 data class AppData(
     val tasks: List<Task> = emptyList(),
     val notes: List<Note> = emptyList(),
     val chat: List<ChatMsg> = emptyList(),
-    val brief: Brief? = null,
     /** Legacy names list — migrated into [persons]. */
     val people: List<String> = emptyList(),
     val persons: List<Person> = emptyList(),
     val projects: List<String> = emptyList(),
     val queue: List<Queued> = emptyList(),
-    /** Per-project «сводка недели», keyed by project tag. */
-    val projectSummaries: Map<String, ProjectSummary> = emptyMap(),
     /** Schema version of the file ([Store.SCHEMA]); 0 = written before versions existed. */
     val v: Int = 0,
 ) {

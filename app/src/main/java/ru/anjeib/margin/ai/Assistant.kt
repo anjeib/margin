@@ -15,6 +15,7 @@ import ru.anjeib.margin.data.Note
 import ru.anjeib.margin.data.Person
 import ru.anjeib.margin.data.Repeat
 import ru.anjeib.margin.data.logged
+import ru.anjeib.margin.data.autoReminded
 import ru.anjeib.margin.data.next
 import ru.anjeib.margin.data.nextOccurrence
 import ru.anjeib.margin.data.Settings
@@ -258,18 +259,6 @@ object Assistant {
             scopeRule(scope).let { if (it.isNotBlank()) it + "\n\n" else "" } +
             "Context:\n" + context(d, s, focusTask = (scope as? Scope.InTask)?.taskId, query = query, recent = recent)
 
-    fun briefPrompt(d: AppData, s: Settings, evening: Boolean = false): String = """
-        You are the assistant inside Margin, a calm planner. ${if (evening) "It is evening. Write the user's brief for TOMORROW (${LocalDate.now().plusDays(1)}) in ${L.s.aiLanguage}: in a few words what is still open today, then what tomorrow holds and the single most important thing for tomorrow." else "Write the user's brief for today in ${L.s.aiLanguage}: what today holds, anything overdue, the single most important thing."}
-        At most 3 short sentences and 45 words, no markdown, no emoji, plain words (no jargon like «окно», «фокус-блок»). Never say "nothing urgent" when something is due today or overdue.
-        If a promise to someone ("promised to …") is due today or overdue, or something you wait for ("waiting for …") is late, mention it.
-        Also give "headline": the most important thing in 3–6 words (e.g. "тексты vuzburo"), and a realistic free time slot for it ${if (evening) "tomorrow" else "today"} avoiding timed tasks.
-        "main_task_id": the task_id of that most important thing (from the context), if it is a task.
-        Reply with JSON only: {"text": string, "headline": string, "focus": "HH:MM–HH:MM" | null, "main_task_id": string | null}
-
-        Context:
-        ${context(d, s)}
-    """.trimIndent()
-
     fun personPrompt(d: AppData, p: Person): String {
         val n = p.name
         val mentions = buildString {
@@ -291,21 +280,6 @@ object Assistant {
             Mentions:
             $mentions
             Reply with JSON only: {"about": string, "summary": string}
-        """.trimIndent()
-    }
-
-    fun projectPrompt(d: AppData, project: String): String {
-        val tasks = d.tasks.filter { it.project == project }
-        val notes = d.notes.filter { it.project == project }
-        return """
-            You keep a planner. Today is ${LocalDate.now()}. Write the weekly summary of project "$project" in ${L.s.aiLanguage}:
-            1–2 short sentences, max 35 words, no markdown, written to the user ("вы"): what moved, what we wait for and from whom, what is on the user and by when.
-            Say something moved ONLY if a task is marked [done] in the last 7 days; otherwise say what is next. Ideas below have no task yet — mention them only if they wait for a decision.
-            Tasks:
-            ${tasks.take(40).joinToString("\n") { t -> "- ${t.title}${if (t.dropped) " [dropped, not done]" else if (t.done) " [done ${t.doneAt}]" else ""}${t.due?.let { " due $it" } ?: ""}${t.waitingFor?.let { " (waiting for $it)" } ?: ""}${t.promisedTo?.let { " (promised to $it)" } ?: ""}" }}
-            Ideas (note entries):
-            ${notes.flatMap { it.entries }.filter { e -> d.tasks.none { it.sourceEntryId == e.id } }.takeLast(20).joinToString("\n") { "- " + it.fullText.take(140) }}
-            Reply with JSON only: {"summary": string}
         """.trimIndent()
     }
 
@@ -932,11 +906,7 @@ object Assistant {
     }
 
     /** A timed task reminds at its time unless the user asked for something else. */
-    fun withAutoReminder(t: Task): Task {
-        if (t.remindAt != null || t.time == null) return t
-        val day = t.dueDate ?: t.startDate ?: return t
-        return t.copy(remindAt = "${day}T${t.time}")
-    }
+    fun withAutoReminder(t: Task): Task = t.autoReminded()
 
     // ---------------- json helpers ----------------
 
