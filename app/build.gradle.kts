@@ -59,8 +59,8 @@ android {
     buildTypes {
         debug {
             // Lets a debug build sit next to the signed release on the same phone — and tells them apart by name.
-            applicationIdSuffix = ".debug"
-            manifestPlaceholders["appLabel"] = "Margin · тест"
+            applicationIdSuffix = ".polya"
+            manifestPlaceholders["appLabel"] = "Margin · поля"
             buildConfigField("boolean", "FORWARD_CHANNELS", "true")
             buildConfigField("String", "OPENROUTER_KEY", "\"${secrets.getProperty("OPENROUTER_KEY", "")}\"")
             buildConfigField("String", "YC_KEY", "\"${secrets.getProperty("YC_KEY", "")}\"")

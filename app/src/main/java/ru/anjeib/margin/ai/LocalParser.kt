@@ -111,12 +111,12 @@ object LocalParser {
         return out.map { it.replace('ё', 'е') }.toSet()
     }
 
-    private class Names(d: AppData) {
+    private class Names(people: List<Pair<String, List<String>>>) {
         val byForm = HashMap<String, String>()
         init {
             commonNames.forEach { n -> forms(n).forEach { f -> byForm.putIfAbsent(f, n.replace("Артем", "Артём")) } }
             // The user's own people win over the dictionary («Маша» their friend, «ЖЭК» their office).
-            d.persons.filter { !it.archived }.forEach { p -> (listOf(p.name) + p.aliases).forEach { n -> forms(n).forEach { f -> byForm[f] = p.name } } }
+            people.forEach { (name, aliases) -> (listOf(name) + aliases).forEach { n -> forms(n).forEach { f -> byForm[f] = name } } }
         }
         fun of(word: String): String? = byForm[key(word)]
         /** Only the name as it is («Дима»), not «Диме» — the one who does or gives something. */
@@ -144,13 +144,22 @@ object LocalParser {
 
     fun parse(text0: String, d: AppData, today: LocalDate = LocalDate.now(), kind: String? = null, sphere: String? = null,
               people: List<String> = emptyList(), waitFor: String? = null, promiseTo: String? = null,
+              wait: Boolean = false, promise: Boolean = false,
+              now: LocalTime? = LocalTime.now().takeIf { today == LocalDate.now() }): Result =
+        parse(text0, d.persons.filter { !it.archived }.map { it.name to it.aliases }, today, kind, sphere, people, waitFor, promiseTo, wait, promise, now)
+
+    /** The same reading with the people known by name (Margin «Поля» passes its own). */
+    fun parse(text0: String, known: List<Pair<String, List<String>>>, today: LocalDate = LocalDate.now(), kind: String? = null, sphere: String? = null,
+              people: List<String> = emptyList(), waitFor: String? = null, promiseTo: String? = null,
               /** «/жду», «/обещаю» without «@»: the other side is the person named in the words («/обещаю Маше вернуть книгу»). */
               wait: Boolean = false, promise: Boolean = false,
               /** The hour now — a weekday or a repeat whose hour has already passed today starts next time. */
-              now: LocalTime? = LocalTime.now().takeIf { today == LocalDate.now() }): Result {
+              now: LocalTime? = LocalTime.now().takeIf { today == LocalDate.now() },
+              /** «Поля»: the title keeps the person's own words (only time words and fillers leave) — no «Получить … от …». */
+              keepWords: Boolean = false): Result {
         val text = text0.trim()
         if (text.isEmpty()) return Result(emptyList(), true)
-        val names = Names(d)
+        val names = Names(known)
         var sure = true
         var why: String? = null
         if (aiCue.containsMatchIn(text)) { sure = false; why = "report-or-edit" }
@@ -164,7 +173,7 @@ object LocalParser {
         // A long stream with no punctuation is dictation — the AI splits it better.
         if (!Regex("[\\n.;,!?]").containsMatchIn(text) && text.split(Regex("\\s+")).size > 16) { sure = false; why = why ?: "long" }
         // «@Маша», «/жду», «/обещал» are said outright: they win over what the words seem to say.
-        val items = chunks.mapNotNull { one(it, names, today, kind, sphere, now) }.map { i0 ->
+        val items = chunks.mapNotNull { one(it, names, today, kind, sphere, now, keepWords) }.map { i0 ->
             val named = i0.people.firstOrNull()
             val i = when {
                 waitFor == null && wait && i0.waitingFor == null && named != null -> i0.copy(waitingFor = named, promisedTo = null, people = i0.people - named)
@@ -262,7 +271,7 @@ object LocalParser {
         LocalDate.of(today.year, mon, day).let { if (it.isBefore(today.minusDays(1))) it.plusYears(1) else it }
     }.getOrNull()
 
-    private fun one(chunk: String, names: Names, today: LocalDate, kind0: String?, sphere: String?, now: LocalTime? = null): Item? {
+    private fun one(chunk: String, names: Names, today: LocalDate, kind0: String?, sphere: String?, now: LocalTime? = null, keepWords: Boolean = false): Item? {
         var s = " $chunk "
         // Takes a matched phrase out of the words (a space stays in its place); [cutIf] only when the match is accepted.
         fun cutIf(r: Regex, f: (MatchResult) -> Boolean): Boolean {
@@ -414,6 +423,8 @@ object LocalParser {
         // Who: «ждём от Маши», «Дима пришлёт макет», «обещал Анне показать».
         var waitingFor: String? = null; var promisedTo: String? = null
         var titleOverride: String? = null
+        // What was said, without the words of time and place (they went to the margin) — the line «Поля» keeps.
+        val spoken = s
         val words = s.trim().split(Regex("\\s+"))
         cutIf(Regex("${B}(?:жд[уеё]м?|ожида$L*)\\s+(?:от\\s+)?(\\p{L}+)\\s+(.+)$", ic)) { m ->
             names.of(m.groupValues[1])?.let { n -> waitingFor = n; titleOverride = m.groupValues[2]; true } ?: false
@@ -441,9 +452,9 @@ object LocalParser {
         val people = words.mapNotNull { names.of(it) }.distinct().filter { it != waitingFor && it != promisedTo }
 
         // The title: what's left, without fillers, starting with a capital; names capitalised.
-        var title = (titleOverride ?: s).replace(Regex("\\s+"), " ").trim().trim(',', '.', '—', '–', '-', ':', ' ')
+        var title = ((if (keepWords) spoken else titleOverride) ?: s).replace(Regex("\\s+"), " ").trim().trim(',', '.', '—', '–', '-', ':', ' ')
         title = title.replace(filler, "").trim().trim(',', '.', '—', '-', ':', ' ')
-        if (waitingFor != null && !asSaid) title = "Получить ${title.replaceFirstChar { it.lowercase() }} от ${waitingFor!!.genitive()}"
+        if (waitingFor != null && !asSaid && !keepWords) title = "Получить ${title.replaceFirstChar { it.lowercase() }} от ${waitingFor!!.genitive()}"
         if (title.isBlank()) title = chunk.trim()
         title = title.sentence().withNames(listOfNotNull(waitingFor, promisedTo) + people)
 
