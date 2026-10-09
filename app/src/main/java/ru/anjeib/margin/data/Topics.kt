@@ -32,7 +32,7 @@ fun AppData.likelyTopic(words: String, people: Collection<String> = emptyList(),
     val who = names.map { norm(it).take(3) }.toSet()
     // A name alone is not enough (Маша is in a trip and in a book): the words must meet too, names apart.
     val said = stems(words).filter { st -> who.none { st.startsWith(it) } }.toSet()
-    val scored = tasks.filter { it.topic && !it.done && it.id !in except }.map { t ->
+    val scored = tasks.filter { it.topic && !it.done && !it.sample && it.id !in except }.map { t ->
         val theirPeople = (t.people + t.subtasks.mapNotNull { it.from } + listOfNotNull(t.waitingFor, t.promisedTo)).map { norm(it).take(3) }.toSet()
         val theirs = stems(t.title + " " + t.subtasks.joinToString(" ") { it.title } + " " + t.entries.takeLast(5).joinToString(" ") { it.text })
         val common = (said intersect theirs).size

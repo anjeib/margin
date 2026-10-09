@@ -13,3 +13,4 @@ releases/
 
 # Agent worktrees
 .claude/worktrees/
+server/codes.local

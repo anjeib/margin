@@ -23,19 +23,21 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        // v2 «Темы» lives next to Margin 3.x as a separate app with its own data.
-        applicationId = "ru.anjeib.margin.v2"
+        // The published app (RuStore, owner's choice 9 Oct). Margin 2 builds up to 0.22 were «ru.anjeib.margin.v2» — a different app.
+        applicationId = "ru.margin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "0.22"
+        versionCode = 23
+        versionName = "0.23"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild { cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_static") } }
-        // Personal build: pre-fills the OpenRouter key from secrets.properties (not committed anywhere).
-        buildConfigField("String", "OPENROUTER_KEY", "\"${secrets.getProperty("OPENROUTER_KEY", "")}\"")
-        buildConfigField("String", "YC_KEY", "\"${secrets.getProperty("YC_KEY", "")}\"")
-        buildConfigField("String", "YC_FOLDER", "\"${secrets.getProperty("YC_FOLDER", "")}\"")
+        // No keys in what people install: the AI goes through Margin's own door in Yandex Cloud (server/proxy),
+        // let in by an invite code. Only the developer's debug build still carries keys from secrets.properties.
+        buildConfigField("String", "OPENROUTER_KEY", "\"\"")
+        buildConfigField("String", "YC_KEY", "\"\"")
+        buildConfigField("String", "YC_FOLDER", "\"\"")
+        buildConfigField("String", "PROXY_URL", "\"${secrets.getProperty("PROXY_URL", "")}\"")
         buildConfigField("boolean", "DEMO", "false")
         // The developer's own Telegram bot and IMAP: only in debug builds — they need setup and a server-side redo.
         buildConfigField("boolean", "FORWARD_CHANNELS", "false")
@@ -56,11 +58,14 @@ android {
         debug {
             // Lets a debug build sit next to the signed release on the same phone — and tells them apart by name.
             applicationIdSuffix = ".debug"
-            manifestPlaceholders["appLabel"] = "Margin 2 · тест"
+            manifestPlaceholders["appLabel"] = "Margin · тест"
             buildConfigField("boolean", "FORWARD_CHANNELS", "true")
+            buildConfigField("String", "OPENROUTER_KEY", "\"${secrets.getProperty("OPENROUTER_KEY", "")}\"")
+            buildConfigField("String", "YC_KEY", "\"${secrets.getProperty("YC_KEY", "")}\"")
+            buildConfigField("String", "YC_FOLDER", "\"${secrets.getProperty("YC_FOLDER", "")}\"")
         }
         release {
-            manifestPlaceholders["appLabel"] = "Margin 2"
+            manifestPlaceholders["appLabel"] = "Margin"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -71,7 +76,7 @@ android {
             initWith(getByName("release"))
             applicationIdSuffix = ".demo"
             versionNameSuffix = "-demo"
-            manifestPlaceholders["appLabel"] = "Margin 2 · демо"
+            manifestPlaceholders["appLabel"] = "Margin · демо"
             buildConfigField("boolean", "DEMO", "true")
             matchingFallbacks += listOf("release")
         }

@@ -16,7 +16,9 @@ object Llm {
     const val YA_STRONG = "deepseek-v4.1-flash"
 
     fun yandex(s: Settings) = s.provider == "yandex"
-    fun ready(s: Settings) = if (yandex(s)) s.yaKey.isNotBlank() && s.yaFolder.isNotBlank() else s.apiKey.isNotBlank()
+    fun door(s: Settings) = Yandex.Door(s.yaKey, s.yaFolder, s.invite)
+    /** With a key (developer builds) or, in what people install, with an invite code for Margin's own door. */
+    fun ready(s: Settings) = if (yandex(s)) (s.yaKey.isNotBlank() && s.yaFolder.isNotBlank()) || door(s).proxy else s.apiKey.isNotBlank()
 
     /** Which Yandex model answers: smart requests and complex phrases → DeepSeek, the rest per mode. */
     fun yaModel(s: Settings, smart: Boolean, complex: Boolean) = when {
@@ -39,7 +41,7 @@ object Llm {
         if (!ready(s)) throw AiException(L.s.errNoKey)
         return if (yandex(s)) {
             // Yandex text models don't read images; the words still go through.
-            val r = Yandex.chat(s.yaKey, s.yaFolder, yaModel(s, smart, complex), system, messages, json)
+            val r = Yandex.chat(door(s), yaModel(s, smart, complex), system, messages, json)
             LlmReply(r.content, r.rub)
         } else {
             val r = OpenRouter.chat(s.apiKey, if (smart) s.mainModel else s.fastModel, system, messages, json = json, quick = !smart, images = images)
@@ -49,15 +51,15 @@ object Llm {
 
     /** Speech → text: SpeechKit on Yandex, an audio model on OpenRouter. */
     suspend fun transcribe(s: Settings, wav: ByteArray, hints: List<String>): LlmReply =
-        if (yandex(s)) Yandex.stt(s.yaKey, s.yaFolder, wav, if (ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.Ru) "ru-RU" else "en-US")
+        if (yandex(s)) Yandex.stt(door(s), wav, if (ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.Ru) "ru-RU" else "en-US")
         else OpenRouter.transcribe(s.apiKey, s.voiceModel, wav, hints).let { LlmReply(it.content, it.costUsd * USD_RUB) }
 
     /** Text on a photo: Yandex Vision, or a vision model on OpenRouter. Empty when there is no text. */
     suspend fun ocr(s: Settings, jpeg: ByteArray, dataUrl: String): LlmReply =
-        if (yandex(s)) Yandex.ocr(s.yaKey, s.yaFolder, jpeg)
+        if (yandex(s)) Yandex.ocr(door(s), jpeg)
         else OpenRouter.chat(s.apiKey, s.fastModel, "Copy all readable text from the image verbatim, line by line. No comments. If there is no text, reply with nothing.",
             listOf("user" to "text?"), json = false, quick = true, images = listOf(dataUrl)).let { LlmReply(it.content.trim(), it.costUsd * USD_RUB) }
 
     suspend fun checkKey(s: Settings): String =
-        if (yandex(s)) Yandex.check(s.yaKey, s.yaFolder) else OpenRouter.checkKey(s.apiKey)
+        if (yandex(s)) Yandex.check(door(s)) else OpenRouter.checkKey(s.apiKey)
 }

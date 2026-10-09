@@ -247,6 +247,8 @@ data class Task(
     val thought: Boolean = false,
     /** A thought's title had its spelling and capitals tidied once. */
     val titleFixed: Boolean = false,
+    /** One of the «Знакомство с Margin» examples: kept apart from the user's own and gone with «Убрать примеры». */
+    val sample: Boolean = false,
     /** A row made for the lists from a topic's question: which topic it belongs to. Never stored. */
     @kotlinx.serialization.Transient val topicId: String? = null,
     @kotlinx.serialization.Transient val topicTitle: String? = null,

@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.withSamples
+import ru.anjeib.margin.data.withoutSamples
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -285,6 +287,11 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 .getOrElse { LocalParser.Result(emptyList(), false, "error") }
             val mode = s.parseMode
             val offline = !Processor.online(ctx) || !Processor.ready(s)
+            // A question is for the assistant only: without it, say so rather than file the question as a matter.
+            if (local.why == "question" && offline) {
+                if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = L.s.askOffline)) else _toast.value = L.s.askOffline
+                return
+            }
             if (local.items.isNotEmpty() && (offline || mode == "local" || tg.explicit || (mode == "auto" && local.sure))) {
                 val plan = LocalParser.plan(local, scope, asQuestion, source = t)
                 count("parse:phone")
@@ -1024,6 +1031,17 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         ru.anjeib.margin.data.Demo.dropFiles(ctx)
         store.restore { mine }
     }
+
+    /** «Знакомство с Margin»: the examples come once, on a fresh start, in place of someone else's two months. */
+    fun addIntroOnce() {
+        val ui = ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
+        if (ui.getBoolean("introAdded", false) || ru.anjeib.margin.BuildConfig.DEMO) return
+        ui.edit().putBoolean("introAdded", true).apply()
+        if (data.value.tasks.none { !it.sample }) store.update { it.withSamples(L.s.intro) }
+    }
+
+    fun removeSamples() = store.update { it.withoutSamples() }
+    fun bringSamples() = store.update { it.withSamples(L.s.intro) }
 
     fun demoAsked() = ru.anjeib.margin.data.Demo.asked(ctx)
     fun demoSkip() = ru.anjeib.margin.data.Demo.markAsked(ctx)

@@ -64,6 +64,17 @@ interface Strings {
     val forwardTitle: String
     val forwardCommentHint: String
     val forwardHint: String
+    val intro: ru.anjeib.margin.data.Intro.Texts
+    val samplesLine: String
+    val samplesRemove: String
+    val samplesBack: String
+    val samplesTitle: String
+    val askOffline: String
+    val errInvite: String
+    val inviteTitle: String
+    val inviteHint: String
+    val inviteNone: String
+    val privacyPolicy: String
     val forwardSorting: String
     val forwardResult: String
     val forwardOpen: String
@@ -729,17 +740,24 @@ object Ru : Strings {
     override val helpIntro = "Всё о разделах, метках и жестах"
     override val helpSearch = "Поиск по справке…"
     override val helpGroups = listOf(
-        "Как это устроено" to listOf("Как это устроено", "Понятия и связи", "Меню"),
+        "Как это устроено" to listOf("Как это устроено", "ИИ-помощник", "Понятия и связи", "Меню"),
         "Экраны" to listOf("Сегодня", "Календарь", "Обзор", "Тема", "Действия в теме", "Страница дела", "Входящие", "Материалы", "Архив"),
         "Ввод" to listOf("Поле ввода и метки", "Окошко тем", "Даты, время, повторы", "Списки", "Голос и файлы", "Быстрый ввод и отзыв", "Пересылка в Margin"),
         "Люди и обещания" to listOf("Люди и обещания", "Контакты", "Неделя, напоминания, виджет"),
         "Значки и жесты" to listOf("Значки", "Бейджи и цвета", "Жесты"),
-        "Настройки и данные" to listOf("Настройки", "ИИ и без ИИ", "Приватность", "Пример данных"),
+        "Настройки и данные" to listOf("Настройки", "ИИ и без ИИ", "Приватность", "Знакомство с Margin"),
     )
     override val helpSections = listOf(
         // ---- concepts ----
         HelpSection("Как это устроено", "Margin — ежедневник, в который пишут как в мессенджер. Одно поле внизу: пишете или диктуете — из слов получаются дела, темы и идеи. Обычные фразы разбираются прямо в телефоне, без интернета; ИИ подключается для сложного, если есть сеть (подробно — в разделе «ИИ и без ИИ»).",
             examples = listOf("Завтра в 15 созвон с Мариной", "Купить корм коту", "Идея: блог о дизайне")),
+        HelpSection("ИИ-помощник", "Встроенный помощник ведёт ежедневник по вашим словам: раскладывает фразы на дела, даты и обещания, переносит и закрывает дела, ведёт темы — и отвечает на вопросы о ваших делах коротко, в два-три предложения. Работает при интернете и с кодом приглашения; обычные фразы Margin понимает и без него. Длинные тексты вроде договоров он не пишет — «подготовить договор» станет вашим делом.", pairs = listOf(
+            "что горит на этой неделе?" to "просроченное, ближайшие сроки, кто кому должен — с объяснением",
+            "что я обещал Лёше?" to "ваши обещания этому человеку",
+            "перенеси стоматолога на пятницу" to "переносит дело",
+            "созвонились с Олегом, макет утвердили" to "закрывает дело и пишет запись в тему",
+            "разбей ремонт на шаги" to "тема с делами",
+        )),
         HelpSection("Понятия и связи", "", pairs = listOf(
             "Дело" to "одно действие с датой или без: «Купить хлеб», «Стоматолог в пт в 11». Может быть на несколько дней и повторяться",
             "Тема" to "дело, которое разрослось: своя лента записей, файлов и дел. Дело становится темой само на втором событии (запись, файл, ещё одно дело) или по «+ дело» в карточке",
@@ -863,7 +881,7 @@ object Ru : Strings {
         HelpSection("Быстрый ввод и отзыв", "Плитка «Записать» в шторке (добавляется через карандаш в быстрых настройках) и долгое нажатие на значок приложения — «Записать» / «Надиктовать». Понял фразу не так — «Понято не так» под результатом. «Отправить отзыв» в меню открывает письмо разработчику с журналами ошибок; ваши записи не отправляются."),
         HelpSection("Неделя, напоминания, виджет", "По воскресеньям на «Сегодня» — тихая карточка недели: сколько сделано, кто кому должен, какие темы стоят без движения; «×» убирает её до следующего воскресенья. Если чужое обещание просрочено, рядом с ним «напомнить» — готовое сообщение человеку (SMS, если известен телефон, иначе «Поделиться»); отправляете вы. Виджет «Margin · Сегодня» на рабочем столе показывает дела дня и открывает поле ввода или диктовку. Тему целиком можно переслать текстом: ⋯ → «Переслать»."),
         HelpSection("Приватность", "Настройки → «Приватность»: вход по отпечатку (или коду экрана) и «Где ваши данные» — где хранятся записи и что уходит с телефона. На экране блокировки напоминания показываются без текста дел."),
-        HelpSection("Пример данных", "Настройки → «Пример данных»: два месяца жизни молодого дизайнера, чтобы всё попробовать. Ваши данные сохраняются отдельно и возвращаются кнопкой «Вернуть мои данные»."),
+        HelpSection("Знакомство с Margin", "При первом запуске в Margin — несколько примеров: каждый показывает одну возможность и сам говорит, что попробовать. Убираются одной строкой «Убрать примеры» на «Сегодня» или в Настройках → «Знакомство с Margin»; там же их можно вернуть. Ваши записи при этом не трогаются."),
     )
     override val tourWriteTitle = "Пишите как думаете"
     override val tourWriteText = "Одно поле внизу: словами или голосом. Margin сам разложит на дела, даты и обещания — обычные фразы прямо в телефоне, даже без интернета."
@@ -904,6 +922,34 @@ object Ru : Strings {
     override val forwardTitle = "В Margin"
     override val forwardCommentHint = "Что с этим сделать — или просто отправьте"
     override val forwardHint = "Margin разберёт: дела, обещания, идеи"
+    override val intro = ru.anjeib.margin.data.Intro.Texts(
+        topic = "Знакомство с Margin",
+        topicNote = "Это тема — лента одного большого дела: записи, файлы и дела вместе. Напишите что-нибудь в поле внизу — это ляжет сюда записью.",
+        topicOpen = "Нажмите на это дело — откроется его карточка: дата, время, комментарий",
+        topicFile = "Добавьте фото или файл через «+» — он появится в материалах темы",
+        waitWho = "Анна",
+        topicWait = "Список гостей",
+        swipeRight = "Смахните это дело вправо — оно сделано",
+        swipeLeft = "Смахните влево — отложить на другой день",
+        hold = "Долгое нажатие — Готово · Дата · Время",
+        ask = "Спросите помощника в поле внизу: «что горит на этой неделе?»",
+        askMove = "Попросите словами: «перенеси полив цветов на воскресенье»",
+        flowers = "Полив цветов",
+        promise = "Прислать фото с отпуска",
+        noDate = "Дело без даты — тоже нормально, такие ждут в «Без даты»",
+        idea = "Подарок маме — книга о садах",
+        ideaNote = "Это идея: тема без дел. Появится первое дело — она станет темой.",
+    )
+    override val samplesLine = "Здесь примеры из «Знакомства с Margin»"
+    override val samplesRemove = "Убрать примеры"
+    override val samplesBack = "Вернуть примеры"
+    override val samplesTitle = "Знакомство с Margin"
+    override val askOffline = "На вопросы помощник отвечает, когда есть интернет и введён код приглашения."
+    override val errInvite = "Код приглашения не подошёл — проверьте его в Настройках"
+    override val inviteTitle = "Код приглашения"
+    override val inviteHint = "Включает ИИ: сложные фразы, голос, текст с фото. Без кода всё разбирается в телефоне."
+    override val inviteNone = "не введён"
+    override val privacyPolicy = "Политика конфиденциальности"
     override val forwardSorting = "Разбираю…"
     override val forwardResult = "Вот что получилось"
     override val forwardOpen = "Открыть в Margin"
@@ -970,7 +1016,7 @@ object Ru : Strings {
     override val misparsed = "Понято не так"
     override val misparsedThanks = "Спасибо — фраза сохранена для разработчика"
     override val sendFeedback = "Отправить отзыв"
-    override fun feedbackSubject(version: String) = "Margin 2 · отзыв · $version"
+    override fun feedbackSubject(version: String) = "Margin · отзыв · $version"
     override fun feedbackBody(version: String, device: String, files: Int) =
         "Что случилось или чего не хватает:\n\n\n—\nMargin $version · $device" + if (files > 0) "\nПриложены журналы ошибок и неверного разбора — без ваших записей." else ""
     override val feedbackNoMail = "Не нашлось почтового приложения"
@@ -1045,7 +1091,7 @@ object Ru : Strings {
     override val undone = "Отменено"
     override val remindFriday = "Напомнить в пятницу"
     override val dismiss = "Скрыть"
-    override val noKey = "Чтобы ИИ разбирал записи, нужен ключ — добавьте его в настройках."
+    override val noKey = "Для ИИ нужен код приглашения — введите его в Настройках. Обычные фразы разбираются и без него."
     override val openSettings = "Открыть настройки"
     override fun movedOverdue(n: Int) = "Перенесено на сегодня: $n"
     override val nothingOverdue = "Просроченных дел нет"
@@ -1482,7 +1528,7 @@ object Ru : Strings {
     override val freeWord = "свободно"
     override val dealsBadge = "Дела"
     override val topicsBadge = "Темы"
-    override fun buildLabel(name: String, code: Int, debug: Boolean) = "Margin 2 · сборка $name ($code)" + if (debug) " · отладка" else ""
+    override fun buildLabel(name: String, code: Int, debug: Boolean) = "Margin · сборка $name ($code)" + if (debug) " · отладка" else ""
     override val backWord = "Назад"
     override val todayShort = "сег."
     override fun progressOf(d: Int, n: Int) = "$d из $n"
@@ -1572,7 +1618,7 @@ object En : Strings {
     override val helpIntro = "Sections, marks and gestures"
     override val helpSearch = "Search help…"
     override val helpGroups = listOf(
-        "How it works" to listOf("How it works", "Three kinds", "Menu"),
+        "How it works" to listOf("How it works", "AI assistant", "Three kinds", "Menu"),
         "Screens" to listOf("Today", "Calendar", "Overview", "Today · Calendar · Overview", "Inside a topic", "Inbox, Materials, Archive"),
         "Writing" to listOf("Marks in the field", "Examples", "Dates, times, repeats", "Lists", "Quick entry and feedback", "Sharing to Margin", "Offline"),
         "People and promises" to listOf("The week, reminders, widget"),
@@ -1582,6 +1628,12 @@ object En : Strings {
     override val helpSections = listOf(
         HelpSection("How it works", "Margin is a planner you write to like a messenger. One field at the bottom: type or dictate, and your words become to-dos, topics and ideas. It is read right on the phone, without internet; the AI joins only for the hard parts, when online.",
             examples = listOf("Call Marina tomorrow at 3", "Buy cat food", "Idea: a design blog")),
+        HelpSection("AI assistant", "The built-in assistant keeps the planner from your words: it turns phrases into to-dos, dates and promises, moves and closes to-dos, keeps topics — and answers questions about your affairs briefly, in two or three sentences. It works online with an invite code; plain phrases are understood without it. It does not write long texts like contracts — «prepare a contract» becomes your to-do.", pairs = listOf(
+            "what's urgent this week?" to "late items, near dates, who owes whom — with why",
+            "what did I promise Lyosha?" to "your promises to that person",
+            "move the dentist to Friday" to "moves the to-do",
+            "called Oleg, the layout is approved" to "closes the to-do and writes a record in the topic",
+        )),
         HelpSection("Three kinds", "", pairs = listOf(
             "To-do" to "one action. The circle marks it done",
             "Topic" to "a to-do that grew: its own feed of records, files and to-dos. A to-do becomes a topic by itself on its second event",
@@ -1666,6 +1718,34 @@ object En : Strings {
     override val forwardTitle = "To Margin"
     override val forwardCommentHint = "What to do with it — or just send"
     override val forwardHint = "Margin will sort it: to-dos, promises, ideas"
+    override val intro = ru.anjeib.margin.data.Intro.Texts(
+        topic = "Getting to know Margin",
+        topicNote = "This is a topic — the feed of one big thing: records, files and to-dos together. Write something in the field below — it lands here as a record.",
+        topicOpen = "Tap this to-do — its card opens: date, time, comment",
+        topicFile = "Add a photo or a file with «+» — it shows up in the topic's materials",
+        waitWho = "Anna",
+        topicWait = "The guest list",
+        swipeRight = "Swipe this to-do right — it's done",
+        swipeLeft = "Swipe left — put it off to another day",
+        hold = "Long press — Done · Date · Time",
+        ask = "Ask the assistant in the field below: «what's urgent this week?»",
+        askMove = "Ask in words: «move watering the plants to Sunday»",
+        flowers = "Watering the plants",
+        promise = "Send the holiday photos",
+        noDate = "A to-do without a date is fine too — such ones wait in «No date»",
+        idea = "A present for mum — a book about gardens",
+        ideaNote = "This is an idea: a topic without to-dos. With the first to-do it becomes a topic.",
+    )
+    override val samplesLine = "These are the «Getting to know Margin» examples"
+    override val samplesRemove = "Remove examples"
+    override val samplesBack = "Bring examples back"
+    override val samplesTitle = "Getting to know Margin"
+    override val askOffline = "The assistant answers questions when there is internet and an invite code."
+    override val errInvite = "The invite code did not work — check it in Settings"
+    override val inviteTitle = "Invite code"
+    override val inviteHint = "Turns on the AI: hard phrases, voice, text on photos. Without it everything is read on the phone."
+    override val inviteNone = "not set"
+    override val privacyPolicy = "Privacy policy"
     override val forwardSorting = "Sorting…"
     override val forwardResult = "Here is what came of it"
     override val forwardOpen = "Open in Margin"
@@ -1732,7 +1812,7 @@ object En : Strings {
     override val misparsed = "Understood wrong"
     override val misparsedThanks = "Thanks — the phrase is saved for the developer"
     override val sendFeedback = "Send feedback"
-    override fun feedbackSubject(version: String) = "Margin 2 · feedback · $version"
+    override fun feedbackSubject(version: String) = "Margin · feedback · $version"
     override fun feedbackBody(version: String, device: String, files: Int) =
         "What happened or what's missing:\n\n\n—\nMargin $version · $device" + if (files > 0) "\nAttached: error and misunderstanding logs — none of your records." else ""
     override val feedbackNoMail = "No e-mail app found"
@@ -1807,7 +1887,7 @@ object En : Strings {
     override val undone = "Undone"
     override val remindFriday = "Remind on Friday"
     override val dismiss = "Dismiss"
-    override val noKey = "The AI needs a key to sort what you write — add it in settings."
+    override val noKey = "The AI needs an invite code — enter it in Settings. Plain phrases are read without it."
     override val openSettings = "Open settings"
     override fun movedOverdue(n: Int) = "Moved to today: $n"
     override val nothingOverdue = "Nothing overdue"
@@ -2244,7 +2324,7 @@ object En : Strings {
     override val freeWord = "free"
     override val dealsBadge = "To-dos"
     override val topicsBadge = "Topics"
-    override fun buildLabel(name: String, code: Int, debug: Boolean) = "Margin 2 · build $name ($code)" + if (debug) " · debug" else ""
+    override fun buildLabel(name: String, code: Int, debug: Boolean) = "Margin · build $name ($code)" + if (debug) " · debug" else ""
     override val backWord = "Back"
     override val todayShort = "today"
     override fun progressOf(d: Int, n: Int) = "$d of $n"

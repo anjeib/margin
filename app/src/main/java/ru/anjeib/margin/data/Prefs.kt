@@ -50,6 +50,8 @@ data class Settings(
     val yaMode: String = "hybrid",
     val yaKey: String = "",
     val yaFolder: String = "",
+    /** The invite code that lets this phone through Margin's door to the AI (closed alpha). */
+    val invite: String = "",
     /** Hidden developer section (providers, keys, models, spend) — long-press the version to toggle. */
     val devMode: Boolean = false,
 ) {
@@ -91,10 +93,11 @@ class Prefs private constructor(context: Context) {
         setupStep = sp.getInt("setupStep", if (sp.getBoolean("onboarded", false)) 3 else 0),
         spentMonth = sp.getString("spentMonth", "") ?: "",
         spentRub = sp.getFloat("spentRub", 0f).toDouble(),
-        provider = sp.getString("provider", null) ?: if (ru.anjeib.margin.BuildConfig.YC_KEY.isNotBlank()) "yandex" else "openrouter",
+        provider = sp.getString("provider", null) ?: if (ru.anjeib.margin.BuildConfig.YC_KEY.isNotBlank() || ru.anjeib.margin.BuildConfig.PROXY_URL.isNotBlank()) "yandex" else "openrouter",
         yaMode = sp.getString("yaMode", null) ?: "hybrid",
         yaKey = sp.getString("yaKey", null) ?: ru.anjeib.margin.BuildConfig.YC_KEY,
         yaFolder = sp.getString("yaFolder", null) ?: ru.anjeib.margin.BuildConfig.YC_FOLDER,
+        invite = sp.getString("invite", null) ?: "",
         devMode = sp.getBoolean("devMode", false),
     )
 
@@ -130,6 +133,7 @@ class Prefs private constructor(context: Context) {
             putString("yaMode", s.yaMode)
             putString("yaKey", s.yaKey.trim())
             putString("yaFolder", s.yaFolder.trim())
+            putString("invite", s.invite.trim())
             putBoolean("devMode", s.devMode)
         }
         _s.value = s.copy(apiKey = s.apiKey.trim())

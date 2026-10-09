@@ -148,6 +148,26 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             Segmented(listOf(s.parseLocal, s.parseAuto, s.parseCloud), modes.indexOf(settings.parseMode).coerceAtLeast(0)) { i -> vm.updateSettings { it.copy(parseMode = modes[i]) } }
             Text(when (settings.parseMode) { "local" -> s.parseLocalHint; "cloud" -> s.parseCloudHint; else -> s.parseAutoHint },
                 style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp))
+            // The closed alpha: the AI opens with the invite code that came with the link.
+            if (ru.anjeib.margin.BuildConfig.PROXY_URL.isNotBlank() && settings.yaKey.isBlank()) {
+                var inviteDraft by remember { mutableStateOf<String?>(null) }
+                val status by vm.keyStatus.collectAsState()
+                Divider()
+                ValueRow(s.inviteTitle, if (settings.invite.isNotBlank() && status != null) status else s.inviteHint,
+                    settings.invite.ifBlank { s.inviteNone }, onClick = { inviteDraft = settings.invite })
+                inviteDraft?.let { d ->
+                    TextDialog(s.inviteTitle, d, "", onDismiss = { inviteDraft = null }) { v ->
+                        vm.updateSettings { it.copy(invite = v.trim(), provider = "yandex") }; inviteDraft = null; vm.checkKey()
+                    }
+                }
+            }
+        }
+
+        // «Знакомство с Margin»: take the examples away, or bring them back to look again.
+        Group(s.samplesTitle) {
+            val data by vm.data.collectAsState()
+            val has = data.tasks.any { it.sample }
+            ValueRow(if (has) s.samplesRemove else s.samplesBack, null, "", onClick = { if (has) vm.removeSamples() else vm.bringSamples() })
         }
 
         // Sample data: to try everything without filling it by hand; the user's own data waits aside.
@@ -184,7 +204,12 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         if (dataInfo) androidx.compose.material3.AlertDialog(onDismissRequest = { dataInfo = false }, containerColor = c.card,
             title = { Text(s.whereDataTitle, style = Type.cardTitle.copy(color = c.ink)) },
             text = { Text(s.whereDataText, style = Type.body.copy(color = c.graphite, fontSize = 14.5.sp), modifier = Modifier.verticalScroll(rememberScrollState())) },
-            confirmButton = { androidx.compose.material3.TextButton({ dataInfo = false }) { Text(s.close, color = c.link) } })
+            confirmButton = { androidx.compose.material3.TextButton({ dataInfo = false }) { Text(s.close, color = c.link) } },
+            dismissButton = {
+                androidx.compose.material3.TextButton({
+                    runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(PRIVACY_URL))) }
+                }) { Text(s.privacyPolicy, color = c.link) }
+            })
         if (settings.devMode) {
         Group(s.devSection) {
             val ya = settings.provider == "yandex"
@@ -520,3 +545,6 @@ private fun ForwardSettings(vm: MainVm) {
         }
     }
 }
+
+/** The privacy policy the store and the users read (owner's site). */
+const val PRIVACY_URL = "https://vuzburo.ru/privacy.html"

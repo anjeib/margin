@@ -113,7 +113,7 @@ object Assistant {
         appendLine("- An answer to your earlier question → update_task on that task, no duplicate.")
         appendLine("- Change only what the user asked about: never touch other tasks, never add or alter dates, times or repeats nobody mentioned.")
         appendLine("- A question or a request for advice → answer in reply (2–4 short sentences, no markdown), actions only if asked. \"Что горит / что сорвётся\" → the 3–5 riskiest items (overdue, due within 3 days, waiting on others, your promises), each with why — not a plain list.")
-        appendLine("- reply/question/options in ${L.s.aiLanguage}: brief, calm, no emoji, no exclamation marks.")
+        appendLine("- reply/question/options in ${L.s.aiLanguage}: brief, calm, no emoji, no exclamation marks. Never show ids (task_id, subtask_id) in reply — name things by their titles. In Russian say «дело/дела», «тема», «идея», never «задача».")
     }
 
     private fun scopeRule(scope: Scope) = when (scope) {
@@ -187,7 +187,10 @@ object Assistant {
     fun context(d0: AppData, s: Settings, now: LocalDateTime = LocalDateTime.now(), focusTask: String? = null, query: String? = null, recent: Set<String> = emptySet()): String {
         // What is in the archive is put away: the AI doesn't append to it or bring it up.
         // v2: thoughts are shown to the model as the notes it knows (all but the one the user is inside).
-        val d = ru.anjeib.margin.data.Topics.asNotes(d0, focusTask).let { x -> x.copy(notes = x.notes.filter { !it.archived }, tasks = x.tasks.filter { !(it.topic && it.done) }) }
+        // The «Знакомство» examples that only teach («Смахните вправо…», «Спросите помощника…») are not the user's matters:
+        // seen, they make the model copy them instead of answering.
+        val d = ru.anjeib.margin.data.Topics.asNotes(d0, focusTask).let { x -> x.copy(notes = x.notes.filter { !it.archived },
+            tasks = x.tasks.filter { !(it.topic && it.done) && !ru.anjeib.margin.data.Intro.teachesOnly(it) }) }
         val today = now.toLocalDate()
         return buildString {
             appendLine("Now: $today, ${now.toLocalTime().withSecond(0).withNano(0)}.")
@@ -345,6 +348,10 @@ object Assistant {
         }
     }
 
+    /** The model sometimes quotes its ids at the user («(subtask_id=intro-q2)»): they mean nothing to a person. */
+    private val idTalk = Regex("""\s*[(\[]?\b(?:sub)?task_?id\s*[=:]\s*[\w-]+[)\]]?""", RegexOption.IGNORE_CASE)
+    fun clean(reply: String) = reply.replace(idTalk, "").replace(Regex("\\s+([,.;:])"), "$1").trim()
+
     /** True when the reply can't be used: unparseable, or "actions" holds garbage like [1, 2, 3]. Worth asking again. */
     fun isBroken(content: String): Boolean {
         val o = parseObject(content) ?: return content.trimStart().startsWith("{") || content.contains("\"actions\"")
@@ -370,7 +377,7 @@ object Assistant {
             val text = qo.str("text") ?: return@let null
             Question(text, (qo["options"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }?.take(4) ?: emptyList())
         }
-        return AiPlan(o.str("reply"), actions, q, o.str("said"))
+        return AiPlan(o.str("reply")?.let(::clean), actions, q, o.str("said"))
     }
 
     fun field(o: JsonObject?, k: String): String? = o?.str(k)

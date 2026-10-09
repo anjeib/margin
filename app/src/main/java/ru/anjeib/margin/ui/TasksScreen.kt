@@ -341,6 +341,13 @@ fun TaskList(
                         }
                     }
                 }
+                // The «Знакомство с Margin» examples are in: one quiet line says so, and takes them away in one tap.
+                if (data.tasks.any { it.sample }) plain("samples") {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(s.samplesLine, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.weight(1f))
+                        PaperLink(s.samplesRemove) { vm.removeSamples() }
+                    }
+                }
                 // Shared or saved without a place: one line here while there is something to put away.
                 val unplaced = data.inboxNote()?.entries?.size ?: 0
                 // While the week's card is up it already says this — once on the screen is enough.

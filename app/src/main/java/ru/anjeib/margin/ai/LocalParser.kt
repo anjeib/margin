@@ -129,6 +129,8 @@ object LocalParser {
     private const val IDEA = "(?:идея|мысль|заметка|на заметку|подумать о|подумать над)\\s*[:—–-]?\\s*"
     private val ideaCue = Regex("^$IDEA", RegexOption.IGNORE_CASE)
     /** Reports and edits need what exists and what it means — the AI's work. */
+    // Only what is plainly a question: «…?» at the end, or «что горит» — «Когда приедет Дима, отдать ключи» stays a matter.
+    private val asked = Regex("\\?\\s*$|^что горит", RegexOption.IGNORE_CASE)
     private val aiCue = Regex("${B}(перенес$L*|перенеси|перенос$L*|сдвин$L*|измени$L*|исправ$L*|переимен$L*|поменя$L*|удали$L*|убери|отмени$L*|не надо|уже не|созвонил$L*|договорил$L*|сказал$L*|ответил$L*|готово|сделал$L*|выполнил$L*|получил$L*|разбей$L*|мне кажется|" +
         // A report of what happened: «встречались, обсудили», «клиент отказался», «согласовали».
         "встречал$L*|обсудил$L*|обсуждал$L*|поговорил$L*|списал$L*ись|решил$L*|отказал$L*|согласовал$L*|утвердил$L*|передумал$L*)$E", RegexOption.IGNORE_CASE)
@@ -152,6 +154,8 @@ object LocalParser {
         var sure = true
         var why: String? = null
         if (aiCue.containsMatchIn(text)) { sure = false; why = "report-or-edit" }
+        // A question to the assistant («что горит на этой неделе?») is not a matter: only the AI answers it.
+        if (asked.containsMatchIn(text.trim())) return Result(emptyList(), false, "question")
         if (sure && reported(text, names)) { sure = false; why = "report" }
         // A phone or an e-mail is about a person — the AI files it on their card.
         if (Regex("\\+?\\d[\\d\\s()-]{8,}\\d|\\S+@\\S+\\.\\p{L}{2,}").containsMatchIn(text)) { sure = false; why = why ?: "contact" }
