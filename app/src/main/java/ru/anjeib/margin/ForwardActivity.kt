@@ -99,9 +99,9 @@ class ForwardActivity : ComponentActivity() {
                         } else {
                             sorting.value = true
                             lifecycleScope.launch {
-                                // A slow network must not hold the user here: after 20 s the words simply wait in the queue
+                                // A slow network must not hold the user here: after 35 s (a forward goes to the stronger, slower model) the words simply wait in the queue
                                 // (leaving cancels the request; the worker sorts it later and says so).
-                                val r = kotlinx.coroutines.withTimeoutOrNull(20_000) {
+                                val r = kotlinx.coroutines.withTimeoutOrNull(35_000) {
                                     runCatching { Processor.drainItems(this@ForwardActivity) }.getOrDefault(emptyList()).find { it.queueId == q.id }
                                 }
                                 sorting.value = false

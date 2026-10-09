@@ -548,4 +548,4 @@ private fun ForwardSettings(vm: MainVm) {
 }
 
 /** The privacy policy the store and the users read (owner's site). */
-const val PRIVACY_URL = "https://vuzburo.ru/privacy.html"
+const val PRIVACY_URL = "https://vuzburo.ru/privacy.html#margin"
