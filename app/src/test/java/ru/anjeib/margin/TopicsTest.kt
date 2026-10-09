@@ -10,6 +10,7 @@ import org.junit.Test
 import ru.anjeib.margin.ai.AiPlan
 import ru.anjeib.margin.ai.Assistant
 import ru.anjeib.margin.data.AppData
+import ru.anjeib.margin.data.likelyTopic
 import ru.anjeib.margin.data.Entry
 import ru.anjeib.margin.data.Task
 import ru.anjeib.margin.data.Topics
@@ -156,5 +157,18 @@ class TopicsTest {
             o("type" to "create_task", "title" to "Купить хлеб"), o("type" to "create_task", "title" to "Купить молоко"),
         ), null), "Завтра в 15: купить хлеб и молоко", strict = true).data
         assertEquals(2, d.tasks.size)
+    }
+
+    /** «Похоже, это к теме Зерно»: by the topic's people and words; nothing when no topic stands out. */
+    @Test fun likelyTopic() {
+        val zerno = Task(id = "z", title = "Айдентика для кофейни «Зерно»", topic = true, people = listOf("Олег"),
+            subtasks = listOf(ru.anjeib.margin.data.Subtask(title = "Макет упаковки для типографии")))
+        val flat = Task(id = "f", title = "Квартира поближе к студии", topic = true, people = listOf("Ирина"))
+        val d = AppData(tasks = listOf(zerno, flat))
+        assertEquals("z", d.likelyTopic("Олегу отправить счёт", listOf("Олег"))?.id)
+        assertEquals("z", d.likelyTopic("распечатать макет упаковки для типографии")?.id)
+        assertEquals("f", d.likelyTopic("Ирина пришлёт варианты", listOf("Ирина"))?.id)
+        assertEquals(null, d.likelyTopic("купить хлеб"))
+        assertEquals(null, d.likelyTopic("Олегу отправить счёт", listOf("Олег"), except = setOf("z")))
     }
 }

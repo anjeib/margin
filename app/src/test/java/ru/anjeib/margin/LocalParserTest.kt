@@ -22,6 +22,8 @@ import java.time.temporal.TemporalAdjusters
 class LocalParserTest {
     private val today = LocalDate.now()
     private fun next(d: DayOfWeek) = today.with(TemporalAdjusters.nextOrSame(d))
+    /** «до пятницы», «к четвергу»: a deadline — said on that very day, it is next week's. */
+    private fun by(d: DayOfWeek) = today.with(TemporalAdjusters.next(d))
     private val tomorrow = today.plusDays(1)
     private fun dom(n: Int): LocalDate { var m = today.withDayOfMonth(1); while (true) { if (n <= m.lengthOfMonth() && !m.withDayOfMonth(n).isBefore(today)) return m.withDayOfMonth(n); m = m.plusMonths(1) } }
     private fun on(day: Int, mon: Int) = LocalDate.of(today.year, mon, day).let { if (it.isBefore(today.minusDays(1))) it.plusYears(1) else it }
@@ -36,11 +38,11 @@ class LocalParserTest {
         Case("позвонить маме в пятницу") { n -> n.single().let { it.dueDate == next(DayOfWeek.FRIDAY) && "Мама" in it.people } },
         Case("созвониться с Анной по договору") { n -> n.single().people.contains("Анна") },
         Case("Дима должен прислать макет в среду") { n -> n.single().let { it.waitingFor == "Дима" && it.dueDate == next(DayOfWeek.WEDNESDAY) } },
-        Case("Обещал Анне показать калькулятор до пятницы") { n -> n.single().let { it.promisedTo == "Анна" && it.dueDate == next(DayOfWeek.FRIDAY) && it.waitingFor == null } },
+        Case("Обещал Анне показать калькулятор до пятницы") { n -> n.single().let { it.promisedTo == "Анна" && it.dueDate == by(DayOfWeek.FRIDAY) && it.waitingFor == null } },
         Case("Каждый вторник в 10:00 планёрка") { n -> n.single().let { it.repeat?.days == listOf(2) && it.time == "10:00" } },
         Case("кажд понедельник заказать муку у тимура") { n -> n.single().let { it.repeat?.days == listOf(1) && it.waitingFor == null } },
         Case("аренда первого числа каждый месяц") { n -> n.single().let { it.repeat?.freq == "monthly" && it.dueDate == dom(1) } },
-        Case("заказать упаковку у ПакетПро до среды") { n -> n.single().let { it.dueDate == next(DayOfWeek.WEDNESDAY) && it.waitingFor == null } },
+        Case("заказать упаковку у ПакетПро до среды") { n -> n.single().let { it.dueDate == by(DayOfWeek.WEDNESDAY) && it.waitingFor == null } },
         Case("тренировка в понедельник и четверг в 19:00") { n -> n.single().let { it.slots.size == 2 && it.slots.all { s -> s.time == "19:00" } && it.repeat == null } },
         Case("полить цветы 12, 15 и 18 октября") { n -> n.single().slots.size == 3 },
         Case("через неделю записаться к врачу") { n -> n.single().dueDate == today.plusDays(7) },
@@ -51,7 +53,7 @@ class LocalParserTest {
         Case("идея: сделать блок с ценами без «от»") { n -> n.single().let { it.thought && it.title.contains("цен") } },
         Case("купить корм коту, позвонить маме и записаться к барберу") { n -> n.size == 3 },
         Case("купить хлеб и молоко") { n -> n.size == 1 },
-        Case("лена пришлёт график до пятницы") { n -> n.single().let { it.waitingFor == "Лена" && it.dueDate == next(DayOfWeek.FRIDAY) } },
+        Case("лена пришлёт график до пятницы") { n -> n.single().let { it.waitingFor == "Лена" && it.dueDate == by(DayOfWeek.FRIDAY) } },
         Case("ждём от Маши ключи от квартиры") { n -> n.single().waitingFor == "Маша" },
         Case("Маша вернёт 3000 в субботу") { n -> n.single().let { it.waitingFor == "Маша" && it.dueDate == next(DayOfWeek.SATURDAY) } },
         Case("отправить счёт клиенту до 10-го") { n -> n.single().dueDate == dom(10) },
@@ -68,7 +70,7 @@ class LocalParserTest {
         Case("позвонить в ЖЭК насчёт счётчиков") { n -> n.single().title.startsWith("Позвонить в ЖЭК") },
         Case("каждый день пить витамины утром") { n -> n.single().repeat?.freq == "daily" },
         Case("Лёше скинуть исходники до четверга") { n -> n.single().let { it.dueDate == next(DayOfWeek.THURSDAY) && ("Лёша" in it.people || it.promisedTo == "Лёша") } },
-        Case("Ирина должна прислать тексты до среды") { n -> n.single().let { it.waitingFor == "Ирина" && it.dueDate == next(DayOfWeek.WEDNESDAY) } },
+        Case("Ирина должна прислать тексты до среды") { n -> n.single().let { it.waitingFor == "Ирина" && it.dueDate == by(DayOfWeek.WEDNESDAY) } },
         Case("в среду в 14:00 созвон с бухгалтерией") { n -> n.single().let { it.dueDate == next(DayOfWeek.WEDNESDAY) && it.time == "14:00" } },
         Case("Сапсан 24 октября в 7:40") { n -> n.single().let { it.dueDate == on(24, 10) && it.time == "07:40" } },
         Case("купить билеты в кино на субботу") { n -> n.single().dueDate == next(DayOfWeek.SATURDAY) },
@@ -79,7 +81,7 @@ class LocalParserTest {
         Case("записаться к стоматологу на Тверской 12") { n -> n.single().let { it.place == "Тверской, 12" && it.title.startsWith("Записаться к стоматологу") } },
         Case("Купить молоко\nЗабрать костюм из химчистки в субботу\nПозвонить Олегу завтра в 11") { n -> n.size == 3 && n.any { it.dueDate == tomorrow && it.time == "11:00" && "Олег" in it.people } },
         Case("сегодня вечером тренировка; завтра в 10 стоматолог") { n -> n.size == 2 && n.any { it.dueDate == tomorrow && it.time == "10:00" } },
-        Case("подготовить бриф для кофейни к четвергу") { n -> n.single().dueDate == next(DayOfWeek.THURSDAY) },
+        Case("подготовить бриф для кофейни к четвергу") { n -> n.single().dueDate == by(DayOfWeek.THURSDAY) },
         Case("1. Купить молоко\n2. Забрать посылку завтра\n3. Позвонить Олегу") { n -> n.size == 3 && n.none { it.title.first().isDigit() } && n.any { it.dueDate == tomorrow } },
         Case("- хлеб купить\n- оплатить интернет 5.11") { n -> n.size == 2 && n.none { it.title.startsWith("-") } },
         Case("в субботу день рождения Кати, купить подарок") { n -> n.isNotEmpty() && n.any { it.dueDate == next(DayOfWeek.SATURDAY) } },
@@ -107,7 +109,7 @@ class LocalParserTest {
         "Каждый вторник в 10:00 планёрка по vuzburo" to { n -> n.single().let { it.repeat?.days == listOf(2) && it.time == "10:00" } },
         "кажд понедельник заказать муку у тимура" to { n -> n.single().let { it.repeat?.days == listOf(1) && it.waitingFor == null } },
         "аренда первого числа каждый месяц" to { n -> n.single().repeat?.freq == "monthly" },
-        "заказать упаковку у ПакетПро до среды" to { n -> n.single().let { it.dueDate == next(DayOfWeek.WEDNESDAY) && it.waitingFor == null } },
+        "заказать упаковку у ПакетПро до среды" to { n -> n.single().let { it.dueDate == by(DayOfWeek.WEDNESDAY) && it.waitingFor == null } },
         "Дента+: Катя делает макеты главной к четвергу, Артём верстает после макетов, Ирина должна прислать тексты до среды" to null,
         "Созвонились. Приказ о зачислении в работе, будет через 2 недели. Нужно отправить документы об оплате в бухгалтерию." to null,
     )
@@ -150,7 +152,7 @@ class LocalParserTest {
     @Test fun marks() {
         L.lang = Lang.Ru
         val w = LocalParser.parse("ключи от квартиры до субботы", base, people = listOf("Маша"), waitFor = "Маша").items.single()
-        assertTrue(w.waitingFor == "Маша" && w.promisedTo == null && w.due == next(DayOfWeek.SATURDAY))
+        assertTrue(w.waitingFor == "Маша" && w.promisedTo == null && w.due == by(DayOfWeek.SATURDAY))
         val p = LocalParser.parse("исходники баннеров завтра", base, people = listOf("Лёша"), promiseTo = "Лёша").items.single()
         assertTrue(p.promisedTo == "Лёша" && p.waitingFor == null && "Лёша" !in p.people)
         val n = LocalParser.parse("позвонить насчёт счётчиков", base, people = listOf("ЖЭК")).items.single()

@@ -12,6 +12,7 @@ import ru.anjeib.margin.data.sentence
 import ru.anjeib.margin.data.withNames
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.temporal.TemporalAdjusters
 
@@ -50,7 +51,7 @@ object LocalParser {
     // ---------------- words ----------------
 
     private const val L = "\\p{L}"
-    private const val WD = "(понедельник$L*|вторник$L*|сред[ауеы]|средам|четверг$L*|пятниц$L*|суббот$L*|воскресень$L*|пн|вт|ср|чт|пт|сб|вс)"
+    private const val WD = "(понедельник$L*|вторник$L*|сред[ауеы]|средам|четверг$L*|пятниц$L*|пятн|субб?от$L*|воскресень$L*|пн|вт|ср|чт|пт|сб|вс)"
     private const val MON = "(январ$L*|феврал$L*|март$L*|апрел$L*|ма[йяе]|июн$L*|июл$L*|август$L*|сентябр$L*|октябр$L*|ноябр$L*|декабр$L*)"
     private const val B = "(?<!$L)"
     private const val E = "(?!$L)"
@@ -62,8 +63,8 @@ object LocalParser {
             x.startsWith("вторник") || x == "вт" -> 2
             x.startsWith("сред") || x == "ср" -> 3
             x.startsWith("четверг") || x == "чт" -> 4
-            x.startsWith("пятниц") || x == "пт" -> 5
-            x.startsWith("суббот") || x == "сб" -> 6
+            x.startsWith("пятн") || x == "пт" -> 5
+            x.startsWith("суббот") || x.startsWith("субот") || x == "сб" -> 6
             x.startsWith("воскресен") || x == "вс" -> 7
             else -> null
         }
@@ -74,7 +75,7 @@ object LocalParser {
 
     private val ordinals = listOf("перв", "втор", "трет", "четвёрт|четверт", "пят", "шест", "седьм", "восьм", "девят", "десят",
         "одиннадцат", "двенадцат", "тринадцат", "четырнадцат", "пятнадцат", "шестнадцат", "семнадцат", "восемнадцат", "девятнадцат", "двадцат")
-    private const val ORD = "(первого|второго|третьего|четвёртого|четвертого|пятого|шестого|седьмого|восьмого|девятого|десятого|одиннадцатого|двенадцатого|тринадцатого|четырнадцатого|пятнадцатого|шестнадцатого|семнадцатого|восемнадцатого|девятнадцатого|двадцатого|двадцать\\s+$L+ого|тридцатого|тридцать\\s+первого)"
+    private const val ORD = "((?:двадцать\\s+|тридцать\\s+)?(?:перв|втор|трет|четв[её]рт|пят|шест|седьм|восьм|девят|десят|одиннадцат|двенадцат|тринадцат|четырнадцат|пятнадцат|шестнадцат|семнадцат|восемнадцат|девятнадцат|двадцат|тридцат)(?:ого|ому|ье|ьего|ьему|ое))"
     private fun ordinal(w: String): Int? {
         val x = w.lowercase().replace('ё', 'е')
         if (x.startsWith("двадцать")) return 20 + (ordinal(x.substringAfter(' ')) ?: return null)
@@ -83,15 +84,15 @@ object LocalParser {
         return ordinals.indexOfFirst { p -> p.split('|').any { x.startsWith(it.replace('ё', 'е')) } }.takeIf { it >= 0 }?.plus(1)
     }
 
-    private val numberWords = mapOf("один" to 1, "одну" to 1, "два" to 2, "две" to 2, "пару" to 2, "три" to 3, "четыре" to 4, "пять" to 5, "шесть" to 6, "семь" to 7, "десять" to 10)
+    private val numberWords = mapOf("один" to 1, "одну" to 1, "два" to 2, "две" to 2, "пару" to 2, "три" to 3, "четыре" to 4, "пять" to 5, "шесть" to 6, "семь" to 7, "десять" to 10, "полчаса" to 0)
 
     /** Common first names (and family words) — so lowercase dictation still finds people. Words that are also ordinary nouns are left out. */
     private val commonNames = ("Александр Алексей Андрей Антон Артём Артем Борис Вадим Валентин Василий Виктор Виталий Владимир Владислав Вячеслав Георгий Глеб " +
         "Григорий Даниил Денис Дмитрий Евгений Егор Иван Игорь Илья Кирилл Константин Леонид Максим Матвей Михаил Никита Николай Олег Павел Пётр Руслан " +
-        "Сергей Станислав Степан Тимур Тимофей Фёдор Юрий Ярослав Саша Лёша Леша Дима Миша Женя Коля Паша Петя Серёжа Сережа Костя Витя Вова Гоша Юра Тёма " +
+        "Сергей Станислав Степан Тимур Тимофей Фёдор Юрий Ярослав Саша Лёша Леша Дима Миша Женя Коля Паша Петя Серёжа Сережа Костя Витя Вова Гоша Юра Вася Петя Гена " +
         "Даня Ваня Стёпа Федя Боря Гриша Артур Эдик Алёна Алина Алла Анастасия Анна Валентина Валерия Вероника Виктория Галина Дарья Диана Екатерина Елена " +
         "Елизавета Жанна Зоя Инна Ирина Карина Кира Ксения Лариса Лидия Людмила Маргарита Марина Мария Наталья Наталия Нина Оксана Ольга Полина Светлана " +
-        "София Софья Таисия Тамара Татьяна Ульяна Юлия Яна Аня Катя Лена Маша Наташа Оля Света Таня Юля Настя Даша Ксюша Лиза Соня Вика Галя Надя Ира Мама Папа").split(' ')
+        "София Софья Таисия Тамара Татьяна Ульяна Юлия Яна Аня Катя Лена Маша Наташа Оля Света Таня Юля Настя Даша Ксюша Лиза Соня Вика Галя Надя Ира Люба Лера Рита Майя Ева Варя Тоня Валя Слава Рома Лёня Толя Стас Мама Папа").split(' ')
 
     /** Every case of a name we care about → the name: «Анне», «Анной», «Анну», «Анны» → «Анна». */
     private fun forms(name: String): Set<String> {
@@ -104,7 +105,7 @@ object LocalParser {
             n.endsWith("я") -> { out += n.dropLast(1) + "ей"; out += n.dropLast(1) + "ю" }
             n.endsWith("й") -> { out += n.dropLast(1) + "ем" }
             n.endsWith("ь") -> { out += n.dropLast(1) + "ем"; out += n.dropLast(1) + "ью" }
-            n.last() in "бвгдзклмнпрстфх" -> out += n + "ом"
+            n.last() in "бвгдзклмнпрстфх" -> { out += n + "ом"; out += n + "а"; out += n + "у"; out += n + "е" }
             n.last() in "жшчщц" -> out += n + "ем"
         }
         return out.map { it.replace('ё', 'е') }.toSet()
@@ -128,12 +129,14 @@ object LocalParser {
     private const val IDEA = "(?:идея|мысль|заметка|на заметку|подумать о|подумать над)\\s*[:—–-]?\\s*"
     private val ideaCue = Regex("^$IDEA", RegexOption.IGNORE_CASE)
     /** Reports and edits need what exists and what it means — the AI's work. */
-    private val aiCue = Regex("${B}(перенес$L*|перенеси|сдвин$L*|измени$L*|поменя$L*|удали$L*|отмени$L*|созвонил$L*|договорил$L*|сказал$L*|ответил$L*|готово|сделал$L*|выполнил$L*|получил$L*|разбей$L*|мне кажется)$E", RegexOption.IGNORE_CASE)
+    private val aiCue = Regex("${B}(перенес$L*|перенеси|перенос$L*|сдвин$L*|измени$L*|исправ$L*|переимен$L*|поменя$L*|удали$L*|убери|отмени$L*|не надо|уже не|созвонил$L*|договорил$L*|сказал$L*|ответил$L*|готово|сделал$L*|выполнил$L*|получил$L*|разбей$L*|мне кажется|" +
+        // A report of what happened: «встречались, обсудили», «клиент отказался», «согласовали».
+        "встречал$L*|обсудил$L*|обсуждал$L*|поговорил$L*|списал$L*ись|решил$L*|отказал$L*|согласовал$L*|утвердил$L*|передумал$L*)$E", RegexOption.IGNORE_CASE)
     private val filler = Regex("^(?:(?:надо|нужно|не забыть|не забудь|напомни(?:ть)?(?: мне)?|мне|я|хочу|пора|обязательно|плиз|пожалуйста)[,\\s]+)+", RegexOption.IGNORE_CASE)
     private val verbStart = Regex("^(?:$L+(?:ть|ти|чь|ться|тись)|позвон$L*|напис$L*|купи|сходи|сделай|отправь|забери|заплати|оплати|закажи|запишись)$E", RegexOption.IGNORE_CASE)
-    private val waitVerbs = "(пришл[её]т|прислать|присылает|скин[еу]т|скинуть|отправит|отправить|верн[её]т|вернуть|сда[её]т|сдать|сдаёт|сдает|даст|ответит|подготовит|сделает|принес[её]т|передаст)"
+    private val waitVerbs = "(пришл[её]т|пришлют|прислать|присылает|скин[еу]т|скинуть|отправит|отправить|верн[её]т|вернуть|сда[её]т|сдаст|сдать|сдаёт|сдает|даст|ответит|подготовит|сделает|принес[её]т|передаст|подпишет|привез[её]т|оплатит)"
 
-    private val leftoverDay = Regex("${B}(сегодня|завтра|послезавтра|понедельник$L*|вторник$L*|сред[ауеы]|четверг$L*|пятниц$L*|суббот$L*|воскресень$L*|\\d{1,2}\\s+$MON)$E", RegexOption.IGNORE_CASE)
+    private val leftoverDay = Regex("${B}(сегодня|завтра|послезавтра|понедельник$L*|вторник$L*|сред[ауеы]|четверг$L*|пятниц$L*|суббот$L*|воскресень$L*|\\d{1,2}\\s+$MON|\\d{1,2}-?(?:го|му|ому|ого))$E", RegexOption.IGNORE_CASE)
 
     // ---------------- parsing ----------------
 
@@ -147,6 +150,7 @@ object LocalParser {
         var sure = true
         var why: String? = null
         if (aiCue.containsMatchIn(text)) { sure = false; why = "report-or-edit" }
+        if (sure && reported(text, names)) { sure = false; why = "report" }
         // A phone or an e-mail is about a person — the AI files it on their card.
         if (Regex("\\+?\\d[\\d\\s()-]{8,}\\d|\\S+@\\S+\\.\\p{L}{2,}").containsMatchIn(text)) { sure = false; why = why ?: "contact" }
 
@@ -168,12 +172,47 @@ object LocalParser {
         return Result(items, sure, why)
     }
 
+    private val pastVerb = Regex("$L{2,}(?:[аеёиоуяыю]л|[её]з|[её]с)(?:а|и|о|ся|ась|ись|ось)?", RegexOption.IGNORE_CASE)
+    private val notPast = setOf("недели", "неделе", "дела", "дело", "цели", "школа", "модели", "мебели", "канал", "журнал", "сериал", "материал",
+        "вокзал", "финал", "сигнал", "оригинал", "персонал", "интервал", "капитал", "стола", "пола", "села", "тела", "мыла", "пчела", "стрела",
+        "через", "адрес", "интерес", "процесс", "прогресс", "бизнес", "конгресс", "навес", "отвес")
+    private val calm = setOf("уже", "тоже", "наконец", "сегодня", "вчера", "только", "что", "всё", "все", "сам", "сама")
+    private val subjects = setOf("я", "мы", "он", "она", "они", "клиент", "клиентка", "заказчик", "заказчица", "бухгалтер", "мастер", "курьер")
+
+    /**
+     * A report of what has happened — «Анна уже прислала договор», «оплатил интернет», «Маша заболела»: a verb in the past
+     * tense at the start of a clause or right after who did it. Such words change what exists: the AI's work, never a new matter.
+     */
+    private fun reported(text: String, names: Names): Boolean {
+        if (Regex("^\\s*(?:всё|все)\\s*[,!.—-]|${B}(?:не\\s+состоится|отменяется|отменили)$E", RegexOption.IGNORE_CASE).containsMatchIn(text)) return true
+        text.split(Regex("[,.;:!?\\n]+")).forEach { clause ->
+            val w = clause.trim().split(Regex("\\s+")).filter { it.isNotBlank() }.map { it.lowercase().trim('«', '»', '"', '(', ')') }
+            var i = 0
+            while (i < w.size && w[i] in calm) i++
+            // «обещал Анне…», «хотел купить…» — past in form, a plan in meaning.
+            fun past(x: String?) = x != null && x.length >= 4 && x !in notPast && pastVerb.matches(x) && names.of(x) == null &&
+                !Regex("^(?:по)?обещал|^хотел|^собирал|^планировал|^думал").containsMatchIn(x)
+            if (past(w.getOrNull(i))) return true
+            // Who, then (maybe «уже»), then what they did.
+            val who = w.getOrNull(i)
+            if (who != null && (who in subjects || names.of(who) != null)) {
+                var j = i + 1
+                while (j < w.size && w[j] in calm) j++
+                if (past(w.getOrNull(j))) return true
+            }
+        }
+        return false
+    }
+
     /** Several matters in one message: lines, «;», sentences, «ещё», a new verb after a comma or «и». */
     private fun split(t0: String): List<String> {
         // «1. …», «- …», «• …» at line starts: a list typed by hand — the marks go before anything else splits the text.
         val t = t0.lines().joinToString("\n") { it.replace(Regex("^\\s*(\\d{1,2}[.)]|[-–—•*])\\s+"), "") }
         // «ещё» starts a new matter only after a whole one («купить хлеб, ещё позвонить»), not after «для vuzburo ещё…».
-        val big = t.split(Regex("\\n+|;\\s*|(?<=[.!?])\\s+(?=\\p{Lu})|(?<=$L{1,30}\\s$L{1,30}\\s$L{1,30}),?\\s+(?:а ещё|а еще|и ещё|и еще|а также|ещё|еще|плюс)\\s+", RegexOption.IGNORE_CASE))
+        // A full stop after «ул.», «д.», «г.» is an abbreviation, not the end of a matter.
+        val big = t.split(Regex("\\n+|;\\s*|(?<=[.!?])(?<!(?<!$L)(?:ул|д|г|пр|кв|пер|стр|им)\\.)\\s+(?=\\p{Lu})|(?<=$L{1,30}\\s$L{1,30}\\s$L{1,30}),?\\s+(?:а ещё|а еще|и ещё|и еще|а также|ещё|еще|плюс)\\s+|" +
+            // «купить хлеб, ещё позвонить в ЖЭК»: after a comma «ещё» with a verb is a new matter, however short the first.
+            ",\\s*(?:а\\s+|и\\s+)?(?:ещё|еще)\\s+(?=$L+(?:ть|ти|чь|ться|тись)$E)", RegexOption.IGNORE_CASE))
             // «1. …», «- …», «• …»: a list typed by hand — each item one matter, without its mark.
             .map { it.replace(Regex("^\\s*(\\d{1,2}[.)]|[-–—•*])\\s+"), "").trim().trim('.', ',', ' ') }.filter { it.isNotBlank() }
         return big.flatMap { part ->
@@ -183,7 +222,8 @@ object LocalParser {
             pieces.forEach { p ->
                 val first = p.trim().split(' ').firstOrNull().orEmpty()
                 // A piece that starts with its own verb is a matter of its own; anything else belongs to the previous one.
-                if (out.isNotEmpty() && verbStart.matches(first) && p.trim().split(' ').size >= 2) out += p.trim()
+                // One word is enough when it is a whole matter in itself: «…, заправиться и купить омывайку».
+                if (out.isNotEmpty() && verbStart.matches(first) && (p.trim().split(' ').size >= 2 || Regex("$L{4,}(?:ться|тись)").matches(first))) out += p.trim()
                 else if (out.isEmpty()) out += p.trim()
                 else out[out.lastIndex] = out.last() + (if (part.contains(out.last() + ", " + p.trim())) ", " else " и ") + p.trim()
             }
@@ -231,17 +271,31 @@ object LocalParser {
         val ic = RegexOption.IGNORE_CASE
 
         // Repeats first: «каждый вторник», «по понедельникам и четвергам», «каждый день», «первого числа каждый месяц».
-        cut(Regex("${B}(?:кажд$L*|по)\\s+$WD((?:\\s*(?:,|и)\\s*$WD)*)$E", ic)) { m ->
+        // «каждые две недели (по средам)»: the interval, then the days if said.
+        var every = 1
+        cut(Regex("${B}(?:кажд$L*|раз\\s+в)\\s+(\\d+|$L+)\\s+недел$L*$E", ic)) { m -> every = (m.groupValues[1].toIntOrNull() ?: numberWords[m.groupValues[1].lowercase()] ?: 1).coerceIn(1, 52) }
+        var everyDays = 0
+        cut(Regex("${B}(?:кажд$L*|раз\\s+в)\\s+(\\d+|$L+)\\s+(?:дн$L*|дня)$E", ic)) { m -> everyDays = (m.groupValues[1].toIntOrNull() ?: numberWords[m.groupValues[1].lowercase()] ?: 1).coerceIn(1, 365) }
+        if (everyDays > 1) { repeat = Triple("daily", everyDays, emptyList()); due = today }
+        if (repeat == null) cut(Regex("${B}(?:кажд$L*|по)\\s+$WD((?:\\s*(?:,|и)\\s*$WD|\\s+$WD)*)$E", ic)) { m ->
             val wds = Regex(WD, ic).findAll(m.value).mapNotNull { weekday(it.value) }.distinct().sorted().toList()
-            if (wds.isNotEmpty()) { repeat = Triple("weekly", 1, wds); due = wds.map { nextDow(today, it) }.minOrNull() }
+            if (wds.isNotEmpty()) { repeat = Triple("weekly", every, wds); due = wds.map { nextDow(today, it) }.minOrNull() }
         }
-        if (repeat == null) cut(Regex("${B}(?:кажд$L*\\s+день|ежедневно|каждое утро|каждый вечер)$E", ic)) { repeat = Triple("daily", 1, emptyList()); due = today }
-        if (repeat == null) cut(Regex("${B}(?:кажд$L*\\s+недел$L*|еженедельно)$E", ic)) { repeat = Triple("weekly", 1, listOf(today.dayOfWeek.value)); due = today }
-        if (repeat == null) cut(Regex("${B}(?:кажд$L*\\s+месяц|ежемесячно)$E", ic)) { repeat = Triple("monthly", 1, emptyList()) }
+        if (repeat == null && every > 1) { repeat = Triple("weekly", every, listOf(today.dayOfWeek.value)); due = today }
+        if (repeat == null) cut(Regex("${B}по\\s+будням$E", ic)) { repeat = Triple("weekly", 1, listOf(1, 2, 3, 4, 5)); due = (0L..6L).map { today.plusDays(it) }.first { it.dayOfWeek.value <= 5 } }
+        if (repeat == null) cut(Regex("${B}по\\s+выходным$E", ic)) { repeat = Triple("weekly", 1, listOf(6, 7)); due = nextDow(today, 6) }
+        if (repeat == null) cut(Regex("${B}(?:кажд$L*\\s+(?:день|утро|вечер)|ежедневно|раз\\s+в\\s+день)$E", ic)) { m ->
+            repeat = Triple("daily", 1, emptyList()); due = today
+            // «каждое утро зарядка»: the part of the day comes with it.
+            when { m.value.lowercase().endsWith("утро") -> part = "morning"; m.value.lowercase().endsWith("вечер") -> part = "evening" }
+        }
+        if (repeat == null) cut(Regex("${B}(?:кажд$L*\\s+недел$L*|еженедельно|раз\\s+в\\s+неделю)$E", ic)) { repeat = Triple("weekly", 1, listOf(today.dayOfWeek.value)); due = today }
+        if (repeat == null) cut(Regex("${B}(?:кажд$L*\\s+месяц|ежемесячно|раз\\s+в\\s+месяц)$E", ic)) { repeat = Triple("monthly", 1, emptyList()) }
+        if (repeat == null) cut(Regex("${B}(?:кажд$L*\\s+квартал|ежеквартально|раз\\s+в\\s+квартал)$E", ic)) { repeat = Triple("monthly", 3, emptyList()) }
         if (repeat == null) cut(Regex("${B}(?:кажд$L*\\s+год|ежегодно)$E", ic)) { repeat = Triple("yearly", 1, emptyList()) }
 
         // Several days: «в пн и чт», «во вторник и в пятницу», «12, 15 и 18 октября».
-        if (repeat == null) cut(Regex("${B}(?:в|во|на|к|до)?\\s*$WD((?:\\s*(?:,|и)\\s*(?:в|во)?\\s*$WD)+)$E", ic)) { m ->
+        if (repeat == null) cut(Regex("${B}(?:в|во|на|к|до)?\\s*$WD((?:\\s*(?:,|и)\\s*(?:в|во)?\\s*$WD|\\s+$WD)+)$E", ic)) { m ->
             days = Regex(WD, ic).findAll(m.value).mapNotNull { weekday(it.value) }.distinct().map { nextDow(today, it) to null }.sortedBy { it.first }.toList()
             byWeekday = true
         }
@@ -253,7 +307,7 @@ object LocalParser {
         // One day.
         if (days.isEmpty()) {
             val dayRules: List<Pair<Regex, (MatchResult) -> Unit>> = listOf(
-                Regex("${B}послезавтра$E", ic) to { _ -> due = today.plusDays(2) },
+                Regex("${B}послезав(?:тр|р|т)а$E", ic) to { _ -> due = today.plusDays(2) },
                 Regex("${B}завтра$E", ic) to { _ -> due = today.plusDays(1) },
                 Regex("${B}сегодня$E", ic) to { _ -> due = today },
                 Regex("${B}через\\s+(\\d+|$L+)?\\s*(дн$L*|день|недел$L*|месяц$L*)$E", ic) to { m ->
@@ -262,17 +316,25 @@ object LocalParser {
                     due = when { u.startsWith("нед") -> today.plusWeeks(n.toLong()); u.startsWith("мес") -> today.plusMonths(n.toLong()); else -> today.plusDays(n.toLong()) }
                 },
                 Regex("${B}(?:на\\s+следующей\\s+неделе)$E", ic) to { _ -> start = today.with(TemporalAdjusters.next(DayOfWeek.MONDAY)); due = start!!.plusDays(6) },
-                Regex("${B}(?:на\\s+этой\\s+неделе|до\\s+конца\\s+недели|в\\s+течение\\s+недели)$E", ic) to { _ -> due = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)) },
-                Regex("${B}(?:до\\s+конца\\s+месяца|в\\s+этом\\s+месяце)$E", ic) to { _ -> due = today.with(TemporalAdjusters.lastDayOfMonth()) },
+                Regex("${B}(?:на\\s+этой\\s+неделе|(?:до|к|в)\\s+конц[ауе]\\s+недели|в\\s+течение\\s+недели)$E", ic) to { _ -> due = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)) },
+                Regex("${B}(?:(?:до|к|в)\\s+конц[ауе]\\s+месяца|в\\s+этом\\s+месяце)$E", ic) to { _ -> due = today.with(TemporalAdjusters.lastDayOfMonth()) },
+                // «в пятницу 16-го»: the number is exact, it wins over the weekday said with it.
+                Regex("${B}(?:(?:в|во|на|к|до)\\s+)?$WD\\s*,?\\s+(\\d{1,2})-?(?:го|е)$E", ic) to { m -> due = dayOfMonth(today, m.groupValues[2].toInt()) },
                 Regex("${B}(?:в|на)\\s+выходн$L*$E", ic) to { _ -> due = nextDow(today, 6) },
-                Regex("${B}(?:(в|во|на|к|до|по)\\s+)?(следующ$L*\\s+)?$WD$E", ic) to { m -> weekday(m.groupValues[3])?.let { due = nextDow(today, it, m.groupValues[2].isNotBlank()); byWeekday = true } },
+                Regex("${B}(?:(в|во|на|к|до|по)\\s+)?((?:следующ$L*|след\\.?)\\s+)?$WD$E", ic) to { m -> weekday(m.groupValues[3])?.let {
+                    due = nextDow(today, it, m.groupValues[2].isNotBlank()); byWeekday = true
+                    // «до четверга» said on a Thursday is the next one: a deadline is never «today, by today».
+                    if (due == today && m.groupValues[1].lowercase() in setOf("до", "к")) due = today.plusWeeks(1)
+                } },
                 Regex("${B}(\\d{1,2})(?:-?го)?\\s+$MON(?:\\s+(\\d{4}))?$E", ic) to { m -> month(m.groupValues[2])?.let { mo -> due = dateOf(today, m.groupValues[1].toInt(), mo) } },
                 Regex("(?<![\\d:])(\\d{1,2})[./](\\d{1,2})(?:[./](\\d{2,4}))?(?![\\d:])", ic) to { m ->
                     val a = m.groupValues[1].toInt(); val b = m.groupValues[2].toInt()
                     if (b in 1..12 && !Regex("(?:^|\\s)(?:в|к|с)\\s*$").containsMatchIn(s.substring(0, m.range.first))) due = dateOf(today, a, b)
                 },
-                Regex("${B}(?:до\\s+|к\\s+)?$ORD(?:\\s+числа)?$E", ic) to { m -> ordinal(m.groupValues[1])?.let { due = dayOfMonth(today, it) } },
-                Regex("${B}(?:до|к)\\s+(\\d{1,2})-?(?:го|числа)$E", ic) to { m -> due = dayOfMonth(today, m.groupValues[1].toInt()) },
+                // An ordinal is a day of the month after «до/к» or before «числа», or standing alone — «второго этапа» is not a date.
+                Regex("${B}(?:(?:до|к)\\s+$ORD(?:\\s+числ$L*)?|$ORD\\s+числ$L*|$ORD(?=\\s*(?:$|[,.;]|в\\s|к\\s|\\d)))$E", ic) to { m ->
+                    (m.groupValues[1].ifBlank { m.groupValues[2] }.ifBlank { m.groupValues[3] }).let { ordinal(it) }?.let { due = dayOfMonth(today, it) } },
+                Regex("${B}(?:до|к)\\s+(\\d{1,2})(?:-?(?:го|му|ому|ого)(?:\\s+числ$L*)?|\\s+числ$L*)$E", ic) to { m -> due = dayOfMonth(today, m.groupValues[1].toInt()) },
                 Regex("${B}(\\d{1,2})-?го\\s+числа$E", ic) to { m -> due = dayOfMonth(today, m.groupValues[1].toInt()) },
             )
             for ((r, f) in dayRules) if (due == null && cut(r, f)) Unit
@@ -288,19 +350,37 @@ object LocalParser {
             when (m.groupValues[3].lowercase()) { "вечера", "дня" -> if (h in 1..11) h += 12 }
             if (h in 0..23 && mi in 0..59) time = "%02d:%02d".format(h, mi)
         }
-        if (time == null) cut(Regex("${B}(?:в|к)\\s+(\\d{1,2})(?:\\s*(?:час$L*|ч))?(?:\\s+(утра|дня|вечера|ночи))?(?![\\d./:]|\\s*$MON|\\s*-?го)$E", ic)) { m ->
+        // «через час», «через 2 часа», «через 30 минут»: from now, today.
+        if (time == null) cut(Regex("${B}через\\s+(?:(\\d+|$L+)\\s+)?(час$L*|минут$L*|полчаса)$E", ic)) { m ->
+            val n = m.groupValues[1].let { it.toIntOrNull() ?: numberWords[it.lowercase()] ?: 1 }
+            val unit = m.groupValues[2].lowercase()
+            val mins = when { unit.startsWith("полчас") -> 30L; unit.startsWith("мин") -> n.toLong(); else -> 60L * n }
+            val at = LocalDateTime.of(today, now ?: LocalTime.now()).plusMinutes(mins)
+            val r = at.withMinute(at.minute / 5 * 5)
+            due = r.toLocalDate(); time = "%02d:%02d".format(r.hour, r.minute)
+        }
+        // «в 11 30»: hours and minutes said apart.
+        if (time == null) cut(Regex("${B}(?:в|к)\\s+(\\d{1,2})\\s+([0-5]\\d)(?![\\d./:])", ic)) { m ->
+            val h = m.groupValues[1].toInt(); if (h in 0..23) time = "%02d:%s".format(h, m.groupValues[2])
+        }
+        // «на 19» at the very end (a pizza for seven pm), never «на 5 человек».
+        if (time == null) cut(Regex("${B}на\\s+(\\d{1,2})(?=\\s*$)", ic)) { m -> m.groupValues[1].toInt().takeIf { it in 7..23 }?.let { time = "%02d:00".format(it) } }
+        if (time == null) cut(Regex("${B}(?:в|к|до)\\s+(\\d{1,2})(?:\\s*(?:час$L*|ч))?(?:\\s+(утра|дня|вечера|ночи))?(?![\\d./:]|\\s*$MON|\\s*-?го|\\s*-?му)$E", ic)) { m ->
             var h = m.groupValues[1].toInt()
             when (m.groupValues[2].lowercase()) { "вечера" -> if (h in 1..11) h += 12; "дня" -> if (h in 1..6) h += 12; "ночи" -> if (h == 12) h = 0 }
             if (h in 0..23) time = "%02d:00".format(h)
         }
         if (time == null) cut(Regex("${B}в\\s+полдень$E", ic)) { time = "12:00" }
-        if (time == null) cut(Regex("${B}(утром|днём|днем|после обеда|вечером|ночью)$E", ic)) { m ->
-            part = when (m.value.lowercase()) { "утром" -> "morning"; "после обеда" -> "afternoon"; "вечером" -> "evening"; "ночью" -> "night"; else -> "day" }
+        // «с днём рождения» is a wish, not the time of day.
+        if (time == null && part == null) cut(Regex("${B}(утром|с утра|утречком|(?<!с\\s)днём|(?<!с\\s)днем|в обед|до обеда|после обеда|вечером|к вечеру|вечерком|ночью)$E", ic)) { m ->
+            part = when (m.value.lowercase()) { "утром", "с утра", "утречком", "до обеда" -> "morning"; "после обеда" -> "afternoon"; "вечером", "к вечеру", "вечерком" -> "evening"; "ночью" -> "night"; else -> "day" }
         }
         if (days.isNotEmpty() && time != null) days = days.map { it.first to time }.also { time = null }
+        fun passed(t: String?) = now != null && t != null && runCatching { !LocalTime.parse(t).isAfter(now) }.getOrDefault(false)
+
+        if (time != null && due == null && start == null && days.isEmpty() && repeat == null) due = if (passed(time)) today.plusDays(1) else today
 
         // Said on Thursday at 23:00, «в четверг в 8» / «по пн и чт в 8» / «каждый день в 8» mean the next time, not this morning.
-        fun passed(t: String?) = now != null && t != null && runCatching { !LocalTime.parse(t).isAfter(now) }.getOrDefault(false)
         val rep = repeat
         if (due == today && passed(time)) when {
             rep?.first == "daily" -> due = today.plusDays(1)
@@ -314,6 +394,10 @@ object LocalParser {
         // An address: «на Ленина 5», «ул. Садовая, 12».
         var place: String? = null
         cut(Regex("${B}(?:на|ул\\.?|улиц$L*|по адресу)\\s+(\\p{Lu}$L+(?:\\s\\p{Lu}$L+)?)\\s*,?\\s*(\\d+$L?)$E")) { m -> place = "${m.groupValues[1]}, ${m.groupValues[2]}" }
+        // In lowercase only a street-like word counts («профсоюзной», «ленина»), never «на неделе 2».
+        if (place == null) cut(Regex("${B}(?:на|ул\\.?|улиц$L*|по адресу)\\s+($L+(?:ой|ая|ую|ого|ина|ына|ова|ева|ёва|ская|ской))\\s*,?\\s*(\\d+$L?)(?:\\s*(?:кв\\.?|квартира)\\s*(\\d+))?$E", ic)) { m ->
+            place = m.groupValues[1].replaceFirstChar { it.uppercase() } + ", " + m.groupValues[2] + (m.groupValues[3].takeIf { it.isNotBlank() }?.let { ", кв. $it" } ?: "")
+        }
 
         // Who: «ждём от Маши», «Дима пришлёт макет», «обещал Анне показать».
         var waitingFor: String? = null; var promisedTo: String? = null
@@ -322,19 +406,32 @@ object LocalParser {
         cutIf(Regex("${B}(?:жд[уеё]м?|ожида$L*)\\s+(?:от\\s+)?(\\p{L}+)\\s+(.+)$", ic)) { m ->
             names.of(m.groupValues[1])?.let { n -> waitingFor = n; titleOverride = m.groupValues[2]; true } ?: false
         }
+        // «жду ответа от Олега по смете»: what first, then from whom.
+        if (waitingFor == null) cutIf(Regex("${B}(?:жд[уеё]м?|ожида$L*)\\s+(.+?)\\s+от\\s+(\\p{L}+)(.*)$", ic)) { m ->
+            names.of(m.groupValues[2])?.let { n -> waitingFor = n; titleOverride = (m.groupValues[1] + m.groupValues[3]).trim(); true } ?: false
+        }
         // «Дима (должен) пришлёт макет»: a person, then (a few words), then a verb of giving — not «заказать у Тимура».
         if (waitingFor == null) cutIf(Regex("${B}(\\p{L}+)\\s+(?:\\p{L}+\\s+){0,2}?(?:должн$L*\\s+|обещал$L*\\s+)?$waitVerbs\\s+(.+)$", ic)) { m ->
             names.subject(m.groupValues[1])?.let { n -> waitingFor = n; titleOverride = m.groupValues[3]; true } ?: false
         }
-        if (waitingFor == null) cutIf(Regex("${B}(?:я\\s+)?(?:обещал$L*|пообещал$L*|должн[аы]?)\\s+(\\p{L}+)\\s+(.+)$", ic)) { m ->
+        // «Олег должен мне 5000»: he owes it — we wait for it.
+        if (waitingFor == null) cutIf(Regex("${B}(\\p{L}+)\\s+(?:должн$L*|должен)\\s+мне\\s+(.+)$", ic)) { m ->
+            names.subject(m.groupValues[1])?.let { n -> waitingFor = n; titleOverride = m.groupValues[2]; true } ?: false
+        }
+        // «Анна должна подписать акт»: someone must do something — we wait for it, the words stay as they are.
+        var asSaid = false
+        if (waitingFor == null) cutIf(Regex("${B}(\\p{L}+)\\s+должн$L*\\s+($L+(?:ть|ти))\\s+(.+)$", ic)) { m ->
+            names.subject(m.groupValues[1])?.let { n -> waitingFor = n; titleOverride = m.groupValues[2] + " " + m.groupValues[3]; asSaid = true; true } ?: false
+        }
+        if (waitingFor == null) cutIf(Regex("${B}(?:я\\s+)?(?:обещал$L*|пообещал$L*|должн[аы]?|должен)\\s+(\\p{L}+)\\s+(.+)$", ic)) { m ->
             names.of(m.groupValues[1])?.let { n -> promisedTo = n; titleOverride = m.groupValues[2]; true } ?: false
         }
         val people = words.mapNotNull { names.of(it) }.distinct().filter { it != waitingFor && it != promisedTo }
 
         // The title: what's left, without fillers, starting with a capital; names capitalised.
-        var title = (titleOverride ?: s).replace(Regex("\\s+"), " ").trim().trim(',', '.', '—', '-', ':', ' ')
+        var title = (titleOverride ?: s).replace(Regex("\\s+"), " ").trim().trim(',', '.', '—', '–', '-', ':', ' ')
         title = title.replace(filler, "").trim().trim(',', '.', '—', '-', ':', ' ')
-        if (waitingFor != null) title = "Получить ${title.replaceFirstChar { it.lowercase() }} от ${waitingFor!!.genitive()}"
+        if (waitingFor != null && !asSaid) title = "Получить ${title.replaceFirstChar { it.lowercase() }} от ${waitingFor!!.genitive()}"
         if (title.isBlank()) title = chunk.trim()
         title = title.sentence().withNames(listOfNotNull(waitingFor, promisedTo) + people)
 
@@ -394,7 +491,11 @@ object LocalParser {
         }
         val parts = listOfNotNull(
             if (r.items.size > 1) (if (rus) "${r.items.size} дела" else "${r.items.size} to-dos") else when (i.kind) { "idea" -> if (rus) "идея" else "idea"; "topic" -> if (rus) "тема" else "topic"; else -> if (rus) "дело" else "to-do" },
-            i.repeat?.let { (f, _, ds) -> if (rus) "повтор " + when (f) { "daily" -> "каждый день"; "monthly" -> "каждый месяц"; "yearly" -> "каждый год"; else -> ds.joinToString(", ") { LocalDate.of(2024, 1, it).dowShort().lowercase() } } else "repeats" },
+            i.repeat?.let { (f, n, ds) -> if (rus) "повтор " + when {
+                f == "daily" && n > 1 -> "раз в $n дн."
+                f == "daily" -> "каждый день"; f == "monthly" -> "каждый месяц"; f == "yearly" -> "каждый год"
+                else -> (if (n > 1) "раз в $n нед., " else "") + ds.joinToString(", ") { LocalDate.of(2024, 1, it).dowShort().lowercase() }
+            } else "repeats" },
             i.days.takeIf { it.isNotEmpty() }?.joinToString(", ") { day(it.first) + (it.second?.let { t -> " $t" } ?: "") },
             listOfNotNull(i.due?.let { day(it) }, i.time).joinToString(" ").ifBlank { null },
             i.part?.let { if (rus) mapOf("morning" to "утром", "day" to "днём", "afternoon" to "после обеда", "evening" to "вечером", "night" to "ночью")[it] else it },

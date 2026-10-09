@@ -20,6 +20,24 @@ val Task.noNextStep get() = topic && !done && subtasks.isNotEmpty() && subtasks.
 /** All attachments of a topic, newest first, with the record they came in. */
 fun Task.materials(): List<Pair<Entry, Attachment>> = entries.flatMap { e -> e.attachments.map { e to it } }.reversed()
 
+/**
+ * «Похоже, это к теме Зерно»: the open topic these words most likely belong to — by its people (a name counts three)
+ * and its words (title, matters, last records). Nothing when no topic stands out clearly.
+ */
+fun AppData.likelyTopic(words: String, people: Collection<String> = emptyList(), except: Set<String> = emptySet()): Task? {
+    fun norm(t: String) = t.lowercase().replace('ё', 'е')
+    fun stems(t: String) = Regex("\\p{L}{4,}").findAll(norm(t)).map { it.value.take(5) }.toSet()
+    val said = stems(words)
+    val who = (people + Regex("\\p{Lu}\\p{L}{2,}").findAll(words).map { it.value }).map { norm(it).take(3) }.toSet()
+    val scored = tasks.filter { it.topic && !it.done && it.id !in except }.map { t ->
+        val theirs = stems(t.title + " " + t.subtasks.joinToString(" ") { it.title } + " " + t.entries.takeLast(5).joinToString(" ") { it.text })
+        val theirPeople = (t.people + t.subtasks.mapNotNull { it.from } + listOfNotNull(t.waitingFor, t.promisedTo)).map { norm(it).take(3) }.toSet()
+        t to ((said intersect theirs).size + 3 * (who intersect theirPeople).size)
+    }.filter { it.second >= 3 }.sortedByDescending { it.second }
+    val best = scored.firstOrNull() ?: return null
+    return best.first.takeIf { scored.getOrNull(1)?.second != best.second }
+}
+
 /** Ids of question rows in the lists: «q:<topic>:<question>». */
 fun questionRef(id: String): Pair<String, String>? =
     if (id.startsWith("q:")) id.removePrefix("q:").split(':').takeIf { it.size == 2 }?.let { it[0] to it[1] } else null

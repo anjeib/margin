@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.likelyTopic
+
 import androidx.compose.ui.text.withStyle
 
 import androidx.compose.ui.text.buildAnnotatedString
@@ -114,6 +116,9 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
                                 var picking by remember { mutableStateOf(false) }
                                 if (!picking) {
                                     if (a != null) SoftMenuItem(s.openWord) { close(); viewing = a } else SoftMenuItem(s.openWord) { close(); onOpenNote(note.id) }
+                                    // The topic it most likely belongs to, by name — then the full list.
+                                    val likely = remember(e.id) { data.likelyTopic(e.text + " " + e.attachments.joinToString(" ") { it.caption ?: it.name }) }
+                                    likely?.let { lt -> SoftMenuItem(s.likelyTopic(lt.title).replaceFirstChar { it.uppercase() }) { close(); vm.inboxToTopic(e.id, lt.id) } }
                                     if (topics.isNotEmpty()) SoftMenuItem(s.toTopicPick) { picking = true }
                                     e.attachments.firstOrNull { it.kind == "photo" && it.ocr == null }?.let { ph -> SoftMenuItem(s.readTextWord) { close(); vm.photoText("note:${note.id}", e.id, ph, "insert") } }
                                     SoftMenuItem(s.removeWord, danger = true) { close(); vm.removeEntry("note:${note.id}", e.id) }

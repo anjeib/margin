@@ -101,4 +101,36 @@ class TopicsLiveTest {
         }
         println("TOTAL $ok/$all")
     }
+
+    /**
+     * Review 0.13, defect 4: «Созвонились с Димой, спецификацию пришлёт в понедельник» from the main screen moved ANOTHER
+     * matter of Dima's topic to Monday, left Dima's promise overdue and wrote nothing into the feed.
+     */
+    @Test fun newsAboutAWait() {
+        assumeTrue(System.getenv("YA_LIVE") != null && key.isNotBlank())
+        L.lang = Lang.Ru
+        val runs = System.getenv("RUNS")?.toIntOrNull() ?: 1
+        var ok = 0; var all = 0
+        fun check(name: String, pass: Boolean) { all++; if (pass) ok++; println((if (pass) "  ok   " else "  FAIL ") + name) }
+        val mon = today.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.MONDAY)).toString()
+        repeat(runs) { run ->
+            println("run ${run + 1}")
+            val spec = ru.anjeib.margin.data.Subtask(title = "Спецификация API", from = "Дима", due = today.minusDays(2).toString())
+            val price = ru.anjeib.margin.data.Subtask(title = "Сделать цену в корзине крупнее", due = today.minusDays(1).toString())
+            val review = ru.anjeib.margin.data.Subtask(title = "Ревью макетов с Лёшей", due = today.plusDays(1).toString(), time = "12:00")
+            val topic = Task(title = "Редизайн приложения доставки", topic = true, people = listOf("Дима", "Лёша"), sphere = "work",
+                subtasks = listOf(spec, price, review), createdAt = today.minusDays(20).toString())
+            var d = AppData(tasks = noise() + topic, persons = listOf(ru.anjeib.margin.data.Person(name = "Дима", kept = true), ru.anjeib.margin.data.Person(name = "Лёша", kept = true)))
+            d = ask(d, "Созвонились с Димой, спецификацию пришлёт в понедельник", Scope.Main)
+            val t = d.tasks.first { it.id == topic.id }
+            println("  subs=" + t.subtasks.map { "${it.title}|done=${it.done}|from=${it.from}|due=${it.due}" } + " entries=" + t.entries.map { it.text })
+            val s2 = t.subtasks.first { it.id == spec.id }
+            check("Dima's spec moves to Monday", !s2.done && s2.due == mon)
+            check("price matter untouched", t.subtasks.first { it.id == price.id }.due == price.due)
+            check("review untouched", t.subtasks.first { it.id == review.id }.let { it.due == review.due && it.time == "12:00" })
+            check("words land in the feed", t.entries.any { it.text.contains("Дим", true) || it.text.contains("спецификац", true) })
+            check("nothing new outside the topic", d.tasks.size == noise().size + 1)
+        }
+        println("TOTAL $ok/$all")
+    }
 }

@@ -84,6 +84,8 @@ interface Strings {
     val storeNewerText: String
     val tryExamples: List<String>
     val tryHint: String
+    val toStart: String
+    fun likelyTopic(title: String): String
     val misparsed: String
     val misparsedThanks: String
     val sendFeedback: String
@@ -868,6 +870,8 @@ object Ru : Strings {
     override val storeNewerText = "Записи сделаны более новой версией Margin. Их копия сохранена; обновите приложение, чтобы ничего не потерялось."
     override val tryExamples = listOf("Завтра в 15 созвон с Олегом", "Маша вернёт 3000 к пятнице", "Идея: подкаст про дизайн")
     override val tryHint = "Попробуйте — нажатие вставит фразу в поле"
+    override val toStart = "↑ к началу"
+    override fun likelyTopic(title: String) = "к теме «${title.take(28)}»?"
     override val misparsed = "Разобрало не так"
     override val misparsedThanks = "Спасибо — фраза сохранена для разработчика"
     override val sendFeedback = "Отправить отзыв"
@@ -1372,7 +1376,7 @@ object Ru : Strings {
     override val noDateQ = "без срока"
     override val kindTopic = "в тему"
     override val kindThought = "идея"
-    override fun lateSince(d: String) = "с $d"
+    override fun lateSince(d: String) = "просрочено с $d"
     override fun doneCountWord(n: Int) = "сделано $n"
     override val freeWord = "свободно"
     override val dealsBadge = "Дела"
@@ -1570,6 +1574,8 @@ object En : Strings {
     override val storeNewerText = "Your records were made by a newer version of Margin. A copy is kept; update the app so nothing gets lost."
     override val tryExamples = listOf("Call with Oleg tomorrow at 3", "Masha returns 3000 by Friday", "Idea: a podcast about design")
     override val tryHint = "Try one — a tap puts the phrase into the field"
+    override val toStart = "↑ to the start"
+    override fun likelyTopic(title: String) = "to «${title.take(28)}»?"
     override val misparsed = "Understood wrong"
     override val misparsedThanks = "Thanks — the phrase is saved for the developer"
     override val sendFeedback = "Send feedback"
@@ -2074,7 +2080,7 @@ object En : Strings {
     override val noDateQ = "no date"
     override val kindTopic = "to the topic"
     override val kindThought = "idea"
-    override fun lateSince(d: String) = "since $d"
+    override fun lateSince(d: String) = "overdue since $d"
     override fun doneCountWord(n: Int) = "$n done"
     override val freeWord = "free"
     override val dealsBadge = "To-dos"

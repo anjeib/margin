@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -1116,8 +1117,9 @@ private fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String>
             }
         }
         // The link under the topic's matters, at the words' edge: «↳ Ремонт ванной».
-        if (tid != null) Column(Modifier.padding(start = 52.dp, bottom = 6.dp).offset(y = (-4).dp)) {
-            Row(Modifier.clip(RoundedCornerShape(6.dp)).clickable { onOpen(tid) }.padding(vertical = 2.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        // The whole line is the target, 44 dp high — a 13 sp word was too small to hit on the go.
+        if (tid != null) Column(Modifier.padding(start = 52.dp, bottom = 2.dp).offset(y = (-10).dp)) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(tid) }.padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("↳", style = Type.small.copy(color = c.link, fontSize = 13.sp))
                 Spacer(Modifier.width(5.dp))
                 TopicGlyph(c.link, 12.dp)
@@ -1173,7 +1175,10 @@ private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, 
             .joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
         if (promises.isNotEmpty()) {
             Text(s.promisesTitle.uppercase(), style = Type.label.copy(color = c.link), modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
-            promises.take(5).forEach { t ->
+            var allPromises by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+            // Three lines, the most pressing first (overdue, today); the rest behind «ещё N ›» so the day's matters stay in sight.
+            val ordered = promises.sortedBy { it.dueDate ?: it.startDate ?: LocalDate.MAX }
+            (if (allPromises) ordered else ordered.take(3)).forEach { t ->
                 val d = t.dueDate ?: t.startDate
                 val late = d?.isBefore(today) == true
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.id) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1188,7 +1193,8 @@ private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, 
                         modifier = Modifier.padding(start = 10.dp)) }
                 }
             }
-            if (promises.size > 5) Text(s.more(promises.size - 5), style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 22.dp, top = 2.dp))
+            if (promises.size > 3) Text(if (allPromises) s.collapse else s.more(promises.size - 3) + " ›", style = Type.small.copy(color = c.link, fontSize = 13.sp),
+                modifier = Modifier.padding(start = 22.dp, top = 2.dp).clip(RoundedCornerShape(6.dp)).clickable { allPromises = !allPromises }.padding(vertical = 4.dp, horizontal = 2.dp))
         }
     }
 }
@@ -1361,7 +1367,11 @@ fun DayBlock(
     val c = M.c
     val s = M.s
     val past = plan.date.isBefore(today)
-    var undatedOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(true) }
+    // «Без даты»: open while it is short; past five it starts folded. Whatever the user chose last is kept.
+    val uiPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
+    var undatedOpen by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(if (uiPrefs.contains("undatedOpen")) uiPrefs.getBoolean("undatedOpen", true) else undated.size <= 5)
+    }
     Column(Modifier.fillMaxWidth().animateContentSize(androidx.compose.animation.core.tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing))) {
         Margined(Modifier.padding(top = 10.dp, bottom = 10.dp), margin = {
             Box(Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle)) { DayMargin(plan.date, today, heading) }
@@ -1434,7 +1444,7 @@ fun DayBlock(
                     }
                     // Matters with no day wait at the end of today, with how long they've been lying there; older ones paler.
                     if (undated.isNotEmpty()) {
-                        Row(Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(8.dp)).clickable { undatedOpen = !undatedOpen }.padding(vertical = 6.dp),
+                        Row(Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(8.dp)).clickable { undatedOpen = !undatedOpen; uiPrefs.edit().putBoolean("undatedOpen", undatedOpen).apply() }.padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Text(s.noDates.uppercase() + " · " + undated.size, style = Type.label.copy(color = c.graphite), modifier = Modifier.weight(1f))
                             val rot by androidx.compose.animation.core.animateFloatAsState(if (undatedOpen) 0f else -90f, label = "ud")

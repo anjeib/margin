@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.anjeib.margin.data.AppData
+import ru.anjeib.margin.data.likelyTopic
 import ru.anjeib.margin.data.ChatMsg
 import ru.anjeib.margin.data.progress
 import ru.anjeib.margin.data.whenLabel
@@ -277,6 +278,11 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
             if (!p.auto) QuietLink(s.create, onConfirm)
             // The words were about another matter: pick the topic, they are read again there.
             if ((topics > 0 || changed > 0 || created == 1 || notes > 0) && moveTargets.isNotEmpty()) QuietLink(if (topics > 0 || changed > 0) s.toOtherTopic else s.toTopicPick) { onHold(); picking = !picking }
+            // One new matter that looks like part of an open topic: offer that topic by name, one tap.
+            if (created == 1 && topics == 0 && changed == 0) remember(p.id) {
+                val nt = p.preview.touchedTasks.firstNotNullOfOrNull { id -> after.tasks.find { it.id == id && current.tasks.none { o -> o.id == id } } }
+                nt?.let { current.likelyTopic(p.source.ifBlank { it.title }, it.people + listOfNotNull(it.waitingFor, it.promisedTo), touched) }
+            }?.let { lt -> QuietLink(s.likelyTopic(lt.title)) { onMoveTo(lt.id) } }
             if (appended) QuietLink(s.toSeparateNote, onSeparate)
             QuietLink(s.edit, onEdit)
             QuietLink(s.undo, onReject)

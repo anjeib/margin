@@ -581,13 +581,18 @@ object Assistant {
                             repeat = if (has("repeat", saysRepeat)) repeat(a["repeat"]) else old.repeat,
                         ).normalized()
                     )
-                    // A topic has no date of its own: «перенеси на пятницу» moves its open question (the nearest, when there are several).
+                    // A topic has no date of its own: a new date moves the one matter the words are about — the one owed by the person
+                    // named, or the one whose words they repeat, or the only open one. Several and none named: nothing moves
+                    // (review 0.13, defect 4: «спецификацию пришлёт в понедельник» moved another matter of the topic).
                     if (old.topic && (next.due != old.due || next.time != old.time || next.start != old.start)) {
-                        val q = old.subtasks.filter { !it.done && !it.isWait }.let { l -> l.singleOrNull() ?: l.minByOrNull { it.due ?: "9999" } }
+                        val q = matterOf(old, low, a.str("waiting_for"), listOfNotNull(a.str("topic_title"), a.str("title")))
                         val moved = next
                         next = next.copy(due = null, start = null, time = null, remindAt = null)
                         if (q != null) next = next.copy(subtasks = next.subtasks.mapTree(q.id) { it.copy(due = moved.due ?: moved.start ?: it.due, time = if (moved.time != old.time) moved.time else it.time) })
                     }
+                    // «Дима пришлёт…» about a topic: the wait lives on its matter, not on the topic.
+                    if (old.topic && next.waitingFor != old.waitingFor && old.subtasks.any { !it.done && it.from != null && next.waitingFor?.let { w -> sameName(it.from, w) } == true })
+                        next = next.copy(waitingFor = old.waitingFor)
                     // A new promise or expectation is a thing of its own: it never turns a recurring task into a one-off.
                     val split = old.repeat != null && ((newPromise != null && old.promisedTo == null) || (newWait != null && old.waitingFor == null))
                     if (split) {
@@ -601,6 +606,12 @@ object Assistant {
                     }
                     // Small models put steps on update_task itself instead of add_subtasks.
                     subtasks(a["subtasks"]).takeIf { it.isNotEmpty() && !split }?.let { st ->
+                        // A step that already exists, sent again with a date the words gave: that step moves (it is not new).
+                        if (saysWhen) st.forEach { n ->
+                            val nd = n.due ?: return@forEach
+                            val same = d.tasks.first { it.id == id }.subtasks.firstOrNull { !it.done && it.title.equals(n.title, true) } ?: return@forEach
+                            d = d.copy(tasks = d.tasks.map { t -> if (t.id != id) t else t.copy(subtasks = t.subtasks.mapTree(same.id) { it.copy(due = nd, time = n.time ?: it.time) }) })
+                        }
                         val have = d.tasks.first { it.id == id }.subtasks.map { it.title.lowercase() }.toSet()
                         val fresh = subs(st, next.people).filter { it.title.lowercase() !in have }
                         if (fresh.isNotEmpty()) d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(subtasks = it.subtasks + fresh, done = false) else it })
@@ -808,6 +819,29 @@ object Assistant {
         return weekdayWords.filter { it.first.containsMatchIn(low) }.map { it.second }.distinct().singleOrNull()
     }
     /** Small models miscount weekdays: the date has to fall on the weekday the user said. */
+    /** Same person in any case: «Дима» / «Димой» / «Диме» — by the stem. */
+    private fun sameName(a: String, b: String): Boolean {
+        val x = a.lowercase().trim(); val y = b.lowercase().trim()
+        val n = minOf(x.length, y.length).coerceAtMost(4) - 1
+        return n >= 2 && x.take(n) == y.take(n)
+    }
+
+    /** The matter of [topic] these words are about (see update_task), or null when it can't be told. */
+    private fun matterOf(topic: Task, low: String, waitFor: String?, titles: List<String>): ru.anjeib.margin.data.Subtask? {
+        val open = flat(topic.subtasks).filter { !it.done }
+        if (open.isEmpty()) return null
+        // Owed by the person the words name.
+        val named = listOfNotNull(waitFor) + Regex("\\p{Lu}\\p{L}{2,}").findAll(titles.joinToString(" ") + " " + low.replaceFirstChar { it.uppercase() }).map { it.value }
+        open.filter { q -> q.from != null && (named.any { sameName(q.from, it) } || low.contains(q.from.lowercase().take(3))) }.singleOrNull()?.let { return it }
+        // The words repeat its words («спецификацию» → «Спецификация API»).
+        fun stems(t: String) = Regex("\\p{L}{4,}").findAll(t.lowercase()).map { it.value.take(if (it.value.length > 6) 6 else it.value.length - 1) }.toSet()
+        val said = stems(low + " " + titles.joinToString(" "))
+        val scored = open.map { it to stems(it.title).count { st -> st in said } }.filter { it.second > 0 }
+        val best = scored.maxOfOrNull { it.second }
+        scored.filter { it.second == best }.singleOrNull()?.let { return it.first }
+        return open.filter { !it.isWait }.singleOrNull() ?: open.singleOrNull()
+    }
+
     private fun onSaidWeekday(date: String?, low: String): String? {
         val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return date
         val wd = weekdayOf(low) ?: return date

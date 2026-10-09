@@ -183,6 +183,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     // One feed; the paperclip narrows it to materials, a tap on the progress — to the matters only.
     var materialsMode by remember(task.id) { mutableStateOf(startTab == 2) }
     var dealsOnly by remember(task.id) { mutableStateOf(false) }
+    /** Only the records (what was written), as «5 записей» in the summary asks. */
+    var saidOnly by remember(task.id) { mutableStateOf(false) }
     val feedState = rememberLazyListState()
     // A matter opened from the lists lights up in the feed («d:<id>»).
     var hl by remember(task.id) { mutableStateOf(startHl?.let { if (it.contains(':')) it else "d:$it" }) }
@@ -202,7 +204,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     val working by vm.working.collectAsState()
     val scopeKey = MainVm.key(Scope.InTask(task.id))
     val feedAll = remember(task) { feedOf(task) }
-    val feed = if (dealsOnly) feedAll.filter { it is FeedLine.Deal } else feedAll
+    val feed = when { dealsOnly -> feedAll.filter { it is FeedLine.Deal }; saidOnly -> feedAll.filter { it is FeedLine.Said }; else -> feedAll }
 
     // The task just grew into a topic: the thread grows down the margin and its lines arrive one by one.
     // Played once per topic in a run of the app (event times are kept to the minute, so «just now» is a two-minute window).
@@ -233,7 +235,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         }
     }
     BackHandler { onClose() }
-    BackHandler(dealsOnly || materialsMode) { dealsOnly = false; materialsMode = false }
+    BackHandler(dealsOnly || saidOnly || materialsMode) { dealsOnly = false; saidOnly = false; materialsMode = false }
 
     val total = task.subtasks.size
     val doneCount = task.subtasks.count { it.done }
@@ -282,11 +284,14 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                     }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f))
                     HeaderIcon(Icons.Outlined.AttachFile, s.materialsTab, count = files, on = materialsMode) {
-                        materialsMode = !materialsMode; dealsOnly = false
+                        materialsMode = !materialsMode; dealsOnly = false; saidOnly = false
                     }
                 }
                 // The same soft card as the summary on «Сегодня»: how far, how much, who owes what. A tap — the matters only.
-                TopicSummary(task, dealsOnly) { dealsOnly = !dealsOnly; materialsMode = false }
+                TopicSummary(task, dealsOnly, saidOnly, materialsMode,
+                    onDeals = { dealsOnly = !dealsOnly; saidOnly = false; materialsMode = false },
+                    onSaid = { saidOnly = !saidOnly; dealsOnly = false; materialsMode = false },
+                    onMaterials = { materialsMode = !materialsMode; dealsOnly = false; saidOnly = false })
                 if (task.done) Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 14.dp, vertical = 10.dp)) {
                     Text(s.inArchiveSince(task.doneAt?.let { runCatching { LocalDate.parse(it).dayMonthShort() }.getOrNull() } ?: ""), style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
                     Text(s.bringBack, style = Type.small.copy(color = c.link), modifier = Modifier.clickable { vm.reviveTopic(task.id) })
@@ -295,6 +300,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         }
         Hairline(Modifier.padding(start = MarginW))
         Box(Modifier.weight(1f).fillMaxWidth()) {
+            // The feed opens at its end; once scrolled away from the start, one quiet way back to it.
+            val awayFromStart by remember { androidx.compose.runtime.derivedStateOf { feedState.firstVisibleItemIndex > 2 } }
             run {
                 androidx.compose.animation.Crossfade(materialsMode, animationSpec = tween(240), label = "materials") { m ->
                     if (m) MaterialsFeed(task, onView = { viewing = it })
@@ -304,6 +311,12 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                         editDeal = { editQ = it }, dateDeal = { dateQ = it }, editNote = { editNote = it }, view = { viewing = it }, timeDeal = { timeQ = it },
                     ), onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
                 }
+            }
+            androidx.compose.animation.AnimatedVisibility(awayFromStart && !materialsMode, modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 12.dp),
+                enter = androidx.compose.animation.fadeIn(tween(180)), exit = androidx.compose.animation.fadeOut(tween(180))) {
+                Text(s.toStart, style = Type.small.copy(color = c.link, fontSize = 13.sp),
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(c.card).clickable { scope.launch { feedState.animateScrollToItem(0) } }
+                        .padding(horizontal = 12.dp, vertical = 6.dp))
             }
         }
         // ---- composer: words go to the feed, on «Вопросы» they become a question ----
@@ -354,18 +367,33 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
 }
 
 /** The topic's summary: «2 из 9 сделано · 5 записей · 3 файла», the progress, and who owes what inside it. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun TopicSummary(task: Task, dealsOnly: Boolean, onToggle: () -> Unit) {
+private fun TopicSummary(task: Task, dealsOnly: Boolean, saidOnly: Boolean, materials: Boolean, onDeals: () -> Unit, onSaid: () -> Unit, onMaterials: () -> Unit) {
     val c = M.c
     val s = M.s
     val total = task.subtasks.size
     val done = task.subtasks.count { it.done }
     val files = task.materials().size
+    // Each part of the summary is its own filter: the matters, the records, the materials; the chosen one in petrol with «✕».
+    @Composable fun part(text: String, on: Boolean, onClick: () -> Unit) = Text(if (on) "$text  ✕" else text,
+        style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 14.sp, fontFeatureSettings = "tnum"),
+        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(vertical = 4.dp, horizontal = 2.dp))
     Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 12.dp).clip(RoundedCornerShape(16.dp)).background(c.linkSoft.copy(alpha = if (c.dark) 0.5f else 0.6f))
-        .clickable(enabled = total > 0, onClick = onToggle).padding(horizontal = 14.dp, vertical = 12.dp)) {
-        Text(listOfNotNull(if (total > 0) s.progressSolved(done, total) else null, task.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, files.takeIf { it > 0 }?.let { s.nMaterials(it) },
-            if (dealsOnly) s.dealsOnlyWord + "  ✕" else null).joinToString("  ·  "), style = Type.small.copy(color = if (dealsOnly) c.link else c.graphite, fontSize = 14.sp, fontFeatureSettings = "tnum"))
-        if (total > 0) TopicProgress(done, total, Modifier.padding(top = 8.dp))
+        .padding(horizontal = 12.dp, vertical = 8.dp)) {
+        // The parts wrap whole onto a second line, never a word of one.
+        androidx.compose.foundation.layout.FlowRow(itemVerticalAlignment = Alignment.CenterVertically) {
+            val parts = listOfNotNull(
+                (if (total > 0) Triple(s.progressSolved(done, total), dealsOnly, onDeals) else null),
+                task.entries.size.takeIf { it > 0 }?.let { Triple(s.nEntries(it), saidOnly, onSaid) },
+                files.takeIf { it > 0 }?.let { Triple(s.nMaterials(it), materials, onMaterials) },
+            )
+            parts.forEachIndexed { i, (t, on, f) ->
+                if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+                part(t, on, f)
+            }
+        }
+        if (total > 0) TopicProgress(done, total, Modifier.padding(top = 4.dp, bottom = 4.dp).clickable(onClick = onDeals))
     }
 }
 
