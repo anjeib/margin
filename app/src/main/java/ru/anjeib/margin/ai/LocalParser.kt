@@ -142,6 +142,8 @@ object LocalParser {
 
     fun parse(text0: String, d: AppData, today: LocalDate = LocalDate.now(), kind: String? = null, sphere: String? = null,
               people: List<String> = emptyList(), waitFor: String? = null, promiseTo: String? = null,
+              /** «/жду», «/обещаю» without «@»: the other side is the person named in the words («/обещаю Маше вернуть книгу»). */
+              wait: Boolean = false, promise: Boolean = false,
               /** The hour now — a weekday or a repeat whose hour has already passed today starts next time. */
               now: LocalTime? = LocalTime.now().takeIf { today == LocalDate.now() }): Result {
         val text = text0.trim()
@@ -158,7 +160,13 @@ object LocalParser {
         // A long stream with no punctuation is dictation — the AI splits it better.
         if (!Regex("[\\n.;,!?]").containsMatchIn(text) && text.split(Regex("\\s+")).size > 16) { sure = false; why = why ?: "long" }
         // «@Маша», «/жду», «/обещал» are said outright: they win over what the words seem to say.
-        val items = chunks.mapNotNull { one(it, names, today, kind, sphere, now) }.map { i ->
+        val items = chunks.mapNotNull { one(it, names, today, kind, sphere, now) }.map { i0 ->
+            val named = i0.people.firstOrNull()
+            val i = when {
+                waitFor == null && wait && i0.waitingFor == null && named != null -> i0.copy(waitingFor = named, promisedTo = null, people = i0.people - named)
+                promiseTo == null && promise && i0.promisedTo == null && named != null -> i0.copy(promisedTo = named, waitingFor = null, people = i0.people - named)
+                else -> i0
+            }
             if (people.isEmpty() && waitFor == null && promiseTo == null) i
             else i.copy(people = (i.people + people).distinct().filter { it != (waitFor ?: i.waitingFor) && it != (promiseTo ?: i.promisedTo) },
                 waitingFor = waitFor ?: i.waitingFor.takeIf { promiseTo == null }, promisedTo = promiseTo ?: i.promisedTo.takeIf { waitFor == null },

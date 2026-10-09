@@ -765,6 +765,29 @@ object Assistant {
                 d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(entries = it.entries + Entry(text = origin)) else it })
             }
         }
+        // «…спецификацию пришлёт в понедельник»: the phone reads a new day for what someone owes; if the model wrote the news
+        // but left that matter's day as it was, the day is moved here (Fable, 9 окт: the wait stayed «просрочено с 8 окт»).
+        if (strict && source.isNotBlank()) {
+            val said = runCatching { LocalParser.parse(source, data).items }.getOrDefault(emptyList()).filter { it.due != null }
+            said.forEach { w ->
+                val day = w.due!!.toString()
+                val who = listOfNotNull(w.waitingFor) + w.people
+                if (who.isEmpty()) return@forEach
+                (listOfNotNull(focus) + touched).distinct().forEach { id ->
+                    val t = d.tasks.find { it.id == id } ?: return@forEach
+                    val o = data.tasks.find { it.id == id }
+                    if (t.topic) {
+                        val q = flat(t.subtasks).filter { q -> !q.done && q.slots.isEmpty() && q.from != null && who.any { sameName(q.from, it) } }.singleOrNull() ?: return@forEach
+                        val oq = o?.let { flat(it.subtasks).find { it.id == q.id } }
+                        if (q.due == day || (oq != null && oq.due != q.due)) return@forEach
+                        d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(subtasks = it.subtasks.mapTree(q.id) { x -> x.copy(due = day) }) else it })
+                    } else if (!t.done && t.slots.isEmpty() && t.repeat == null && t.waitingFor != null && who.any { sameName(t.waitingFor, it) }) {
+                        if (t.due == day || (o != null && o.due != t.due)) return@forEach
+                        d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(due = day) else it })
+                    }
+                }
+            }
+        }
         val s = L.s
         val caption = when {
             created > 1 -> s.tasksCreated(created)

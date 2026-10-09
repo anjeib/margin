@@ -994,7 +994,9 @@ private fun androidx.compose.ui.text.AnnotatedString.Builder.timeLink(time: Stri
 
 /** One thing to do on an open day: kind mark, the circle, the hour as a link, the words, a quiet line under. */
 @Composable
-private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () -> Unit, onTime: () -> Unit, age: String? = null, faded: Boolean = false, onLater: (() -> Unit)? = null) {
+internal fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () -> Unit, onTime: () -> Unit, age: String? = null, faded: Boolean = false, onLater: (() -> Unit)? = null,
+                     /** Off the day lists (the tour) the day is not around the row — it is said in it. */
+                     whenText: String? = null) {
     val c = M.c
     val s = M.s
     val view = androidx.compose.ui.platform.LocalView.current
@@ -1029,7 +1031,7 @@ private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () 
                 modifier = Modifier.padding(top = 1.dp).drawStrike(strike.value, c.faint))
             if (late && t.dueDate?.isBefore(today) == true) Text(s.lateSince(t.dueDate!!.dayMonthShort()), style = Type.small.copy(color = c.accent, fontSize = 12.5.sp))
             t.dayOf()?.let { (i, n) -> Text(s.dayOfDays(i, n), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp)) }
-            TaskLine(t, null, true, today = today, tappable = false)
+            TaskLine(t, whenText, true, today = today, tappable = false)
         }
         age?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 8.dp, top = 3.dp)) }
     }
@@ -1037,11 +1039,11 @@ private fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () 
 }
 
 /**
- * Deal rows; the matters of one topic stay together and the topic is named once, under them — «↳ Тема»:
- * the matter comes first, where it belongs comes second.
+ * Deal rows; the matters of one topic stay together as one block under the topic's name (owner's choice in 0.18),
+ * with a quiet line under them: when it began, how much is written, its other matters.
  */
 @Composable
-private fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String>, onOpen: (String) -> Unit, onDone: (String) -> Unit, onLater: (String) -> Unit, onTime: (String) -> Unit,
+internal fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String>, onOpen: (String) -> Unit, onDone: (String) -> Unit, onLater: (String) -> Unit, onTime: (String) -> Unit,
                          age: ((Task) -> String?)? = null, faded: (Task) -> Boolean = { false }, topicOf: (String) -> Task? = { null }) {
     val c = M.c
     val s = M.s
@@ -1114,6 +1116,8 @@ private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, 
     val s = M.s
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val topics = plan.deals.mapNotNull { it.topicId }.distinct().size
+    // An empty day says «Свободный день» under it — a card with «0 дел» would only repeat it.
+    if (plan.deals.isEmpty() && plan.events.isEmpty() && promises.isEmpty()) return
     // A soft petrol card — the day's summary, set apart from the matters under it.
     Column(Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(RoundedCornerShape(16.dp)).background(c.linkSoft.copy(alpha = if (c.dark) 0.5f else 0.6f))
         .padding(horizontal = 14.dp, vertical = 12.dp)) {

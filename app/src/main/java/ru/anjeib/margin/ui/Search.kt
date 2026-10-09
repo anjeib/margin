@@ -65,13 +65,19 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
     var kind by rememberSaveable { mutableStateOf<String?>(null) }
     var viewing by remember { mutableStateOf<ru.anjeib.margin.data.Attachment?>(null) }
     val prefs = remember { ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE) }
-    var recent by remember { mutableStateOf(prefs.getString("searchRecent", "").orEmpty().split('\n').filter { it.isNotBlank() }) }
-    // A search is worth remembering once something it found was opened.
+    // One list for the whole run: a search left a moment ago is there when the screen opens again.
+    val recentState = RecentSearches.state
+    if (recentState.value == null) recentState.value = prefs.getString("searchRecent", "").orEmpty().split('\n').filter { it.isNotBlank() }
+    val recent = recentState.value.orEmpty()
+    // A search is remembered when something it found is opened, and when the user leaves it with words typed
+    // (Fable, 9 окт: looking without opening left «Недавние» empty).
     fun keep() {
         val t = q.trim().takeIf { it.length >= 2 } ?: return
-        recent = (listOf(t) + recent.filterNot { it.equals(t, true) }).take(5)
-        prefs.edit().putString("searchRecent", recent.joinToString("\n")).apply()
+        val now = (listOf(t) + recentState.value.orEmpty().filterNot { it.equals(t, true) }).take(5)
+        recentState.value = now
+        prefs.edit().putString("searchRecent", now.joinToString("\n")).apply()
     }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { keep() } }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     BackHandler { if (viewing != null) viewing = null else onBack() }
@@ -175,3 +181,6 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
     }
     viewing?.let { a -> Viewer(a, vm, onClose = { viewing = null }) }
 }
+
+/** The last searches, shared by every opening of the search screen (kept in prefs «ui» / searchRecent). */
+private object RecentSearches { val state = mutableStateOf<List<String>?>(null) }

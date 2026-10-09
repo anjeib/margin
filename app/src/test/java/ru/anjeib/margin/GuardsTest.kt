@@ -171,6 +171,8 @@ class GuardsTest {
         listOf(
             """{"actions":[{"type":"add_entry","task_id":"t","text":"$said"},{"type":"update_task","task_id":"t","topic_title":"Спецификация API","waiting_for":"Дима","due":"$mon"}]}""",
             """{"actions":[{"type":"add_entry","task_id":"t","text":"$said"},{"type":"update_task","task_id":"t","waiting_for":"Дима","due":"$mon","subtasks":[{"title":"Спецификация API","due":"$mon","from":"Дима"}]}]}""",
+            // Fable, 9 окт: the model only wrote the news — the day said for Dima's matter is moved by code.
+            """{"actions":[{"type":"add_entry","task_id":"t","text":"$said"}]}""",
         ).forEach { json ->
             val t = run(AppData(tasks = listOf(topic)), json, said).tasks.first { it.id == "t" }
             assertEquals(mon, t.subtasks.first { it.id == "spec" }.due)

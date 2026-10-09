@@ -166,11 +166,15 @@ class TopicsTest {
             subtasks = listOf(ru.anjeib.margin.data.Subtask(title = "Макет упаковки для типографии")))
         val flat = Task(id = "f", title = "Квартира поближе к студии", topic = true, people = listOf("Ирина"))
         val d = AppData(tasks = listOf(zerno, flat))
-        assertEquals("z", d.likelyTopic("Олегу отправить счёт", listOf("Олег"))?.id)
+        assertEquals("z", d.likelyTopic("Олегу отправить счёт за упаковку", listOf("Олег"))?.id)
         assertEquals("z", d.likelyTopic("распечатать макет упаковки для типографии")?.id)
-        assertEquals("f", d.likelyTopic("Ирина пришлёт варианты", listOf("Ирина"))?.id)
+        assertEquals("f", d.likelyTopic("Ирина пришлёт варианты квартир", listOf("Ирина"))?.id)
         assertEquals(null, d.likelyTopic("купить хлеб"))
-        assertEquals(null, d.likelyTopic("Олегу отправить счёт", listOf("Олег"), except = setOf("z")))
+        assertEquals(null, d.likelyTopic("Олегу отправить счёт за упаковку", listOf("Олег"), except = setOf("z")))
+        // Fable, 9 окт: Маша is in the trip, the book is not — a name alone suggests nothing.
+        val trip = Task(id = "t", title = "Поездка в Питер на выходные", topic = true, people = listOf("Маша"))
+        assertEquals(null, AppData(tasks = listOf(trip)).likelyTopic("Маше вернуть книгу в субботу", listOf("Маша")))
+        assertEquals("t", AppData(tasks = listOf(trip)).likelyTopic("Маша купит билеты на поездку", listOf("Маша"))?.id)
     }
 
     /** Sunday's card: done this week, who owes whom, topics that stood still for a week. */

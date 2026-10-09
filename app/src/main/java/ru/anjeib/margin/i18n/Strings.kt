@@ -31,9 +31,16 @@ interface Strings {
     val tourGesturesText: String
     val tourSwipeDone: String
     val tourSwipeLater: String
-    val tourFixTitle: String
-    val tourFixText: String
-    val tourCommands: List<String>
+    val tourMarks: List<String>
+    val tourMarksText: String
+    val tourTopicTitle: String
+    val tourTopicText: String
+    val tourTopicName: String
+    val tourTopicDeals: List<String>
+    val tourTopicWho: String
+    val tourHold: String
+    val tourOpened: String
+    val tourUndo: String
     val tourMore: String
     val tourDemoCall: String
     val tourDemoEdits: String
@@ -853,15 +860,22 @@ object Ru : Strings {
         HelpSection("Пример данных", "Настройки → «Пример данных»: два месяца жизни молодого дизайнера, чтобы всё попробовать. Ваши данные сохраняются отдельно и возвращаются кнопкой «Вернуть мои данные»."),
     )
     override val tourWriteTitle = "Пишите как думаете"
-    override val tourWriteText = "Словами или голосом — Margin сам разложит на дела, даты и обещания."
+    override val tourWriteText = "Одно поле внизу: словами или голосом. Margin сам разложит на дела, даты и обещания — обычные фразы прямо в телефоне, даже без интернета."
     override val tourWriteExample = "Завтра в 15 созвон с Мариной, она пришлёт правки до среды"
-    override val tourGesturesTitle = "Жесты"
-    override val tourGesturesText = "Нажатие открывает карточку дела — всё, что пишете в ней, относится к этому делу."
-    override val tourSwipeDone = "→ вправо — готово"
+    override val tourMarks = listOf("#тема", "@человек", "/жду", "/обещаю", "/идея")
+    override val tourMarksText = "Метки говорят точно, когда нужно:"
+    override val tourTopicTitle = "Дело растёт в тему"
+    override val tourTopicText = "Появилась запись, файл или второе дело — дело само становится темой: лентой со всей историей. На «Сегодня» дела темы идут блоком под её названием."
+    override val tourTopicName = "Ремонт ванной"
+    override val tourTopicDeals = listOf("Купить плитку", "Смета от мастера")
+    override val tourTopicWho = "Сергей"
+    override val tourGesturesTitle = "Нажмите — откроется"
+    override val tourGesturesText = "Нажатие на дело — его карточка: название, дата, комментарий. Попробуйте на строке ниже."
+    override val tourSwipeDone = "→ вправо — сделано"
     override val tourSwipeLater = "← влево — отложить"
-    override val tourFixTitle = "Если вышло не так"
-    override val tourFixText = "Под каждым изменением есть «Отменить». Или скажите прямо:"
-    override val tourCommands = listOf("Добавить дело: …", "Добавить идею: …", "Добавить контакт: …", "Исправить: …")
+    override val tourHold = "долгое — Готово · Дата · Время"
+    override val tourOpened = "В приложении откроется карточка этого дела"
+    override val tourUndo = "Под каждым изменением несколько секунд есть «Отменить», а если Margin понял не так — «Понято не так»."
     override val tourMore = "Подробнее — в меню, «Помощь»."
     override val tourDemoCall = "Созвон с Мариной"
     override val tourDemoEdits = "Получить правки от Марины"
@@ -1363,7 +1377,7 @@ object Ru : Strings {
     override val ob3Title = "Голос, фото, файлы"
     override val ob3Text = "Микрофон распознаёт речь с помощью ИИ, «+» прикрепляет фото, файлы и контакты. Мысли и идеи попадают в заметки, люди и компании — в «Контакты»."
     override val ob4Title = "Пара разрешений"
-    override val ob4Text = "Уведомления — для напоминаний. Календарь — чтобы ИИ планировал вокруг ваших встреч. Всё можно поменять в настройках."
+    override val ob4Text = "Уведомления — для напоминаний. Календарь — чтобы встречи стояли рядом с делами дня. Всё можно поменять в настройках."
     override val notifications = "Уведомления"
     override val calendar = "Календарь"
     override fun queueDoneText(n: Int) = "Разобрано: $n"
@@ -1602,15 +1616,22 @@ object En : Strings {
         HelpSection("Offline", "Settings → «Reading your words»: Phone — code only; Auto — hard phrases go to the AI when online; AI — as before. The line over the field shows what was understood before you send."),
     )
     override val tourWriteTitle = "Write as you think"
-    override val tourWriteText = "In words or by voice — Margin turns it into to-dos, dates and promises."
+    override val tourWriteText = "One field at the bottom: type or dictate. Margin turns it into to-dos, dates and promises — plain phrases right on the phone, even offline."
     override val tourWriteExample = "Call with Marina tomorrow at 3 pm, she sends the edits by Wednesday"
-    override val tourGesturesTitle = "Gestures"
-    override val tourGesturesText = "A tap opens the to-do — whatever you write there is about that to-do."
+    override val tourMarks = listOf("#topic", "@person", "/wait", "/promised", "/idea")
+    override val tourMarksText = "Marks say it exactly when you need to:"
+    override val tourTopicTitle = "A to-do grows into a topic"
+    override val tourTopicText = "A record, a file or a second to-do — and the to-do becomes a topic: a feed with all its story. On Today a topic's to-dos come as one block under its name."
+    override val tourTopicName = "Bathroom repair"
+    override val tourTopicDeals = listOf("Buy the tiles", "Estimate from the builder")
+    override val tourTopicWho = "Sergey"
+    override val tourGesturesTitle = "Tap to open"
+    override val tourGesturesText = "A tap on a to-do opens its card: the title, the date, a comment. Try it on the line below."
     override val tourSwipeDone = "→ right — done"
     override val tourSwipeLater = "← left — put off"
-    override val tourFixTitle = "If it got it wrong"
-    override val tourFixText = "Every change has “Undo”. Or say it directly:"
-    override val tourCommands = listOf("Add task: …", "Add note: …", "Add contact: …", "Fix: …")
+    override val tourHold = "hold — Done · Date · Time"
+    override val tourOpened = "In the app, this to-do's card opens"
+    override val tourUndo = "Every change has “Undo” for a few seconds, and “Understood wrong” when it got you wrong."
     override val tourMore = "More in the menu, “Help”."
     override val tourDemoCall = "Call with Marina"
     override val tourDemoEdits = "Get the edits from Marina"
@@ -2112,7 +2133,7 @@ object En : Strings {
     override val ob3Title = "Voice, photos, files"
     override val ob3Text = "The mic transcribes with AI, “+” attaches photos, files and contacts. Thoughts go to notes, people and companies to Contacts."
     override val ob4Title = "A couple of permissions"
-    override val ob4Text = "Notifications — for reminders. Calendar — so AI plans around your meetings. You can change this in Settings."
+    override val ob4Text = "Notifications — for reminders. Calendar — so meetings stand next to the day's to-dos. You can change this in Settings."
     override val notifications = "Notifications"
     override val calendar = "Calendar"
     override fun queueDoneText(n: Int) = "Sorted: $n"

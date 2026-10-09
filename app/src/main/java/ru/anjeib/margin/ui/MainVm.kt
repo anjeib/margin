@@ -281,7 +281,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             // A slip in the phone's reading must never lose the words: then they go the usual way (the AI or the queue).
             val who = tg.people.firstOrNull()
             val local = runCatching { LocalParser.parse(t, data.value, kind = when (tagKind) { "note" -> "idea"; "topic" -> "topic"; "task" -> "task"; else -> null }, sphere = tagSphere,
-                people = tg.people, waitFor = who.takeIf { tg.wait }, promiseTo = who.takeIf { tg.promise }) }
+                people = tg.people, waitFor = who.takeIf { tg.wait }, promiseTo = who.takeIf { tg.promise }, wait = tg.wait, promise = tg.promise) }
                 .getOrElse { LocalParser.Result(emptyList(), false, "error") }
             val mode = s.parseMode
             val offline = !Processor.online(ctx) || !Processor.ready(s)
@@ -1001,7 +1001,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         if (tg.record) return listOfNotNull(L.s.previewRecord, topic?.let { L.s.intoTopic(it.title) }).joinToString("  ·  ")
         val who = tg.people.firstOrNull()
         val r = runCatching { LocalParser.parse(t, data.value, kind = when (kind) { "note" -> "idea"; "topic" -> "topic"; "task" -> "task"; else -> null }, sphere = tg.sphere,
-            people = tg.people, waitFor = who.takeIf { tg.wait }, promiseTo = who.takeIf { tg.promise }) }.getOrNull() ?: return null
+            people = tg.people, waitFor = who.takeIf { tg.wait }, promiseTo = who.takeIf { tg.promise }, wait = tg.wait, promise = tg.promise) }.getOrNull() ?: return null
         val line = (runCatching { LocalParser.describe(r) }.getOrNull() ?: return null) + (topic?.let { "  ·  " + L.s.intoTopic(it.title) } ?: "")
         if (tg.explicit) return line
         val s = settings.value

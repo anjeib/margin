@@ -27,15 +27,19 @@ fun Task.materials(): List<Pair<Entry, Attachment>> = entries.flatMap { e -> e.a
 fun AppData.likelyTopic(words: String, people: Collection<String> = emptyList(), except: Set<String> = emptySet()): Task? {
     fun norm(t: String) = t.lowercase().replace('ё', 'е')
     fun stems(t: String) = Regex("\\p{L}{4,}").findAll(norm(t)).map { it.value.take(5) }.toSet()
-    val said = stems(words)
-    val who = (people + Regex("\\p{Lu}\\p{L}{2,}").findAll(words).map { it.value }).map { norm(it).take(3) }.toSet()
+    // A capital inside a sentence is a name; the first word of a sentence is just a word.
+    val names = people + Regex("(?<=[^.!?\\s] )\\p{Lu}\\p{L}{2,}").findAll(words).map { it.value }
+    val who = names.map { norm(it).take(3) }.toSet()
+    // A name alone is not enough (Маша is in a trip and in a book): the words must meet too, names apart.
+    val said = stems(words).filter { st -> who.none { st.startsWith(it) } }.toSet()
     val scored = tasks.filter { it.topic && !it.done && it.id !in except }.map { t ->
-        val theirs = stems(t.title + " " + t.subtasks.joinToString(" ") { it.title } + " " + t.entries.takeLast(5).joinToString(" ") { it.text })
         val theirPeople = (t.people + t.subtasks.mapNotNull { it.from } + listOfNotNull(t.waitingFor, t.promisedTo)).map { norm(it).take(3) }.toSet()
-        t to ((said intersect theirs).size + 3 * (who intersect theirPeople).size)
-    }.filter { it.second >= 3 }.sortedByDescending { it.second }
+        val theirs = stems(t.title + " " + t.subtasks.joinToString(" ") { it.title } + " " + t.entries.takeLast(5).joinToString(" ") { it.text })
+        val common = (said intersect theirs).size
+        Triple(t, common, common + 3 * (who intersect theirPeople).size)
+    }.filter { it.second > 0 && it.third >= 3 }.sortedByDescending { it.third }
     val best = scored.firstOrNull() ?: return null
-    return best.first.takeIf { scored.getOrNull(1)?.second != best.second }
+    return best.first.takeIf { scored.getOrNull(1)?.third != best.third }
 }
 
 /** The last day anything happened in a topic: a record, an event, a matter added or settled. */

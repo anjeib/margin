@@ -157,6 +157,11 @@ class LocalParserTest {
         assertTrue(p.promisedTo == "Лёша" && p.waitingFor == null && "Лёша" !in p.people)
         val n = LocalParser.parse("позвонить насчёт счётчиков", base, people = listOf("ЖЭК")).items.single()
         assertTrue("ЖЭК" in n.people)
+        // Fable, 9 окт: «/обещаю Маше …» without «@» — the person named in the words is the other side.
+        val m = LocalParser.parse("Маше вернуть книгу в субботу", base, promise = true).items.single()
+        assertTrue("${m.promisedTo} ${m.people} ${m.title}", m.promisedTo == "Маша" && "Маша" !in m.people && m.due == next(DayOfWeek.SATURDAY))
+        val k = LocalParser.parse("Дима спецификацию в понедельник", base, wait = true).items.single()
+        assertTrue("${k.waitingFor} ${k.title}", k.waitingFor == "Дима" && k.promisedTo == null)
     }
 
     @Test fun coverage() {

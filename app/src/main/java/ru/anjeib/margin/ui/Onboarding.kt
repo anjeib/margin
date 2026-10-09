@@ -34,10 +34,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.anjeib.margin.data.questionRow
+import ru.anjeib.margin.data.shortLabel
 
 /**
- * Four quiet pages on first launch — only the basics, the rest lives in «Помощь»; skippable at any point.
- * Each page shows the thing itself (real rows and badges), not a description of it. The last one asks for permissions.
+ * Four quiet pages on first launch — only the basics, the rest lives in «Помощь»; skippable at any point:
+ * write as you think (and the marks), a matter grows into a topic, a tap opens / a hold gives the menu / «Отменить»,
+ * permissions. Each page shows the thing itself — the same rows as on «Сегодня» — not a description of it.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -45,7 +48,7 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
     val c = M.c
     val s = M.s
     var page by rememberSaveable { mutableIntStateOf(0) }
-    val pages = listOf(s.tourWriteTitle to s.tourWriteText, s.tourGesturesTitle to s.tourGesturesText, s.tourFixTitle to s.tourFixText, s.ob4Title to s.ob4Text)
+    val pages = listOf(s.tourWriteTitle to s.tourWriteText, s.tourTopicTitle to s.tourTopicText, s.tourGesturesTitle to s.tourGesturesText, s.ob4Title to s.ob4Text)
     val ctx = androidx.compose.ui.platform.LocalContext.current
     fun has(p: String) = androidx.core.content.ContextCompat.checkSelfPermission(ctx, p) == android.content.pm.PackageManager.PERMISSION_GRANTED
     // A pressed button shows what happened — otherwise nobody knows whether it worked.
@@ -57,8 +60,17 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
     }
     val today = java.time.LocalDate.now()
     val wed = today.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.WEDNESDAY))
-    val call = ru.anjeib.margin.data.Task(title = s.tourDemoCall, due = today.plusDays(1).toString(), time = "15:00", people = listOf(s.tourDemoName))
-    val edits = ru.anjeib.margin.data.Task(title = s.tourDemoEdits, due = wed.toString(), waitingFor = s.tourDemoName)
+    val call = ru.anjeib.margin.data.Task(id = "tour-call", title = s.tourDemoCall, due = today.plusDays(1).toString(), time = "15:00", people = listOf(s.tourDemoName))
+    val edits = ru.anjeib.margin.data.Task(id = "tour-edits", title = s.tourDemoEdits, due = wed.toString(), waitingFor = s.tourDemoName)
+    // A topic as it looks on «Сегодня»: its matters under its name, a quiet line of how much is written.
+    val sat = today.with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SATURDAY))
+    val topic = ru.anjeib.margin.data.Task(id = "tour-topic", title = s.tourTopicName, topic = true, createdAt = today.minusDays(12).toString(),
+        subtasks = listOf(ru.anjeib.margin.data.Subtask(id = "a", title = s.tourTopicDeals[0], due = sat.toString()),
+            ru.anjeib.margin.data.Subtask(id = "b", title = s.tourTopicDeals[1], due = today.plusDays(2).toString(), from = s.tourTopicWho)),
+        entries = List(4) { ru.anjeib.margin.data.Entry(id = "e$it") })
+    val topicRows = topic.subtasks.map { topic.questionRow(it) }
+    // Real rows, so a tap and a hold here do what they will do on «Сегодня».
+    var opened by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
@@ -74,30 +86,34 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                 Text(pages[p].second, style = Type.body.copy(color = c.graphite, fontSize = 17.sp, lineHeight = 25.sp))
                 Spacer(Modifier.height(22.dp))
                 when (p) {
-                    // What you say → what it becomes.
+                    // What you say → what it becomes; the marks for when it must be exact.
                     0 -> Column {
                         Said(s.tourWriteExample)
                         Text("↓", style = Type.body.copy(color = c.link, fontSize = 20.sp), modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 2.dp))
-                        Column(Modifier.fillMaxWidth()) {
-                            TaskRow(call, today, false, onToggle = {}, onOpen = {})
-                            TaskRow(edits, today, false, onToggle = {}, onOpen = {})
+                        DealRow(call, today, onToggle = {}, onOpen = {}, onTime = {}, whenText = call.dueDate?.shortLabel()?.lowercase())
+                        DealRow(edits, today, onToggle = {}, onOpen = {}, onTime = {}, whenText = edits.dueDate?.shortLabel()?.lowercase())
+                        Spacer(Modifier.height(16.dp))
+                        Text(s.tourMarksText, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            s.tourMarks.forEach { Pill(it) }
                         }
                     }
-                    1 -> Column {
-                        Column(Modifier.fillMaxWidth()) {
-                            TaskRow(call, today, false, onToggle = {}, onOpen = {})
+                    1 -> GroupedDeals(topicRows, today, emptySet(), onOpen = {}, onDone = {}, onLater = {}, onTime = {}, topicOf = { topic })
+                    2 -> Column {
+                        DealRow(call, today, onToggle = {}, onOpen = { opened = true }, onTime = {}, onLater = {}, whenText = call.dueDate?.shortLabel()?.lowercase())
+                        androidx.compose.animation.AnimatedVisibility(opened) {
+                            Text(s.tourOpened, style = Type.small.copy(color = c.link, fontSize = 13.sp), modifier = Modifier.padding(start = 52.dp, bottom = 4.dp))
                         }
-                        Spacer(Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Spacer(Modifier.height(10.dp))
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Pill(s.tourSwipeDone, accent = true)
                             Pill(s.tourSwipeLater)
-                        }
-                    }
-                    2 -> Column {
-                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            s.tourCommands.forEach { Said(it) }
+                            Pill(s.tourHold)
                         }
                         Spacer(Modifier.height(16.dp))
+                        Text(s.tourUndo, style = Type.small.copy(color = c.graphite, fontSize = 14.sp, lineHeight = 20.sp))
+                        Spacer(Modifier.height(8.dp))
                         Text(s.tourMore, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
                     }
                     else -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
