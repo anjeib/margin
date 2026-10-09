@@ -1,6 +1,7 @@
 package ru.anjeib.margin.ui
 
 import ru.anjeib.margin.data.withSamples
+import ru.anjeib.margin.data.hasSamples
 import ru.anjeib.margin.data.withoutSamples
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -91,8 +92,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     val keyStatus: StateFlow<String?> = _keyStatus
 
     companion object {
-        /** Bumped when the «Знакомство с Margin» words change: 2 — the owner's edits after the first test (0.26). */
-        const val INTRO_VERSION = 2
+        /** Bumped when the examples change: 2 — the owner's edits after the first test (0.26); 3 — «Примеры» from the designer's demo in place of «Знакомство с Margin» (0.29). */
+        const val INTRO_VERSION = 3
         const val AUTO_CONFIRM_MS = 5000L
         fun key(scope: Scope) = when (scope) { Scope.Main -> "main"; Scope.Notes -> "notes"; is Scope.InTask -> "task:" + scope.taskId }
     }
@@ -1042,25 +1043,34 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         store.restore { mine }
     }
 
-    /** «Знакомство с Margin»: the examples come once, on a fresh start, in place of someone else's two months. */
+    /** «Примеры» are Russian, like the demo they come from: an English interface gets none. */
+    fun samplesHere() = L.lang == ru.anjeib.margin.i18n.Lang.Ru
+
+    /** «Примеры»: one of each thing the app does, from the designer's demo — once, on a fresh start (not in the demo copy). */
     fun addIntroOnce() {
         val ui = ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
         if (ui.getBoolean("introAdded", false) || ru.anjeib.margin.BuildConfig.DEMO) return
         ui.edit().putBoolean("introAdded", true).apply()
         ui.edit().putInt("introVersion", INTRO_VERSION).apply()
-        if (data.value.tasks.none { !it.sample }) store.update { it.withSamples(L.s.intro) }
+        if (samplesHere() && data.value.tasks.none { !it.sample }) putSamples()
     }
 
-    /** The examples' words change between versions: ones left from an older version are replaced with today's. */
+    /** The topic's two files are drawn off the main thread; the set goes in as one change. */
+    private fun putSamples() = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+        val set = ru.anjeib.margin.data.Samples.withFiles(ctx)
+        store.update { it.withSamples(set) }
+    }
+
+    /** Examples left from an older version (the old «Знакомство с Margin») are replaced with today's set. */
     fun refreshSamples() {
         val ui = ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
         if (ui.getInt("introVersion", 1) >= INTRO_VERSION) return
         ui.edit().putInt("introVersion", INTRO_VERSION).apply()
-        if (data.value.tasks.any { it.sample }) store.update { it.withSamples(L.s.intro) }
+        if (data.value.hasSamples()) { if (samplesHere()) putSamples() else store.update { it.withoutSamples() } }
     }
 
     fun removeSamples() = store.update { it.withoutSamples() }
-    fun bringSamples() = store.update { it.withSamples(L.s.intro) }
+    fun bringSamples() { if (samplesHere()) putSamples() }
 
     fun demoAsked() = ru.anjeib.margin.data.Demo.asked(ctx)
     fun demoSkip() = ru.anjeib.margin.data.Demo.markAsked(ctx)

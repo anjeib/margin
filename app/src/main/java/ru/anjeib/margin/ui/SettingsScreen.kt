@@ -164,10 +164,10 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             }
         }
 
-        // «Знакомство с Margin»: take the examples away, or bring them back to look again.
-        Group(s.samplesTitle) {
+        // «Примеры»: take the examples away, or bring them back to look again (Russian only, like the demo).
+        if (vm.samplesHere()) Group(s.samplesTitle) {
             val data by vm.data.collectAsState()
-            val has = data.tasks.any { it.sample }
+            val has = data.tasks.any { it.sample } || data.persons.any { it.sample }
             ValueRow(if (has) s.samplesRemove else s.samplesBack, null, "", onClick = { if (has) vm.removeSamples() else vm.bringSamples() })
         }
 

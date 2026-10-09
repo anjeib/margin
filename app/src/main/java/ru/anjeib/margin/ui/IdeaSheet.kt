@@ -23,6 +23,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
@@ -56,13 +58,22 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
     ) {
         val half = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.5f).dp
         Column(Modifier.fillMaxWidth().heightIn(min = half).imePadding().navigationBarsPadding().screenRule().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            Margined(Modifier.padding(top = 10.dp)) { GroupBadge(s.ideaBadge) }
+            // The top: the sphere (a tap switches it); a line; then the stream — the idea's words by its bulb, the day it was
+            // written on the margin, and its records under them.
             Margined(Modifier.padding(top = 8.dp)) {
-                BasicTextField(title, { title = it }, textStyle = Type.title.copy(color = c.ink, fontSize = 28.sp, lineHeight = 34.sp),
-                    cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
+                MetaLine(listOf(MetaItem(Meta.sphere(task.sphere == "work"), Meta.quiet()) { vm.setSphere(task.id, nextSphere(task.sphere)) }))
             }
-            Margined { SphereBadge(task.sphere, Modifier.padding(top = 6.dp)) { vm.setSphere(task.id, nextSphere(task.sphere)) } }
-            WrittenLane(task.entries.filter { it.text.isNotBlank() }.map { LaneItem(it.id, it.at, it.text) }, s.ideaHint, Modifier.padding(top = 12.dp),
+            Hairline(Modifier.padding(start = MarginW, top = 12.dp))
+            val born = task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
+            Margined(Modifier.padding(top = 12.dp), margin = { Stamp(born) }) {
+                androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.width(46.dp), contentAlignment = Alignment.CenterStart) { IdeaMark() }
+                    androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
+                    BasicTextField(title, { title = it }, textStyle = Type.body.copy(color = c.ink, fontSize = 17.sp, lineHeight = 24.sp),
+                        cursorBrush = SolidColor(c.link), modifier = Modifier.weight(1f))
+                }
+            }
+            WrittenLane(task.entries.filter { it.text.isNotBlank() }.map { LaneItem(it.id, it.at, it.text) }, s.ideaHint, Modifier.padding(top = 4.dp), after = born,
                 onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
                 onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
             // Files, matters and all the rest of it — on the full page.

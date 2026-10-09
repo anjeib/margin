@@ -167,57 +167,26 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
             // «Поля»: the rule down the card, the day and hour on the margin, everything else right of it.
             // At least half the screen with the field right under it; a longer card grows, the field stays below.
             Column(Modifier.weight(1f, fill = false).heightIn(min = (half - 76.dp).coerceAtLeast(120.dp)).screenRule().verticalScroll(rememberScrollState())) {
-                // The tick and the words right of the rule; the day and the hour just below, each with its glyph.
-                Margined(Modifier.padding(top = 6.dp)) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        // No corner menu (owner's call): its few things are on a long press of the tick.
-                        Box(Modifier.offset(x = (-8).dp)) {
-                            CheckCircle(task.done, size = 24.dp, onLong = { menu = true }) { vm.toggleTask(task.id) }
-                            SoftMenu(menu, { menu = false }) {
-                                if (!task.done) {
-                                    SoftMenuItem(s.swipeTomorrow) { menu = false; vm.postpone(task.id, 1) }
-                                    SoftMenuItem(s.plusWeek) { menu = false; vm.postpone(task.id, 7) }
-                                    SoftMenuItem(s.wontDo) { menu = false; commitTitle(); vm.dropTask(task.id); onClose() }
-                                }
-                                SoftMenuItem(s.toNote) { menu = false; commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }
-                                SoftMenuItem(s.delete, danger = true) { menu = false; dialog = "delete" }
-                            }
-                        }
-                        BasicTextField(
-                            value = title, onValueChange = { title = it },
-                            textStyle = Type.title.copy(color = if (task.done) c.graphite else c.ink, fontSize = 28.sp, lineHeight = 34.sp),
-                            cursorBrush = SolidColor(c.link),
-                            modifier = Modifier.weight(1f).padding(top = 4.dp),
-                        )
-                    }
-                }
-                Margined {
+                // The top: when, how often, where, with whom — one quiet line; then what is not set yet.
+                val ctxOpen = androidx.compose.ui.platform.LocalContext.current
+                Margined(Modifier.padding(top = 8.dp)) {
                     Column {
-                        // What is set: each with its small glyph, the value a petrol link that changes it.
-                        val ctxOpen = androidx.compose.ui.platform.LocalContext.current
-                        val dates = task.whenLabel()?.substringBefore(" · ${task.time}")?.takeIf { task.dueDate != null || task.startDate != null }
-                        Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            if (task.slots.isNotEmpty()) DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) })
-                            else {
-                                dates?.let { Prop({ CalendarGlyph(c.graphite, 15.dp) }, it, task.isOverdue()) { dialog = "dates" } }
-                                task.time?.let { Prop({ ClockGlyph(c.graphite, 15.dp) }, it, task.isOverdue()) { dialog = "time" } }
-                            }
-                            task.repeat?.let { Prop({ RepeatGlyph(c.graphite, 15.dp) }, it.label()) { dialog = "repeat" } }
-                            task.place?.let { pl -> Prop({ Icon(Icons.Outlined.Place, null, tint = c.graphite, modifier = Modifier.size(15.dp)) }, pl, onLong = { fill("place") }) {
-                                runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
-                            } }
-                        }
+                        if (task.slots.isNotEmpty()) DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) })
+                        val dates = task.whenLabel()?.substringBefore(" · ${task.time}")?.takeIf { (task.dueDate != null || task.startDate != null) && task.slots.isEmpty() }
                         val others = task.people.filter { p -> p != task.waitingFor && p != task.promisedTo }
-                        // One row of badges for every matter: the sphere, the people, the promise.
-                        FlowRow(
-                            Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-                            itemVerticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            SphereBadge(task.sphere) { vm.setSphere(task.id, nextSphere(task.sphere)) }
-                            others.forEach { p -> PersonBadge(p, big = true) { data.contact(p)?.let { onOpenPerson(it.id) } ?: vm.offerContact(p) } }
-                            if (task.waitingFor != null) PromiseBadge(task, big = true) { dialog = "waiting" }
-                            else task.promisedTo?.let { w -> PromiseBadge(task, big = true) { data.contact(w)?.let { p -> onOpenPerson(p.id) } ?: vm.offerContact(w) } }
-                        }
+                        val late = task.isOverdue()
+                        MetaLine(buildList {
+                            dates?.let { add(MetaItem(Meta.plain(it), Meta.date(late)) { dialog = "dates" }) }
+                            task.time?.takeIf { task.slots.isEmpty() }?.let { add(MetaItem(Meta.plain(it), Meta.date(late)) { dialog = "time" }) }
+                            task.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
+                            add(MetaItem(Meta.sphere(task.sphere == "work"), Meta.quiet()) { vm.setSphere(task.id, nextSphere(task.sphere)) })
+                            task.waitingFor?.let { w -> add(MetaItem(Meta.promise(s.promiseToYouParts(w)), Meta.quiet()) { dialog = "waiting" }) }
+                                ?: task.promisedTo?.let { w -> add(MetaItem(Meta.promise(s.promiseFromYouParts(w)), Meta.quiet()) { data.contact(w)?.let { p -> onOpenPerson(p.id) } ?: vm.offerContact(w) }) }
+                            others.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { data.contact(p)?.let { onOpenPerson(it.id) } ?: vm.offerContact(p) }) }
+                            task.place?.let { pl -> add(MetaItem(Meta.plain(pl), Meta.link(), onLong = { fill("place") }) {
+                                runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
+                            }) }
+                        }, Modifier.padding(top = if (task.slots.isNotEmpty()) 6.dp else 0.dp))
                         // What is not set yet: quiet «+ …»; a step turns the matter into a topic.
                         val typed = setOf("step", "place", "people")
                         val missing = buildList {
@@ -230,7 +199,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             if (task.place == null) add(s.fieldPlace to "place")
                             if (!task.done) add(s.stepOne to "step")
                         }
-                        if (missing.isNotEmpty()) FlowRow(Modifier.padding(top = 6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+                        if (missing.isNotEmpty()) FlowRow(Modifier.padding(top = 2.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                             missing.forEachIndexed { i, (label, d) ->
                                 if (i > 0) Text(" · ", style = Type.small.copy(color = c.faint))
                                 PaperLink("+ " + label.lowercase(), quiet = true) { if (d in typed) fill(d) else dialog = d }
@@ -238,9 +207,36 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         }
                     }
                 }
-                Hairline(Modifier.padding(start = MarginW, top = 16.dp))  // the comments begin under this line
-                // The user's own comments: typed right on the page, each with its day and hour on the margin, no AI.
-                WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 10.dp),
+                Hairline(Modifier.padding(start = MarginW, top = 12.dp))  // the stream begins under this line
+                // The stream: the matter's own words first — the same line as on the main screen, the day it was written on
+                // the margin — then the user's comments, each with its own day and hour.
+                val born = task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
+                Margined(Modifier.padding(top = 12.dp), margin = { Stamp(born) }) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        KindMark(task)
+                        // No corner menu (owner's call): its few things are on a long press of the bagel.
+                        Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) {
+                            CheckCircle(task.done, size = 18.dp, onLong = { menu = true }) { vm.toggleTask(task.id) }
+                            SoftMenu(menu, { menu = false }) {
+                                if (!task.done) {
+                                    SoftMenuItem(s.swipeTomorrow) { menu = false; vm.postpone(task.id, 1) }
+                                    SoftMenuItem(s.plusWeek) { menu = false; vm.postpone(task.id, 7) }
+                                    SoftMenuItem(s.wontDo) { menu = false; commitTitle(); vm.dropTask(task.id); onClose() }
+                                }
+                                SoftMenuItem(s.toNote) { menu = false; commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }
+                                SoftMenuItem(s.delete, danger = true) { menu = false; dialog = "delete" }
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        BasicTextField(
+                            value = title, onValueChange = { title = it },
+                            textStyle = Type.body.copy(color = if (task.done) c.graphite else c.ink, fontSize = 17.sp, lineHeight = 24.sp),
+                            cursorBrush = SolidColor(c.link),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = born,
                     onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
                     onAdd = { t, at -> vm.addComment(task.id, t, at); savedAt = System.currentTimeMillis() })
                 // Where it came from — below the shared part of every matter's card, quietly.

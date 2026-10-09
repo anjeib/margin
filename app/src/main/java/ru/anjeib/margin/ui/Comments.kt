@@ -31,18 +31,20 @@ data class LaneItem(val id: String, val at: String, val text: String)
  * a new piece, stamped with when its writing began.
  */
 @Composable
-fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifier, onEdit: (String, String) -> Unit, onAdd: (String, String) -> Unit) {
+fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifier, after: String? = null, onEdit: (String, String) -> Unit, onAdd: (String, String) -> Unit) {
     val c = M.c
     val text = Type.body.copy(color = c.ink, fontSize = 15.5.sp, lineHeight = 22.sp)
     Column(modifier.fillMaxWidth()) {
-        items.forEach { item ->
+        // The day is written once: a piece of the same day as the one above it shows only its hour ([after] — what stands above the lane).
+        items.forEachIndexed { i, item ->
+            val above = if (i == 0) after else items[i - 1].at
             androidx.compose.runtime.key(item.id) {
                 var t by remember(item.id) { mutableStateOf(item.text) }
                 val edit by rememberUpdatedState(onEdit)
                 // Saved a moment after typing stops, and on leaving the page whatever is left.
                 LaunchedEffect(t) { if (t != item.text) { kotlinx.coroutines.delay(800); edit(item.id, t) } }
                 DisposableEffect(item.id) { onDispose { if (t.trim() != item.text.trim()) edit(item.id, t) } }
-                Margined(Modifier.padding(top = 6.dp), margin = { Stamp(item.at) }) {
+                Margined(Modifier.padding(top = 6.dp), margin = { Stamp(item.at, sameDay = above?.take(10) == item.at.take(10)) }) {
                     BasicTextField(t, { t = it }, textStyle = text, cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp))
                 }
             }
@@ -53,7 +55,7 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
         val add by rememberUpdatedState(onAdd)
         fun commit() { if (draft.isNotBlank()) add(draft.trim(), started ?: nowStamp()); draft = ""; started = null }
         DisposableEffect(Unit) { onDispose { commit() } }
-        Margined(Modifier.padding(top = 6.dp), margin = { started?.let { Stamp(it) } }) {
+        Margined(Modifier.padding(top = 6.dp), margin = { started?.let { st -> Stamp(st, sameDay = (items.lastOrNull()?.at ?: after)?.take(10) == st.take(10)) } }) {
             Box(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                 if (draft.isEmpty() && !focused) Text(hint, style = text.copy(color = c.faint))
                 BasicTextField(draft, { v -> draft = v; if (started == null && v.isNotBlank()) started = nowStamp() },
@@ -64,13 +66,14 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
     }
 }
 
-/** The day and the hour a piece was written, on the margin. */
+/** The day and the hour a piece was written, on the margin; only the day when that is all that is known. */
 @Composable
-private fun Stamp(at: String) {
+internal fun Stamp(at: String, sameDay: Boolean = false) {
     val c = M.c
-    val dt = runCatching { java.time.LocalDateTime.parse(at.take(16)) }.getOrNull() ?: return
+    val dt = runCatching { java.time.LocalDateTime.parse(at.take(16)) }.getOrNull()
+        ?: run { if (!sameDay) runCatching { java.time.LocalDate.parse(at.take(10)) }.getOrNull()?.let { Text(it.dayMonthShort(), style = dateStyle(12.5.sp)) }; return }
     Column {
-        Text(dt.toLocalDate().dayMonthShort(), style = dateStyle(12.5.sp))
+        if (!sameDay) Text(dt.toLocalDate().dayMonthShort(), style = dateStyle(12.5.sp))
         Text(dt.toLocalTime().toString().take(5), style = Type.small.copy(color = c.graphite, fontSize = 12.sp, fontFeatureSettings = "tnum"))
     }
 }

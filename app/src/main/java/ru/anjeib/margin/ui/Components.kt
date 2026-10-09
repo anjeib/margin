@@ -114,10 +114,10 @@ fun MenuGlyph(color: Color = M.c.ink) {
 @Composable
 fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, onToggle: () -> Unit) {
     val c = M.c
-    // Smaller and finer than the touch target: a hairline ring with a whisper of a tick; done — filled sage, the tick white.
+    // A bullet the size of the other glyphs — a small «bagel» (owner's call, 10 окт): a thick ring;
+    // done — the hole closes into a sage disc and a white tick comes up on it.
     val d = size * 0.8f
-    val fill by animateColorAsState(if (done) c.ok else Color.Transparent, label = "check")
-    val ring by animateColorAsState(if (done) c.ok else c.graphite.copy(alpha = 0.5f), label = "ring")
+    val p by androidx.compose.animation.core.animateFloatAsState(if (done) 1f else 0f, androidx.compose.animation.core.tween(280), label = "bagel")
     Box(
         Modifier
             .size(size + 16.dp)
@@ -127,8 +127,17 @@ fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, o
                 else Modifier.combinedClickable(role = androidx.compose.ui.semantics.Role.Checkbox, onLongClick = onLong, onClick = onToggle)),
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(d).clip(CircleShape).background(fill).border(1.1.dp, ring, CircleShape), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Check, null, tint = if (done) c.bg else c.graphite.copy(alpha = 0.22f), modifier = Modifier.size(d * 0.62f))
+        val ring = androidx.compose.ui.graphics.lerp(c.graphite.copy(alpha = 0.78f), c.ok, p)
+        val tick = c.bg
+        androidx.compose.foundation.Canvas(Modifier.size(d)) {
+            val w = this.size.width; val h = this.size.height
+            val r = w * 0.42f
+            val t = r * (0.46f + 0.54f * p)
+            drawCircle(ring, radius = r - t / 2, center = androidx.compose.ui.geometry.Offset(w / 2, h / 2), style = androidx.compose.ui.graphics.drawscope.Stroke(width = t))
+            val q = ((p - 0.45f) / 0.55f).coerceIn(0f, 1f)
+            if (q > 0f) drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(w * 0.31f, h * 0.51f); lineTo(w * 0.45f, h * 0.64f); lineTo(w * 0.7f, h * 0.37f) },
+                tick.copy(alpha = q), style = androidx.compose.ui.graphics.drawscope.Stroke(width = (w * 0.09f).coerceAtLeast(1.4.dp.toPx()), cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    join = androidx.compose.ui.graphics.StrokeJoin.Round))
         }
     }
 }

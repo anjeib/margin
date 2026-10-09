@@ -65,7 +65,6 @@ interface Strings {
     val forwardTitle: String
     val forwardCommentHint: String
     val forwardHint: String
-    val intro: ru.anjeib.margin.data.Intro.Texts
     val samplesLine: String
     val ideaBadge: String
     val openTopic: String
@@ -753,7 +752,7 @@ object Ru : Strings {
         "Ввод" to listOf("Поле ввода и метки", "Окошко тем", "Даты, время, повторы", "Списки", "Голос и файлы", "Быстрый ввод и отзыв", "Пересылка в Margin"),
         "Люди и обещания" to listOf("Люди и обещания", "Контакты", "Неделя, напоминания, виджет"),
         "Значки и жесты" to listOf("Значки", "Бейджи и цвета", "Жесты"),
-        "Настройки и данные" to listOf("Настройки", "ИИ и без ИИ", "Приватность", "Знакомство с Margin"),
+        "Настройки и данные" to listOf("Настройки", "ИИ и без ИИ", "Приватность", "Примеры"),
     )
     override val helpSections = listOf(
         // ---- concepts ----
@@ -888,7 +887,7 @@ object Ru : Strings {
         HelpSection("Быстрый ввод и отзыв", "Быстро записать можно с плитки «Записать» в шторке (добавьте её через карандаш в быстрых настройках) или долгим нажатием на значок приложения — «Записать» / «Надиктовать». Если Margin понял фразу не так, нажмите «Не совсем понял» под результатом. «Отправить отзыв» в меню открывает письмо разработчику с журналами ошибок; ваши записи не отправляются."),
         HelpSection("Неделя, напоминания, виджет", "По воскресеньям на «Сегодня» появляется итог недели: сколько сделано, кто кому должен, какие темы стоят на месте; «×» скрывает его до следующего воскресенья. Если кто-то просрочил обещание, рядом появится «напомнить»: Margin подготовит сообщение (SMS, если известен телефон, иначе через «Поделиться»), а отправите его вы. Виджет «Margin · Сегодня» на рабочем столе показывает дела дня и открывает поле ввода или диктовку. Тему целиком можно переслать текстом: ⋯ → «Переслать»."),
         HelpSection("Приватность", "Настройки → «Приватность»: вход по отпечатку (или коду блокировки) и «Где ваши данные» — где хранятся записи и что уходит с телефона. На экране блокировки напоминания показываются без текста дел."),
-        HelpSection("Знакомство с Margin", "При первом запуске в Margin уже есть несколько примеров: каждый показывает одну возможность и подсказывает, что попробовать. Убрать их можно в Настройках → «Знакомство с Margin», там же их можно вернуть. Ваши записи останутся на месте."),
+        HelpSection("Примеры", "При первом запуске в Margin уже есть примеры — несколько дней молодого дизайнера, по одному на каждую возможность: тема с записями и файлами, дела со временем, повтором и на несколько дней, просроченное, обещания в обе стороны, дело без даты, идея, контакт и компания. Убрать их можно в Настройках → «Примеры», там же их можно вернуть. Ваши записи останутся на месте."),
     )
     override val tourWriteTitle = "Пишите как думаете"
     override val tourWriteText = "Одно поле внизу — пишите или диктуйте. Margin сам разложит всё на дела, даты и обещания, даже без интернета."
@@ -930,24 +929,7 @@ object Ru : Strings {
     override val forwardTitle = "В Margin"
     override val forwardCommentHint = "Что с этим сделать — или просто отправьте"
     override val forwardHint = "Margin найдёт дела, обещания, идеи"
-    override val intro = ru.anjeib.margin.data.Intro.Texts(
-        topic = "Знакомство с Margin",
-        topicNote = "Это тема — лента одного большого дела: записи, файлы и дела вместе. Напишите что-нибудь в поле внизу — появится новая запись.",
-        topicOpen = "Нажмите на это дело — откроется его карточка",
-        topicFile = "Добавьте фото или файл через «+» — он появится в материалах темы",
-        waitWho = "Анна",
-        topicWait = "Список гостей",
-        swipeRight = "Смахните вправо — дело сделано",
-        swipeLeft = "Смахните влево — отложить",
-        hold = "Нажмите и подержите — появится меню",
-        askMove = "Попросите словами: «перенеси полив цветов на воскресенье»",
-        flowers = "Полив цветов",
-        promise = "Прислать фото с отпуска",
-        noDate = "Дело без даты — тоже нормально",
-        idea = "Подарок маме — книга о садах",
-        ideaNote = "Это идея: тема без дел. Появится первое дело — она станет темой.",
-    )
-    override val samplesLine = "Здесь примеры из «Знакомства с Margin»"
+    override val samplesLine = "Здесь примеры"
     override val ideaBadge = "Идея"
     override val openTopic = "Открыть тему"
     override fun aboutDeal(title: String, text: String) = "Про дело «$title»: $text"
@@ -956,7 +938,7 @@ object Ru : Strings {
     override val ideasBadge = "Идеи"
     override val samplesRemove = "Убрать примеры"
     override val samplesBack = "Вернуть примеры"
-    override val samplesTitle = "Знакомство с Margin"
+    override val samplesTitle = "Примеры"
     override val askOffline = "Чтобы помощник отвечал, нужны интернет и код приглашения."
     override val errInvite = "Код приглашения не подошёл — проверьте его в Настройках"
     override val inviteTitle = "Код приглашения"
@@ -1733,24 +1715,7 @@ object En : Strings {
     override val forwardTitle = "To Margin"
     override val forwardCommentHint = "What to do with it — or just send"
     override val forwardHint = "Margin will sort it: to-dos, promises, ideas"
-    override val intro = ru.anjeib.margin.data.Intro.Texts(
-        topic = "Getting to know Margin",
-        topicNote = "This is a topic — the feed of one big thing: records, files and to-dos together. Write something in the field below — it lands here as a record.",
-        topicOpen = "Tap this to-do — its card opens",
-        topicFile = "Add a photo or a file with «+» — it shows up in the topic's materials",
-        waitWho = "Anna",
-        topicWait = "The guest list",
-        swipeRight = "Swipe right — done",
-        swipeLeft = "Swipe left — put off",
-        hold = "Long press — Done · Date · Time",
-        askMove = "Ask in words: «move watering the plants to Sunday»",
-        flowers = "Watering the plants",
-        promise = "Send the holiday photos",
-        noDate = "A to-do without a date is fine too",
-        idea = "A present for mum — a book about gardens",
-        ideaNote = "This is an idea: a topic without to-dos. With the first to-do it becomes a topic.",
-    )
-    override val samplesLine = "These are the «Getting to know Margin» examples"
+    override val samplesLine = "These are examples"
     override val ideaBadge = "Idea"
     override val openTopic = "Open the topic"
     override fun aboutDeal(title: String, text: String) = "About the to-do «$title»: $text"
@@ -1759,7 +1724,7 @@ object En : Strings {
     override val ideasBadge = "Ideas"
     override val samplesRemove = "Remove examples"
     override val samplesBack = "Bring examples back"
-    override val samplesTitle = "Getting to know Margin"
+    override val samplesTitle = "Examples"
     override val askOffline = "The assistant answers questions when there is internet and an invite code."
     override val errInvite = "The invite code did not work — check it in Settings"
     override val inviteTitle = "Invite code"

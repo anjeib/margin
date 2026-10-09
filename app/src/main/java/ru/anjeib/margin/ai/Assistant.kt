@@ -193,7 +193,7 @@ object Assistant {
         // The «Знакомство» examples that only teach («Смахните вправо…», «Спросите помощника…») are not the user's matters:
         // seen, they make the model copy them instead of answering.
         val d = ru.anjeib.margin.data.Topics.asNotes(d0, focusTask).let { x -> x.copy(notes = x.notes.filter { !it.archived },
-            tasks = x.tasks.filter { !(it.topic && it.done) && !ru.anjeib.margin.data.Intro.teachesOnly(it) }) }
+            tasks = x.tasks.filter { !(it.topic && it.done) }) }
         val today = now.toLocalDate()
         return buildString {
             appendLine("Now: $today, ${now.toLocalTime().withSecond(0).withNano(0)}.")

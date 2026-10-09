@@ -232,7 +232,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         val trayShown = tray != null || pending != null || busy == "main"
                         var lastTray by androidx.compose.runtime.remember { mutableStateOf<Triple<String?, Pending?, Boolean>>(Triple(null, null, false)) }
                         if (trayShown) lastTray = Triple(tray, pending, busy == "main")
-                        AnimatedVisibility(trayShown, enter = fadeIn(), exit = fadeOut(androidx.compose.animation.core.tween(350)) + androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(350))) {
+                        // The exchange over the field stands on the page itself: the margin rule stops under it, never crosses its words.
+                        AnimatedVisibility(trayShown, modifier = Modifier.background(c.bg), enter = fadeIn(), exit = fadeOut(androidx.compose.animation.core.tween(350)) + androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(350))) {
                         Tray(
                             data, lastTray.first, lastTray.second, lastTray.third,
                             canUndo = vm::canUndo, onUndo = vm::undo,

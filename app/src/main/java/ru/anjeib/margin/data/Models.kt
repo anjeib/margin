@@ -128,6 +128,8 @@ data class Person(
     val kept: Boolean = false,
     /** A business, not a person: a shop, a clinic, a housing office, a bank — «Организации» in «Контакты». */
     val org: Boolean = false,
+    /** One of «Примеры» — leaves with «Убрать примеры» together with the example matters. */
+    val sample: Boolean = false,
 ) {
     fun matches(n: String) = name.equals(n, true) || aliases.any { it.equals(n, true) }
     /** Anything beyond a name: worth keeping in «Контакты» even if nobody pressed «+ контакт». */

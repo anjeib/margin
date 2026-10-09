@@ -363,16 +363,15 @@ fun TaskList(
                     }
                 }
                 // «Без следующего шага» lives in «Обзор · Темы» now: «Сегодня» is about today.
-                // Ideas written today: under their own badge, each a full line in ink — not a grey summary cut short.
+                // Ideas written today: each a full line in ink by its bulb — the bulb says «идея», no badge over them.
                 val notesToday = data.tasks.filter { t -> t.thought && !t.done && (t.createdAt == today.toString() || t.entries.any { it.at.startsWith(today.toString()) }) }
                 if (notesToday.isNotEmpty()) plain("notes-today") {
                     Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
-                        GroupBadge(if (notesToday.size == 1) s.ideaBadge else s.ideasBadge, Modifier.padding(bottom = 4.dp))
                         notesToday.forEach { t ->
                             Tile {
                                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onOpen(t.id) }.landing(t.id in landed, 10)
-                                    .padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
-                                    Box(Modifier.size(26.dp, 22.dp), contentAlignment = Alignment.CenterStart) { ThoughtGlyph(c.graphite, 16.dp) }
+                                    .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.width(46.dp), contentAlignment = Alignment.CenterStart) { IdeaMark() }
                                     Spacer(Modifier.width(8.dp))
                                     Text(t.title.ifBlank { s.untitled }, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), modifier = Modifier.weight(1f))
                                 }
@@ -1135,30 +1134,34 @@ private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, 
         // A soft petrol card for who owes whom, set apart from the matters under it.
         if (promises.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.linkSoft.copy(alpha = if (c.dark) 0.5f else 0.6f))
             .padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(s.promisesTitle.uppercase(), style = Type.label.copy(color = c.link), modifier = Modifier.padding(bottom = 2.dp))
+            Row(Modifier.padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(34.dp), contentAlignment = Alignment.CenterStart) { Box(Modifier.padding(start = 4.dp)) { PeopleGlyph(c.link, 18.dp) } }
+                Text(s.promisesTitle.uppercase(), style = Type.label.copy(color = c.link))
+            }
             var allPromises by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
             // Three lines, the most pressing first (overdue, today); the rest behind «ещё N ›» so the day's matters stay in sight.
             val ordered = promises.sortedBy { it.dueDate ?: it.startDate ?: LocalDate.MAX }
             (if (allPromises) ordered else ordered.take(3)).forEach { t ->
                 val d = t.dueDate ?: t.startDate
                 val late = d?.isBefore(today) == true
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.id) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.width(22.dp), contentAlignment = Alignment.CenterStart) {
-                        ArrowGlyph(c.link, 14.dp, incoming = t.waitingFor != null)
+                // The whole promise is read, never cut: a long one wraps under itself, the date stays on its first line.
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.id) }.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
+                    Box(Modifier.width(34.dp), contentAlignment = Alignment.CenterStart) {
+                        SoftRound(c.link) { ArrowGlyph(c.link, 14.dp, incoming = t.waitingFor != null) }
                     }
                     Text(androidx.compose.ui.text.buildAnnotatedString {
                         withStyle(SpanStyle(color = c.link)) { append(t.waitingFor ?: t.promisedTo!!.dative()) }
                         withStyle(SpanStyle(color = c.ink)) { append("  ·  " + t.title) }
-                    }, style = Type.small.copy(fontSize = 14.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    }, style = Type.small.copy(fontSize = 14.5.sp, lineHeight = 20.sp), modifier = Modifier.weight(1f).padding(top = 3.dp))
                     d?.let { Text(if (it == today) s.quickToday.lowercase() else it.dayMonthShort(), style = dateStyle(12.5.sp, late),
-                        modifier = Modifier.padding(start = 10.dp)) }
+                        modifier = Modifier.padding(start = 10.dp, top = 5.dp)) }
                     // They owe it and it's late: one tap writes them a reminder (the words ready, the user sends).
                     if (late && t.waitingFor != null) Text(s.remindLink, style = Type.small.copy(color = c.link, fontSize = 12.5.sp),
-                        modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).clickable { remindAbout(ctx, data, t) }.padding(horizontal = 4.dp, vertical = 2.dp))
+                        modifier = Modifier.padding(start = 8.dp, top = 3.dp).clip(RoundedCornerShape(6.dp)).clickable { remindAbout(ctx, data, t) }.padding(horizontal = 4.dp, vertical = 2.dp))
                 }
             }
             if (promises.size > 3) Text(if (allPromises) s.collapse else s.more(promises.size - 3) + " ›", style = Type.small.copy(color = c.link, fontSize = 13.sp),
-                modifier = Modifier.padding(start = 22.dp, top = 2.dp).clip(RoundedCornerShape(6.dp)).clickable { allPromises = !allPromises }.padding(vertical = 4.dp, horizontal = 2.dp))
+                modifier = Modifier.padding(start = 34.dp, top = 2.dp).clip(RoundedCornerShape(6.dp)).clickable { allPromises = !allPromises }.padding(vertical = 4.dp, horizontal = 2.dp))
         }
     }
 }
@@ -1395,10 +1398,11 @@ fun DayBlock(
                     plan.feed.forEach { n ->
                         Tile {
                             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(n.owner.id) }.padding(vertical = 7.dp), verticalAlignment = Alignment.Top) {
-                                Box(Modifier.size(20.dp, 22.dp), contentAlignment = Alignment.Center) {
-                                    if (n.idea) ThoughtGlyph(c.graphite, 15.dp) else Icon(kindIcon(n.file!!.kind), null, tint = c.graphite, modifier = Modifier.size(15.dp))
+                                if (n.idea) { Box(Modifier.width(46.dp), contentAlignment = Alignment.CenterStart) { IdeaMark() }; Spacer(Modifier.width(8.dp)) }
+                                else {
+                                    Box(Modifier.size(20.dp, 22.dp), contentAlignment = Alignment.Center) { Icon(kindIcon(n.file!!.kind), null, tint = c.graphite, modifier = Modifier.size(15.dp)) }
+                                    Spacer(Modifier.width(34.dp))
                                 }
-                                Spacer(Modifier.width(34.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(if (n.idea) n.owner.title else (n.file!!.caption ?: attachmentLabel(n.file).ifBlank { n.file.name }), style = Type.body.copy(fontSize = 15.sp, color = c.ink), maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     Text(listOfNotNull(n.at.drop(11).take(5).takeIf { it != "00:00" && it.isNotBlank() }, if (n.idea) s.thoughtWord else n.owner.title).joinToString("  ·  "),

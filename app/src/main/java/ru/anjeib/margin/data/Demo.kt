@@ -14,6 +14,70 @@ import java.io.File
 import java.time.DayOfWeek
 import java.time.LocalDate
 
+/** The demo's pictures and PDFs, drawn on the phone the first time each is needed — the examples use only two of them. */
+class DemoArt(private val dir: File) {
+    private fun jpeg(name: String, draw: (Canvas, Int, Int) -> Unit): Attachment {
+        val w = 1200; val h = 900
+        val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        draw(Canvas(b), w, h)
+        val f = File(dir, "demo_$name.jpg")
+        f.outputStream().use { b.compress(Bitmap.CompressFormat.JPEG, 86, it) }
+        return Attachment(kind = "photo", file = f.name, name = f.name, mime = "image/jpeg", size = f.length())
+    }
+    private fun pdf(name: String, title: String, lines: List<String>): Attachment {
+        val doc = PdfDocument()
+        val page = doc.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(26, 26, 26); textSize = 22f; typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD) }
+        page.canvas.drawText(title, 48f, 80f, p)
+        p.textSize = 13f; p.typeface = Typeface.DEFAULT
+        lines.forEachIndexed { i, l -> page.canvas.drawText(l, 48f, 120f + i * 22f, p) }
+        doc.finishPage(page)
+        val f = File(dir, "demo_$name.pdf")
+        f.outputStream().use { doc.writeTo(it) }
+        doc.close()
+        return Attachment(kind = "file", file = f.name, name = "$name.pdf", mime = "application/pdf", size = f.length())
+    }
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    val moodboard by lazy { jpeg("moodboard") { c, w, h ->
+        c.drawColor(Color.rgb(242, 234, 222))
+        val cols = listOf(Color.rgb(200, 100, 59), Color.rgb(122, 86, 60), Color.rgb(217, 190, 150), Color.rgb(60, 52, 46), Color.rgb(160, 168, 130), Color.rgb(236, 220, 196))
+        cols.forEachIndexed { i, col -> paint.color = col; val x = 40f + (i % 3) * 380f; val y = 40f + (i / 3) * 420f; c.drawRoundRect(RectF(x, y, x + 350f, y + 390f), 24f, 24f, paint) }
+        paint.color = Color.rgb(242, 234, 222); c.drawCircle(w * 0.5f, h * 0.5f, 120f, paint)
+    } }
+    val logos by lazy { jpeg("logos") { c, w, h ->
+        c.drawColor(Color.rgb(246, 240, 230))
+        paint.color = Color.rgb(60, 40, 30)
+        listOf(Typeface.SERIF to Typeface.BOLD, Typeface.SANS_SERIF to Typeface.BOLD, Typeface.SERIF to Typeface.ITALIC).forEachIndexed { i, (tf, st) ->
+            paint.typeface = Typeface.create(tf, st); paint.textSize = 96f
+            c.drawText("ЗЕРНО", 70f, 220f + i * 260f, paint)
+            paint.color = Color.rgb(200, 100, 59); c.drawOval(RectF(860f, 120f + i * 260f, 980f, 250f + i * 260f), paint); paint.color = Color.rgb(60, 40, 30)
+        }
+    } }
+    val screens by lazy { jpeg("screens") { c, w, h ->
+        c.drawColor(Color.rgb(235, 238, 242))
+        repeat(3) { i ->
+            val x = 70f + i * 370f
+            paint.color = Color.WHITE; c.drawRoundRect(RectF(x, 60f, x + 320f, 840f), 36f, 36f, paint)
+            paint.color = Color.rgb(28, 100, 128); c.drawRoundRect(RectF(x + 30f, 720f, x + 290f, 800f), 20f, 20f, paint)
+            paint.color = Color.rgb(210, 214, 220); repeat(5) { r -> c.drawRoundRect(RectF(x + 30f, 120f + r * 110f, x + 290f, 200f + r * 110f), 16f, 16f, paint) }
+        }
+    } }
+    val flat by lazy { jpeg("flat") { c, w, h ->
+        paint.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), Color.rgb(250, 236, 214), Color.rgb(196, 170, 140), Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint); paint.shader = null
+        paint.color = Color.rgb(255, 250, 240); c.drawRect(380f, 120f, 820f, 560f, paint)
+        paint.color = Color.rgb(120, 92, 70); c.drawRect(0f, 700f, w.toFloat(), h.toFloat(), paint)
+    } }
+    val board by lazy { jpeg("board") { c, w, h ->
+        c.drawColor(Color.rgb(250, 250, 248))
+        paint.color = Color.rgb(40, 60, 140); paint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL); paint.textSize = 54f
+        listOf("Дизайн-система:", "— сетка 8 pt", "— кнопки: 3 размера", "— цвета: 6 + серые", "дедлайн → пт").forEachIndexed { i, l -> c.drawText(l, 80f, 150f + i * 120f, paint) }
+    } }
+    val brief by lazy { pdf("Бриф_Зерно", "Бриф: кофейня «Зерно»", listOf("Логотип, вывеска, упаковка для зерна 250 г и 1 кг.", "Тон: тёплый, ремесленный, без хипстерских клише.", "Бюджет: 120 000 ₽. Срок: конец октября.", "Контакт: Олег, владелец.")) }
+    val tickets by lazy { pdf("Билеты_Сапсан", "Электронный билет", listOf("Москва → Санкт-Петербург", "Поезд 752А «Сапсан»", "2 пассажира, вагон 5")) }
+    val contract by lazy { pdf("Договор_Зерно", "Договор оказания услуг", listOf("Исполнитель: самозанятый дизайнер", "Заказчик: ООО «Зерно»", "Предмет: разработка фирменного стиля")) }
+}
+
 /**
  * «Пример данных» to try every part of the app: two months of a young designer in Moscow — work topics with briefs,
  * moodboards and waits, personal plans, ideas, deals of every kind (late, today, repeating, on several days, promised,
@@ -29,67 +93,8 @@ object Demo {
         fun at(n: Long, hm: String) = "${today.plusDays(n)}T$hm"
         val dir = Files.dir(ctx)
 
-        // ---- files: drawn here ----
-        fun jpeg(name: String, draw: (Canvas, Int, Int) -> Unit): Attachment {
-            val w = 1200; val h = 900
-            val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            draw(Canvas(b), w, h)
-            val f = File(dir, "demo_$name.jpg")
-            f.outputStream().use { b.compress(Bitmap.CompressFormat.JPEG, 86, it) }
-            return Attachment(kind = "photo", file = f.name, name = f.name, mime = "image/jpeg", size = f.length())
-        }
-        fun pdf(name: String, title: String, lines: List<String>): Attachment {
-            val doc = PdfDocument()
-            val page = doc.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
-            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(26, 26, 26); textSize = 22f; typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD) }
-            page.canvas.drawText(title, 48f, 80f, p)
-            p.textSize = 13f; p.typeface = Typeface.DEFAULT
-            lines.forEachIndexed { i, l -> page.canvas.drawText(l, 48f, 120f + i * 22f, p) }
-            doc.finishPage(page)
-            val f = File(dir, "demo_$name.pdf")
-            f.outputStream().use { doc.writeTo(it) }
-            doc.close()
-            return Attachment(kind = "file", file = f.name, name = "$name.pdf", mime = "application/pdf", size = f.length())
-        }
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        val moodboard = jpeg("moodboard") { c, w, h ->
-            c.drawColor(Color.rgb(242, 234, 222))
-            val cols = listOf(Color.rgb(200, 100, 59), Color.rgb(122, 86, 60), Color.rgb(217, 190, 150), Color.rgb(60, 52, 46), Color.rgb(160, 168, 130), Color.rgb(236, 220, 196))
-            cols.forEachIndexed { i, col -> paint.color = col; val x = 40f + (i % 3) * 380f; val y = 40f + (i / 3) * 420f; c.drawRoundRect(RectF(x, y, x + 350f, y + 390f), 24f, 24f, paint) }
-            paint.color = Color.rgb(242, 234, 222); c.drawCircle(w * 0.5f, h * 0.5f, 120f, paint)
-        }
-        val logos = jpeg("logos") { c, w, h ->
-            c.drawColor(Color.rgb(246, 240, 230))
-            paint.color = Color.rgb(60, 40, 30)
-            listOf(Typeface.SERIF to Typeface.BOLD, Typeface.SANS_SERIF to Typeface.BOLD, Typeface.SERIF to Typeface.ITALIC).forEachIndexed { i, (tf, st) ->
-                paint.typeface = Typeface.create(tf, st); paint.textSize = 96f
-                c.drawText("ЗЕРНО", 70f, 220f + i * 260f, paint)
-                paint.color = Color.rgb(200, 100, 59); c.drawOval(RectF(860f, 120f + i * 260f, 980f, 250f + i * 260f), paint); paint.color = Color.rgb(60, 40, 30)
-            }
-        }
-        val screens = jpeg("screens") { c, w, h ->
-            c.drawColor(Color.rgb(235, 238, 242))
-            repeat(3) { i ->
-                val x = 70f + i * 370f
-                paint.color = Color.WHITE; c.drawRoundRect(RectF(x, 60f, x + 320f, 840f), 36f, 36f, paint)
-                paint.color = Color.rgb(28, 100, 128); c.drawRoundRect(RectF(x + 30f, 720f, x + 290f, 800f), 20f, 20f, paint)
-                paint.color = Color.rgb(210, 214, 220); repeat(5) { r -> c.drawRoundRect(RectF(x + 30f, 120f + r * 110f, x + 290f, 200f + r * 110f), 16f, 16f, paint) }
-            }
-        }
-        val flat = jpeg("flat") { c, w, h ->
-            paint.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), Color.rgb(250, 236, 214), Color.rgb(196, 170, 140), Shader.TileMode.CLAMP)
-            c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint); paint.shader = null
-            paint.color = Color.rgb(255, 250, 240); c.drawRect(380f, 120f, 820f, 560f, paint)
-            paint.color = Color.rgb(120, 92, 70); c.drawRect(0f, 700f, w.toFloat(), h.toFloat(), paint)
-        }
-        val board = jpeg("board") { c, w, h ->
-            c.drawColor(Color.rgb(250, 250, 248))
-            paint.color = Color.rgb(40, 60, 140); paint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL); paint.textSize = 54f
-            listOf("Дизайн-система:", "— сетка 8 pt", "— кнопки: 3 размера", "— цвета: 6 + серые", "дедлайн → пт").forEachIndexed { i, l -> c.drawText(l, 80f, 150f + i * 120f, paint) }
-        }
-        val brief = pdf("Бриф_Зерно", "Бриф: кофейня «Зерно»", listOf("Логотип, вывеска, упаковка для зерна 250 г и 1 кг.", "Тон: тёплый, ремесленный, без хипстерских клише.", "Бюджет: 120 000 ₽. Срок: конец октября.", "Контакт: Олег, владелец."))
-        val tickets = pdf("Билеты_Сапсан", "Электронный билет", listOf("Москва → Санкт-Петербург", "Поезд 752А «Сапсан»", "2 пассажира, вагон 5"))
-        val contract = pdf("Договор_Зерно", "Договор оказания услуг", listOf("Исполнитель: самозанятый дизайнер", "Заказчик: ООО «Зерно»", "Предмет: разработка фирменного стиля"))
+        val art = DemoArt(dir)
+        val moodboard = art.moodboard; val logos = art.logos; val screens = art.screens; val flat = art.flat; val board = art.board; val brief = art.brief; val tickets = art.tickets; val contract = art.contract
 
         fun ev(n: Long, hm: String, ref: String, wait: Boolean = false, entry: String? = null) = TopicEvent(at = at(n, hm), kind = if (wait) "wait" else "q", ref = ref, entry = entry)
 

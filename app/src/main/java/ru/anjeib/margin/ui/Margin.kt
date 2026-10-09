@@ -134,15 +134,48 @@ fun TopicGlyph(color: Color, size: Dp = 18.dp) = Canvas(Modifier.size(size)) {
 
 /** A thought: a quiet speech bubble. */
 @Composable
-fun ThoughtGlyph(color: Color, size: Dp = 18.dp) = Canvas(Modifier.size(size)) {
+fun ThoughtGlyph(color: Color, size: Dp = 18.dp, line: Dp = 1.5.dp) = Canvas(Modifier.size(size)) {
+    // An idea: a light bulb — the glass, its neck, two turns of the base and a filament inside.
     val w = this.size.width; val h = this.size.height
-    val p = Path().apply {
-        moveTo(w * 0.18f, h * 0.2f); lineTo(w * 0.82f, h * 0.2f); quadraticTo(w * 0.9f, h * 0.2f, w * 0.9f, h * 0.3f)
-        lineTo(w * 0.9f, h * 0.62f); quadraticTo(w * 0.9f, h * 0.72f, w * 0.82f, h * 0.72f); lineTo(w * 0.42f, h * 0.72f)
-        lineTo(w * 0.24f, h * 0.88f); lineTo(w * 0.26f, h * 0.72f); lineTo(w * 0.18f, h * 0.72f)
-        quadraticTo(w * 0.1f, h * 0.72f, w * 0.1f, h * 0.62f); lineTo(w * 0.1f, h * 0.3f); quadraticTo(w * 0.1f, h * 0.2f, w * 0.18f, h * 0.2f); close()
+    val glass = Path().apply {
+        moveTo(w * 0.38f, h * 0.66f)
+        cubicTo(w * 0.38f, h * 0.56f, w * 0.2f, h * 0.5f, w * 0.2f, h * 0.36f)
+        cubicTo(w * 0.2f, h * 0.18f, w * 0.34f, h * 0.07f, w * 0.5f, h * 0.07f)
+        cubicTo(w * 0.66f, h * 0.07f, w * 0.8f, h * 0.18f, w * 0.8f, h * 0.36f)
+        cubicTo(w * 0.8f, h * 0.5f, w * 0.62f, h * 0.56f, w * 0.62f, h * 0.66f)
+        close()
     }
-    drawPath(p, color, style = stroke())
+    drawPath(glass, color, style = stroke(line))
+    drawPath(Path().apply {
+        moveTo(w * 0.39f, h * 0.78f); lineTo(w * 0.61f, h * 0.78f)
+        moveTo(w * 0.43f, h * 0.9f); lineTo(w * 0.57f, h * 0.9f)
+        moveTo(w * 0.44f, h * 0.46f); lineTo(w * 0.5f, h * 0.36f); lineTo(w * 0.56f, h * 0.46f)
+    }, color, style = stroke(line))
+}
+
+/** An idea in a list: the bulb on a soft sage circle (owner's reference, 10 окт) — no «ИДЕЯ» word needed. */
+@Composable
+fun IdeaMark(size: Dp = 28.dp) {
+    val c = M.c
+    Box(Modifier.size(size).clip(androidx.compose.foundation.shape.CircleShape).background(c.ok.copy(alpha = if (c.dark) 0.24f else 0.2f)),
+        contentAlignment = Alignment.Center) { ThoughtGlyph(c.ok, size * 0.68f, 1.7.dp) }
+}
+
+/** «Обещания»: two people, one a little behind the other. */
+@Composable
+fun PeopleGlyph(color: Color, size: Dp = 16.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawCircle(color, radius = w * 0.14f, center = Offset(w * 0.38f, h * 0.32f), style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.12f, h * 0.84f); cubicTo(w * 0.12f, h * 0.6f, w * 0.64f, h * 0.6f, w * 0.64f, h * 0.84f) }, color, style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.62f, h * 0.2f); cubicTo(w * 0.8f, h * 0.16f, w * 0.86f, h * 0.44f, w * 0.66f, h * 0.47f) }, color, style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.74f, h * 0.6f); cubicTo(w * 0.84f, h * 0.64f, w * 0.9f, h * 0.72f, w * 0.9f, h * 0.84f) }, color, style = stroke(1.4.dp))
+}
+
+/** A glyph on a soft round ground of its colour — the arrows of «Обещания». */
+@Composable
+fun SoftRound(color: Color, size: Dp = 26.dp, content: @Composable () -> Unit) {
+    Box(Modifier.size(size).clip(androidx.compose.foundation.shape.CircleShape).background(color.copy(alpha = if (M.c.dark) 0.2f else 0.12f)),
+        contentAlignment = Alignment.Center) { content() }
 }
 
 /** «Ждём»: an hourglass; [sand] — how much has run down, [turn] — 0..1 of the flip that turns it into «получено». */
