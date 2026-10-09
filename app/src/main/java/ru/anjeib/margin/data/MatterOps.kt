@@ -210,12 +210,21 @@ fun AppData.matterFor(words: String, topicId: String?): Pair<String, String>? {
     return cands.map { it to (stems(it.second) intersect q).size }.filter { it.second > 0 }.maxByOrNull { it.second }?.first
 }
 
-/** The user's comment on a matter or on a topic's matter («q:<topic>:<matter>»); blank clears it. */
-fun AppData.setNote(id: String, text: String): AppData {
-    val v = text.trim().ifBlank { null }
-    questionRef(slotRef(id)?.first ?: id)?.let { (tid, qid) ->
-        return copy(tasks = tasks.map { t -> if (t.id != tid) t else t.copy(subtasks = t.subtasks.mapTree(qid) { it.copy(note = v) }) })
+/** The comments of a matter or of a topic's matter («q:<topic>:<matter>»), changed by [f]. */
+private fun AppData.editComments(ref: String, f: (List<Comment>) -> List<Comment>): AppData {
+    questionRef(slotRef(ref)?.first ?: ref)?.let { (tid, qid) ->
+        return copy(tasks = tasks.map { t -> if (t.id != tid) t else t.copy(subtasks = t.subtasks.mapTree(qid) { it.copy(comments = f(it.comments)) }) })
     }
-    return copy(tasks = tasks.map { if (it.id == id) it.copy(note = v) else it })
+    return copy(tasks = tasks.map { if (it.id == ref) it.copy(comments = f(it.comments)) else it })
+}
+
+/** A new comment, stamped with when its writing began. */
+fun AppData.addComment(ref: String, text: String, at: String = nowStamp()): AppData =
+    text.trim().takeIf { it.isNotEmpty() }?.let { v -> editComments(ref) { it + Comment(at = at, text = v) } } ?: this
+
+/** A comment changed in place; emptied — gone. */
+fun AppData.editComment(ref: String, id: String, text: String): AppData = editComments(ref) { l ->
+    val v = text.trim()
+    if (v.isEmpty()) l.filterNot { it.id == id } else l.map { if (it.id == id) it.copy(text = v) else it }
 }
 

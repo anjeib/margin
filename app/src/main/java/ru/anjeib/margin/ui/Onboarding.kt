@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import kotlinx.coroutines.launch
 import ru.anjeib.margin.data.questionRow
 import ru.anjeib.margin.data.shortLabel
 
@@ -47,7 +49,10 @@ import ru.anjeib.margin.data.shortLabel
 fun Onboarding(vm: MainVm, onDone: () -> Unit) {
     val c = M.c
     val s = M.s
-    var page by rememberSaveable { mutableIntStateOf(0) }
+    // Swiped like any set of pages, or moved on with the button; «1 из 4» says how far it is.
+    val pager = androidx.compose.foundation.pager.rememberPagerState { 4 }
+    val page = pager.currentPage
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val pages = listOf(s.tourWriteTitle to s.tourWriteText, s.tourTopicTitle to s.tourTopicText, s.tourGesturesTitle to s.tourGesturesText, s.ob4Title to s.ob4Text)
     val ctx = androidx.compose.ui.platform.LocalContext.current
     fun has(p: String) = androidx.core.content.ContextCompat.checkSelfPermission(ctx, p) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -69,16 +74,13 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
             ru.anjeib.margin.data.Subtask(id = "b", title = s.tourTopicDeals[1], due = today.plusDays(2).toString(), from = s.tourTopicWho)),
         entries = List(4) { ru.anjeib.margin.data.Entry(id = "e$it") })
     val topicRows = topic.subtasks.map { topic.questionRow(it) }
-    // Real rows, so a tap and a hold here do what they will do on «Сегодня».
-    var opened by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
             if (page < pages.lastIndex) QuietLink(s.skip, onDone)
         }
-        Spacer(Modifier.weight(0.6f))
-        AnimatedContent(page, label = "ob") { p ->
-            Column {
+        androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth()) { p ->
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                 Text("Margin", style = Type.label.copy(color = c.accent, fontSize = 13.sp))
                 Spacer(Modifier.height(12.dp))
                 Text(pages[p].first, style = Type.display.copy(color = c.ink, fontSize = 36.sp, lineHeight = 42.sp))
@@ -101,9 +103,10 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                     }
                     1 -> GroupedDeals(topicRows, today, emptySet(), onOpen = {}, onDone = {}, onLater = {}, onTime = {}, topicOf = { topic })
                     2 -> Column {
-                        DealRow(call, today, onToggle = {}, onOpen = { opened = true }, onTime = {}, onLater = {}, whenText = call.dueDate?.shortLabel()?.lowercase())
-                        androidx.compose.animation.AnimatedVisibility(opened) {
-                            Text(s.tourOpened, style = Type.small.copy(color = c.link, fontSize = 13.sp), modifier = Modifier.padding(start = 52.dp, bottom = 4.dp))
+                        // A picture of the row, not a live one: the words say what a tap and a hold do.
+                        Box(Modifier.fillMaxWidth()) {
+                            DealRow(call, today, onToggle = {}, onOpen = {}, onTime = {}, whenText = call.dueDate?.shortLabel()?.lowercase())
+                            Box(Modifier.matchParentSize().clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {})
                         }
                         Spacer(Modifier.height(10.dp))
                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -125,14 +128,17 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                 }
             }
         }
-        Spacer(Modifier.weight(1f))
         Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 pages.indices.forEach { i ->
                     Box(Modifier.size(if (i == page) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (i == page) c.link else c.hairline))
                 }
+                Spacer(Modifier.width(8.dp))
+                Text(s.pageOf(page + 1, pages.size), style = Type.small.copy(color = c.graphite, fontSize = 13.sp, fontFeatureSettings = "tnum"))
             }
-            Pill(if (page < pages.lastIndex) s.next else s.begin, filled = true, onClick = { if (page < pages.lastIndex) page++ else onDone() })
+            Pill(if (page < pages.lastIndex) s.next else s.begin, filled = true, onClick = {
+                if (page < pages.lastIndex) scope.launch { pager.animateScrollToPage(page + 1) } else onDone()
+            })
             Spacer(Modifier.width(2.dp))
         }
     }

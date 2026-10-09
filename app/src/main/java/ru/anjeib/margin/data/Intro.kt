@@ -14,13 +14,13 @@ object Intro {
         val topic: String, val topicNote: String, val topicOpen: String, val topicFile: String,
         val waitWho: String, val topicWait: String,
         val swipeRight: String, val swipeLeft: String, val hold: String,
-        val ask: String, val askMove: String, val flowers: String,
+        val askMove: String, val flowers: String,
         val promise: String, val noDate: String,
         val idea: String, val ideaNote: String,
     )
 
     /** Examples whose words only say what to try — kept out of the AI's view (the flowers, the promise, the topic stay in). */
-    private val teaching = setOf("intro-right", "intro-left", "intro-hold", "intro-ask", "intro-move", "intro-nodate")
+    private val teaching = setOf("intro-right", "intro-left", "intro-hold", "intro-move", "intro-nodate")
     fun teachesOnly(t: Task) = t.sample && t.id in teaching
 
     fun build(t: Texts, today: LocalDate = LocalDate.now()): List<Task> {
@@ -42,7 +42,6 @@ object Intro {
             deal("right", t.swipeRight, d(0)),
             deal("left", t.swipeLeft, d(0)),
             deal("hold", t.hold, d(0), "18:00"),
-            deal("ask", t.ask, d(0)),
             deal("move", t.askMove, d(1)),
             deal("flowers", t.flowers, sat).copy(repeat = Repeat("weekly")),
             deal("promise", t.promise, d(3)).copy(promisedTo = t.waitWho),

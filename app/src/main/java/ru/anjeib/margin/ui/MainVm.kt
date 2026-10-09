@@ -931,7 +931,9 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** The hour of a task, one of its days or a topic's question («q:…»), set from the clock that opens on its time. */
     fun setTime(id: String, time: String?) = store.update { it.setTime(id, time) }
 
-    fun setNote(id: String, text: String) = store.update { it.setNote(id, text) }
+    /** The user's comments on a matter (or a topic's matter, «q:…»): written in the card, kept as is. */
+    fun addComment(ref: String, text: String, at: String) = store.update { it.addComment(ref, text, at) }
+    fun editComment(ref: String, id: String, text: String) = store.update { it.editComment(ref, id, text) }
 
     fun setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null) = store.update { it.setQuestionDue(taskId, subId, due, time) }
 

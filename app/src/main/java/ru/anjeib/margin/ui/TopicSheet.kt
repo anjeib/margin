@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.drawBehind
 
 import androidx.compose.material.icons.outlined.CalendarToday
@@ -615,11 +616,20 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, day: LocalDate?, fr
     val s = M.s
     var menu by remember(e.id) { mutableStateOf(false) }
     var tools by remember(e.id) { mutableStateOf(false) }
+    // A tap puts the cursor right into the record — edited on the page, not in a window.
+    var editing by remember(e.id) { mutableStateOf(false) }
+    var hadFocus by remember(e.id) { mutableStateOf(false) }
+    var draft by remember(e.id, e.text) { mutableStateOf(e.text) }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    fun save() { if (draft.isNotBlank() && draft.trim() != e.text.trim()) vm.editEntryText("task:${task.id}", e.id, draft.trim()) }
+    LaunchedEffect(editing) { if (editing) runCatching { focus.requestFocus() } }
+    LaunchedEffect(draft) { if (editing && draft != e.text) { kotlinx.coroutines.delay(900); save() } }
+    androidx.compose.runtime.DisposableEffect(e.id) { onDispose { save() } }
     val sel by androidx.compose.animation.animateColorAsState(if (tools) c.chip else Color.Transparent, tween(180), label = "sel")
     Margined(Modifier.padding(top = 6.dp), margin = day?.let { d -> { DayMargin(d, LocalDate.now(), false, strong = true) } }) {
         Box {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(sel)
-                .combinedClickable(onClick = { if (removed) menu = true else act.editNote(e) }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp)) {
+                .combinedClickable(onClick = { if (removed) menu = true else editing = true }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
                         // What it is and when: a record — the user's own words; the matters that came of them hang under it.
@@ -628,7 +638,13 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, day: LocalDate?, fr
                                 modifier = Modifier.clip(RoundedCornerShape(50)).background(c.chip).padding(horizontal = 8.dp, vertical = 2.dp))
                             timeOfStamp(e.at).takeIf { it.isNotBlank() && it != "00:00" }?.let { Text(it, style = dateStyle(12.5.sp), modifier = Modifier.padding(start = 8.dp)) }
                         }
-                        if (e.text.isNotBlank()) ListAwareText(e.text, Type.body.copy(color = if (removed) c.faint else c.ink, fontSize = 15.5.sp,
+                        if (editing) androidx.compose.foundation.text.BasicTextField(draft, { draft = it },
+                            textStyle = Type.body.copy(color = c.ink, fontSize = 15.5.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
+                            modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { f ->
+                                // The field reports «not focused» as it appears: leave editing only once the cursor has been in it.
+                                if (f.isFocused) hadFocus = true else if (editing && hadFocus) { save(); editing = false; hadFocus = false }
+                            })
+                        else if (e.text.isNotBlank()) ListAwareText(e.text, Type.body.copy(color = if (removed) c.faint else c.ink, fontSize = 15.5.sp,
                             textDecoration = if (removed) androidx.compose.ui.text.style.TextDecoration.LineThrough else null))
                         // A list in a record is a list of thoughts, not matters: bullets, no ticks.
                         e.items.forEach { Row(Modifier.padding(vertical = 1.dp)) {
@@ -641,7 +657,7 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, day: LocalDate?, fr
                     Box {
                         SoftMenu(tools, { tools = false }) {
                             ToolItem(Icons.Rounded.Add, s.underLine) { tools = false; act.addUnder(e.id, e.text.ifBlank { e.attachments.firstOrNull()?.let { attachmentLabel(it) }?.ifBlank { null } ?: "…" }) }
-                            ToolItem(Icons.Outlined.Build, s.edit) { tools = false; act.editNote(e) }
+                            ToolItem(Icons.Outlined.Build, s.edit) { tools = false; editing = true }
                             ToolItem(Icons.Rounded.Remove, s.delete, danger = true) { tools = false; vm.removeRecord(task.id, e.id) }
                         }
                     }

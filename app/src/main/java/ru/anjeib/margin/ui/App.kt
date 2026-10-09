@@ -123,6 +123,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     var openHl by rememberSaveable { mutableStateOf<String?>(null) }
     var viewing by remember { mutableStateOf<ru.anjeib.margin.data.Attachment?>(null) }
     var openDeal by rememberSaveable { mutableStateOf<String?>(null) }
+    var fullIdea by rememberSaveable { mutableStateOf<String?>(null) }
     /** A task, or a topic's question from the lists: then the topic opens on «Вопросы» with that one lit. */
     fun openId(id0: String) {
         // A day of a matter done on several days opens the matter itself.
@@ -299,14 +300,15 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 else NoteEditor(note, data, vm, onBack = { openNote = null }, onOpenTask = { openTask = it })
             }
             // v2: a topic on the whole screen, sliding in from the side; when a task grows into one, its sheet gives way to it.
-            val topicId = openTask?.takeIf { id -> data.tasks.find { it.id == id }?.topic == true }
+            // An idea opens as a half-page notebook card; «Открыть целиком» gives it the whole screen like any topic.
+            val topicId = openTask?.takeIf { id -> data.tasks.find { it.id == id }?.let { it.topic && (!it.thought || fullIdea == id) } == true }
             var lastTopic by remember { mutableStateOf<String?>(null) }
             if (topicId != null) lastTopic = topicId
             AnimatedVisibility(topicId != null,
                 enter = androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { it / 3 } + fadeIn(androidx.compose.animation.core.tween(220)),
                 exit = androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(220)) { it / 3 } + fadeOut(androidx.compose.animation.core.tween(180))) {
                 data.tasks.find { it.id == (topicId ?: lastTopic) }?.let { t ->
-                    TopicScreen(t, data, vm, openTab, openHl, onClose = { openTask = null; openHl = null; openTab = 0 },
+                    TopicScreen(t, data, vm, openTab, openHl, onClose = { openTask = null; openHl = null; openTab = 0; fullIdea = null },
                         onOpenPerson = { openTask = null; openPerson = it })
                 }
             }
@@ -398,6 +400,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         val t = data.tasks.find { it.id == id }
         if (t == null) openTask = null
         // v2: a topic opens on the whole screen (below); a simple task keeps its sheet.
+        else if (t.topic && t.thought && fullIdea != id) IdeaSheet(t, vm, onClose = { openTask = null }, onOpenFull = { fullIdea = id })
         else if (!t.topic) TaskSheet(
             t, data, vm, onClose = { openTask = null; openTaskDialog = null; openHl = null; openTab = 0 },
             startTab = openTab, startHl = openHl,

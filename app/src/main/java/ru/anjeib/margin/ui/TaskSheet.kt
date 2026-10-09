@@ -152,8 +152,9 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
         // The sheet itself lifts above the keyboard, so the content gives up exactly the keyboard's height.
         val ime = androidx.compose.foundation.layout.WindowInsets.ime.asPaddingValues().calculateBottomPadding()
 
-        // As tall as what is in it (a short matter — about half the screen), growing up to nearly all of it; the input at the bottom.
-        Column(Modifier.fillMaxWidth().heightIn(min = 320.dp, max = (maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
+        // Opens on half the screen (owner's call), grows with what is in it up to nearly all of it; the input at the bottom.
+        val half = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.5f).dp
+        Column(Modifier.fillMaxWidth().heightIn(min = half.coerceAtMost((maxH - ime).coerceAtLeast(200.dp)), max = (maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
             // «Поля»: the rule down the card, the day and hour on the margin, everything else right of it.
             Column(Modifier.weight(1f, fill = false).screenRule().verticalScroll(rememberScrollState())) {
                 Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -248,18 +249,10 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         }
                     }
                 }
-                // The user's own comment: typed right here, kept as is, no AI.
-                Margined(Modifier.padding(top = 10.dp)) {
-                    var note by remember(task.id) { mutableStateOf(task.note.orEmpty()) }
-                    androidx.compose.runtime.LaunchedEffect(note) {
-                        if (note.trim() != task.note.orEmpty().trim()) { kotlinx.coroutines.delay(700); vm.setNote(task.id, note) ; savedAt = System.currentTimeMillis() }
-                    }
-                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 12.dp, vertical = 10.dp)) {
-                        if (note.isEmpty()) Text(s.commentHint, style = Type.body.copy(color = c.graphite, fontSize = 15.sp))
-                        BasicTextField(note, { note = it }, textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp), cursorBrush = SolidColor(c.link),
-                            modifier = Modifier.fillMaxWidth())
-                    }
-                }
+                // The user's own comments: typed right on the page, each with its day and hour on the margin, no AI.
+                WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 10.dp),
+                    onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
+                    onAdd = { t, at -> vm.addComment(task.id, t, at); savedAt = System.currentTimeMillis() })
                 Hairline(Modifier.padding(start = MarginW, top = 14.dp))
 
                 // Follow-up is late: offer to nudge the person (SMS if we know the number, else share).

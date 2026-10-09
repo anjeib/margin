@@ -279,7 +279,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         if (showIdea && t.noteId != null) { next(); append("✎ " + s.ideaMark) }
         if (showProject) t.project?.let { next(); append("#" + projectLabel(it)) }
         // The user left a comment: a small mark says it is there (the words are in the card).
-        if (!t.note.isNullOrBlank()) { next(); appendInlineContent("note", "≡") }
+        if (t.comments.isNotEmpty()) { next(); appendInlineContent("note", "≡") }
     }
     val inline = mapOf("note" to androidx.compose.foundation.text.InlineTextContent(
         androidx.compose.ui.text.Placeholder(14.sp, 14.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {

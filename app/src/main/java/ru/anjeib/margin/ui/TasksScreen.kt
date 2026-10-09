@@ -341,13 +341,6 @@ fun TaskList(
                         }
                     }
                 }
-                // The «Знакомство с Margin» examples are in: one quiet line says so, and takes them away in one tap.
-                if (data.tasks.any { it.sample }) plain("samples") {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(s.samplesLine, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.weight(1f))
-                        PaperLink(s.samplesRemove) { vm.removeSamples() }
-                    }
-                }
                 // Shared or saved without a place: one line here while there is something to put away.
                 val unplaced = data.inboxNote()?.entries?.size ?: 0
                 // While the week's card is up it already says this — once on the screen is enough.
@@ -369,19 +362,19 @@ fun TaskList(
                     }
                 }
                 // «Без следующего шага» lives in «Обзор · Темы» now: «Сегодня» is about today.
-                // Notes never mix into task lists — one quiet line says what was written today.
+                // Ideas written today: under their own badge, each a full line in ink — not a grey summary cut short.
                 val notesToday = data.tasks.filter { t -> t.thought && !t.done && (t.createdAt == today.toString() || t.entries.any { it.at.startsWith(today.toString()) }) }
                 if (notesToday.isNotEmpty()) plain("notes-today") {
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(14.dp))
-                            .clickable { if (notesToday.size == 1) onOpen(notesToday[0].id) else onView(Views.ALL) }
-                            .landing(notesToday.any { it.id in landed }, 14).padding(horizontal = 10.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("✎", style = Type.body.copy(color = c.graphite))
-                        Spacer(Modifier.width(10.dp))
-                        Text(s.thoughtsToday + ": " + notesToday.take(3).joinToString(", ") { it.title.ifBlank { s.untitled } } + if (notesToday.size > 3) "…" else "",
-                            style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
+                        GroupBadge(if (notesToday.size == 1) s.ideaBadge else s.ideasBadge, Modifier.padding(bottom = 4.dp))
+                        notesToday.forEach { t ->
+                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onOpen(t.id) }.landing(t.id in landed, 10)
+                                .padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                                Box(Modifier.size(26.dp, 22.dp), contentAlignment = Alignment.CenterStart) { ThoughtGlyph(c.graphite, 16.dp) }
+                                Spacer(Modifier.width(8.dp))
+                                Text(t.title.ifBlank { s.untitled }, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), modifier = Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
             
@@ -1125,13 +1118,14 @@ private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, 
     val topics = plan.deals.mapNotNull { it.topicId }.distinct().size
     // An empty day says «Свободный день» under it — a card with «0 дел» would only repeat it.
     if (plan.deals.isEmpty() && plan.events.isEmpty() && promises.isEmpty()) return
-    // A soft petrol card — the day's summary, set apart from the matters under it.
-    Column(Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(RoundedCornerShape(16.dp)).background(c.linkSoft.copy(alpha = if (c.dark) 0.5f else 0.6f))
-        .padding(horizontal = 14.dp, vertical = 12.dp)) {
+    // How much the day holds — a quiet line of its own: in the promises' card it read as if they were counted.
+    Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
         Text(listOfNotNull(s.summaryDeals(plan.deals.size), topics.takeIf { it > 0 }?.let { s.summaryTopics(it) }, plan.events.size.takeIf { it > 0 }?.let { s.summaryMeetings(it) })
-            .joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
-        if (promises.isNotEmpty()) {
-            Text(s.promisesTitle.uppercase(), style = Type.label.copy(color = c.link), modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
+            .joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 14.sp), modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
+        // A soft petrol card for who owes whom, set apart from the matters under it.
+        if (promises.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.linkSoft.copy(alpha = if (c.dark) 0.5f else 0.6f))
+            .padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text(s.promisesTitle.uppercase(), style = Type.label.copy(color = c.link), modifier = Modifier.padding(bottom = 2.dp))
             var allPromises by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
             // Three lines, the most pressing first (overdue, today); the rest behind «ещё N ›» so the day's matters stay in sight.
             val ordered = promises.sortedBy { it.dueDate ?: it.startDate ?: LocalDate.MAX }

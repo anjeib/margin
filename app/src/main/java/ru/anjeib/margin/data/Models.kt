@@ -27,8 +27,10 @@ data class Subtask(
     val parent: String? = null,
     /** Several days for this matter; [due]/[time] then follow the next open one. */
     val slots: List<Slot> = emptyList(),
-    /** The user's own comment, written as is (no AI) — «код домофона 45», «взять чек». */
+    /** Before 0.26: the user's one comment; now it lives in [comments] (moved on load). */
     val note: String? = null,
+    /** The user's own comments, each with when it was written — «код домофона 45», «взять чек». No AI. */
+    val comments: List<Comment> = emptyList(),
 )
 
 /**
@@ -45,6 +47,10 @@ data class TopicEvent(
 )
 
 fun nowStamp(): String = java.time.LocalDateTime.now().withNano(0).withSecond(0).toString()
+
+/** One comment on a matter, typed right in its card; the day and hour it was written stand on the margin. */
+@Serializable
+data class Comment(val id: String = newId(), val at: String = nowStamp(), val text: String)
 
 @Serializable
 data class ContactInfo(val name: String, val phone: String? = null, val email: String? = null)
@@ -226,8 +232,10 @@ data class Task(
     val sourceFixed: Boolean = false,
     /** Where it happens: an address or a place («Ленина 5», «кафе Зерно»). */
     val place: String? = null,
-    /** The user's own comment, written as is (no AI); a small mark in the lists says it is there. */
+    /** Before 0.26: the user's one comment; now it lives in [comments] (moved on load). */
     val note: String? = null,
+    /** The user's own comments, each with when it was written; no AI. A small mark in the lists says they are there. */
+    val comments: List<Comment> = emptyList(),
     val subtasks: List<Subtask> = emptyList(),
     val repeat: Repeat? = null,
     /** How many times the task was pushed to a later day — lets reviews spot what never happens. */
@@ -348,6 +356,16 @@ data class AppData(
         if (d.notes.any { it.body.isNotBlank() })
             d = d.copy(notes = d.notes.map { n ->
                 if (n.body.isBlank()) n else n.copy(body = "", entries = listOf(Entry(at = n.updatedAt.take(16), text = n.body.trim())) + n.entries)
+            })
+        // 0.26: the one comment became a list of dated comments.
+        fun subNotes(l: List<Subtask>): List<Subtask> = l.map { q ->
+            q.copy(note = null, comments = if (q.note.isNullOrBlank() || q.comments.isNotEmpty()) q.comments else listOf(Comment(at = (q.doneAt ?: nowStamp()).take(16).let { if (it.length == 10) it + "T09:00" else it }, text = q.note)),
+                children = subNotes(q.children))
+        }
+        if (d.tasks.any { t -> t.note != null || t.subtasks.any { it.note != null } })
+            d = d.copy(tasks = d.tasks.map { t ->
+                t.copy(note = null, comments = if (t.note.isNullOrBlank() || t.comments.isNotEmpty()) t.comments else listOf(Comment(at = t.createdAt + "T09:00", text = t.note)),
+                    subtasks = subNotes(t.subtasks))
             })
         // Records written before 3.10 could start with a small letter («купить хлеб», «тимур»).
         fun subs(l: List<Subtask>, names: List<String>): List<Subtask> = l.map { it.copy(title = it.title.sentence().withNames(names), children = subs(it.children, names)) }

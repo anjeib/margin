@@ -2,6 +2,7 @@ package ru.anjeib.margin
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.Attachment
@@ -10,7 +11,8 @@ import ru.anjeib.margin.data.Subtask
 import ru.anjeib.margin.data.Task
 import ru.anjeib.margin.data.attachment
 import ru.anjeib.margin.data.questionRow
-import ru.anjeib.margin.data.setNote
+import ru.anjeib.margin.data.addComment
+import ru.anjeib.margin.data.editComment
 import ru.anjeib.margin.data.setOcr
 import ru.anjeib.margin.data.Person
 import ru.anjeib.margin.data.setPersonField
@@ -32,15 +34,28 @@ class TouchTest {
         assertEquals(emptyList<Pair<String, String>>(), kinds("вернуть 3000 рублей к 15.10"))
     }
 
-    @Test fun commentOnAMatterAndOnATopicsMatter() {
+    @Test fun commentsOnAMatterAndOnATopicsMatter() {
         val q = Subtask(id = "q", title = "Спецификация API", from = "Дима")
         val d = AppData(tasks = listOf(Task(id = "t", title = "Купить хлеб"), Task(id = "z", title = "Редизайн", topic = true, subtasks = listOf(q))))
-        val a = d.setNote("t", "  бородинский  ").setNote("q:z:q", "в Notion")
-        assertEquals("бородинский", a.tasks.first { it.id == "t" }.note)
+        val a = d.addComment("t", "  бородинский  ", "2026-10-09T17:50").addComment("q:z:q", "в Notion", "2026-10-09T18:00").addComment("t", "   ", "2026-10-09T18:01")
+        val mine = a.tasks.first { it.id == "t" }.comments
+        assertEquals(listOf("бородинский"), mine.map { it.text })
+        assertEquals("2026-10-09T17:50", mine.single().at)
         val topic = a.tasks.first { it.id == "z" }
-        assertEquals("в Notion", topic.subtasks.single().note)
-        assertEquals("в Notion", topic.questionRow(topic.subtasks.single()).note)
-        assertNull(a.setNote("t", "   ").tasks.first { it.id == "t" }.note)
+        assertEquals("в Notion", topic.subtasks.single().comments.single().text)
+        assertEquals("в Notion", topic.questionRow(topic.subtasks.single()).comments.single().text)
+        val edited = a.editComment("t", mine.single().id, "белый")
+        assertEquals("белый", edited.tasks.first { it.id == "t" }.comments.single().text)
+        assertTrue(a.editComment("t", mine.single().id, " ").tasks.first { it.id == "t" }.comments.isEmpty())
+    }
+
+    /** 0.26: the one old comment becomes the first dated comment. */
+    @Test fun oldCommentMovesIntoTheLane() {
+        val d = AppData(tasks = listOf(Task(id = "t", title = "Купить хлеб", note = "бородинский", createdAt = "2026-10-05"),
+            Task(id = "z", title = "Редизайн", topic = true, subtasks = listOf(Subtask(id = "q", title = "Макет", note = "в Figma"))))).migrated()
+        val t = d.tasks.first { it.id == "t" }
+        assertEquals(null, t.note); assertEquals("бородинский", t.comments.single().text); assertEquals("2026-10-05T09:00", t.comments.single().at)
+        assertEquals("в Figma", d.tasks.first { it.id == "z" }.subtasks.single().comments.single().text)
     }
 
     @Test fun textOnAPhotoWhereverItIs() {

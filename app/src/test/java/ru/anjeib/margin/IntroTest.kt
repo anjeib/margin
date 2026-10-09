@@ -31,9 +31,9 @@ class IntroTest {
         val gone = d.withoutSamples()
         assertFalse(gone.hasSamples())
         assertEquals(listOf(mine), gone.tasks)
-        // The AI does not see the examples that only teach — it copied «Спросите помощника…» instead of answering.
+        // The AI does not see the examples that only teach — it copied «Спросите помощника…» instead of answering (that example is gone; the rule stays).
         val ctx = ru.anjeib.margin.ai.Assistant.context(d, ru.anjeib.margin.data.Settings())
-        assertFalse(ctx.contains("Спросите помощника"))
+        assertFalse(ctx.contains("Смахните вправо"))
         assertTrue(ctx.contains("Полив цветов"))
         // «к теме …?» never points into the examples.
         assertNull(d.likelyTopic("Список гостей от Анны на праздник", listOf("Анна")))
