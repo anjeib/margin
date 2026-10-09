@@ -1,6 +1,8 @@
 package ru.anjeib.margin
 
 import android.os.Bundle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -44,7 +46,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         val settings = Prefs.get(this).settings.value
         if (settings.lock && Lock.available(this)) locked.value = true
         if (savedInstanceState == null) take(intent)
-        publishShortcuts()
+        // Shortcuts are the launcher's business, not the first frame's.
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.Default) { publishShortcuts() }
         setContent {
             val s by Prefs.get(this).settings.collectAsState()
             val words = if (resolveLang(s.lang) == Lang.Ru) WordsRu else WordsEn
