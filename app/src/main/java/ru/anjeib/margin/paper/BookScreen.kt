@@ -135,6 +135,18 @@ fun BookScreen(vm: BookVm) {
         if (month) MonthSheet(book, today, current, onPick = { d -> month = false; stack = emptyList(); go(d) }, onClose = { month = false })
     }
 
+    // Opened from a notification: its line, the ritual, or today.
+    val launch by vm.launch.collectAsState()
+    LaunchedEffect(launch) {
+        val l = launch ?: return@LaunchedEffect
+        vm.launchTaken()
+        when {
+            l == "ritual" -> { stack = emptyList(); ritual = true }
+            l == "today" -> { stack = emptyList(); go(today) }
+            l.startsWith("line:") -> { stack = emptyList(); open = l.removePrefix("line:") }
+        }
+    }
+
     // A new day while the app was open: today moves, the pager follows.
     LaunchedEffect(Unit) {
         while (true) {

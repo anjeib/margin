@@ -8,6 +8,8 @@ class MarginApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Feedback.installCrashLog(this)
-        ru.anjeib.margin.data.Store.onSaved = { ru.anjeib.margin.widget.TodayWidget.refresh(this) }
+        // «Поля»: every save keeps the bell in step with the lines; the day's bells are set once per start.
+        ru.anjeib.margin.book.BookStore.onSaved = { ru.anjeib.margin.notify.Bell.sync(this, ru.anjeib.margin.book.BookStore.get(this).book.value) }
+        ru.anjeib.margin.notify.Bell.daily(this)
     }
 }

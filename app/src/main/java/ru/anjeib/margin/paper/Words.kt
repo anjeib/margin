@@ -129,6 +129,12 @@ interface Words {
     val settingsNote: String
     fun feedbackSubject(version: String): String
     fun feedbackBody(version: String, device: String): String
+    val bellLines: String
+    val bellDay: String
+    val today: String
+    val bellDone: String
+    val bellHour: String
+    fun morningLine(n: Int, tails: Int): String
 }
 
 private fun plural(n: Int, one: String, few: String, many: String): String {
@@ -321,6 +327,13 @@ object WordsRu : Words {
     override val settingsNote = "Ваши записи хранятся на телефоне и в резервной копии Google."
     override fun feedbackSubject(version: String) = "Margin «Поля» $version — отзыв"
     override fun feedbackBody(version: String, device: String) = "Что понравилось, что мешает:\n\n\n— \nMargin $version · $device"
+    override val bellLines = "Строки со временем"
+    override val bellDay = "Утро и вечер"
+    override val today = "сегодня"
+    override val bellDone = "Сделано"
+    override val bellHour = "Через час"
+    override fun morningLine(n: Int, tails: Int) = "$n " + plural(n, "строка", "строки", "строк") + " на сегодня" +
+        (if (tails > 0) ", из них $tails " + plural(tails, "хвост", "хвоста", "хвостов") else "")
 }
 
 object WordsEn : Words {
@@ -487,4 +500,10 @@ object WordsEn : Words {
     override val settingsNote = "Your notes live on the phone and in the Google backup."
     override fun feedbackSubject(version: String) = "Margin «Pages» $version — feedback"
     override fun feedbackBody(version: String, device: String) = "What works, what gets in the way:\n\n\n— \nMargin $version · $device"
+    override val bellLines = "Lines with a time"
+    override val bellDay = "Morning and evening"
+    override val today = "today"
+    override val bellDone = "Done"
+    override val bellHour = "In an hour"
+    override fun morningLine(n: Int, tails: Int) = "$n line" + (if (n == 1) "" else "s") + " for today" + (if (tails > 0) ", $tails left over" else "")
 }

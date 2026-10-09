@@ -44,6 +44,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         val settings = Prefs.get(this).settings.value
         if (settings.lock && Lock.available(this)) locked.value = true
         if (savedInstanceState == null) take(intent)
+        askBellOnce()
         setContent {
             val s by Prefs.get(this).settings.collectAsState()
             val words = if (resolveLang(s.lang) == Lang.Ru) WordsRu else WordsEn
@@ -66,11 +67,27 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         take(intent)
     }
 
-    /** Text handed in («Поделиться» → Margin): it waits in the field; taken once. */
+    /** Text handed in («Поделиться» → Margin) waits in the field; a notification opens its line or the ritual. Taken once. */
     private fun take(i: android.content.Intent?) {
+        if (i?.action == ACTION_OPEN) {
+            vm.launchWith(i.getStringExtra(EXTRA_ID))
+            setIntent(android.content.Intent(i).setAction(android.content.Intent.ACTION_MAIN))
+            return
+        }
         if (i?.action != android.content.Intent.ACTION_SEND) return
         vm.handIn(i.getStringExtra(android.content.Intent.EXTRA_TEXT))
         setIntent(android.content.Intent(i).apply { action = android.content.Intent.ACTION_MAIN; removeExtra(android.content.Intent.EXTRA_TEXT) })
+    }
+
+    private val bellAsk = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+
+    /** The bell needs the right to notify (Android 13+): asked once, on the first start. */
+    private fun askBellOnce() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        val sp = getSharedPreferences("polya", MODE_PRIVATE)
+        if (sp.getBoolean("bellAsked", false)) return
+        sp.edit().putBoolean("bellAsked", true).apply()
+        bellAsk.launch(android.Manifest.permission.POST_NOTIFICATIONS)
     }
 
     override fun onResume() {

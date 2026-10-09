@@ -52,6 +52,12 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     private val _prefill = MutableStateFlow<String?>(null)
     val prefill: StateFlow<String?> = _prefill
     fun handIn(text: String?) { if (!text.isNullOrBlank()) _prefill.value = text.trim() }
+
+    /** Opened from a notification or a shortcut: «line:<id>», «ritual», «today». */
+    private val _launch = MutableStateFlow<String?>(null)
+    val launch: StateFlow<String?> = _launch
+    fun launchWith(what: String?) { _launch.value = what }
+    fun launchTaken() { _launch.value = null }
     fun prefillTaken() { _prefill.value = null }
 
     init {
