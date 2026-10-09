@@ -327,7 +327,7 @@ data class AppData(
     val persons: List<Person> = emptyList(),
     val projects: List<String> = emptyList(),
     val queue: List<Queued> = emptyList(),
-    /** Schema version of the file ([Store.SCHEMA]); 0 = written before versions existed. */
+    /** Schema version of the file (Margin 0.29); 0 = written before versions existed. */
     val v: Int = 0,
 ) {
     fun person(name: String): Person? = persons.find { it.matches(name) }

@@ -2,9 +2,7 @@ package ru.anjeib.margin
 
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import ru.anjeib.margin.ai.Assistant
 import ru.anjeib.margin.ai.LocalParser
-import ru.anjeib.margin.ai.Scope
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.Person
 import ru.anjeib.margin.data.Task
@@ -114,22 +112,6 @@ class LocalParserTest {
         "Созвонились. Приказ о зачислении в работе, будет через 2 недели. Нужно отправить документы об оплате в бухгалтерию." to null,
     )
 
-    @Test fun foreignPhrases() {
-        L.lang = Lang.Ru
-        var right = 0; var toAi = 0; var wrongSure = 0
-        foreign.forEach { (text, check) ->
-            val r = LocalParser.parse(text, base, now = null)
-            if (!r.sure) { toAi++; println("  → ИИ   «$text» (${r.why})"); if (check == null) right++; return@forEach }
-            val after = Topics.track(base, Assistant.apply(base, LocalParser.plan(r, Scope.Main, source = text), text, strict = true).data)
-            val new = after.tasks.filter { t -> base.tasks.none { it.id == t.id } }
-            val pass = check != null && runCatching { check(new) }.getOrDefault(false)
-            if (pass) right++ else wrongSure++
-            println((if (pass) "  ok   " else "  ✗    ") + "«$text» → " + new.joinToString(" | ") { "${it.title} [due=${it.due} t=${it.time} wait=${it.waitingFor} prom=${it.promisedTo} ppl=${it.people}]" })
-        }
-        println("Чужие фразы: верно ${right}/${foreign.size}, отдано ИИ $toAi, ошибся уверенно $wrongSure")
-    }
-
-    /** Said on Thursday 8 Oct at 23:04: an hour that has passed today means the next time (review 0.13, defect 5). */
     @Test fun passedHourMovesOn() {
         L.lang = Lang.Ru
         val thu = LocalDate.of(2026, 10, 8)
@@ -162,26 +144,5 @@ class LocalParserTest {
         assertTrue("${m.promisedTo} ${m.people} ${m.title}", m.promisedTo == "Маша" && "Маша" !in m.people && m.due == next(DayOfWeek.SATURDAY))
         val k = LocalParser.parse("Дима спецификацию в понедельник", base, wait = true).items.single()
         assertTrue("${k.waitingFor} ${k.title}", k.waitingFor == "Дима" && k.promisedTo == null)
-    }
-
-    @Test fun coverage() {
-        L.lang = Lang.Ru
-        var ok = 0; var sure = 0
-        val misses = mutableListOf<String>()
-        cases.forEach { c ->
-            val r = LocalParser.parse(c.text, base, now = null)
-            if (r.sure) sure++
-            val after = Topics.track(base, Assistant.apply(base, LocalParser.plan(r, Scope.Main, source = c.text), c.text, strict = true).data)
-            val new = after.tasks.filter { t -> base.tasks.none { it.id == t.id } }
-            val pass = runCatching { c.check(new) }.getOrDefault(false)
-            if (pass) ok++ else misses += "  ✗ «${c.text.replace("\n", " / ")}» → " + new.joinToString(" | ") {
-                "${it.title} [due=${it.due} t=${it.time} part=${it.dayPart} rep=${it.repeat?.freq}${it.repeat?.days} days=${it.slots.map { s -> s.date + " " + s.time }} wait=${it.waitingFor} prom=${it.promisedTo} ppl=${it.people} place=${it.place} thought=${it.thought}]"
-            }
-        }
-        val flagged = forAi.count { !LocalParser.parse(it, base, now = null).sure }
-        println("Разбор в телефоне: $ok/${cases.size} фраз верно, уверен в $sure; отдаёт ИИ ${flagged}/${forAi.size} сложных")
-        misses.forEach { println(it) }
-        assertTrue("too many misses: $ok/${cases.size}", ok >= cases.size * 8 / 10)
-        assertTrue(flagged == forAi.size)
     }
 }

@@ -79,10 +79,10 @@ object Yandex {
                 put("max_tokens", maxTokens)
                 if (withFormat) put("response_format", buildJsonObject { put("type", "json_object") })
             }.toString()
-            var (code, text) = try { post(door, body(json)) } catch (e: java.io.IOException) { throw AiException(ru.anjeib.margin.i18n.L.s.errNet) }
-            if (json && code == 400) { val r = try { post(door, body(false)) } catch (e: java.io.IOException) { throw AiException(ru.anjeib.margin.i18n.L.s.errNet) }; code = r.first; text = r.second }
-            if (door.refused(code)) throw AiException(ru.anjeib.margin.i18n.L.s.errInvite)
-            if (code !in 200..299) { android.util.Log.w("Margin", "Yandex $code: ${text.take(300)}"); throw AiException(ru.anjeib.margin.i18n.L.s.errService) }
+            var (code, text) = try { post(door, body(json)) } catch (e: java.io.IOException) { throw AiException(AiErr.NET) }
+            if (json && code == 400) { val r = try { post(door, body(false)) } catch (e: java.io.IOException) { throw AiException(AiErr.NET) }; code = r.first; text = r.second }
+            if (door.refused(code)) throw AiException(AiErr.INVITE)
+            if (code !in 200..299) { android.util.Log.w("Margin", "Yandex $code: ${text.take(300)}"); throw AiException(AiErr.SERVICE) }
             val root = AppJson.parseToJsonElement(text).jsonObject
             val content = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonObject
                 ?.get("content")?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: throw AiException(EMPTY)
@@ -107,13 +107,13 @@ object Yandex {
             c.outputStream.use { it.write(pcm) }
             val code = c.responseCode
             val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
-            if (door.refused(code)) throw AiException(ru.anjeib.margin.i18n.L.s.errInvite)
+            if (door.refused(code)) throw AiException(AiErr.INVITE)
             if (code !in 200..299) throw AiException("SpeechKit $code")
             val result = AppJson.parseToJsonElement(text).jsonObject["result"]?.jsonPrimitive?.contentOrNull.orEmpty()
             val seconds = pcm.size / 32_000.0
             LlmReply(result.replaceFirstChar { it.uppercase() }, kotlin.math.ceil(seconds / 15.0).coerceAtLeast(1.0) * 0.1626)
         } catch (e: java.io.IOException) {
-            throw AiException(ru.anjeib.margin.i18n.L.s.errNet)
+            throw AiException(AiErr.NET)
         } finally { c.disconnect() }
     }
 
@@ -135,13 +135,13 @@ object Yandex {
             c.outputStream.use { it.write(body.toByteArray()) }
             val code = c.responseCode
             val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
-            if (door.refused(code)) throw AiException(ru.anjeib.margin.i18n.L.s.errInvite)
+            if (door.refused(code)) throw AiException(AiErr.INVITE)
             if (code !in 200..299) throw AiException("Vision $code")
             val full = AppJson.parseToJsonElement(text).jsonObject["result"]?.jsonObject?.get("textAnnotation")?.jsonObject
                 ?.get("fullText")?.jsonPrimitive?.contentOrNull.orEmpty()
             LlmReply(full.trim(), 0.13)
         } catch (e: java.io.IOException) {
-            throw AiException(ru.anjeib.margin.i18n.L.s.errNet)
+            throw AiException(AiErr.NET)
         } finally { c.disconnect() }
     }
 
@@ -153,11 +153,11 @@ object Yandex {
         }
         try {
             val code = c.responseCode
-            if (door.refused(code)) throw AiException(ru.anjeib.margin.i18n.L.s.errInvite)
-            if (code !in 200..299) throw AiException(if (code == 401 || code == 403) ru.anjeib.margin.i18n.L.s.errBadKey else "Yandex $code")
-            ru.anjeib.margin.i18n.L.s.connected + " · Yandex AI Studio"
+            if (door.refused(code)) throw AiException(AiErr.INVITE)
+            if (code !in 200..299) throw AiException(if (code == 401 || code == 403) AiErr.BAD_KEY else "Yandex $code")
+            "Yandex AI Studio"
         } catch (e: java.io.IOException) {
-            throw AiException(ru.anjeib.margin.i18n.L.s.errNet)
+            throw AiException(AiErr.NET)
         } finally { c.disconnect() }
     }
 

@@ -14,8 +14,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ru.anjeib.margin.ui.Sans
-import ru.anjeib.margin.ui.Serif
+
+
 
 /*
  * The paper: four roles of colour and two voices of type (DESIGN.md §12–13). Nothing on a screen picks a colour or a

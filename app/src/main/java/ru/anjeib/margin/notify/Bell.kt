@@ -123,7 +123,7 @@ object Bell {
                 if (!l.open) return
                 val from = l.who.firstOrNull { it.dir == Dir.From }?.name
                 val title = listOfNotNull(l.time, from?.let { w.from(it) }).joinToString(" · ").ifBlank { w.today }
-                val n = NotificationCompat.Builder(ctx, LINES).setSmallIcon(R.drawable.ic_write)
+                val n = NotificationCompat.Builder(ctx, LINES).setSmallIcon(R.drawable.ic_notify)
                     .setContentTitle(l.text).setContentText(title).setAutoCancel(true)
                     .setContentIntent(open(ctx, "line:${l.id}", l.id.hashCode()))
                     .addAction(0, w.bellDone, pi(ctx, ("done" + l.id).hashCode(), intent(ctx, "done", l.id)))
@@ -144,7 +144,7 @@ object Bell {
             "evening" -> {
                 val open = book.toDecide(today).size
                 if (open > 0) runCatching {
-                    nm.notify(REQ_EVENING, NotificationCompat.Builder(ctx, DAY).setSmallIcon(R.drawable.ic_write)
+                    nm.notify(REQ_EVENING, NotificationCompat.Builder(ctx, DAY).setSmallIcon(R.drawable.ic_notify)
                         .setContentTitle(w.ritualTitle).setContentText(w.ritualLine(open)).setAutoCancel(true)
                         .setContentIntent(open(ctx, "ritual", REQ_EVENING)).build())
                 }
@@ -154,7 +154,7 @@ object Bell {
                 val p = book.page(today, today)
                 val n = p.open.size
                 if (n > 0) runCatching {
-                    nm.notify(REQ_MORNING, NotificationCompat.Builder(ctx, DAY).setSmallIcon(R.drawable.ic_write)
+                    nm.notify(REQ_MORNING, NotificationCompat.Builder(ctx, DAY).setSmallIcon(R.drawable.ic_notify)
                         .setContentTitle(w.weekday(today)).setContentText(w.morningLine(n, p.tails.size)).setAutoCancel(true)
                         .setContentIntent(open(ctx, "today", REQ_MORNING)).build())
                 }

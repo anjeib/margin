@@ -5,8 +5,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.dative
-import ru.anjeib.margin.data.dayMonthShort
-import ru.anjeib.margin.data.dowShort
 import ru.anjeib.margin.data.genitive
 import ru.anjeib.margin.data.sentence
 import ru.anjeib.margin.data.withNames
@@ -460,74 +458,5 @@ object LocalParser {
 
         return Item(kind = kind, title = title, due = due, start = start, time = time, part = part, days = days, repeat = repeat,
             people = people, waitingFor = waitingFor, promisedTo = promisedTo, place = place, sphere = sphere)
-    }
-
-    // ---------------- into actions ----------------
-
-    private fun o(vararg p: Pair<String, Any?>): JsonObject = JsonObject(p.filter { it.second != null }.associate { (k, v) ->
-        k to when (v) {
-            is JsonObject -> v
-            is List<*> -> JsonArray(v.map { x -> if (x is JsonObject) x else JsonPrimitive(x.toString()) })
-            else -> JsonPrimitive(v.toString())
-        }
-    })
-
-    private fun Item.fields(): Array<Pair<String, Any?>> = arrayOf(
-        "due" to due?.toString(), "start" to start?.toString(), "time" to time, "part" to part,
-        "dates" to days.takeIf { it.size >= 2 }?.map { (d, t) -> o("date" to d.toString(), "time" to t) },
-        "repeat" to repeat?.let { (f, i, ds) -> o("freq" to f, "interval" to i, "days" to ds.takeIf { it.isNotEmpty() }) },
-        "people" to people.takeIf { it.isNotEmpty() }, "waiting_for" to waitingFor, "promised_to" to promisedTo, "place" to place, "sphere" to sphere,
-    )
-
-    /** The same actions the AI would send, for [scope]; inside a topic words are its record and dated ones also its matter. */
-    fun plan(r: Result, scope: Scope, asQuestion: Boolean = false, source: String = ""): AiPlan {
-        val actions = when (scope) {
-            is Scope.InTask -> {
-                val deals = r.items.filter { asQuestion || it.kind == "task" && (it.due != null || it.time != null || it.days.isNotEmpty() || it.waitingFor != null) }
-                listOfNotNull(
-                    if (asQuestion) null else o("type" to "add_entry", "task_id" to scope.taskId, "text" to source.ifBlank { r.items.joinToString(". ") { it.title } }),
-                    deals.takeIf { it.isNotEmpty() }?.let { ds ->
-                        o("type" to "add_subtasks", "task_id" to scope.taskId, "subtasks" to ds.map { i ->
-                            o("title" to (if (i.waitingFor != null) i.title.removePrefix("Получить ").substringBeforeLast(" от ").sentence() else i.title),
-                                "due" to (i.due ?: i.days.firstOrNull()?.first)?.toString(), "time" to (i.time ?: i.days.firstOrNull()?.second), "from" to i.waitingFor,
-                                "dates" to i.days.takeIf { it.size >= 2 }?.map { (d, t) -> o("date" to d.toString(), "time" to t) })
-                        })
-                    },
-                )
-            }
-            else -> r.items.map { i ->
-                if (i.kind == "idea") o("type" to "create_note", "text" to i.title)
-                else o("type" to "create_task", "title" to i.title, "topic" to (if (i.kind == "topic") "true" else null), *i.fields())
-            }
-        }
-        return AiPlan(null, actions, null, local = true)
-    }
-
-    /** One quiet line for the preview under the field: «дело · завтра 15:00 · Маша · работа». */
-    fun describe(r: Result, today: LocalDate = LocalDate.now()): String? {
-        val i = r.items.firstOrNull() ?: return null
-        val rus = ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.Ru
-        fun day(d: LocalDate) = when (d) {
-            today -> if (rus) "сегодня" else "today"
-            today.plusDays(1) -> if (rus) "завтра" else "tomorrow"
-            else -> d.dowShort().lowercase() + " " + d.dayMonthShort()
-        }
-        val parts = listOfNotNull(
-            if (r.items.size > 1) (if (rus) "${r.items.size} дела" else "${r.items.size} to-dos") else when (i.kind) { "idea" -> if (rus) "идея" else "idea"; "topic" -> if (rus) "тема" else "topic"; else -> if (rus) "дело" else "to-do" },
-            i.repeat?.let { (f, n, ds) -> if (rus) "повтор " + when {
-                f == "daily" && n > 1 -> "раз в $n дн."
-                f == "daily" -> "каждый день"; f == "monthly" -> "каждый месяц"; f == "yearly" -> "каждый год"
-                else -> (if (n > 1) "раз в $n нед., " else "") + ds.joinToString(", ") { LocalDate.of(2024, 1, it).dowShort().lowercase() }
-            } else "repeats" },
-            i.days.takeIf { it.isNotEmpty() }?.joinToString(", ") { day(it.first) + (it.second?.let { t -> " $t" } ?: "") },
-            listOfNotNull(i.due?.let { day(it) }, i.time).joinToString(" ").ifBlank { null },
-            i.part?.let { if (rus) mapOf("morning" to "утром", "day" to "днём", "afternoon" to "после обеда", "evening" to "вечером", "night" to "ночью")[it] else it },
-            i.waitingFor?.let { if (rus) "ждём от ${it.genitive()}" else "from $it" },
-            i.promisedTo?.let { if (rus) "обещано ${it.dative()}" else "promised to $it" },
-            i.people.takeIf { it.isNotEmpty() }?.joinToString(", "),
-            i.place,
-            i.sphere?.let { if (rus) (if (it == "work") "работа" else "личное") else it },
-        )
-        return parts.joinToString("  ·  ")
     }
 }

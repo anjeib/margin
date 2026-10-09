@@ -13,12 +13,20 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import ru.anjeib.margin.data.AppJson
-import ru.anjeib.margin.i18n.L
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
 class AiException(message: String) : Exception(message)
+
+/** Why the AI could not be asked — kept as codes: the notebook says it in its own words (or not at all). */
+object AiErr {
+    const val NO_KEY = "no-key"
+    const val NET = "net"
+    const val INVITE = "invite"
+    const val SERVICE = "service"
+    const val BAD_KEY = "bad-key"
+}
 
 /** The model answered with nothing — worth one more try, never worth showing as is. */
 const val EMPTY = "empty"
@@ -41,7 +49,7 @@ object OpenRouter {
         /** Data URLs of images attached to the last user message. */
         images: List<String> = emptyList(),
     ): AiReply = withContext(Dispatchers.IO) {
-        if (apiKey.isBlank()) throw AiException(L.s.errNoKey)
+        if (apiKey.isBlank()) throw AiException(AiErr.NO_KEY)
         fun body(withFormat: Boolean) = buildJsonObject {
             put("model", model)
             put("messages", buildJsonArray {
@@ -71,18 +79,18 @@ object OpenRouter {
         }
         if (code !in 200..299) throw AiException(errorMessage(code, text))
         val root = runCatching { AppJson.parseToJsonElement(text).jsonObject }.getOrNull()
-            ?: throw AiException(L.s.errWeird)
+            ?: throw AiException("weird")
         root["error"]?.let { throw AiException(errorMessage(code, text)) }
         val content = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject
             ?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull
-            ?: throw AiException(L.s.errEmpty)
+            ?: throw AiException(EMPTY)
         val cost = (root["usage"] as? JsonObject)?.get("cost")?.jsonPrimitive?.doubleOrNull ?: 0.0
         AiReply(content, cost)
     }
 
     /** Speech to text: sends a WAV recording to an audio-capable model, with known names as spelling hints. */
     suspend fun transcribe(apiKey: String, model: String, wav: ByteArray, hints: List<String>): AiReply = withContext(Dispatchers.IO) {
-        if (apiKey.isBlank()) throw AiException(L.s.errNoKey)
+        if (apiKey.isBlank()) throw AiException(AiErr.NO_KEY)
         val sys = "Transcribe the user's voice note verbatim in the language spoken. Add punctuation, drop filler sounds (э-э, ну-у), keep the meaning exactly. " +
             "Write numbers and times as digits (18:00). Reply with the transcript only, no quotes, no comments." +
             if (hints.isNotEmpty()) " The speaker often mentions these names and project names: ${hints.joinToString()}. Whenever you hear something that sounds like one of them (even transliterated, e.g. «вузбюро» for vuzburo), write it exactly in this spelling." else ""
@@ -111,7 +119,7 @@ object OpenRouter {
         val root = AppJson.parseToJsonElement(text).jsonObject
         val content = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject
             ?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull?.trim()
-            ?: throw AiException(L.s.errEmpty)
+            ?: throw AiException(EMPTY)
         AiReply(content.trim('"', '«', '»', ' '), (root["usage"] as? JsonObject)?.get("cost")?.jsonPrimitive?.doubleOrNull ?: 0.0)
     }
 
@@ -122,12 +130,12 @@ object OpenRouter {
         val d = AppJson.parseToJsonElement(text).jsonObject["data"]?.jsonObject
         val usage = d?.get("usage")?.jsonPrimitive?.doubleOrNull
         val limit = d?.get("limit")?.jsonPrimitive?.doubleOrNull
-        L.s.keyStatus(usage, limit)
+        "OpenRouter: $usage / ${limit ?: "∞"}"
     }
 
     suspend fun models(): List<ModelInfo> = withContext(Dispatchers.IO) {
         val (code, text) = get("$BASE/models", null)
-        if (code !in 200..299) throw AiException(L.s.errNet)
+        if (code !in 200..299) throw AiException(AiErr.NET)
         val arr = AppJson.parseToJsonElement(text).jsonObject["data"] as? JsonArray ?: return@withContext emptyList()
         arr.mapNotNull { e ->
             val o = e.jsonObject
@@ -153,10 +161,10 @@ object OpenRouter {
             AppJson.parseToJsonElement(text).jsonObject["error"]?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
         }.getOrNull()
         return when (code) {
-            401 -> L.s.errBadKey
-            402 -> L.s.errNoMoney
-            429 -> L.s.errRate
-            else -> msg ?: L.s.errGeneric(code)
+            401 -> AiErr.BAD_KEY
+            402 -> "no-money"
+            429 -> "rate"
+            else -> msg ?: "OpenRouter $code"
         }
     }
 
@@ -176,13 +184,13 @@ object OpenRouter {
         c.outputStream.use { it.write(body.toByteArray()) }
         read(c)
     } catch (e: IOException) {
-        throw AiException(L.s.errNet)
+        throw AiException(AiErr.NET)
     }
 
     private fun get(url: String, apiKey: String?): Pair<Int, String> = try {
         read(open(url, apiKey))
     } catch (e: IOException) {
-        throw AiException(L.s.errNet)
+        throw AiException(AiErr.NET)
     }
 
     private fun read(c: HttpURLConnection): Pair<Int, String> {

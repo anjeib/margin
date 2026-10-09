@@ -47,7 +47,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import ru.anjeib.margin.book.splitOccurrence
-import ru.anjeib.margin.ui.TopicGlyph
+
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -194,7 +194,7 @@ private fun TopLine(back: Boolean, onBack: () -> Unit, onIndex: () -> Unit, away
         Box(Modifier.width(Grid.margin - Grid.noteGap), contentAlignment = Alignment.Center) {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable { if (back) onBack() else onIndex() }
                 .semantics { contentDescription = if (back) w.back else w.a11yIndex }, contentAlignment = Alignment.Center) {
-                if (back) Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = c.ink) else TopicGlyph(c.ink, 20.dp)
+                if (back) Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = c.ink) else IndexGlyph(c.ink, 20.dp)
             }
         }
         Spacer(Modifier.width(Grid.text - Grid.margin + Grid.noteGap))

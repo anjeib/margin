@@ -202,7 +202,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
 
     private val prefs = Prefs.get(app)
     private val polya = app.getSharedPreferences("polya", android.content.Context.MODE_PRIVATE)
-    private fun online() = ru.anjeib.margin.ai.Processor.online(getApplication())
+    private fun online() = ru.anjeib.margin.ai.Net.online(getApplication())
     /** The AI can be asked: a key or an invite code, and a network. */
     fun aiReady() = Llm.ready(prefs.settings.value) && online()
 

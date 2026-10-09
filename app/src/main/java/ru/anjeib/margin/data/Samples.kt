@@ -69,12 +69,6 @@ object Samples {
         )
         return AppData(tasks = listOf(topic) + deals + idea, persons = persons)
     }
-
-    /** The set with the topic's two files drawn into the app's files (the demo's brief and logos). */
-    fun withFiles(ctx: Context, today: LocalDate = LocalDate.now()): AppData {
-        val art = DemoArt(Files.dir(ctx))
-        return build(today, runCatching { art.brief }.getOrNull(), runCatching { art.logos }.getOrNull())
-    }
 }
 
 /** The examples are in the app (even ticked off). */

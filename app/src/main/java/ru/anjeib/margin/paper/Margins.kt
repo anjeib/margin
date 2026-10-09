@@ -108,7 +108,7 @@ fun NoteText(n: Note, align: TextAlign = TextAlign.End) {
     Text(buildAnnotatedString {
         n.struck?.let { withStyle(SpanStyle(color = c.pencil, textDecoration = TextDecoration.LineThrough)) { append(it) }; append(" ") }
         // Signs (← → ↻ ≡) in the plain sans: the serif italic draws them as feathered ornaments.
-        n.text.forEach { ch -> if (ch in SIGNS) withStyle(SpanStyle(fontFamily = ru.anjeib.margin.ui.Sans, fontStyle = androidx.compose.ui.text.font.FontStyle.Normal)) { append(ch) } else append(ch) }
+        n.text.forEach { ch -> if (ch in SIGNS) withStyle(SpanStyle(fontFamily = Sans, fontStyle = androidx.compose.ui.text.font.FontStyle.Normal)) { append(ch) } else append(ch) }
     }, style = Voice.note.copy(color = color, textAlign = align), maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 

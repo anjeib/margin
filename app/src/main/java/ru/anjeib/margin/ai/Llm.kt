@@ -1,7 +1,6 @@
 package ru.anjeib.margin.ai
 
 import ru.anjeib.margin.data.Settings
-import ru.anjeib.margin.i18n.L
 
 data class LlmReply(val content: String, val rub: Double)
 
@@ -40,7 +39,7 @@ object Llm {
         /** A model that thinks before it answers needs room for both. */
         maxTokens: Int = 1500,
     ): LlmReply {
-        if (!ready(s)) throw AiException(L.s.errNoKey)
+        if (!ready(s)) throw AiException(AiErr.NO_KEY)
         return if (yandex(s)) {
             // Yandex text models don't read images; the words still go through.
             val r = Yandex.chat(door(s), yaModel(s, smart, complex), system, messages, json, maxTokens)

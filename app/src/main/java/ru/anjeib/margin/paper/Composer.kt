@@ -80,9 +80,9 @@ import ru.anjeib.margin.book.Book
 import ru.anjeib.margin.data.Attachment
 import ru.anjeib.margin.data.Files
 import ru.anjeib.margin.data.WavRecorder
-import ru.anjeib.margin.ui.MicGlyph
-import ru.anjeib.margin.ui.PlusGlyph
-import ru.anjeib.margin.ui.SendGlyph
+
+
+
 import java.io.File
 import java.time.LocalDate
 
@@ -364,7 +364,9 @@ private fun AnswerPanel(a: BookVm.Asked, book: Book, today: LocalDate, onClose: 
             }
         }
         val shown = ans?.lines.orEmpty().map { l -> book.line(l.id) ?: l }
-        shown.take(5).forEach { l -> LineOnPage(l, today, today, book, Seen.Page, false, onMark, onOpen) }
+        // An answer about one day shows its lines as on that page: the day is in the sentence, not on every margin.
+        val pageOf = ans?.takeIf { it.about == Ask.About.Day && it.from == it.to }?.from ?: today
+        shown.take(5).forEach { l -> LineOnPage(l, pageOf, today, book, Seen.Page, false, onMark, onOpen) }
         if (shown.size > 5) MarginLink(w.more(shown.size - 5)) { (go ?: onSearch)() }
     }
 }
