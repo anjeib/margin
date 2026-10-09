@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -236,17 +237,8 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             }
         }
         }
-        // Long-press the version to open/close the developer section.
-        Text(
-            s.version(ru.anjeib.margin.BuildConfig.VERSION_NAME),
-            style = Type.small.copy(color = c.faint, fontSize = 12.sp),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp)
-                .combinedClickable(onClick = {}, onLongClick = {
-                    vm.updateSettings { it.copy(devMode = !it.devMode) }
-                    if (!settings.devMode) android.widget.Toast.makeText(ctx, s.devUnlocked, android.widget.Toast.LENGTH_SHORT).show()
-                }),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
+        // The version (and the long press into the developer section) lives once — under the menu.
+        Spacer(Modifier.height(20.dp))
         Spacer(Modifier.height(24.dp))
     }
 
@@ -307,8 +299,9 @@ private fun ValueRow(label: String, hint: String?, value: String, chevron: Boole
             Text(label, style = Type.body.copy(color = c.ink))
             hint?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp)) }
         }
-        Text(value, style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 12.dp).fillMaxWidth(0.55f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        // A value takes only its own width (up to a cap), so a row with none keeps the whole line for its label.
+        if (value.isNotBlank()) Text(value, style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 12.dp).widthIn(max = 180.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
         if (chevron) Icon(Icons.Rounded.KeyboardArrowRight, null, tint = c.faint, modifier = Modifier.size(20.dp))
     }
 }

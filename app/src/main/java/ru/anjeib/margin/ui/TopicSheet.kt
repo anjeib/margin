@@ -510,7 +510,9 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
             if (firstOfDay) lastDay = day
             item(line.key) {
                 val fresh = line.key in freshKeys
-                Column(Modifier.animateItem().arrive(fresh, freshKeys.indexOf(line.key)).landing(hl == line.key, 10)) {
+                // Lines slide into place but never fade: a line fading out under «только дела» kept its day on the margin
+                // on top of the next one's (review 0.13, defect 13). New lines have their own arrival.
+                Column(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).arrive(fresh, freshKeys.indexOf(line.key)).landing(hl == line.key, 10)) {
                     if (newDayAfter) Hairline(Modifier.padding(start = MarginW, top = 8.dp, bottom = 4.dp))
                     val dayMark = if (firstOfDay) day else null
                     when (line) {

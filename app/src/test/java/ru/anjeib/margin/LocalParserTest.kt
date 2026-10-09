@@ -116,7 +116,7 @@ class LocalParserTest {
         L.lang = Lang.Ru
         var right = 0; var toAi = 0; var wrongSure = 0
         foreign.forEach { (text, check) ->
-            val r = LocalParser.parse(text, base)
+            val r = LocalParser.parse(text, base, now = null)
             if (!r.sure) { toAi++; println("  → ИИ   «$text» (${r.why})"); if (check == null) right++; return@forEach }
             val after = Topics.track(base, Assistant.apply(base, LocalParser.plan(r, Scope.Main, source = text), text, strict = true).data)
             val new = after.tasks.filter { t -> base.tasks.none { it.id == t.id } }
@@ -125,6 +125,25 @@ class LocalParserTest {
             println((if (pass) "  ok   " else "  ✗    ") + "«$text» → " + new.joinToString(" | ") { "${it.title} [due=${it.due} t=${it.time} wait=${it.waitingFor} prom=${it.promisedTo} ppl=${it.people}]" })
         }
         println("Чужие фразы: верно ${right}/${foreign.size}, отдано ИИ $toAi, ошибся уверенно $wrongSure")
+    }
+
+    /** Said on Thursday 8 Oct at 23:04: an hour that has passed today means the next time (review 0.13, defect 5). */
+    @Test fun passedHourMovesOn() {
+        L.lang = Lang.Ru
+        val thu = LocalDate.of(2026, 10, 8)
+        val late = java.time.LocalTime.of(23, 4)
+        fun one(t: String, now: java.time.LocalTime? = late) = LocalParser.parse(t, base, today = thu, now = now).items.single()
+        val gym = one("Тренировка по понедельникам и четвергам в 8 утра")
+        assertTrue("repeat starts Monday: ${gym.due}", gym.due == LocalDate.of(2026, 10, 12) && gym.time == "08:00")
+        assertTrue(one("каждый день в 9 зарядка").due == thu.plusDays(1))
+        assertTrue(one("в четверг в 8 созвон").due == thu.plusWeeks(1))
+        val two = one("в пн и чт в 8 бассейн")
+        assertTrue("days: ${two.days}", two.days.map { it.first } == listOf(LocalDate.of(2026, 10, 12), LocalDate.of(2026, 10, 15)))
+        // Still ahead today, said outright, or no hour — stays today.
+        assertTrue(one("в четверг в 23:30 созвон").due == thu)
+        assertTrue(one("сегодня в 8 созвон").due == thu)
+        assertTrue(one("в четверг созвон").due == thu)
+        assertTrue(one("в четверг в 8 созвон", now = java.time.LocalTime.of(7, 0)).due == thu)
     }
 
     /** «@Маша» with «/жду» / «/обещал»: said outright, it wins over the words. */
@@ -143,7 +162,7 @@ class LocalParserTest {
         var ok = 0; var sure = 0
         val misses = mutableListOf<String>()
         cases.forEach { c ->
-            val r = LocalParser.parse(c.text, base)
+            val r = LocalParser.parse(c.text, base, now = null)
             if (r.sure) sure++
             val after = Topics.track(base, Assistant.apply(base, LocalParser.plan(r, Scope.Main, source = c.text), c.text, strict = true).data)
             val new = after.tasks.filter { t -> base.tasks.none { it.id == t.id } }
@@ -152,7 +171,7 @@ class LocalParserTest {
                 "${it.title} [due=${it.due} t=${it.time} part=${it.dayPart} rep=${it.repeat?.freq}${it.repeat?.days} days=${it.slots.map { s -> s.date + " " + s.time }} wait=${it.waitingFor} prom=${it.promisedTo} ppl=${it.people} place=${it.place} thought=${it.thought}]"
             }
         }
-        val flagged = forAi.count { !LocalParser.parse(it, base).sure }
+        val flagged = forAi.count { !LocalParser.parse(it, base, now = null).sure }
         println("Разбор в телефоне: $ok/${cases.size} фраз верно, уверен в $sure; отдаёт ИИ ${flagged}/${forAi.size} сложных")
         misses.forEach { println(it) }
         assertTrue("too many misses: $ok/${cases.size}", ok >= cases.size * 8 / 10)

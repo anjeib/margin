@@ -26,6 +26,10 @@ import ru.anjeib.margin.data.nextOccurrence
 import ru.anjeib.margin.data.whenLabel
 import ru.anjeib.margin.i18n.L
 import ru.anjeib.margin.i18n.resolveLang
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -138,6 +142,15 @@ object Reminders {
             .apply { if (!text.isNullOrBlank()) setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text)) }
             .setContentIntent(open)
             .setAutoCancel(true)
+            // On the lock screen only «Напоминание»: what the user wrote stays behind the unlock.
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(ctx, CHANNEL)
+                    .setSmallIcon(R.drawable.ic_notify)
+                    .setColor(0xFFC8643B.toInt())
+                    .setContentTitle(L.s.notifReminder)
+                    .build()
+            )
             .apply {
                 if (taskId != null) {
                     fun act(kind: String, req: Int) = PendingIntent.getBroadcast(ctx, taskId.hashCode() + req,
@@ -216,7 +229,15 @@ object Reminders {
 }
 
 class AlarmReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) = Reminders.fire(context, intent)
+    override fun onReceive(context: Context, intent: Intent) {
+        Reminders.fire(context, intent)
+        // «Готово» / «Через час» from a notification: keep the process alive until the change is on disk.
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { withTimeout(8_000) { Store.get(context).flush() } }
+            pending.finish()
+        }
+    }
 }
 
 class BootReceiver : BroadcastReceiver() {

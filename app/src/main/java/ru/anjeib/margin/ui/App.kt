@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -158,7 +159,12 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         drawerState = drawer,
         scrimColor = c.scrim,
         drawerContent = {
-            Drawer(data, screen, view, onGo = ::go, onFeedback = { feedback = true; scope.launch { drawer.close() } })
+            Drawer(data, screen, view, onGo = ::go, onFeedback = { feedback = true; scope.launch { drawer.close() } },
+                onBuildLongPress = {
+                    val on = !settings.devMode
+                    vm.updateSettings { it.copy(devMode = on) }
+                    if (on) android.widget.Toast.makeText(ctx, s.devUnlocked, android.widget.Toast.LENGTH_SHORT).show()
+                })
         },
     ) {
         Box(Modifier.fillMaxSize().background(c.bg)) {
@@ -319,6 +325,22 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         confirmButton = { androidx.compose.material3.TextButton({ feedback = false }) { Text(s.close, color = c.link) } },
     )
 
+    val storeProblem by vm.storeProblem.collectAsState()
+    storeProblem?.let { p ->
+        val (title, text) = when (p.kind) {
+            ru.anjeib.margin.data.LoadProblem.Kind.RESTORED -> s.storeRestoredTitle to s.storeRestoredText
+            ru.anjeib.margin.data.LoadProblem.Kind.LOST -> s.storeLostTitle to s.storeLostText
+            ru.anjeib.margin.data.LoadProblem.Kind.NEWER -> s.storeNewerTitle to s.storeNewerText
+        }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { vm.dismissStoreProblem() },
+            containerColor = c.card,
+            title = { Text(title, style = Type.cardTitle.copy(color = c.ink)) },
+            text = { Text(text, style = Type.body.copy(color = c.graphite)) },
+            confirmButton = { androidx.compose.material3.TextButton({ vm.dismissStoreProblem() }) { Text(s.close, color = c.link) } },
+        )
+    }
+
     copiedText?.let { t ->
         BackHandler { copiedText = null; onCopiedSeen() }
         val sender = remember(t) { ru.anjeib.margin.ai.Forward.sender(t) }
@@ -384,7 +406,7 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
 }
 
 @Composable
-private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, String?) -> Unit, onFeedback: () -> Unit = {}) {
+private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, String?) -> Unit, onFeedback: () -> Unit = {}, onBuildLongPress: () -> Unit = {}) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
@@ -408,9 +430,12 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
             NavRow(Icons.Outlined.Settings, s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
             NavRow(Icons.AutoMirrored.Outlined.HelpOutline, s.helpTitle, "", screen == HELP, small = true) { onGo(HELP, null) }
             NavRow(Icons.Outlined.ChatBubbleOutline, s.feedbackTitle, "", false, small = true) { onFeedback() }
-            // Which build this is — so a screenshot or a complaint says what it is about.
+            // Which build this is — so a screenshot or a complaint says what it is about. The only place the version is shown;
+            // a long press opens the developer section.
             Text(s.buildLabel(ru.anjeib.margin.BuildConfig.VERSION_NAME, ru.anjeib.margin.BuildConfig.VERSION_CODE, ru.anjeib.margin.BuildConfig.DEBUG),
-                style = Type.small.copy(color = c.faint, fontSize = 12.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 26.dp, top = 10.dp))
+                style = Type.small.copy(color = c.faint, fontSize = 12.sp, fontFeatureSettings = "tnum"),
+                modifier = Modifier.padding(start = 26.dp, top = 10.dp)
+                    .combinedClickable(onClick = {}, onLongClick = onBuildLongPress))
         }
     }
 }

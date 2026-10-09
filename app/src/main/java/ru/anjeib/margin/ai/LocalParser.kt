@@ -12,6 +12,7 @@ import ru.anjeib.margin.data.sentence
 import ru.anjeib.margin.data.withNames
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.temporal.TemporalAdjusters
 
 /**
@@ -137,7 +138,9 @@ object LocalParser {
     // ---------------- parsing ----------------
 
     fun parse(text0: String, d: AppData, today: LocalDate = LocalDate.now(), kind: String? = null, sphere: String? = null,
-              people: List<String> = emptyList(), waitFor: String? = null, promiseTo: String? = null): Result {
+              people: List<String> = emptyList(), waitFor: String? = null, promiseTo: String? = null,
+              /** The hour now — a weekday or a repeat whose hour has already passed today starts next time. */
+              now: LocalTime? = LocalTime.now().takeIf { today == LocalDate.now() }): Result {
         val text = text0.trim()
         if (text.isEmpty()) return Result(emptyList(), true)
         val names = Names(d)
@@ -151,7 +154,7 @@ object LocalParser {
         // A long stream with no punctuation is dictation — the AI splits it better.
         if (!Regex("[\\n.;,!?]").containsMatchIn(text) && text.split(Regex("\\s+")).size > 16) { sure = false; why = why ?: "long" }
         // «@Маша», «/жду», «/обещал» are said outright: they win over what the words seem to say.
-        val items = chunks.mapNotNull { one(it, names, today, kind, sphere) }.map { i ->
+        val items = chunks.mapNotNull { one(it, names, today, kind, sphere, now) }.map { i ->
             if (people.isEmpty() && waitFor == null && promiseTo == null) i
             else i.copy(people = (i.people + people).distinct().filter { it != (waitFor ?: i.waitingFor) && it != (promiseTo ?: i.promisedTo) },
                 waitingFor = waitFor ?: i.waitingFor.takeIf { promiseTo == null }, promisedTo = promiseTo ?: i.promisedTo.takeIf { waitFor == null },
@@ -207,7 +210,7 @@ object LocalParser {
         LocalDate.of(today.year, mon, day).let { if (it.isBefore(today.minusDays(1))) it.plusYears(1) else it }
     }.getOrNull()
 
-    private fun one(chunk: String, names: Names, today: LocalDate, kind0: String?, sphere: String?): Item? {
+    private fun one(chunk: String, names: Names, today: LocalDate, kind0: String?, sphere: String?, now: LocalTime? = null): Item? {
         var s = " $chunk "
         // Takes a matched phrase out of the words (a space stays in its place); [cutIf] only when the match is accepted.
         fun cutIf(r: Regex, f: (MatchResult) -> Boolean): Boolean {
@@ -223,6 +226,8 @@ object LocalParser {
         var due: LocalDate? = null; var start: LocalDate? = null; var time: String? = null; var part: String? = null
         var days = emptyList<Pair<LocalDate, String?>>()
         var repeat: Triple<String, Int, List<Int>>? = null
+        // A date that came from a weekday («в четверг», «по пн и чт»), not from «сегодня»: it may move a week on.
+        var byWeekday = false
         val ic = RegexOption.IGNORE_CASE
 
         // Repeats first: «каждый вторник», «по понедельникам и четвергам», «каждый день», «первого числа каждый месяц».
@@ -238,6 +243,7 @@ object LocalParser {
         // Several days: «в пн и чт», «во вторник и в пятницу», «12, 15 и 18 октября».
         if (repeat == null) cut(Regex("${B}(?:в|во|на|к|до)?\\s*$WD((?:\\s*(?:,|и)\\s*(?:в|во)?\\s*$WD)+)$E", ic)) { m ->
             days = Regex(WD, ic).findAll(m.value).mapNotNull { weekday(it.value) }.distinct().map { nextDow(today, it) to null }.sortedBy { it.first }.toList()
+            byWeekday = true
         }
         if (days.isEmpty()) cut(Regex("${B}(\\d{1,2})((?:\\s*(?:,|и)\\s*\\d{1,2})+)\\s+$MON$E", ic)) { m ->
             val mon = month(m.groupValues[3]) ?: return@cut
@@ -259,7 +265,7 @@ object LocalParser {
                 Regex("${B}(?:на\\s+этой\\s+неделе|до\\s+конца\\s+недели|в\\s+течение\\s+недели)$E", ic) to { _ -> due = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)) },
                 Regex("${B}(?:до\\s+конца\\s+месяца|в\\s+этом\\s+месяце)$E", ic) to { _ -> due = today.with(TemporalAdjusters.lastDayOfMonth()) },
                 Regex("${B}(?:в|на)\\s+выходн$L*$E", ic) to { _ -> due = nextDow(today, 6) },
-                Regex("${B}(?:(в|во|на|к|до|по)\\s+)?(следующ$L*\\s+)?$WD$E", ic) to { m -> weekday(m.groupValues[3])?.let { due = nextDow(today, it, m.groupValues[2].isNotBlank()) } },
+                Regex("${B}(?:(в|во|на|к|до|по)\\s+)?(следующ$L*\\s+)?$WD$E", ic) to { m -> weekday(m.groupValues[3])?.let { due = nextDow(today, it, m.groupValues[2].isNotBlank()); byWeekday = true } },
                 Regex("${B}(\\d{1,2})(?:-?го)?\\s+$MON(?:\\s+(\\d{4}))?$E", ic) to { m -> month(m.groupValues[2])?.let { mo -> due = dateOf(today, m.groupValues[1].toInt(), mo) } },
                 Regex("(?<![\\d:])(\\d{1,2})[./](\\d{1,2})(?:[./](\\d{2,4}))?(?![\\d:])", ic) to { m ->
                     val a = m.groupValues[1].toInt(); val b = m.groupValues[2].toInt()
@@ -292,6 +298,18 @@ object LocalParser {
             part = when (m.value.lowercase()) { "утром" -> "morning"; "после обеда" -> "afternoon"; "вечером" -> "evening"; "ночью" -> "night"; else -> "day" }
         }
         if (days.isNotEmpty() && time != null) days = days.map { it.first to time }.also { time = null }
+
+        // Said on Thursday at 23:00, «в четверг в 8» / «по пн и чт в 8» / «каждый день в 8» mean the next time, not this morning.
+        fun passed(t: String?) = now != null && t != null && runCatching { !LocalTime.parse(t).isAfter(now) }.getOrDefault(false)
+        val rep = repeat
+        if (due == today && passed(time)) when {
+            rep?.first == "daily" -> due = today.plusDays(1)
+            rep?.first == "weekly" -> due = rep.third.ifEmpty { listOf(today.dayOfWeek.value) }
+                .map { today.with(TemporalAdjusters.next(DayOfWeek.of(it))) }.min()
+            rep == null && byWeekday -> due = today.plusWeeks(1)
+        }
+        if (byWeekday && days.any { it.first == today && passed(it.second) })
+            days = days.map { if (it.first == today && passed(it.second)) it.first.plusWeeks(1) to it.second else it }.sortedBy { it.first }
 
         // An address: «на Ленина 5», «ул. Садовая, 12».
         var place: String? = null

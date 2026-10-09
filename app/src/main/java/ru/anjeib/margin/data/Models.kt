@@ -323,6 +323,8 @@ data class AppData(
     val queue: List<Queued> = emptyList(),
     /** Per-project «сводка недели», keyed by project tag. */
     val projectSummaries: Map<String, ProjectSummary> = emptyMap(),
+    /** Schema version of the file ([Store.SCHEMA]); 0 = written before versions existed. */
+    val v: Int = 0,
 ) {
     fun person(name: String): Person? = persons.find { it.matches(name) }
 

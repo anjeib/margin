@@ -80,6 +80,9 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     val data: StateFlow<AppData> = store.data
     val settings: StateFlow<Settings> = prefs.settings
+    /** The saved file could not be read as is (see [Store.load]); told once. */
+    val storeProblem: StateFlow<ru.anjeib.margin.data.LoadProblem?> = store.problem
+    fun dismissStoreProblem() = store.dismissProblem()
 
     private val _busy = MutableStateFlow<String?>(null) // scope key in flight
     val busy: StateFlow<String?> = _busy

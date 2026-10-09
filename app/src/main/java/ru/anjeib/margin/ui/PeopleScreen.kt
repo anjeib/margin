@@ -67,6 +67,7 @@ import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.Person
 import ru.anjeib.margin.data.Task
 import ru.anjeib.margin.data.text
+import ru.anjeib.margin.data.withNames
 import java.time.LocalDate
 import ru.anjeib.margin.data.dayMonthShort
 
@@ -100,7 +101,10 @@ fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddi
                 Column(Modifier.weight(1f)) {
                     Text(p.name, style = Type.cardTitle.copy(color = c.ink))
                     // Nothing known yet → no line at all, not a dash.
-                    val line = listOfNotNull(p.about, p.company, wait?.let { s.waitLine(it.title.replaceFirstChar { c -> c.lowercase() }) }, promise?.let { s.promiseLine(it.title.replaceFirstChar { c -> c.lowercase() }) })
+                    // Mid-sentence the title starts small, but a name stays a name: «ждём: Маша вернёт 3 000 ₽».
+                    fun mid(t: Task) = t.title.replaceFirstChar { c -> c.lowercase() }
+                        .withNames(listOfNotNull(p.name, t.waitingFor, t.promisedTo) + p.aliases + t.people)
+                    val line = listOfNotNull(p.about, p.company, wait?.let { s.waitLine(mid(it)) }, promise?.let { s.promiseLine(mid(it)) })
                         .joinToString(" · ").ifBlank { listOfNotNull(p.phone, p.email).joinToString(" · ") }
                     if (line.isNotBlank()) Text(line, style = Type.small.copy(color = c.graphite), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }

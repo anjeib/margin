@@ -40,7 +40,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        readShare(intent)
+        // Recreated (rotation, theme) or reopened from recents: the shared text was already taken in.
+        if (savedInstanceState == null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) readShare(intent)
         // Permissions are asked in onboarding (first run) — no system dialog on top of it.
         Reminders.scheduleDaily(this)
         // The daily file copy is gone (3.10): drop its job where earlier versions scheduled it.
@@ -107,6 +108,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun readShare(i: Intent?) {
-        if (i?.action == Intent.ACTION_SEND) shared.value = i.getStringExtra(Intent.EXTRA_TEXT)
+        if (i?.action != Intent.ACTION_SEND) return
+        shared.value = i.getStringExtra(Intent.EXTRA_TEXT)
+        // Taken once: whatever recreates the activity later gets an intent with nothing to share.
+        setIntent(Intent(i).apply { action = Intent.ACTION_MAIN; removeExtra(Intent.EXTRA_TEXT) })
     }
 }

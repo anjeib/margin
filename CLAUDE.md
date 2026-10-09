@@ -54,6 +54,8 @@
 - **«В другую тему» / «В тему…»** в пузыре-результате: список открытых тем → `MainVm.moveToTopic` отменяет предпросмотр и читает те же слова внутри выбранной темы (`send(movedHere = true)`); слова в любом случае ложатся в её ленту. Внутри темы ИИ меняет только её (`asked` при `focus`).
 - **Напоминания вопросов** (`Reminders.questionAlarms`): вопрос со временем — в это время, «ждём» — утром в день срока; ключ `q:<тема>:<вопрос>`, кнопки «Готово» / «Через час» (сдвигает время вопроса).
 - Если ИИ не назвал тему по сути, быстрая модель называет её отдельным запросом (`MainVm.nameNewTopics`, `Assistant.topicNamePrompt`). «Сказали…/созвонились…» внутри простой задачи со звонком/письмом закрывает исходное действие кодом (`reportCue`/`actionCue`).
+- Версия показывается один раз — внизу бокового меню; долгое нажатие на неё открывает раздел разработчика (с 0.14).
+- Словарь интерфейса (с 0.14): «дело · тема · идея · запись», не «задача/заметка»; главный экран в меню — «Ежедневник».
 - APK: `~/Desktop/Margin2-<версия>.apk`, архив — `releases/Margin2-<версия>.apk`, тег `v2-<версия>`.
 - **Демо-копия**: `./gradlew assembleDemo` → `app/build/outputs/apk/demo/app-demo.apk` (`ru.anjeib.margin.v2.demo`, «Margin 2 · демо», подписана, ставится рядом): при первом запуске сама загружает пример данных (`BuildConfig.DEMO` → `MainVm.loadDemo`). Кладётся как `~/Desktop/Margin2-<версия>-demo.apk` и в `releases/`.
 
@@ -121,7 +123,7 @@ ai/Processor.kt     вложения → куда положить, заметк
 ai/Forward.kt       пересылка: свой бот Telegram, письма себе (IMAP), рамка «чужие слова» для ИИ, ForwardWorker
 ForwardActivity     «Поделиться → В Margin» и «В Margin» в меню выделенного текста (лист поверх чужого приложения)
 data/Models.kt      Task, Subtask, Entry, Attachment, Note, Person, Repeat, Queued, AppData (+ migrated())
-data/Store.kt       всё состояние в одном JSON (filesDir/margin.json), атомарная запись
+data/Store.kt       всё состояние в одном JSON (filesDir/margin.json): запись tmp → rename одним писателем (всегда свежее состояние), предыдущий файл — margin.json.bak; нечитаемый файл уходит в margin.broken-<время>.json и открывается .bak (диалог `LoadProblem`), ничего не перезаписывается; `AppData.v` = `Store.SCHEMA` — повышать при несовместимой правке модели. Тест — `StoreTest`
 data/Prefs.kt       настройки (SharedPreferences "margin"); ключ API по умолчанию из BuildConfig
 data/Files.kt       вложения в filesDir/att, превью, WavRecorder (16 кГц моно)
 data/Repeats.kt     повторяющиеся задачи: next(), nextOccurrence() при выполнении
