@@ -222,10 +222,10 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             INBOX -> InboxScreen(data, vm, onOpenNote = { openNote = it }, contentPadding = pad)
                         }
                     }
-                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(20.dp).background(Brush.verticalGradient(listOf(Color.Transparent, c.bg))))
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(20.dp).background(Brush.verticalGradient(listOf(Color.Transparent, c.bg))).fieldRule())
                 }
                 if (screen == TASKS || screen == NOTES) Column(
-                    Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().padding(horizontal = 14.dp).padding(bottom = 10.dp),
+                    Modifier.fillMaxWidth().background(c.bg).fieldRule().navigationBarsPadding().padding(horizontal = 14.dp).padding(bottom = 10.dp),
                 ) {
                     if (screen == TASKS) {
                         // Keep the last exchange on screen while it fades out, so it leaves gracefully.
@@ -263,12 +263,12 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         )
                         }
                     } else {
-                        notice?.takeIf { it.scopeKey == "notes" }?.let { NoticeLine(it, vm) }
+                        notice?.takeIf { it.scopeKey == "notes" }?.let { Box(Modifier.padding(start = FieldLead)) { NoticeLine(it, vm) } }
                     }
                     Spacer(Modifier.height(8.dp))
                     // Copied a message in MAX or Telegram a moment ago → one tap hands it in, with who and what.
                     if (copied && !typing && busy == null && pending == null && (screen == TASKS || screen == NOTES)) {
-                        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().padding(start = FieldLead, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Pill(s.pasteCopied, accent = true, onClick = { copiedText = readCopied(); if (copiedText == null) onCopiedSeen() })
                             Box(Modifier.size(32.dp).clip(CircleShape).clickable { onCopiedSeen() }, contentAlignment = Alignment.Center) {
                                 Icon(Icons.Rounded.Close, s.dismiss, tint = c.faint, modifier = Modifier.size(16.dp))
@@ -393,7 +393,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         val topic = qr?.let { (tid, _) -> data.tasks.find { it.id == tid } }
         if (qr == null || topic == null) openDeal = null
         else DealSheet(topic, qr.second, vm, onClose = { openDeal = null },
-            onOpenTopic = { openDeal = null; openTask = topic.id; openTab = 1; openHl = qr.second })
+            onOpenTopic = { openDeal = null; openTask = topic.id; openTab = 1; openHl = qr.second },
+            onOpenPerson = { openDeal = null; openPerson = it })
     }
 
     openTask?.let { id ->

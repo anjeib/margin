@@ -65,6 +65,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -111,6 +112,9 @@ fun SmartComposer(
     slash: Boolean = false,
     /** What the phone understood of the words so far — one quiet line over the field. */
     preview: ((String) -> String?)? = null,
+    /** «Поля»: the field right of the rule. [edge] — how far the caller already moved it from the screen's edge. */
+    ruled: Boolean = true,
+    edge: Dp = 14.dp,
 ) {
     val c = M.c
     val s = M.s
@@ -199,7 +203,10 @@ fun SmartComposer(
 
     LaunchedEffect(micKey) { if (micKey != null) { delay(300); mic() } }
 
+    // Everything over the field starts where the field does — right of the rule.
+    val lead = if (ruled) MarginW - edge + FieldInset else 0.dp
     Column(modifier.fillMaxWidth()) {
+      Column(Modifier.padding(start = lead)) {
         // «/…», «#…», «@…» at the end of the words: a small window of choices, one over another.
         val trigger = if (slash && modeLabel == null) Regex("(?:^|\\s)([/#@])([\\p{L}\\d_-]*)$").find(text) else null
         val sign = trigger?.groupValues?.get(1)
@@ -287,33 +294,15 @@ fun SmartComposer(
                 files.toList().forEach { a -> AttachmentChip(a, onRemove = { files.remove(a); if (a.file != null) Files.delete(ctx, a) }) }
             }
         }
+      }
         val rec = recorder
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(28.dp))
-                .padding(start = 4.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-            // Long text grows upwards; the buttons stay where the thumb is.
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            if (rec != null) {
-                // Recording bar: cancel · pulsing dot + level · confirm
-                RoundIcon(Icons.Rounded.Close, c.graphite) { recorder = null; rec.cancel() }
-                Spacer(Modifier.width(6.dp))
-                Box(Modifier.size(10.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
-                Spacer(Modifier.width(10.dp))
-                LevelBars(level, Modifier.weight(1f))
-                Spacer(Modifier.width(6.dp))
-                Box(
-                    Modifier.size(44.dp).clip(CircleShape).background(c.accent).clickable {
-                        recorder = null
-                        val audio = rec.stop()
-                        if (audio != null) vm.transcribe(audio) { gotSpeech(it, audio) }
-                    },
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.Check, null, tint = M.c.onAccent) }
-                return@Row
-            }
+        val canSend = (text.isNotBlank() || files.isNotEmpty() || sendEmpty) && !busy
+        fun send() { onSend(tagged(text), files.toList()); text = ""; files.clear() }
+        val attach: @Composable () -> Unit = {
             Box {
-                RoundIcon(Icons.Rounded.Add, c.graphite, s.a11yAttach) { menu = true }
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.a11yAttach) { menu = true }, contentAlignment = Alignment.Center) {
+                    PlusGlyph(c.graphite, 18.dp)
+                }
                 SoftMenu(menu, { menu = false }) {
                     MenuItem(Icons.Outlined.PhotoLibrary, s.attachPhoto) { menu = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
                     MenuItem(Icons.Outlined.PhotoCamera, s.attachCamera) {
@@ -328,38 +317,69 @@ fun SmartComposer(
                     }
                 }
             }
-            Box(Modifier.weight(1f).padding(vertical = 10.dp, horizontal = 4.dp)) {
-                if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = Type.body.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                BasicTextField(
-                    value = text, onValueChange = { text = continueList(text, it) },
-                    textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link), maxLines = 6,
-                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                )
-            }
-            if (text.isBlank() && !busy) {
-                if (transcribing) Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = c.link, strokeWidth = 1.6.dp, modifier = Modifier.size(18.dp))
-                } else RoundIcon(Icons.Outlined.Mic, c.accent, s.a11yMic, onClick = ::mic)
-            }
-            Spacer(Modifier.width(4.dp))
-            val enabled = (text.isNotBlank() || files.isNotEmpty() || sendEmpty) && !busy
-            Box(
-                Modifier.size(44.dp).clip(CircleShape)
-                    .background(if (enabled || busy) c.accent else c.accent.copy(alpha = 0.35f))
-                    .clickable(enabled = enabled) { onSend(tagged(text), files.toList()); text = ""; files.clear() },
-                contentAlignment = Alignment.Center,
+        }
+        // A light line, a little taller than the words, a hairline around it.
+        val shape = RoundedCornerShape(FieldH / 2)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            if (ruled) Spacer(Modifier.width(MarginW - edge))
+            Row(
+                Modifier.weight(1f).padding(start = if (ruled) FieldInset else 0.dp).heightIn(min = FieldH).clip(shape).background(c.card)
+                    .border(1.dp, c.hairline, shape).padding(start = 2.dp, end = 5.dp),
+                // Long text grows upwards; the buttons stay where the thumb is.
+                verticalAlignment = Alignment.Bottom,
             ) {
-                if (busy) CircularProgressIndicator(color = M.c.onAccent, strokeWidth = 1.8.dp, modifier = Modifier.size(18.dp))
-                else Icon(Icons.AutoMirrored.Outlined.Send, s.a11ySend, tint = M.c.onAccent, modifier = Modifier.size(19.dp))
+                if (rec != null) {
+                    // Recording: cancel · the pulsing dot and the level · done.
+                    Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Close, s.cancel, tint = c.graphite, modifier = Modifier.size(18.dp))
+                    }
+                    Row(Modifier.weight(1f).height(FieldH - 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
+                        Spacer(Modifier.width(10.dp))
+                        LevelBars(level, Modifier.weight(1f))
+                    }
+                    FieldButton(filled = true, label = s.a11ySend, onClick = {
+                        recorder = null
+                        val audio = rec.stop()
+                        if (audio != null) vm.transcribe(audio) { gotSpeech(it, audio) }
+                    }) { TickGlyph(M.c.onAccent, 18.dp) }
+                    return@Row
+                }
+                attach()
+                Box(Modifier.weight(1f).heightIn(min = FieldH - 2.dp).padding(vertical = 9.dp, horizontal = 2.dp), contentAlignment = Alignment.CenterStart) {
+                    if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = Type.body.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    BasicTextField(
+                        value = text, onValueChange = { text = continueList(text, it) },
+                        textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link), maxLines = 6,
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                    )
+                }
+                // The microphone while nothing is typed; «send» always at the end — pale until there is something to send.
+                if (text.isBlank() && !busy) {
+                    if (transcribing) Box(Modifier.size(FieldH - 2.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
+                    } else FieldButton(label = s.a11yMic, onClick = ::mic) { MicGlyph(c.accent, 21.dp) }
+                }
+                FieldButton(filled = true, enabled = canSend, busy = busy, label = s.a11ySend, onClick = ::send) {
+                    if (busy) CircularProgressIndicator(color = M.c.onAccent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
+                    else SendGlyph(M.c.onAccent, 15.dp)
+                }
             }
         }
     }
 }
 
+/** Height of the field: one line of words and a little air. */
+private val FieldH = 42.dp
+/** The field keeps this much clear of the rule; its words then line up with the page's text. */
+private val FieldInset = 4.dp
+
+/** A sign at the end of the field; [filled] — the small terracotta circle of «send», pale while there is nothing to send. */
 @Composable
-private fun RoundIcon(icon: ImageVector, tint: Color, label: String? = null, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, label, tint = tint)
+private fun FieldButton(filled: Boolean = false, enabled: Boolean = true, busy: Boolean = false, label: String? = null, onClick: () -> Unit, content: @Composable () -> Unit) {
+    Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable(enabled = enabled, onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
+        if (filled) Box(Modifier.size(30.dp).clip(CircleShape).background(if (enabled || busy) M.c.accent else M.c.accent.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) { content() }
+        else content()
     }
 }
 
@@ -378,9 +398,9 @@ private fun LevelBars(level: Float, modifier: Modifier) {
     val c = M.c
     val history = remember { mutableStateListOf<Float>() }
     LaunchedEffect(level) { history += level; while (history.size > 40) history.removeAt(0) }
-    Row(modifier.height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+    Row(modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         history.forEach { v ->
-            Box(Modifier.width(3.dp).height((4 + v * 24).dp).clip(RoundedCornerShape(2.dp)).background(c.graphite.copy(alpha = 0.6f)))
+            Box(Modifier.width(3.dp).height((3 + v * 18).dp).clip(RoundedCornerShape(2.dp)).background(c.graphite.copy(alpha = 0.6f)))
         }
     }
 }

@@ -66,7 +66,7 @@ fun questionRef(id: String): Pair<String, String>? =
 
 fun Task.questionRow(q: Subtask) = Task(
     id = "q:$id:${q.id}", title = q.title, due = q.due, time = q.time, waitingFor = q.from, comments = q.comments,
-    people = listOfNotNull(q.assignee), project = project, sphere = sphere, topicId = id, topicTitle = title,
+    people = (listOfNotNull(q.assignee) + q.people).distinct(), place = q.place, repeat = q.repeat, project = project, sphere = sphere, topicId = id, topicTitle = title,
     // The day the matter itself appeared, not the topic — «лежит с 3 окт».
     createdAt = events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at?.take(10) ?: createdAt,
 )
@@ -171,6 +171,9 @@ object Topics {
         if (t.topic) {
             added.forEach { evs += TopicEvent(kind = if (it.isWait) "wait" else "q", ref = it.id, entry = entry) }
             settled.forEach { evs += TopicEvent(kind = if (it.isWait) "got" else "solved", ref = it.id, entry = entry) }
+            // A repeating matter leaves the next one behind, as a simple matter does — once, whoever ticked it.
+            val again = settled.filter { s -> t.subtasks.none { !it.done && it.repeat != null && it.title == s.title } }.mapNotNull { it.nextOccurrence() }
+            if (again.isNotEmpty()) { t = t.copy(subtasks = t.subtasks + again); again.forEach { evs += TopicEvent(kind = "q", ref = it.id, entry = entry) } }
             // News in an archived topic brings it back.
             if (o.topic && o.done && grew) { t = t.copy(done = false, doneAt = null); evs += TopicEvent(kind = "revived") }
             else if (o.topic && o.done && !n.done) evs += TopicEvent(kind = "revived")

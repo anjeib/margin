@@ -249,6 +249,8 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 else { vm.writeInNote(note.id, t, f, mode); if (mode != "item") mode = null }
             },
             modifier = Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp),
+            // The old note page has no margin rule: «+» stays inside the field.
+            ruled = false,
             prefill = fill?.prefill, onPrefillUsed = {},
             modeLabel = modeLabel, onModeClose = { mode = null; fill = null }, focusKey = modeTick.takeIf { it > 0 },
         )

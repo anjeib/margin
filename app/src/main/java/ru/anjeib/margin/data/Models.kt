@@ -31,6 +31,10 @@ data class Subtask(
     val note: String? = null,
     /** The user's own comments, each with when it was written — «код домофона 45», «взять чек». No AI. */
     val comments: List<Comment> = emptyList(),
+    /** The same card as a simple matter: it can repeat, happen somewhere, involve people. */
+    val repeat: Repeat? = null,
+    val place: String? = null,
+    val people: List<String> = emptyList(),
 )
 
 /**

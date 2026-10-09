@@ -134,6 +134,7 @@ fun ForwardSheet(
                 onSend = { t, f -> onSend(t.trim(), f) },
                 focusKey = Unit,
                 sendEmpty = true,
+                ruled = false,
             )
         }
     }

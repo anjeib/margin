@@ -5,6 +5,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import ru.anjeib.margin.data.slotRef
 
 import ru.anjeib.margin.data.questionRow
+import ru.anjeib.margin.data.Subtask
 
 import ru.anjeib.margin.data.dative
 
@@ -368,11 +369,13 @@ fun TaskList(
                     Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
                         GroupBadge(if (notesToday.size == 1) s.ideaBadge else s.ideasBadge, Modifier.padding(bottom = 4.dp))
                         notesToday.forEach { t ->
-                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onOpen(t.id) }.landing(t.id in landed, 10)
-                                .padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
-                                Box(Modifier.size(26.dp, 22.dp), contentAlignment = Alignment.CenterStart) { ThoughtGlyph(c.graphite, 16.dp) }
-                                Spacer(Modifier.width(8.dp))
-                                Text(t.title.ifBlank { s.untitled }, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), modifier = Modifier.weight(1f))
+                            Tile {
+                                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onOpen(t.id) }.landing(t.id in landed, 10)
+                                    .padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                                    Box(Modifier.size(26.dp, 22.dp), contentAlignment = Alignment.CenterStart) { ThoughtGlyph(c.graphite, 16.dp) }
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(t.title.ifBlank { s.untitled }, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }
@@ -855,7 +858,7 @@ private fun SwipeTask(t: Task, onDone: () -> Unit, onLater: () -> Unit, modifier
             val toEnd = dir == SwipeToDismissBoxValue.StartToEnd
             Box(
                 Modifier.fillMaxSize().clip(RoundedCornerShape(radius.dp))
-                    .background(if (dir == SwipeToDismissBoxValue.Settled) c.bg else if (toEnd) c.ink else c.accent)
+                    .background(if (dir == SwipeToDismissBoxValue.Settled) (LocalRowGround.current ?: c.bg) else if (toEnd) c.ink else c.accent)
                     .padding(horizontal = 22.dp),
                 contentAlignment = if (toEnd) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
@@ -1018,7 +1021,7 @@ internal fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: ()
         if (onLater != null) SoftMenuItem(s.dateWord) { quick = false; onLater() }
         SoftMenuItem(s.fieldTime) { quick = false; onTime() }
     }
-    Row(Modifier.fillMaxWidth().background(c.bg).combinedClickable(onClick = onOpen, onLongClick = { view.confirmTick(); quick = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+    Row(Modifier.fillMaxWidth().background(LocalRowGround.current ?: c.bg).combinedClickable(onClick = onOpen, onLongClick = { view.confirmTick(); quick = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
         KindMark(t)
         Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(ticking, size = 18.dp, onToggle = ::tick) }
         Spacer(Modifier.width(8.dp))
@@ -1044,64 +1047,71 @@ internal fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: ()
  */
 @Composable
 internal fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String>, onOpen: (String) -> Unit, onDone: (String) -> Unit, onLater: (String) -> Unit, onTime: (String) -> Unit,
-                         age: ((Task) -> String?)? = null, faded: (Task) -> Boolean = { false }, topicOf: (String) -> Task? = { null }) {
+                         age: ((Task) -> String?)? = null, faded: (Task) -> Boolean = { false }, topicOf: (String) -> Task? = { null },
+                         /** Topics' matters stay folded under the topic's name (no day of their own to show them on). */
+                         foldTopics: Boolean = false) {
     val c = M.c
     val s = M.s
     val seen = mutableSetOf<String>()
     // Topics whose other matters are unfolded under their link.
     val unfolded = androidx.compose.runtime.saveable.rememberSaveable(saver = androidx.compose.runtime.saveable.listSaver<androidx.compose.runtime.MutableState<Set<String>>, String>(
         save = { it.value.toList() }, restore = { mutableStateOf(it.toSet()) })) { mutableStateOf(emptySet<String>()) }
+    @Composable
+    fun row(g: Task, tid: String?, depth: Int, pale: Boolean, keyPrefix: String = "") = androidx.compose.runtime.key(keyPrefix + g.id) {
+        // One level for every matter; only a matter put under another matter steps in.
+        SwipeTask(g, onDone = { onDone(g.id) }, onLater = { onLater(g.id) }, modifier = Modifier.padding(start = (depth * 22).dp)
+            .landing(keyPrefix.isEmpty() && (g.id in landed || (tid != null && tid in landed)), 0), radius = 0) {
+            DealRow(g, today, onToggle = { onDone(g.id) }, onOpen = { onOpen(g.id) }, onTime = { onTime(g.id) }, age = if (pale) null else age?.invoke(g), faded = pale || faded(g), onLater = { onLater(g.id) },
+                // Off the day: its own day is said in the row («11 окт», «завтра»).
+                whenText = if (pale) g.dueDate?.let { if (it == today.plusDays(1)) s.quickTomorrow.lowercase() else it.dayMonthShort() } else null)
+        }
+    }
     list.forEach { t ->
         val tid = t.topicId
         if (tid != null && tid in seen) return@forEach
-        val group = if (tid != null) list.filter { it.topicId == tid } else listOf(t)
+        val group = if (tid == null) listOf(t) else if (foldTopics) emptyList() else list.filter { it.topicId == tid }
         if (tid != null) seen += tid
-        // Several or one: the topic's matters come as one block under its name — whose they are is seen before what they are.
-        if (tid != null) Row(Modifier.fillMaxWidth().heightIn(min = 40.dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(tid) }.padding(top = 6.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            TopicGlyph(c.link, 13.dp)
-            Spacer(Modifier.width(7.dp))
-            Text((t.topicTitle ?: "") + "  ›", style = Type.small.copy(color = c.link, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Column(Modifier.padding(start = if (tid != null) 12.dp else 0.dp)) {
-            group.forEach { g ->
-                androidx.compose.runtime.key(g.id) {
-                    SwipeTask(g, onDone = { onDone(g.id) }, onLater = { onLater(g.id) }, modifier = Modifier.landing(g.id in landed || (tid != null && tid in landed), 0), radius = 0) {
-                        DealRow(g, today, onToggle = { onDone(g.id) }, onOpen = { onOpen(g.id) }, onTime = { onTime(g.id) }, age = age?.invoke(g), faded = faded(g), onLater = { onLater(g.id) })
-                    }
-                }
+        // Each matter on its own soft block; a topic's matters share one.
+        Tile {
+            // Several or one: the topic's matters come as one block under its name — whose they are is seen before what they are.
+            if (tid != null) Row(Modifier.fillMaxWidth().heightIn(min = 40.dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(tid) }.padding(top = 6.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                TopicGlyph(c.link, 13.dp)
+                Spacer(Modifier.width(7.dp))
+                Text((t.topicTitle ?: "") + "  ›", style = Type.small.copy(color = c.link, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-        }
-        if (tid != null) Column(Modifier.padding(start = 12.dp + 52.dp, bottom = 6.dp).offset(y = (-4).dp)) {
-            // Small under it: when the topic began, how much is written, and its other matters — a tap unfolds them here.
-            topicOf(tid)?.let { topic ->
-                val shown = group.map { (slotRef(it.id)?.first ?: it.id).substringAfterLast(':') }.toSet()
-                val others = topic.subtasks.filter { !it.done && it.parent == null && it.id !in shown }.map { topic.questionRow(it) }
+            // The day's own matters of the topic (overdue or today) stand open; under another of them — a step in.
+            val groupIds = group.map { (slotRef(it.id)?.first ?: it.id).substringAfterLast(':') }.toSet()
+            val topic = tid?.let(topicOf)
+            group.forEach { g ->
+                val parent = topic?.subtasks?.find { it.id == (slotRef(g.id)?.first ?: g.id).substringAfterLast(':') }?.parent
+                row(g, tid, if (parent != null && parent in groupIds) 1 else 0, false)
+            }
+            if (tid != null && topic != null) {
+                // Small under it: when the topic began, how much is written, and its other matters — folded; a tap unfolds them here.
+                val pool = topic.subtasks.filter { !it.done && it.id !in groupIds }
+                val ids = pool.map { it.id }.toSet()
+                fun under(p: String, d: Int): List<Pair<Subtask, Int>> = pool.filter { it.parent == p }.flatMap { listOf(it to d) + under(it.id, d + 1) }
+                val others = pool.filter { it.parent == null || it.parent !in ids }.flatMap { listOf(it to 0) + under(it.id, 1) }
                 val born = runCatching { LocalDate.parse(topic.createdAt) }.getOrNull()
                 val open = tid in unfolded.value
-                val rest = listOfNotNull(topic.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }, others.size.takeIf { it > 0 }?.let { s.moreDeals(it) + if (open) " ▴" else " ▾" })
+                val rest = listOfNotNull(topic.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) },
+                    others.size.takeIf { it > 0 }?.let { (if (group.isEmpty()) s.summaryDeals(it) else s.moreDeals(it)) + if (open) " ▴" else " ▾" })
                 val dateSp = dateSpan()
                 Text(buildAnnotatedString {
                     born?.let { withStyle(dateSp) { append(it.dayMonthShort() + " ’" + "%02d".format(it.year % 100)) } }
                     if (born != null && rest.isNotEmpty()) append("  ·  ")
                     append(rest.joinToString("  ·  "))
                 }, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
-                    modifier = Modifier.padding(start = 2.dp).clip(RoundedCornerShape(6.dp))
+                    modifier = Modifier.padding(start = 54.dp, bottom = 6.dp).offset(y = (-4).dp).clip(RoundedCornerShape(6.dp))
                         .clickable(enabled = others.isNotEmpty()) { unfolded.value = if (open) unfolded.value - tid else unfolded.value + tid }.padding(vertical = 2.dp))
                 androidx.compose.animation.AnimatedVisibility(open && others.isNotEmpty(), enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(240)) + androidx.compose.animation.fadeIn(),
                     exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.fadeOut()) {
-                    // The topic's other matters, a step in and paler — they belong to the topic, not to this day.
-                    Column(Modifier.offset(x = (-36).dp)) {
-                        others.forEach { g ->
-                            androidx.compose.runtime.key("o" + g.id) {
-                                SwipeTask(g, onDone = { onDone(g.id) }, onLater = { onLater(g.id) }, modifier = Modifier, radius = 0) {
-                                    DealRow(g, today, onToggle = { onDone(g.id) }, onOpen = { onOpen(g.id) }, onTime = { onTime(g.id) }, faded = true, onLater = { onLater(g.id) })
-                                }
-                            }
-                        }
-                    }
+                    // The topic's other matters, on the same level and paler — they belong to the topic, not to this day.
+                    Column { others.forEach { (q, d) -> row(topic.questionRow(q), tid, d, true, "o") } }
                 }
             }
+
         }
     }
 }
@@ -1368,12 +1378,14 @@ fun DayBlock(
                     if (plan.quiet) Text(if (plan.date == today) s.freeDay else s.freeWord, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(top = 6.dp))
                     if (dealsAll) {
                         plan.events.forEach { e ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
-                                Box(Modifier.size(20.dp, 24.dp), contentAlignment = Alignment.Center) { CalendarGlyph(c.graphite) }
-                                Spacer(Modifier.width(34.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(e.start.toLocalTime().toString().take(5) + "   " + e.title, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink))
-                                    e.location?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 13.sp)) }
+                            Tile {
+                                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                                    Box(Modifier.size(20.dp, 24.dp), contentAlignment = Alignment.Center) { CalendarGlyph(c.graphite) }
+                                    Spacer(Modifier.width(34.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(e.start.toLocalTime().toString().take(5) + "   " + e.title, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink))
+                                        e.location?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 13.sp)) }
+                                    }
                                 }
                             }
                         }
@@ -1381,33 +1393,39 @@ fun DayBlock(
                     }
                     // «Месяц»: ideas written and files attached that day, by time — a tap opens the idea or the topic.
                     plan.feed.forEach { n ->
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(n.owner.id) }.padding(vertical = 7.dp), verticalAlignment = Alignment.Top) {
-                            Box(Modifier.size(20.dp, 22.dp), contentAlignment = Alignment.Center) {
-                                if (n.idea) ThoughtGlyph(c.graphite, 15.dp) else Icon(kindIcon(n.file!!.kind), null, tint = c.graphite, modifier = Modifier.size(15.dp))
-                            }
-                            Spacer(Modifier.width(34.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(if (n.idea) n.owner.title else (n.file!!.caption ?: attachmentLabel(n.file).ifBlank { n.file.name }), style = Type.body.copy(fontSize = 15.sp, color = c.ink), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text(listOfNotNull(n.at.drop(11).take(5).takeIf { it != "00:00" && it.isNotBlank() }, if (n.idea) s.thoughtWord else n.owner.title).joinToString("  ·  "),
-                                    style = Type.small.copy(color = if (n.idea) c.graphite else c.link, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Tile {
+                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(n.owner.id) }.padding(vertical = 7.dp), verticalAlignment = Alignment.Top) {
+                                Box(Modifier.size(20.dp, 22.dp), contentAlignment = Alignment.Center) {
+                                    if (n.idea) ThoughtGlyph(c.graphite, 15.dp) else Icon(kindIcon(n.file!!.kind), null, tint = c.graphite, modifier = Modifier.size(15.dp))
+                                }
+                                Spacer(Modifier.width(34.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(if (n.idea) n.owner.title else (n.file!!.caption ?: attachmentLabel(n.file).ifBlank { n.file.name }), style = Type.body.copy(fontSize = 15.sp, color = c.ink), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(listOfNotNull(n.at.drop(11).take(5).takeIf { it != "00:00" && it.isNotBlank() }, if (n.idea) s.thoughtWord else n.owner.title).joinToString("  ·  "),
+                                        style = Type.small.copy(color = if (n.idea) c.graphite else c.link, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
                             }
                         }
                     }
                     // What got done that day: struck through, a tap opens it (and the tick there can take it back).
                     plan.done.forEach { t ->
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.topicId ?: t.id) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(20.dp, 20.dp))
-                            Box(Modifier.size(26.dp, 20.dp), contentAlignment = Alignment.CenterStart) { TickGlyph(c.ok, 15.dp) }
-                            Spacer(Modifier.width(8.dp))
-                            Text(t.title + (t.topicTitle?.let { "  ·  $it" } ?: ""), style = Type.body.copy(fontSize = 15.sp, color = c.graphite,
-                                textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Tile {
+                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.topicId ?: t.id) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(20.dp, 20.dp))
+                                Box(Modifier.size(26.dp, 20.dp), contentAlignment = Alignment.CenterStart) { TickGlyph(c.ok, 15.dp) }
+                                Spacer(Modifier.width(8.dp))
+                                Text(t.title + (t.topicTitle?.let { "  ·  $it" } ?: ""), style = Type.body.copy(fontSize = 15.sp, color = c.graphite,
+                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                     // Matters with no day wait at the end of today, with how long they've been lying there; older ones paler.
-                    if (undated.isNotEmpty()) {
+                    // A topic's undated matters fold under its name; a topic already in the day keeps them under «ещё N дел» there.
+                    val undatedShown = undated.filter { u -> u.topicId == null || plan.deals.none { it.topicId == u.topicId } }
+                    if (undatedShown.isNotEmpty()) {
                         Row(Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(8.dp)).clickable { undatedOpen = !undatedOpen; uiPrefs.edit().putBoolean("undatedOpen", undatedOpen).apply() }.padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Text(s.noDates.uppercase() + " · " + undated.size, style = Type.label.copy(color = c.graphite), modifier = Modifier.weight(1f))
+                            Text(s.noDates.uppercase() + " · " + undatedShown.size, style = Type.label.copy(color = c.graphite), modifier = Modifier.weight(1f))
                             val rot by androidx.compose.animation.core.animateFloatAsState(if (undatedOpen) 0f else -90f, label = "ud")
                             Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.faint, modifier = Modifier.size(18.dp).rotate(rot))
                         }
@@ -1415,9 +1433,9 @@ fun DayBlock(
                             exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.fadeOut()) {
                             Column {
                                 fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
-                                GroupedDeals(undated, today, landed, onOpen, onDone, onLater, onTime, topicOf = topicOf,
+                                GroupedDeals(undatedShown, today, landed, onOpen, onDone, onLater, onTime, topicOf = topicOf,
                                     age = { t -> born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() } },
-                                    faded = { t -> born(t)?.isBefore(today.minusDays(7)) == true })
+                                    faded = { t -> born(t)?.isBefore(today.minusDays(7)) == true }, foldTopics = true)
                             }
                         }
                     }

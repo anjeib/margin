@@ -17,6 +17,11 @@ import ru.anjeib.margin.data.Task
 import ru.anjeib.margin.data.Topics
 import ru.anjeib.margin.data.addRecord
 import ru.anjeib.margin.data.addSlot
+import ru.anjeib.margin.data.addDealPeople
+import ru.anjeib.margin.data.listTasks
+import ru.anjeib.margin.data.questionRow
+import ru.anjeib.margin.data.setDealPlace
+import ru.anjeib.margin.data.setDealRepeat
 import ru.anjeib.margin.data.archivePerson
 import ru.anjeib.margin.data.archiveTopic
 import ru.anjeib.margin.data.dropTask
@@ -70,6 +75,41 @@ class OpsTest {
         assertFalse(back.task("r").done)
         assertNull(back.task("r").doneAt)
         assertEquals(2, back.tasks.size)
+    }
+
+    @Test fun topicsRepeatingMatterLeavesTheNextOne() {
+        val topic = Task(id = "t", title = "Дача", topic = true, subtasks = listOf(Subtask(id = "q", title = "Полить цветы", due = today.toString())))
+        val d0 = AppData(tasks = listOf(topic)).step { it.setDealRepeat("t", "q", Repeat("weekly")) }
+        assertEquals(Repeat("weekly"), d0.sub("t", "q").repeat)
+        val d = d0.step { it.toggleTask("q:t:q", today) }
+        assertTrue(d.sub("t", "q").done)
+        val next = d.task("t").subtasks.single { it.id != "q" }
+        assertEquals(day(7), next.due)
+        assertFalse(next.done)
+        assertEquals(Repeat("weekly"), next.repeat)
+        // Opened and ticked again: still one next matter, not two.
+        val again = d.step { it.toggleTask("q:t:q", today) }.step { it.toggleTask("q:t:q", today) }
+        assertEquals(2, again.task("t").subtasks.size)
+    }
+
+    @Test fun topicsMatterTakesAnotherDayPlaceAndPeople() {
+        val topic = Task(id = "t", title = "Ремонт", topic = true, subtasks = listOf(Subtask(id = "q", title = "Встретить мастера", due = day(1), time = "10:00")))
+        val d = AppData(tasks = listOf(topic)).step { it.addSlot("q:t:q", day(3)) }
+            .step { it.setDealPlace("t", "q", " Ленина, 5 ") }.step { it.addDealPeople("t", "q", listOf("Олег", "Маша", "Олег")) }
+        val q = d.sub("t", "q")
+        assertEquals(listOf(day(1), day(3)), q.slots.map { it.date })
+        assertEquals(day(1), q.due)
+        assertEquals("Ленина, 5", q.place)
+        assertEquals(listOf("Олег", "Маша"), q.people)
+        // The day lists see them the way they see a simple matter's.
+        val row = d.task("t").questionRow(q)
+        assertEquals("Ленина, 5", row.place)
+        assertEquals(listOf("Олег", "Маша"), row.people)
+        assertEquals(2, d.listTasks().count { it.id.startsWith("q:t:q@") })
+        // One day less: a plain date again.
+        val one = d.step { it.removeSlot("q:t:q", q.slots.last().id) }
+        assertTrue(one.sub("t", "q").slots.isEmpty())
+        assertEquals(day(1), one.sub("t", "q").due)
     }
 
     @Test fun droppedRepeatingMatterComesBack() {

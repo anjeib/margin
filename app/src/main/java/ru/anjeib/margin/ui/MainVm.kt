@@ -940,6 +940,11 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     fun setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null) = store.update { it.setQuestionDue(taskId, subId, due, time) }
 
+    /** A topic's matter, the same «+ …» as a simple one: repeat, place, people — set by hand, no AI. */
+    fun setDealRepeat(topicId: String, subId: String, r: ru.anjeib.margin.data.Repeat?) = store.update { it.setDealRepeat(topicId, subId, r) }
+    fun setDealPlace(topicId: String, subId: String, place: String?) = store.update { it.setDealPlace(topicId, subId, place) }
+    fun addDealPeople(topicId: String, subId: String, text: String) = store.update { it.addDealPeople(topicId, subId, ru.anjeib.margin.ai.Commands.items(text)) }
+
     /** «Решено · в архив»: the topic with its materials leaves the lists; news in it brings it back. */
     fun archiveTopic(id: String) {
         val before = data.value

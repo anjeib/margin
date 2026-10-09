@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -315,6 +316,29 @@ fun ClockGlyph(color: Color, size: Dp = 14.dp) = Canvas(Modifier.size(size)) {
     drawPath(Path().apply { moveTo(w * 0.5f, h * 0.3f); lineTo(w * 0.5f, h * 0.5f); lineTo(w * 0.64f, h * 0.6f) }, color, style = stroke(1.4.dp))
 }
 
+/** «+» of the field, on the margin: two thin strokes. */
+@Composable
+fun PlusGlyph(color: Color, size: Dp = 18.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply { moveTo(w * 0.5f, h * 0.2f); lineTo(w * 0.5f, h * 0.8f); moveTo(w * 0.2f, h * 0.5f); lineTo(w * 0.8f, h * 0.5f) }, color, style = stroke(1.5.dp))
+}
+
+/** Dictation: a slim capsule on its stand, the same line as the clock and the calendar. */
+@Composable
+fun MicGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawRoundRect(color, topLeft = Offset(w * 0.37f, h * 0.1f), size = Size(w * 0.26f, h * 0.5f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.13f), style = stroke(1.5.dp))
+    drawArc(color, startAngle = 0f, sweepAngle = 180f, useCenter = false, topLeft = Offset(w * 0.24f, h * 0.3f), size = Size(w * 0.52f, h * 0.46f), style = stroke(1.5.dp))
+    drawPath(Path().apply { moveTo(w * 0.5f, h * 0.76f); lineTo(w * 0.5f, h * 0.9f); moveTo(w * 0.38f, h * 0.9f); lineTo(w * 0.62f, h * 0.9f) }, color, style = stroke(1.5.dp))
+}
+
+/** Send: a thin arrow up, drawn inside the small terracotta circle. */
+@Composable
+fun SendGlyph(color: Color, size: Dp = 16.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply { moveTo(w * 0.5f, h * 0.86f); lineTo(w * 0.5f, h * 0.16f); moveTo(w * 0.22f, h * 0.43f); lineTo(w * 0.5f, h * 0.15f); lineTo(w * 0.78f, h * 0.43f) }, color, style = stroke(1.8.dp))
+}
+
 /** A meeting from the phone's calendar. */
 @Composable
 fun CalendarGlyph(color: Color, size: Dp = 14.dp) = Canvas(Modifier.size(size)) {
@@ -354,6 +378,13 @@ fun PageHead(title: String, subtitle: String? = null, modifier: Modifier = Modif
 /** The rule behind a whole screen, the same on every one. */
 @Composable
 fun Modifier.screenRule(): Modifier = marginRule(M.c.accent.copy(alpha = 0.85f), over = true)
+
+/** The same rule under the field at the bottom: drawn behind, so bubbles and pills over it keep their ground. */
+@Composable
+fun Modifier.fieldRule(): Modifier = marginRule(M.c.accent.copy(alpha = 0.85f))
+
+/** Where the field's words begin when its column is padded 14 dp from the edge: just right of the rule. */
+val FieldLead = MarginW - 14.dp + 4.dp
 
 /** A petrol word, medium — a link as everywhere in the app (no underline); [quiet] — graphite. */
 @Composable
@@ -467,3 +498,32 @@ fun continueList(old: String, new: String): String {
 }
 
 /** Hours and dates on the margin of lists — the same everywhere: today stays ink in lists of things (not a timeline). */
+
+/** The ground a row stands on: the page, or the soft block it sits in — rows paint it under themselves for swipes. */
+val LocalRowGround = androidx.compose.runtime.compositionLocalOf<Color?> { null }
+
+/**
+ * One thing of the day on its own soft block: a matter, an idea, a file — or all of one topic's matters together.
+ * The block reaches a little into the gap by the rule, so the words keep their line with everything else on the page.
+ */
+@Composable
+fun Tile(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val ground = M.c.card
+    androidx.compose.runtime.CompositionLocalProvider(LocalRowGround provides ground) {
+        Column(
+            modifier.padding(vertical = 4.dp).bleedStart(TileInset).fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                .background(ground).padding(start = TileInset, end = 10.dp, top = 2.dp, bottom = 2.dp),
+            content = content,
+        )
+    }
+}
+
+private val TileInset = 9.dp
+
+/** Lays the content [d] wider and further left than its slot — a ground that starts before the words do. */
+private fun Modifier.bleedStart(d: Dp): Modifier = this.layout { m, c ->
+    val px = d.roundToPx()
+    if (!c.hasBoundedWidth) { val p = m.measure(c); return@layout layout(p.width, p.height) { p.place(0, 0) } }
+    val p = m.measure(c.copy(minWidth = (c.minWidth + px).coerceAtMost(c.maxWidth + px), maxWidth = c.maxWidth + px))
+    layout((p.width - px).coerceAtLeast(0), p.height) { p.place(-px, 0) }
+}

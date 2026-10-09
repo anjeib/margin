@@ -110,8 +110,9 @@ fun MenuGlyph(color: Color = M.c.ink) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun CheckCircle(done: Boolean, size: Dp = 24.dp, onToggle: () -> Unit) {
+fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, onToggle: () -> Unit) {
     val c = M.c
     // Smaller and finer than the touch target: a hairline ring with a whisper of a tick; done — filled sage, the tick white.
     val d = size * 0.8f
@@ -121,7 +122,9 @@ fun CheckCircle(done: Boolean, size: Dp = 24.dp, onToggle: () -> Unit) {
         Modifier
             .size(size + 16.dp)
             .clip(CircleShape)
-            .toggleable(value = done, role = androidx.compose.ui.semantics.Role.Checkbox, onValueChange = { onToggle() }),
+            // In a card the long press holds what the corner menu used to: tomorrow, a week, not doing it, delete.
+            .then(if (onLong == null) Modifier.toggleable(value = done, role = androidx.compose.ui.semantics.Role.Checkbox, onValueChange = { onToggle() })
+                else Modifier.combinedClickable(role = androidx.compose.ui.semantics.Role.Checkbox, onLongClick = onLong, onClick = onToggle)),
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.size(d).clip(CircleShape).background(fill).border(1.1.dp, ring, CircleShape), contentAlignment = Alignment.Center) {

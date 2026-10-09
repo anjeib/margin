@@ -327,8 +327,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             }
         }
         // ---- composer: words go to the feed, on «Вопросы» they become a question ----
-        Column(Modifier.background(c.bg).padding(horizontal = 14.dp).padding(top = 6.dp, bottom = 10.dp)) {
-            notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> NoticeLine(nt, vm) }
+        Column(Modifier.background(c.bg).fieldRule().padding(horizontal = 14.dp).padding(top = 6.dp, bottom = 10.dp)) {
+            notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> Box(Modifier.padding(start = FieldLead)) { NoticeLine(nt, vm) } }
             val under = addUnder
             SmartComposer(
                 vm, if (under != null) "«" + under.second.take(40) + "»" else if (dealsOnly) s.newQuestionHint else s.writeInTopic, busy == scopeKey,
@@ -367,7 +367,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             dismissButton = { TextButton({ vm.misparsed(task.source.orEmpty(), "card", listOfNotNull(task.title, task.whenLabel()).joinToString(" · ")); dialog = null }) { Text(s.misparsed, color = c.link) } },
         )
     }
-    dealQ?.let { id -> DealSheet(task, id, vm, onClose = { dealQ = null }, onOpenTopic = null) }
+    dealQ?.let { id -> DealSheet(task, id, vm, onClose = { dealQ = null }, onOpenTopic = null, onOpenPerson = { dealQ = null; onOpenPerson(it) }) }
     editNote?.let { e -> TextDialog(s.edit, e.text, "", onDismiss = { editNote = null }) { v -> vm.editEntryText("task:${task.id}", e.id, v); editNote = null } }
     editQ?.let { q -> TextDialog(s.edit, q.title, "", onDismiss = { editQ = null }) { v -> vm.renameSubtask(task.id, q.id, v); editQ = null } }
     timeQ?.let { q -> TimeDialog(q.time, onDismiss = { timeQ = null }) { tm -> vm.setTime("q:${task.id}:${q.id}", tm); timeQ = null } }

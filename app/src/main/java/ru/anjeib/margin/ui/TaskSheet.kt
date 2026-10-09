@@ -146,43 +146,43 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
         sheetState = sheet,
         containerColor = c.bg,
         scrimColor = c.scrim,
-        dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 2.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) },
+        // The handle, and by it a quiet «✓ Сохранено» after a change by hand.
+        dragHandle = {
+            Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp)) {
+                Box(Modifier.align(Alignment.Center).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline))
+                androidx.compose.animation.AnimatedVisibility(savedAt > 0, Modifier.align(Alignment.CenterEnd).padding(end = 18.dp),
+                    enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+                    Text("✓ " + s.savedTick, style = Type.small.copy(color = c.ok, fontSize = 12.5.sp))
+                }
+            }
+        },
     ) {
         val maxH = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.92f).dp
         // The sheet itself lifts above the keyboard, so the content gives up exactly the keyboard's height.
         val ime = androidx.compose.foundation.layout.WindowInsets.ime.asPaddingValues().calculateBottomPadding()
 
         // Opens on half the screen (owner's call), grows with what is in it up to nearly all of it; the input at the bottom.
-        val half = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.5f).dp
+        val half = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.6f).dp
         Column(Modifier.fillMaxWidth().heightIn(max = (maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
             // «Поля»: the rule down the card, the day and hour on the margin, everything else right of it.
             // At least half the screen with the field right under it; a longer card grows, the field stays below.
             Column(Modifier.weight(1f, fill = false).heightIn(min = (half - 76.dp).coerceAtLeast(120.dp)).screenRule().verticalScroll(rememberScrollState())) {
-                Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.width(MarginW + MarginGap))
-                    androidx.compose.animation.AnimatedVisibility(savedAt > 0, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
-                        Text("✓ " + s.savedTick, style = Type.small.copy(color = c.ok, fontSize = 12.5.sp))
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Box(Modifier.padding(end = 8.dp)) {
-                        Box(Modifier.size(40.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.MoreHoriz, null, tint = c.graphite)
-                        }
-                        SoftMenu(menu, { menu = false }) {
-                            if (!task.done) {
-                                SoftMenuItem(s.swipeTomorrow) { menu = false; vm.postpone(task.id, 1) }
-                                SoftMenuItem(s.plusWeek) { menu = false; vm.postpone(task.id, 7) }
-                                SoftMenuItem(s.wontDo) { menu = false; commitTitle(); vm.dropTask(task.id); onClose() }
-                            }
-                            SoftMenuItem(s.toNote) { menu = false; commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }
-                            SoftMenuItem(s.delete, danger = true) { menu = false; dialog = "delete" }
-                        }
-                    }
-                }
                 // The tick and the words right of the rule; the day and the hour just below, each with its glyph.
-                Margined {
+                Margined(Modifier.padding(top = 6.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
-                        Box(Modifier.offset(x = (-8).dp)) { CheckCircle(task.done, size = 24.dp) { vm.toggleTask(task.id) } }
+                        // No corner menu (owner's call): its few things are on a long press of the tick.
+                        Box(Modifier.offset(x = (-8).dp)) {
+                            CheckCircle(task.done, size = 24.dp, onLong = { menu = true }) { vm.toggleTask(task.id) }
+                            SoftMenu(menu, { menu = false }) {
+                                if (!task.done) {
+                                    SoftMenuItem(s.swipeTomorrow) { menu = false; vm.postpone(task.id, 1) }
+                                    SoftMenuItem(s.plusWeek) { menu = false; vm.postpone(task.id, 7) }
+                                    SoftMenuItem(s.wontDo) { menu = false; commitTitle(); vm.dropTask(task.id); onClose() }
+                                }
+                                SoftMenuItem(s.toNote) { menu = false; commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }
+                                SoftMenuItem(s.delete, danger = true) { menu = false; dialog = "delete" }
+                            }
+                        }
                         BasicTextField(
                             value = title, onValueChange = { title = it },
                             textStyle = Type.title.copy(color = if (task.done) c.graphite else c.ink, fontSize = 28.sp, lineHeight = 34.sp),
@@ -238,11 +238,11 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         }
                     }
                 }
+                Hairline(Modifier.padding(start = MarginW, top = 16.dp))  // the comments begin under this line
                 // The user's own comments: typed right on the page, each with its day and hour on the margin, no AI.
                 WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 10.dp),
                     onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
                     onAdd = { t, at -> vm.addComment(task.id, t, at); savedAt = System.currentTimeMillis() })
-                Hairline(Modifier.padding(start = MarginW, top = 14.dp))
                 // Where it came from — below the shared part of every matter's card, quietly.
                 Margined(Modifier.padding(top = 6.dp)) {
                     Column {
@@ -370,12 +370,12 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
             }
 
             // Scoped composer — everything about this task is said here.
-            Column(Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
-                notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> NoticeLine(nt, vm) }
+            Column(Modifier.fieldRule().padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
+                notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> Box(Modifier.padding(start = FieldLead)) { NoticeLine(nt, vm) } }
                 // A name here that isn't a contact was tapped: the same quiet offer as on the main screen.
                 val offer by vm.contactOffer.collectAsState()
                 offer?.let { n ->
-                    Row(Modifier.fillMaxWidth().padding(start = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(start = FieldLead, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(s.notAContact(n), style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
                         QuietLink(s.addContact) { vm.keepContact(n) }
                     }
@@ -442,7 +442,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
 }
 
 @Composable
-private fun RepeatDialog(task: Task, onDismiss: () -> Unit, onPick: (ru.anjeib.margin.data.Repeat?) -> Unit) {
+internal fun RepeatDialog(task: Task, onDismiss: () -> Unit, onPick: (ru.anjeib.margin.data.Repeat?) -> Unit) {
     val c = M.c
     val s = M.s
     val dow = (task.dueDate ?: LocalDate.now()).dayOfWeek.value
@@ -464,7 +464,7 @@ private fun RepeatDialog(task: Task, onDismiss: () -> Unit, onPick: (ru.anjeib.m
                     val sel = task.repeat == r
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (sel) c.linkSoft else c.card)
                         .clickable { onPick(r) }.padding(horizontal = 12.dp, vertical = 12.dp)) {
-                        Text(label + (r?.let { if (it.freq == "weekly" && it.days.size == 1) " · " + it.label() else "" } ?: ""),
+                        Text(r?.takeIf { it.freq == "weekly" && it.days.size == 1 }?.label()?.replaceFirstChar { it.uppercase() } ?: label,
                             style = Type.body.copy(color = if (sel) c.link else c.ink))
                     }
                 }
@@ -478,7 +478,7 @@ private fun RepeatDialog(task: Task, onDismiss: () -> Unit, onPick: (ru.anjeib.m
 /** The days of a matter done on several days: each a small chip with its own tick; a long press takes the day away. */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-private fun DaysProp(slots: List<ru.anjeib.margin.data.Slot>, onToggle: (String) -> Unit, onRemove: (String) -> Unit) {
+internal fun DaysProp(slots: List<ru.anjeib.margin.data.Slot>, onToggle: (String) -> Unit, onRemove: (String) -> Unit) {
     val c = M.c
     val today = LocalDate.now()
     Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
@@ -503,7 +503,7 @@ private fun DaysProp(slots: List<ru.anjeib.margin.data.Slot>, onToggle: (String)
 /** One day picked for «+ день». */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OneDayDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
+internal fun OneDayDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
     val c = M.c
     val s = M.s
     val st = androidx.compose.material3.rememberDatePickerState()

@@ -58,13 +58,30 @@ private fun AppData.onSlotOwner(base: String, task: (Task) -> Task, sub: (Subtas
 fun AppData.toggleSlot(base: String, slotId: String) = onSlotOwner(base, { it.toggleSlot(slotId) }, { it.toggleSlot(slotId) })
 
 /** «+ день»: one more day for the matter; its single date becomes the first of the days. */
-fun AppData.addSlot(taskId: String, date: String) = editTask(taskId) { t ->
+fun AppData.addSlot(taskId: String, date: String): AppData {
+    questionRef(taskId)?.let { (tid, qid) ->
+        return editDeal(tid, qid) { q -> q.copy(slots = (if (q.slots.isEmpty()) listOfNotNull(q.due?.let { Slot(date = it, time = q.time) }) else q.slots) + Slot(date = date)).syncSlots() }
+    }
+    return addTaskSlot(taskId, date)
+}
+
+private fun AppData.addTaskSlot(taskId: String, date: String) = editTask(taskId) { t ->
     val base = if (t.slots.isEmpty()) listOfNotNull((t.due ?: t.start)?.let { Slot(date = it, time = t.time) }) else t.slots
     t.copy(slots = base + Slot(date = date)).syncSlots()
 }
 
 /** One day less; the last one left becomes a plain date again. */
-fun AppData.removeSlot(taskId: String, slotId: String) = editTask(taskId) { t ->
+fun AppData.removeSlot(taskId: String, slotId: String): AppData {
+    questionRef(taskId)?.let { (tid, qid) ->
+        return editDeal(tid, qid) { q ->
+            val l = q.slots.filterNot { it.id == slotId }
+            if (l.size <= 1) q.copy(slots = emptyList(), due = l.firstOrNull()?.date ?: q.due, time = l.firstOrNull()?.time ?: q.time) else q.copy(slots = l).syncSlots()
+        }
+    }
+    return removeTaskSlot(taskId, slotId)
+}
+
+private fun AppData.removeTaskSlot(taskId: String, slotId: String) = editTask(taskId) { t ->
     val l = t.slots.filterNot { it.id == slotId }
     if (l.size <= 1) t.copy(slots = emptyList(), due = l.firstOrNull()?.date ?: t.due, time = l.firstOrNull()?.time ?: t.time) else t.copy(slots = l).syncSlots()
 }

@@ -66,6 +66,17 @@ fun AppData.setTime(id: String, time: String?, today: LocalDate = LocalDate.now(
     return editTask(id) { t -> t.copy(time = time, due = t.due ?: if (time != null && t.start == null) today.toString() else t.due, remindAt = null).autoReminded() }
 }
 
+/** One topic's matter changed by hand: its repeat, place, people. */
+fun AppData.editDeal(topicId: String, subId: String, f: (Subtask) -> Subtask) = editTask(topicId) { t -> t.copy(subtasks = t.subtasks.mapTree(subId, f)) }
+
+fun AppData.setDealRepeat(topicId: String, subId: String, r: Repeat?, today: LocalDate = LocalDate.now()) =
+    editDeal(topicId, subId) { it.copy(repeat = r, due = it.due ?: if (r != null) today.toString() else null) }
+
+fun AppData.setDealPlace(topicId: String, subId: String, place: String?) = editDeal(topicId, subId) { it.copy(place = place?.trim()?.ifBlank { null }) }
+
+fun AppData.addDealPeople(topicId: String, subId: String, names: List<String>) =
+    editDeal(topicId, subId) { q -> q.copy(people = (q.people + names.map { it.trim() }.filter { it.isNotEmpty() && it != q.assignee }).distinct()) }
+
 fun AppData.setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null) = editTask(taskId) { t ->
     t.copy(subtasks = t.subtasks.mapTree(subId) { it.copy(due = due, time = if (due == null) null else time ?: it.time) })
 }

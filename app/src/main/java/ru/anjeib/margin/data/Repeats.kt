@@ -42,6 +42,14 @@ fun Task.nextOccurrence(today: LocalDate = LocalDate.now()): Task? {
     )
 }
 
+/** A topic's repeating matter, done: the next one, on its next day, with nothing of the old one's notes. */
+fun Subtask.nextOccurrence(today: LocalDate = LocalDate.now()): Subtask? {
+    val r = repeat ?: return null
+    var next = r.next(due?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today)
+    while (next.isBefore(today)) next = r.next(next)
+    return copy(id = newId(), due = next.toString(), done = false, doneAt = null, children = emptyList(), slots = emptyList(), comments = emptyList(), note = null)
+}
+
 private val dayNamesRu = listOf("пн", "вт", "ср", "чт", "пт", "сб", "вс")
 private val dayNamesEn = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
@@ -51,9 +59,17 @@ fun Repeat.label(): String {
     return when (freq) {
         "daily" -> if (n == 1) (if (ru) "каждый день" else "every day") else (if (ru) "раз в $n дн." else "every $n days")
         "weekly" -> {
-            val d = days.sorted().joinToString(", ") { (if (ru) dayNamesRu else dayNamesEn)[(it - 1).coerceIn(0, 6)] }
+            val sorted = days.sorted()
+            val d = sorted.joinToString(", ") { (if (ru) dayNamesRu else dayNamesEn)[(it - 1).coerceIn(0, 6)] }
             val base = if (n == 1) (if (ru) "каждую неделю" else "weekly") else (if (ru) "раз в $n нед." else "every $n weeks")
-            if (d.isEmpty()) base else if (n == 1) (if (ru) "по $d" else "every $d") else "$base: $d"
+            // «каждая пт», «каждый пн», «каждое вс», «каждые пн, чт» (owner's wording), «по будням».
+            val every = when {
+                !ru -> "every $d"
+                sorted == listOf(1, 2, 3, 4, 5) -> "по будням"
+                sorted.size > 1 -> "каждые $d"
+                else -> when (sorted.single()) { 3, 5, 6 -> "каждая"; 7 -> "каждое"; else -> "каждый" } + " " + d
+            }
+            if (d.isEmpty()) base else if (n == 1) every else "$base: $d"
         }
         "monthly" -> if (n == 1) (if (ru) "каждый месяц" else "monthly") else (if (ru) "раз в $n мес." else "every $n months")
         "yearly" -> if (ru) "каждый год" else "yearly"
