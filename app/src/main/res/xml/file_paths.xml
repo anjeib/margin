@@ -2,4 +2,5 @@
 <paths>
     <cache-path name="export" path="export/" />
     <files-path name="att" path="att/" />
+    <files-path name="feedback" path="feedback/" />
 </paths>

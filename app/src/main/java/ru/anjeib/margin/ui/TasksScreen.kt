@@ -189,6 +189,8 @@ fun TaskList(
     onOpenNote: (String) -> Unit,
     onOpenNotes: () -> Unit = {},
     onOpenInbox: () -> Unit = {},
+    /** A phrase into the main field, not sent («Попробуйте» on an empty Today). */
+    onTry: (String) -> Unit = {},
     contentPadding: PaddingValues,
 ) {
     val landed by vm.landed.collectAsState()
@@ -317,6 +319,20 @@ fun TaskList(
                             onOpen = onOpen, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = landed,
                             undated = if (p.date == today) undatedAll else emptyList(),
                             top = if (p.date == today) ({ TodaySummary(p, promises, today, onOpen) }) else null)
+                    }
+                }
+                // Nothing written yet: three phrases to try — a tap puts one into the field, the user sends it.
+                if (data.tasks.isEmpty() && data.queue.isEmpty()) plain("try") {
+                    Column(Modifier.padding(top = 12.dp)) {
+                        Text(s.tryHint, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+                        androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            s.tryExamples.forEach { ex ->
+                                Text(ex, style = Type.small.copy(color = c.link, fontSize = 14.sp),
+                                    modifier = Modifier.clip(RoundedCornerShape(50)).background(c.linkSoft).clickable { onTry(ex) }
+                                        .padding(horizontal = 12.dp, vertical = 7.dp))
+                            }
+                        }
                     }
                 }
                 // Written without internet: one quiet line here, the items themselves live in «Входящие».

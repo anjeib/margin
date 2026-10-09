@@ -9,6 +9,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.withLink
 
 import ru.anjeib.margin.data.questionRow
+import ru.anjeib.margin.data.whenLabel
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -342,6 +343,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             title = { Text(s.youWrote, style = Type.cardTitle.copy(color = c.ink)) },
             text = { Text(task.source.orEmpty().sentence(), style = Type.body.copy(color = c.ink)) },
             confirmButton = { TextButton({ dialog = null }) { Text(s.closeWord2, color = c.graphite) } },
+            // Beta: what was written and what it became, for the developer's log.
+            dismissButton = { TextButton({ vm.misparsed(task.source.orEmpty(), "card", listOfNotNull(task.title, task.whenLabel()).joinToString(" · ")); dialog = null }) { Text(s.misparsed, color = c.link) } },
         )
     }
     editNote?.let { e -> TextDialog(s.edit, e.text, "", onDismiss = { editNote = null }) { v -> vm.editEntryText("task:${task.id}", e.id, v); editNote = null } }

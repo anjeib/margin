@@ -86,6 +86,8 @@ fun Tray(
     onAskWhen: (taskId: String, what: String) -> Unit = { _, _ -> },
     onKeepContact: (String) -> Unit = {},
     onMoveTo: (String) -> Unit = {},
+    /** «Разобрало не так»: the words, who read them (phone or AI) and what came out. */
+    onMisparse: (Pending, String) -> Unit = { _, _ -> },
 ) {
     val c = M.c
     val s = M.s
@@ -123,13 +125,13 @@ fun Tray(
                         contentKey = { it?.id ?: "raw" },
                         label = "bubble",
                     ) { p ->
-                        if (p != null) ResultBubble(p, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen, onKeepContact, onMoveTo)
+                        if (p != null) ResultBubble(p, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen, onKeepContact, onMoveTo, onMisparse)
                         else UserBubble(m, working = busy && m.id == lastUser)
                     }
                 } else AssistantMsg(m, canUndo(m.id), onUndo = { onUndo(m.id) }, onOpenTask = onOpenTask, onOption = onOption, onOpenSettings = onOpenSettings)
             }
             // A result without a user bubble (e.g. from a suggestion) still gets its own bubble.
-            if (pending != null && msgs.none { it.id == pending.userMsgId }) ResultBubble(pending, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen, onKeepContact, onMoveTo)
+            if (pending != null && msgs.none { it.id == pending.userMsgId }) ResultBubble(pending, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen, onKeepContact, onMoveTo, onMisparse)
         }
     }
 }
@@ -165,7 +167,8 @@ private fun Dots(color: androidx.compose.ui.graphics.Color) {
 
 @Composable
 private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, onEdit: () -> Unit, onReject: () -> Unit, onHold: () -> Unit, onSeparate: () -> Unit = {},
-                         onAskWhen: (String, String) -> Unit = { _, _ -> }, onKeepContact: (String) -> Unit = {}, onMoveTo: (String) -> Unit = {}) {
+                         onAskWhen: (String, String) -> Unit = { _, _ -> }, onKeepContact: (String) -> Unit = {}, onMoveTo: (String) -> Unit = {},
+                         onMisparse: (Pending, String) -> Unit = { _, _ -> }) {
     val c = M.c
     val s = M.s
     val after = p.preview.data
@@ -234,6 +237,7 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
     ).joinToString(" · ")
 
     var picking by remember(p.id) { mutableStateOf(false) }
+    var reported by remember(p.id) { mutableStateOf(false) }
     val touched = p.preview.touchedTasks.toSet()
     val moveTargets = remember(p.id) {
         current.tasks.filter { it.topic && !it.done && it.id !in touched }
@@ -276,6 +280,11 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
             if (appended) QuietLink(s.toSeparateNote, onSeparate)
             QuietLink(s.edit, onEdit)
             QuietLink(s.undo, onReject)
+            // Beta: the words and what came of them go to the developer's log; the bubble stays so it can still be fixed.
+            if (!reported) QuietLink(s.misparsed) {
+                onHold(); reported = true
+                onMisparse(p, lines.joinToString(" | ") { (t, m) -> if (m.isBlank()) t else "$t — $m" } + if (kind.isNotBlank()) " [$kind]" else "")
+            }
         }
         if (picking) Column(Modifier.padding(start = 48.dp, top = 2.dp).widthIn(max = 320.dp).clip(RoundedCornerShape(14.dp)).background(c.card)) {
             moveTargets.forEach { t ->

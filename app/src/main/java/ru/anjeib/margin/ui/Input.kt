@@ -103,6 +103,8 @@ fun SmartComposer(
     onModeClose: () -> Unit = {},
     /** Changes when the field should take focus (and the keyboard come up) by itself. */
     focusKey: Any? = null,
+    /** Changes when dictation should start by itself («Надиктовать» on the app icon). */
+    micKey: Any? = null,
     /** The send button works with nothing typed (forwarding: the words are already there). */
     sendEmpty: Boolean = false,
     /** «/» offers what it is (дело / тема / идея) and where it belongs (работа / личное) — the main field only. */
@@ -132,7 +134,12 @@ fun SmartComposer(
     LaunchedEffect(prefill) { if (!prefill.isNullOrBlank()) { text = prefill; if (modeLabel != null) fromMode = prefill; onPrefillUsed() } }
     LaunchedEffect(modeLabel) { if (modeLabel == null) { if (fromMode != null && text == fromMode) text = ""; fromMode = null } }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(focusKey) { if (focusKey != null) { delay(150); runCatching { focus.requestFocus() } } }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    // Asked again a moment later: opened from the quick-settings tile, the window gets its focus only after the shade closes.
+    LaunchedEffect(focusKey) {
+        if (focusKey == null) return@LaunchedEffect
+        repeat(2) { delay(if (it == 0) 150L else 450L); runCatching { focus.requestFocus() }; keyboard?.show() }
+    }
     LaunchedEffect(text, files.size, recorder) { onTyping(text.isNotEmpty() || files.isNotEmpty() || recorder != null) }
 
     fun add(a: Attachment?) { if (a != null) files += a }
@@ -178,6 +185,7 @@ fun SmartComposer(
     }
 
     fun mic() {
+        if (recorder != null) return
         if (!settings.voiceAi) {
             val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -188,6 +196,8 @@ fun SmartComposer(
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRecording()
         else askMic.launch(Manifest.permission.RECORD_AUDIO)
     }
+
+    LaunchedEffect(micKey) { if (micKey != null) { delay(300); mic() } }
 
     Column(modifier.fillMaxWidth()) {
         // «/…», «#…», «@…» at the end of the words: a small window of choices, one over another.
@@ -329,7 +339,7 @@ fun SmartComposer(
             if (text.isBlank() && !busy) {
                 if (transcribing) Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = c.link, strokeWidth = 1.6.dp, modifier = Modifier.size(18.dp))
-                } else RoundIcon(Icons.Outlined.Mic, c.graphite, s.a11yMic, onClick = ::mic)
+                } else RoundIcon(Icons.Outlined.Mic, c.accent, s.a11yMic, onClick = ::mic)
             }
             Spacer(Modifier.width(4.dp))
             val enabled = (text.isNotBlank() || files.isNotEmpty() || sendEmpty) && !busy

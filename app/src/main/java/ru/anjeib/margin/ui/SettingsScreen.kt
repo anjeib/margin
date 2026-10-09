@@ -123,11 +123,8 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             }
         }
 
-        Group(s.forwardSection) {
-            // The own Telegram bot and mail need setup and a server-side redo — only in the developer section for now.
-            Text(s.forwardHowTo, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
-            if (settings.devMode) { Divider(); ForwardSettings(vm) }
-        }
+        // How to share into Margin is a matter for «Помощь»; here only the developer's own bot and mail, which need setup.
+        if (settings.devMode) Group(s.forwardSection) { ForwardSettings(vm) }
 
         Group(s.appearance) {
             Segmented(
@@ -156,9 +153,10 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         // Sample data: to try everything without filling it by hand; the user's own data waits aside.
         var demoAsk by remember { mutableStateOf(false) }
         var mineKept by remember { mutableStateOf(vm.hasMine()) }
-        Group(s.demoSection) {
-            ValueRow(s.demoLoad, s.demoLoadHint, "", onClick = { demoAsk = true })
-            if (mineKept) { Divider(); ValueRow(s.demoRestore, s.demoRestoreHint, "", onClick = { vm.restoreMine(); mineKept = false }) }
+        // Outside the demo build the sample is offered once, at first start; here only the way back to one's own records.
+        if (ru.anjeib.margin.BuildConfig.DEMO || mineKept || settings.devMode) Group(s.demoSection) {
+            if (ru.anjeib.margin.BuildConfig.DEMO || settings.devMode) ValueRow(s.demoLoad, s.demoLoadHint, "", onClick = { demoAsk = true })
+            if (mineKept) { if (ru.anjeib.margin.BuildConfig.DEMO || settings.devMode) Divider(); ValueRow(s.demoRestore, s.demoRestoreHint, "", onClick = { vm.restoreMine(); mineKept = false }) }
         }
         if (demoAsk) androidx.compose.material3.AlertDialog(onDismissRequest = { demoAsk = false }, containerColor = c.card,
             title = { Text(s.demoAskTitle, style = Type.cardTitle.copy(color = c.ink)) },
@@ -223,6 +221,8 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                     Text(s.aiUndoLine(when (w) { "main" -> s.tasks; "task" -> s.inTaskWord; else -> s.notes }, n, u),
                         style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
                 }
+                // The same numbers that go into a tester's e-mail.
+                Text(vm.betaStats(), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(top = 4.dp))
             }
                     Divider()
             ToggleRow(s.voiceAi, s.voiceAiHint, settings.voiceAi) { v -> vm.updateSettings { it.copy(voiceAi = v) } }

@@ -24,6 +24,7 @@
     </queries>
 
     <application
+        android:name=".MarginApp"
         android:allowBackup="true"
         android:backupAgent=".data.MarginBackupAgent"
         android:fullBackupOnly="true"
@@ -44,6 +45,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- «Записать» in the quick settings. -->
+        <service
+            android:name=".notify.WriteTile"
+            android:exported="true"
+            android:icon="@drawable/ic_write"
+            android:label="@string/shortcut_write"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- «Поделиться» и «В Margin» в меню выделенного текста: из Telegram, MAX, почты, браузера. -->
         <activity

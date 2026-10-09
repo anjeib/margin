@@ -47,6 +47,7 @@ import ru.anjeib.margin.data.contact
 import ru.anjeib.margin.data.Prefs
 import ru.anjeib.margin.data.Settings
 import ru.anjeib.margin.data.Store
+import ru.anjeib.margin.data.Feedback
 import ru.anjeib.margin.data.Subtask
 import ru.anjeib.margin.data.Task
 import ru.anjeib.margin.data.mapTree
@@ -266,6 +267,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun send(text: String, smart: Boolean = false, label: String? = null, scope: Scope = Scope.Main, files: List<Attachment> = emptyList(), asQuestion: Boolean = false, movedHere: Boolean = false) {
         // «/дело», «/тема», «/идея», «/работа», «/личное» — said by the user, so they decide; the AI only fills in the rest.
         val tg = parseTags(text)
+        lastSaid = tg.text to text
         val t = tg.text
         val tagKind = tg.kind
         val tagSphere = tg.sphere
@@ -323,6 +325,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             val offline = !Processor.online(ctx) || !Processor.ready(s)
             if (local.items.isNotEmpty() && (offline || mode == "local" || tg.explicit || (mode == "auto" && local.sure))) {
                 val plan = LocalParser.plan(local, scope, asQuestion, source = t)
+                count("parse:phone")
                 if (scope == Scope.Main) propose(plan, files, userId, false, source) else applyScoped(plan, scope, files, source, movedHere)
                 return
             }
@@ -355,6 +358,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                     smart = smart, complex = Assistant.isComplex(t, scope), images = images,
                 )
                 prefs.addSpend(cost)
+                if (!smart) count("parse:ai")
                 // «Исправить …» changes what exists — whatever the model thought, nothing new is made.
                 val plan = when (cmd?.what) {
                     "fix" -> plan0.copy(actions = plan0.actions.filterNot { a -> a["type"]?.toString()?.trim('"')?.startsWith("create_") == true })
@@ -730,7 +734,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** Cancel before anything was saved: the bubble simply goes away. */
     fun rejectPending() {
-        if (_pending.value?.plan?.local == false) { count("ai:main"); count("undo:main") }
+        if (_pending.value?.plan?.local == false) { count("ai:main"); count("undo:main") } else if (_pending.value != null) count("undo:phone")
         autoJob?.cancel()
         val p = _pending.value
         _pending.value = null
@@ -850,6 +854,28 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private val stats get() = ctx.getSharedPreferences("stats", android.content.Context.MODE_PRIVATE)
     private fun count(key: String) { stats.edit().putInt(key, stats.getInt(key, 0) + 1).apply() }
     private fun aiChanged(id: String, where: String) { aiChanges[id] = where; count("ai:$where") }
+
+    /** For beta reports: how much the phone read itself, how much went to the AI, how often each was undone, the AI's cost. */
+    fun betaStats(): String {
+        val st = stats
+        val spent = settings.value.let { if (it.spentMonth == java.time.YearMonth.now().toString()) it.spentRub else 0.0 }
+        return "parse: phone ${st.getInt("parse:phone", 0)} (undo ${st.getInt("undo:phone", 0)}) · ai ${st.getInt("parse:ai", 0)} (undo ${st.getInt("undo:main", 0)})" +
+            " · misparsed ${Feedback.misparsedCount(ctx)} · ai ${"%.2f".format(spent)} ₽/month"
+    }
+
+    /** «Разобрало не так» on the result bubble: the words and what came of them go to the log for the developer. */
+    fun misparsed(text: String, by: String, got: String) {
+        Feedback.misparsed(ctx, Feedback.Misparse(at = java.time.LocalDateTime.now().toString().take(16), text = text, by = by, got = got))
+        count("misparsed")
+        _toast.value = L.s.misparsedThanks
+    }
+
+    /** The same from a result bubble: the words exactly as typed (marks included), not as the tags left them. */
+    fun misparsed(p: Pending, got: String) =
+        misparsed(lastSaid?.takeIf { p.source.endsWith(it.first) }?.second ?: p.source, if (p.plan.local) "phone" else "ai", got)
+
+    /** The last words sent: without marks (what the parsers read) → as typed. */
+    private var lastSaid: Pair<String, String>? = null
 
     /** «ИИ: 120 изменений, отменено 3» per place — read in the developer section. */
     fun aiStats(): List<Triple<String, Int, Int>> = listOf("main", "task", "notes").map { w -> Triple(w, stats.getInt("ai:$w", 0), stats.getInt("undo:$w", 0)) }

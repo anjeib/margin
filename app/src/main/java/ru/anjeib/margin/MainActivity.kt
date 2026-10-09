@@ -34,6 +34,8 @@ import java.io.File
 class MainActivity : ComponentActivity() {
     private val vm: MainVm by viewModels()
     private val shared = mutableStateOf<String?>(null)
+    /** «Записать» / «Надиктовать» from the quick-settings tile or a long press on the icon; the time makes each one new. */
+    private val launch = mutableStateOf<Pair<String, Long>?>(null)
     /** A message copied in another app a moment ago (MAX, Telegram «Копировать»): offered as «Вставить скопированное». */
     private val copied = mutableStateOf<Long?>(null)
 
@@ -42,6 +44,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // Recreated (rotation, theme) or reopened from recents: the shared text was already taken in.
         if (savedInstanceState == null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) readShare(intent)
+        publishShortcuts()
         // Permissions are asked in onboarding (first run) — no system dialog on top of it.
         Reminders.scheduleDaily(this)
         // The daily file copy is gone (3.10): drop its job where earlier versions scheduled it.
@@ -71,6 +74,7 @@ class MainActivity : ComponentActivity() {
                     isContact = { n -> d.persons.any { it.isContact && it.matches(n) } }, onName = vm::nameTapped,
                 )) {
                 App(vm, shared.value, onSharedConsumed = { shared.value = null },
+                    launch = launch.value, onLaunchUsed = { launch.value = null },
                     copied = copied.value != null,
                     readCopied = { readCopied() },
                     onCopiedSeen = { copied.value?.let { seenClip(it) }; copied.value = null })
@@ -108,9 +112,32 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun readShare(i: Intent?) {
+        when (i?.action) {
+            ACTION_WRITE -> launch.value = "write" to System.currentTimeMillis()
+            ACTION_DICTATE -> launch.value = "dictate" to System.currentTimeMillis()
+        }
+        if (i?.action == ACTION_WRITE || i?.action == ACTION_DICTATE) setIntent(Intent(i).setAction(Intent.ACTION_MAIN))
         if (i?.action != Intent.ACTION_SEND) return
         shared.value = i.getStringExtra(Intent.EXTRA_TEXT)
         // Taken once: whatever recreates the activity later gets an intent with nothing to share.
         setIntent(Intent(i).apply { action = Intent.ACTION_MAIN; removeExtra(Intent.EXTRA_TEXT) })
+    }
+
+    /** Long press on the icon: «Записать» and «Надиктовать», in the app's own language. */
+    private fun publishShortcuts() = runCatching {
+        val s = stringsFor(resolveLang(vm.settings.value.lang))
+        fun one(id: String, label: String, action: String, icon: Int) =
+            androidx.core.content.pm.ShortcutInfoCompat.Builder(this, id).setShortLabel(label)
+                .setIcon(androidx.core.graphics.drawable.IconCompat.createWithResource(this, icon))
+                .setIntent(Intent(this, MainActivity::class.java).setAction(action)).build()
+        androidx.core.content.pm.ShortcutManagerCompat.setDynamicShortcuts(this, listOf(
+            one("write", s.tileWrite, ACTION_WRITE, R.drawable.ic_shortcut_write),
+            one("dictate", s.shortcutDictate, ACTION_DICTATE, R.drawable.ic_shortcut_dictate),
+        ))
+    }
+
+    companion object {
+        const val ACTION_WRITE = "ru.anjeib.margin.WRITE"
+        const val ACTION_DICTATE = "ru.anjeib.margin.DICTATE"
     }
 }

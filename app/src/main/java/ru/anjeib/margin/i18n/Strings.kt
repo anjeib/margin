@@ -82,6 +82,22 @@ interface Strings {
     val storeLostText: String
     val storeNewerTitle: String
     val storeNewerText: String
+    val tryExamples: List<String>
+    val tryHint: String
+    val misparsed: String
+    val misparsedThanks: String
+    val sendFeedback: String
+    fun feedbackSubject(version: String): String
+    fun feedbackBody(version: String, device: String, files: Int): String
+    val feedbackNoMail: String
+    val crashTitle: String
+    val crashText: String
+    val crashSend: String
+    val crashLater: String
+    val searchRecent: String
+    val searchTry: List<String>
+    val tileWrite: String
+    val shortcutDictate: String
     val forwardHowTo: String
     val allDay: String
     val addContact: String
@@ -786,6 +802,8 @@ object Ru : Strings {
             "только с ИИ" to "название новой темы по сути; распознать текст с фото (визитка → контакт, доска → дела); разбор пересланных сообщений (кто что обещал); приведение в порядок исходной фразы",
             "голос" to "в облаке или на телефоне без сети — переключатель в «Голосе»",
         )),
+        HelpSection("Пересылка в Margin", "Из Telegram, MAX, почты: «Поделиться» или выделить текст → «В Margin». Или «Копировать» — и в Margin появится «Вставить скопированное». Чужие слова Margin читает как чужие: что обещают вам — «ждём», о чём просят — дело."),
+        HelpSection("Быстрый ввод и отзыв", "Плитка «Записать» в шторке (добавляется через карандаш в быстрых настройках) и долгое нажатие на значок приложения — «Записать» / «Надиктовать». Понял фразу не так — «Разобрало не так» под результатом. «Отправить отзыв» в меню открывает письмо разработчику с журналами ошибок; ваши записи не отправляются."),
         HelpSection("Пример данных", "Настройки → «Пример данных»: два месяца жизни молодого дизайнера, чтобы всё попробовать. Ваши данные сохраняются отдельно и возвращаются кнопкой «Вернуть мои данные»."),
     )
     override val tourWriteTitle = "Пишите как думаете"
@@ -848,6 +866,23 @@ object Ru : Strings {
     override val storeLostText = "Файл с записями и его копия повреждены. Оба сохранены внутри приложения — ничего не удалено. Напишите разработчику: записи можно будет вернуть."
     override val storeNewerTitle = "Записи из более новой версии"
     override val storeNewerText = "Записи сделаны более новой версией Margin. Их копия сохранена; обновите приложение, чтобы ничего не потерялось."
+    override val tryExamples = listOf("Завтра в 15 созвон с Олегом", "Маша вернёт 3000 к пятнице", "Идея: подкаст про дизайн")
+    override val tryHint = "Попробуйте — нажатие вставит фразу в поле"
+    override val misparsed = "Разобрало не так"
+    override val misparsedThanks = "Спасибо — фраза сохранена для разработчика"
+    override val sendFeedback = "Отправить отзыв"
+    override fun feedbackSubject(version: String) = "Margin 2 · отзыв · $version"
+    override fun feedbackBody(version: String, device: String, files: Int) =
+        "Что случилось или чего не хватает:\n\n\n—\nMargin $version · $device" + if (files > 0) "\nПриложены журналы ошибок и неверного разбора — без ваших записей." else ""
+    override val feedbackNoMail = "Не нашлось почтового приложения"
+    override val crashTitle = "Margin закрылся с ошибкой"
+    override val crashText = "Отправить разработчику описание ошибки? Ваши записи не отправляются."
+    override val crashSend = "Отправить"
+    override val crashLater = "Не сейчас"
+    override val searchRecent = "Недавние"
+    override val searchTry = listOf("люди", "темы", "файлы")
+    override val tileWrite = "Записать"
+    override val shortcutDictate = "Надиктовать"
     override val feedbackStub = "Скоро здесь можно будет написать нам напрямую — что мешает, чего не хватает, что нравится. Спасибо, что пользуетесь Margin."
     override val forwardHowTo = "Из Telegram, MAX, почты: «Поделиться» или выделить текст → «В Margin». Или «Копировать» — и в Margin появится «Вставить скопированное»."
     override val allDay = "весь день"
@@ -1094,7 +1129,7 @@ object Ru : Strings {
         "Пишите внизу, что нужно сделать, — обычными словами. Поменять это можно так же: «сводку в 9», «называй меня Аня»."
     override val settingsChanged = "Настройки изменены"
     override val inboxEmpty = "Здесь пусто"
-    override val inboxEmptyHint = "Сюда попадает то, что записано без интернета, — оно разберётся само, когда связь вернётся."
+    override val inboxEmptyHint = "Сюда попадает записанное без интернета — разберётся само, когда связь вернётся, — и присланное через «Поделиться → В Margin»."
     override val savedUnsorted = "СОХРАНЕНО БЕЗ РАЗБОРА"
     override fun queuedLine(n: Int) = "Ждут интернета: " + n + " " + pluralRu(n, "запись", "записи", "записей")
     override val nothingFound = "Ничего не найдено"
@@ -1438,7 +1473,7 @@ object En : Strings {
             "Topic" to "a to-do that grew: its own feed of records, files and to-dos. A to-do becomes a topic by itself on its second event",
             "Idea" to "a thought without to-dos; a feed like a topic's",
         )),
-        HelpSection("Menu", "Top left: Inbox, Feed, Materials, Contacts, Archive; Settings and Help below.", image = "drawer"),
+        HelpSection("Menu", "Top left: Inbox, Planner, Materials, Contacts, Archive; Settings and Help below.", image = "drawer"),
         HelpSection("Today", "The day's summary (how much, who owes what), to-dos by the hour, «No date», «Tomorrow — N».", image = "today"),
         HelpSection("Calendar", "The month as a grid; the chosen day below.", image = "calendar"),
         HelpSection("Overview", "Topics, To-dos, Ideas; filter Personal / Work.", image = "overview"),
@@ -1467,6 +1502,8 @@ object En : Strings {
         )),
         HelpSection("Icons", "The narrow column left of the circle says what kind of to-do it is.", legend = "icons"),
         HelpSection("Badges and colours", "", legend = "badges"),
+        HelpSection("Sharing to Margin", "From Telegram, MAX, mail: “Share” or select text → “To Margin”. Or “Copy” — and “Paste what you copied” appears in Margin. Margin reads other people’s words as theirs: what they promise you becomes “waiting”, what they ask — a to-do."),
+        HelpSection("Quick entry and feedback", "The “Write” tile in quick settings (add it with the pencil there) and a long press on the app icon — “Write” / “Dictate”. Understood wrong — “Understood wrong” under the result. “Send feedback” in the menu opens an e-mail to the developer with the error logs; your records are not sent."),
         HelpSection("Lists", "Start a line with «1.», «-» or «•» — Enter continues the list, Enter on an empty item ends it."),
         HelpSection("Inbox, Materials, Archive", "Inbox — what was written offline or saved without words; tap for actions. Materials — all files by day, with search. Archive — settled topics; news in one brings it back."),
         HelpSection("Offline", "Settings → «Reading your words»: Phone — code only; Auto — hard phrases go to the AI when online; AI — as before. The line over the field shows what was understood before you send."),
@@ -1531,6 +1568,23 @@ object En : Strings {
     override val storeLostText = "The file with your records and its copy are damaged. Both are kept inside the app — nothing was deleted. Write to the developer: the records can be brought back."
     override val storeNewerTitle = "Records from a newer version"
     override val storeNewerText = "Your records were made by a newer version of Margin. A copy is kept; update the app so nothing gets lost."
+    override val tryExamples = listOf("Call with Oleg tomorrow at 3", "Masha returns 3000 by Friday", "Idea: a podcast about design")
+    override val tryHint = "Try one — a tap puts the phrase into the field"
+    override val misparsed = "Understood wrong"
+    override val misparsedThanks = "Thanks — the phrase is saved for the developer"
+    override val sendFeedback = "Send feedback"
+    override fun feedbackSubject(version: String) = "Margin 2 · feedback · $version"
+    override fun feedbackBody(version: String, device: String, files: Int) =
+        "What happened or what's missing:\n\n\n—\nMargin $version · $device" + if (files > 0) "\nAttached: error and misunderstanding logs — none of your records." else ""
+    override val feedbackNoMail = "No e-mail app found"
+    override val crashTitle = "Margin closed with an error"
+    override val crashText = "Send a description of the error to the developer? Your records are not sent."
+    override val crashSend = "Send"
+    override val crashLater = "Not now"
+    override val searchRecent = "Recent"
+    override val searchTry = listOf("people", "topics", "files")
+    override val tileWrite = "Write"
+    override val shortcutDictate = "Dictate"
     override val feedbackStub = "Soon you’ll be able to write to us right here — what gets in the way, what’s missing, what you like. Thank you for using Margin."
     override val forwardHowTo = "From Telegram, MAX, mail: “Share” or select text → “To Margin”. Or “Copy” — and “Paste what you copied” appears in Margin."
     override val allDay = "all day"
@@ -1777,7 +1831,7 @@ object En : Strings {
         "Type below what needs doing, in plain words. You can change this the same way: “summary at 9”, “call me Anna”."
     override val settingsChanged = "Settings changed"
     override val inboxEmpty = "Nothing here"
-    override val inboxEmptyHint = "Things written without internet land here and sort themselves once you’re back online."
+    override val inboxEmptyHint = "What you write without internet lands here and sorts itself once you’re back online — and so does what you share to Margin."
     override val savedUnsorted = "SAVED UNSORTED"
     override fun queuedLine(n: Int) = "Waiting for internet: $n"
     override val nothingFound = "Nothing found"

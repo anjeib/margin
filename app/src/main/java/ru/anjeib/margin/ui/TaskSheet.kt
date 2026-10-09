@@ -413,6 +413,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
             title = { Text(s.youWrote, style = Type.cardTitle.copy(color = c.ink)) },
             text = { Text(task.source.orEmpty().sentence(), style = Type.body.copy(color = c.ink)) },
             confirmButton = { TextButton({ dialog = null }) { Text(s.closeWord2, color = c.graphite) } },
+            // Beta: what was written and what it became, for the developer's log.
+            dismissButton = { TextButton({ vm.misparsed(task.source.orEmpty(), "card", listOfNotNull(task.title, task.whenLabel()).joinToString(" · ")); dialog = null }) { Text(s.misparsed, color = c.link) } },
         )
         "repeat" -> RepeatDialog(task, onDismiss = { dialog = null }) { r ->
             val due = task.due ?: if (r != null) LocalDate.now().toString() else null

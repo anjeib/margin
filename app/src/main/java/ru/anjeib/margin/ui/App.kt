@@ -95,6 +95,7 @@ private const val MATERIALS = "materials"
 
 @Composable
 fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
+        launch: Pair<String, Long>? = null, onLaunchUsed: () -> Unit = {},
         copied: Boolean = false, readCopied: () -> String? = { null }, onCopiedSeen: () -> Unit = {}) {
     val c = M.c
     val s = M.s
@@ -139,6 +140,18 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(shared) { if (!shared.isNullOrBlank()) { prefill = shared; screen = TASKS; onSharedConsumed() } }
+    // «Записать» / «Надиктовать» (tile, icon shortcut): back to the main field, keyboard up or the microphone on.
+    var focusKey by remember { mutableStateOf<Long?>(null) }
+    var micKey by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(launch) {
+        val (what, at) = launch ?: return@LaunchedEffect
+        searching = false; openTask = null; openPerson = null; openNote = null; screen = TASKS
+        scope.launch { drawer.close() }
+        if (what == "dictate") micKey = at else focusKey = at
+        onLaunchUsed()
+    }
+    // Margin closed with an error last time: offer once to send what happened.
+    var crashOffer by remember { mutableStateOf(ru.anjeib.margin.data.Feedback.newCrash(ctx)) }
     // The assistant tray is for the latest exchange — moving elsewhere tucks it away.
     LaunchedEffect(view, screen) { if (pending == null && busy == null) vm.dismissTray() }
     LaunchedEffect(personReq) { personReq?.let { openTask = null; openPerson = it; vm.personOpened() } }
@@ -192,7 +205,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                     v, shown, settings, working, vm, if (feedFilter == "all" || feedFilter == "deals") events else emptyList(),
                                     briefQuiet = typing || tray != null || pending != null || busy == "main",
                                     onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
-                                    onOpenNotes = { screen = NOTES }, onOpenInbox = { screen = INBOX }, contentPadding = pad,
+                                    onOpenNotes = { screen = NOTES }, onOpenInbox = { screen = INBOX },
+                                    onTry = { prefill = it; focusKey = System.currentTimeMillis() }, contentPadding = pad,
                                 )
                             }
                             NOTES -> NotesList(data, vm, onOpen = { openNote = it }, contentPadding = pad)
@@ -237,6 +251,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             onSeparate = vm::pendingAsNewNote,
                             onKeepContact = { vm.keepContact(it) },
                             onMoveTo = { vm.moveToTopic(it) },
+                            onMisparse = { pd, got -> vm.misparsed(pd, got) },
                             onAskWhen = { _, what ->
                                 // The preview's ids are not the saved ones: take the new task without a time from what was saved.
                                 val ids = vm.confirm()
@@ -265,6 +280,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         onSend = { t, f -> vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f) },
                         prefill = prefill, onPrefillUsed = { prefill = null },
                         onTyping = { typing = it }, slash = screen != NOTES, preview = { vm.previewOf(it) },
+                        focusKey = focusKey, micKey = micKey,
                     )
                 }
             }
@@ -316,13 +332,15 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         }
     }
 
-    // «Пожаловаться или похвалить»: a placeholder until there is somewhere to send it.
-    if (feedback) androidx.compose.material3.AlertDialog(
-        onDismissRequest = { feedback = false },
+    // «Отправить отзыв»: an e-mail to the developer with the crash and misunderstanding logs — never the records.
+    LaunchedEffect(feedback) { if (feedback) { sendFeedback(ctx, vm); feedback = false } }
+    if (crashOffer) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { crashOffer = false; ru.anjeib.margin.data.Feedback.crashSeen(ctx) },
         containerColor = c.card,
-        title = { Text(s.feedbackTitle, style = Type.cardTitle.copy(color = c.ink)) },
-        text = { Text(s.feedbackStub, style = Type.body.copy(color = c.graphite)) },
-        confirmButton = { androidx.compose.material3.TextButton({ feedback = false }) { Text(s.close, color = c.link) } },
+        title = { Text(s.crashTitle, style = Type.cardTitle.copy(color = c.ink)) },
+        text = { Text(s.crashText, style = Type.body.copy(color = c.graphite)) },
+        confirmButton = { androidx.compose.material3.TextButton({ crashOffer = false; ru.anjeib.margin.data.Feedback.crashSeen(ctx); sendFeedback(ctx, vm) }) { Text(s.crashSend, color = c.link) } },
+        dismissButton = { androidx.compose.material3.TextButton({ crashOffer = false; ru.anjeib.margin.data.Feedback.crashSeen(ctx) }) { Text(s.crashLater, color = c.graphite) } },
     )
 
     val storeProblem by vm.storeProblem.collectAsState()
@@ -429,7 +447,7 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
             Spacer(Modifier.height(8.dp))
             NavRow(Icons.Outlined.Settings, s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
             NavRow(Icons.AutoMirrored.Outlined.HelpOutline, s.helpTitle, "", screen == HELP, small = true) { onGo(HELP, null) }
-            NavRow(Icons.Outlined.ChatBubbleOutline, s.feedbackTitle, "", false, small = true) { onFeedback() }
+            NavRow(Icons.Outlined.ChatBubbleOutline, s.sendFeedback, "", false, small = true) { onFeedback() }
             // Which build this is — so a screenshot or a complaint says what it is about. The only place the version is shown;
             // a long press opens the developer section.
             Text(s.buildLabel(ru.anjeib.margin.BuildConfig.VERSION_NAME, ru.anjeib.margin.BuildConfig.VERSION_CODE, ru.anjeib.margin.BuildConfig.DEBUG),
@@ -455,4 +473,31 @@ private fun NavRow(icon: ImageVector?, label: String, count: String, active: Boo
         Text(label, style = (if (small) Type.body.copy(fontSize = 15.sp) else Type.cardTitle).copy(color = c.ink), modifier = Modifier.weight(1f))
         Text(count, style = Type.small.copy(color = c.graphite))
     }
+}
+
+/** Opens the mail app with the developer's address, the build, the phone and the logs attached (nothing of the user's records). */
+fun sendFeedback(ctx: android.content.Context, vm: MainVm) {
+    val s = ru.anjeib.margin.i18n.L.s
+    val fb = ru.anjeib.margin.data.Feedback
+    val version = ru.anjeib.margin.BuildConfig.VERSION_NAME + " (" + ru.anjeib.margin.BuildConfig.VERSION_CODE + ")"
+    val device = android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE
+    val files = fb.attachments(ctx)
+    val uris = ArrayList(files.map { androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", it) })
+    val body = s.feedbackBody(version, device, files.size) + "\n" + vm.betaStats()
+    // Mail apps only (the mailto: selector), with the logs attached; no mail app — any app that takes files.
+    val i = android.content.Intent(if (uris.size > 1) android.content.Intent.ACTION_SEND_MULTIPLE else android.content.Intent.ACTION_SEND)
+        .setType("text/plain")
+        .putExtra(android.content.Intent.EXTRA_EMAIL, arrayOf(fb.EMAIL))
+        .putExtra(android.content.Intent.EXTRA_SUBJECT, s.feedbackSubject(version))
+        .putExtra(android.content.Intent.EXTRA_TEXT, body)
+        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        .apply {
+            if (uris.size > 1) putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, uris)
+            else uris.firstOrNull()?.let { putExtra(android.content.Intent.EXTRA_STREAM, it) }
+            if (uris.isNotEmpty()) clipData = android.content.ClipData.newRawUri("", uris.first()).also { c -> uris.drop(1).forEach { c.addItem(android.content.ClipData.Item(it)) } }
+        }
+    val mail = android.content.Intent(i).apply { selector = android.content.Intent(android.content.Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:")) }
+    runCatching { ctx.startActivity(mail) }
+        .recoverCatching { ctx.startActivity(android.content.Intent.createChooser(i, s.sendFeedback).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        .onFailure { Toast.makeText(ctx, s.feedbackNoMail, Toast.LENGTH_SHORT).show() }
 }
