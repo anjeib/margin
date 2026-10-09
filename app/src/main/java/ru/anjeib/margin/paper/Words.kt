@@ -191,6 +191,14 @@ interface Words {
     val inviteShared: String
     val inviteNone: String
     val inviteHint: String
+    val call: String
+    val message: String
+    val mail: String
+    val weekTitle: String
+    fun weekLine(open: Int, done: Int, events: Int): String
+    val weekFree: String
+    val weekSub: String
+    val weekLink: String
     /** Under a page just closed: what the next one holds. */
     fun nextPage(lines: List<Line>): String
     val propWhoTo: String
@@ -504,6 +512,18 @@ object WordsRu : Words {
     override val inviteNone = "нет"
     override val inviteHint = "ИИ перечитывает сложные фразы, отвечает на трудные вопросы и расшифровывает голос. Если вам дали свой код — введите его; пусто — общий."
     override fun nextPage(lines: List<Line>) = "завтра — " + things(lines).ifBlank { "пусто" } + " ›"
+    override val call = "позвонить"
+    override val message = "написать"
+    override val mail = "письмо"
+    override val weekTitle = "Неделя"
+    override fun weekLine(open: Int, done: Int, events: Int) = listOfNotNull(
+        open.takeIf { it > 0 }?.let { "$it " + plural(it, "дело", "дела", "дел") + " впереди" },
+        done.takeIf { it > 0 }?.let { "$it сделано" },
+        events.takeIf { it > 0 }?.let { "$it " + plural(it, "встреча", "встречи", "встреч") },
+    ).joinToString(" · ").ifBlank { "пустая неделя" }
+    override val weekFree = "свободно"
+    override val weekSub = "семь дней на одной странице"
+    override val weekLink = "неделя ›"
     override val propWhoTo = "вы обещали"
     override val propWhoFrom = "ждёте"
     override val offerToday = "› сегодня"
@@ -793,6 +813,18 @@ object WordsEn : Words {
     override val inviteNone = "none"
     override val inviteHint = "The AI re-reads hard phrases, answers difficult questions and transcribes voice. If you were given your own code, enter it; empty — the shared one."
     override fun nextPage(lines: List<Line>) = "tomorrow — " + things(lines).ifBlank { "nothing yet" } + " ›"
+    override val call = "call"
+    override val message = "message"
+    override val mail = "email"
+    override val weekTitle = "Week"
+    override fun weekLine(open: Int, done: Int, events: Int) = listOfNotNull(
+        open.takeIf { it > 0 }?.let { "$it ahead" },
+        done.takeIf { it > 0 }?.let { "$it done" },
+        events.takeIf { it > 0 }?.let { "$it meeting" + if (it == 1) "" else "s" },
+    ).joinToString(" · ").ifBlank { "an empty week" }
+    override val weekFree = "free"
+    override val weekSub = "seven days on one page"
+    override val weekLink = "week ›"
     override val propWhoTo = "you promised"
     override val propWhoFrom = "waiting for"
     override val offerToday = "› today"

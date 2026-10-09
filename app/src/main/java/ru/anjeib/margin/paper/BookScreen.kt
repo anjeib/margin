@@ -99,6 +99,7 @@ private fun Notebook(vm: BookVm) {
         route.startsWith("thread:") -> BookVm.Target(today, threadId = route.removePrefix("thread:"))
         route.startsWith("person:") -> BookVm.Target(today, person = route.removePrefix("person:"))
         route == "later" -> BookVm.Target(today, later = true)
+        route.startsWith("week:") -> BookVm.Target(today)
         else -> null
     }
 
@@ -135,7 +136,9 @@ private fun Notebook(vm: BookVm) {
                         }
                         r == "index" -> IndexPage(book, today, onThread = { push("thread:$it") }, onPerson = { push("person:$it") }, onLater = { push("later") },
                             onSettings = { push("settings") }, onHelp = { push("help") }, onSearch = { push("search") },
-                            onFeedback = { sendFeedback(ctx, w) })
+                            onFeedback = { sendFeedback(ctx, w) }, onWeek = { push("week:$current") })
+                        r.startsWith("week:") -> WeekPage(book, today, LocalDate.parse(r.removePrefix("week:")), vm::toggle, onOpen,
+                            onDay = { d -> stack = emptyList(); go(d) }, bottom = 24.dp)
                         r.startsWith("thread:") -> ThreadPage(book, r.removePrefix("thread:"), today, vm::toggle, onOpen, bottom = 24.dp,
                             onClose = { close -> vm.closeThread(r.removePrefix("thread:"), close) })
                         r.startsWith("person:") -> PersonPage(book, r.removePrefix("person:"), today, vm::toggle, onOpen,
@@ -159,7 +162,8 @@ private fun Notebook(vm: BookVm) {
             LineSheet(baseId, current, vm, book, today, onClose = { open = null },
                 onThread = { open = null; push("thread:$it") }, onPerson = { open = null; push("person:$it") })
         }
-        if (month) MonthSheet(book, today, current, onPick = { d -> month = false; stack = emptyList(); go(d) }, onClose = { month = false })
+        if (month) MonthSheet(book, today, current, onPick = { d -> month = false; stack = emptyList(); go(d) }, onClose = { month = false },
+            onWeek = { d -> month = false; push("week:$d") })
     }
 
     // Opened from a notification: its line, the ritual, or today.

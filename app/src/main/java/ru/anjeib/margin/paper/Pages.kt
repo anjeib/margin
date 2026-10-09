@@ -67,7 +67,7 @@ fun IndexRow(margin: List<Note>, title: String, sub: String?, onClick: () -> Uni
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun IndexPage(book: Book, today: LocalDate, onThread: (String) -> Unit, onPerson: (String) -> Unit, onLater: () -> Unit,
-              onSettings: () -> Unit, onHelp: () -> Unit, onSearch: () -> Unit, onFeedback: () -> Unit) {
+              onSettings: () -> Unit, onHelp: () -> Unit, onSearch: () -> Unit, onFeedback: () -> Unit, onWeek: () -> Unit = {}) {
     val c = P.c
     val w = P.w
     val open = book.threads.filter { it.closedAt == null }.map { it to book.threadStats(it.id) }.sortedByDescending { it.second.last }
@@ -95,6 +95,7 @@ fun IndexPage(book: Book, today: LocalDate, onThread: (String) -> Unit, onPerson
             IndexRow(m, p.name, listOfNotNull(p.about, w.linesN(n)).joinToString(" · "), { onPerson(p.name) })
         }
         item { Spacer(Modifier.padding(top = 14.dp)) }
+        item { IndexRow(emptyList(), w.weekTitle, w.weekSub, onWeek) }
         item { IndexRow(listOf(Note(later.size.toString(), Tone.Quiet)), w.laterTitle, w.laterLine, onLater) }
         if (closed.isNotEmpty()) {
             item { SectionHead(w.closedThreads) }
@@ -163,9 +164,21 @@ fun PersonPage(book: Book, name: String, today: LocalDate, onMark: (String) -> U
     val pl = book.personLines(name)
     LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = bottom)) {
         item {
-            PageHead(marginTop = name.take(1).uppercase(), marginBottom = null, title = p?.name ?: name,
-                line = listOfNotNull(p?.about, p?.phone, p?.telegram).joinToString(" · ").ifBlank { null },
-                onLine = p?.phone?.let { ph -> { onCall(ph) } }, lineColor = if (p?.phone != null) c.link else c.graphite)
+            // On the margin under the letter: when they were last on a page.
+            val last = (pl.promised + pl.waited + pl.other).maxOfOrNull { it.written.toLocalDate() }
+            PageHead(marginTop = name.take(1).uppercase(), marginBottom = last?.let { w.near(it, today) }, title = p?.name ?: name,
+                line = p?.about)
+            // Reaching them: in their own app, from here.
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            fun go(i: android.content.Intent) = runCatching { ctx.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(start = Grid.text - 6.dp, end = Grid.right)) {
+                p?.phone?.let { ph ->
+                    Reply(w.call) { onCall(ph) }
+                    Reply(w.message) { go(android.content.Intent(android.content.Intent.ACTION_SENDTO, android.net.Uri.parse("smsto:" + ph.filter { it.isDigit() || it == '+' }))) }
+                }
+                p?.telegram?.let { tg -> Reply("Telegram") { go(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://t.me/" + tg.trimStart('@')))) } }
+                p?.email?.let { em -> Reply(w.mail) { go(android.content.Intent(android.content.Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:$em"))) } }
+            }
         }
         if (pl.promised.isNotEmpty()) {
             item { SectionHead(w.youPromised) }

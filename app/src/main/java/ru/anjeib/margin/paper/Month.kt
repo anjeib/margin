@@ -48,7 +48,7 @@ import java.time.YearMonth
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MonthSheet(book: Book, today: LocalDate, shown: LocalDate, onPick: (LocalDate) -> Unit, onClose: () -> Unit) {
+fun MonthSheet(book: Book, today: LocalDate, shown: LocalDate, onPick: (LocalDate) -> Unit, onClose: () -> Unit, onWeek: ((LocalDate) -> Unit)? = null) {
     val c = P.c
     val w = P.w
     var ym by remember { mutableStateOf(YearMonth.from(shown)) }
@@ -57,7 +57,11 @@ fun MonthSheet(book: Book, today: LocalDate, shown: LocalDate, onPick: (LocalDat
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) }) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(w.monthName(ym), style = Voice.section.copy(color = c.ink), modifier = Modifier.weight(1f).padding(start = 8.dp))
+                Text(w.monthName(ym), style = Voice.section.copy(color = c.ink), modifier = Modifier.padding(start = 8.dp))
+                // The week of the shown day, as a spread.
+                if (onWeek != null) Text(w.weekLink, style = Voice.reply.copy(color = c.link), modifier = Modifier.padding(start = 12.dp)
+                    .clip(RoundedCornerShape(6.dp)).clickable { onWeek(shown) }.padding(horizontal = 4.dp, vertical = 10.dp))
+                Spacer(Modifier.weight(1f))
                 Text("‹", style = Voice.section.copy(color = c.graphite), modifier = Modifier.clip(CircleShape).clickable { ym = ym.minusMonths(1) }
                     .semantics { contentDescription = "‹" }.padding(horizontal = 16.dp, vertical = 8.dp))
                 Text("›", style = Voice.section.copy(color = c.graphite), modifier = Modifier.clip(CircleShape).clickable { ym = ym.plusMonths(1) }
