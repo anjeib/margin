@@ -40,9 +40,6 @@ android {
         buildConfigField("String", "PROXY_URL", "\"${secrets.getProperty("PROXY_URL", "")}\"")
         // Closed alpha: one shared code built in, so testers need not type anything (switched off by itself in server/alpha.local).
         buildConfigField("String", "ALPHA_CODE", "\"${secrets.getProperty("ALPHA_CODE", "")}\"")
-        buildConfigField("boolean", "DEMO", "false")
-        // The developer's own Telegram bot and IMAP: only in debug builds — they need setup and a server-side redo.
-        buildConfigField("boolean", "FORWARD_CHANNELS", "false")
     }
 
     signingConfigs {
@@ -58,10 +55,9 @@ android {
 
     buildTypes {
         debug {
-            // Lets a debug build sit next to the signed release on the same phone — and tells them apart by name.
-            applicationIdSuffix = ".polya"
-            manifestPlaceholders["appLabel"] = "Margin · поля"
-            buildConfigField("boolean", "FORWARD_CHANNELS", "true")
+            // Lets a debug build sit next to the signed release and the stage build on the same phone — and tells them apart by name.
+            applicationIdSuffix = ".polya.debug"
+            manifestPlaceholders["appLabel"] = "Margin · поля (debug)"
             buildConfigField("String", "OPENROUTER_KEY", "\"${secrets.getProperty("OPENROUTER_KEY", "")}\"")
             buildConfigField("String", "YC_KEY", "\"${secrets.getProperty("YC_KEY", "")}\"")
             buildConfigField("String", "YC_FOLDER", "\"${secrets.getProperty("YC_FOLDER", "")}\"")
@@ -73,13 +69,13 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
         }
-        // A copy to show: opens with two months of the sample designer's life already in it; sits next to Margin 2.
-        create("demo") {
+        // «Поля» to try on a real phone next to Margin 0.29: signed like the release, its own app and its own data
+        // (0.29's notebook is not touched; the examples show how the pages work). `./gradlew assemblePolya`.
+        create("polya") {
             initWith(getByName("release"))
-            applicationIdSuffix = ".demo"
-            versionNameSuffix = "-demo"
-            manifestPlaceholders["appLabel"] = "Margin · демо"
-            buildConfigField("boolean", "DEMO", "true")
+            applicationIdSuffix = ".polya"
+            versionNameSuffix = "-polya"
+            manifestPlaceholders["appLabel"] = "Margin · поля"
             matchingFallbacks += listOf("release")
         }
     }
