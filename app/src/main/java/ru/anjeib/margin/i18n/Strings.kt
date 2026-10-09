@@ -68,6 +68,8 @@ interface Strings {
     val intro: ru.anjeib.margin.data.Intro.Texts
     val samplesLine: String
     val ideaBadge: String
+    val openTopic: String
+    fun aboutDeal(title: String, text: String): String
     val ideaHint: String
     val openWhole: String
     val ideasBadge: String
@@ -948,6 +950,8 @@ object Ru : Strings {
     )
     override val samplesLine = "Здесь примеры из «Знакомства с Margin»"
     override val ideaBadge = "Идея"
+    override val openTopic = "Открыть тему"
+    override fun aboutDeal(title: String, text: String) = "Про дело «$title»: $text"
     override val ideaHint = "Текст идеи"
     override val openWhole = "Открыть целиком"
     override val ideasBadge = "Идеи"
@@ -1749,6 +1753,8 @@ object En : Strings {
     )
     override val samplesLine = "These are the «Getting to know Margin» examples"
     override val ideaBadge = "Idea"
+    override val openTopic = "Open the topic"
+    override fun aboutDeal(title: String, text: String) = "About the to-do «$title»: $text"
     override val ideaHint = "The idea in words"
     override val openWhole = "Open in full"
     override val ideasBadge = "Ideas"

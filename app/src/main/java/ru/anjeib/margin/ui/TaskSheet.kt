@@ -154,9 +154,10 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
 
         // Opens on half the screen (owner's call), grows with what is in it up to nearly all of it; the input at the bottom.
         val half = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.5f).dp
-        Column(Modifier.fillMaxWidth().heightIn(min = half.coerceAtMost((maxH - ime).coerceAtLeast(200.dp)), max = (maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
+        Column(Modifier.fillMaxWidth().heightIn(max = (maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
             // «Поля»: the rule down the card, the day and hour on the margin, everything else right of it.
-            Column(Modifier.weight(1f, fill = false).screenRule().verticalScroll(rememberScrollState())) {
+            // At least half the screen with the field right under it; a longer card grows, the field stays below.
+            Column(Modifier.weight(1f, fill = false).heightIn(min = (half - 76.dp).coerceAtLeast(120.dp)).screenRule().verticalScroll(rememberScrollState())) {
                 Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
                     Spacer(Modifier.width(MarginW + MarginGap))
                     androidx.compose.animation.AnimatedVisibility(savedAt > 0, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
@@ -192,12 +193,6 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 }
                 Margined {
                     Column {
-                        // From a note without a matching idea: one quiet line.
-                        if (task.noteId != null) originLine(task, data)?.let { o ->
-                            Text("↳ $o", style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(6.dp)).clickable { task.noteId?.let(onOpenNote) })
-                        }
-                        SphereBadge(task.sphere, Modifier.padding(top = 6.dp)) { vm.setSphere(task.id, nextSphere(task.sphere)) }
                         // What is set: each with its small glyph, the value a petrol link that changes it.
                         val ctxOpen = androidx.compose.ui.platform.LocalContext.current
                         val dates = task.whenLabel()?.substringBefore(" · ${task.time}")?.takeIf { task.dueDate != null || task.startDate != null }
@@ -213,10 +208,12 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             } }
                         }
                         val others = task.people.filter { p -> p != task.waitingFor && p != task.promisedTo }
-                        if (others.isNotEmpty() || task.waitingFor != null || task.promisedTo != null) FlowRow(
+                        // One row of badges for every matter: the sphere, the people, the promise.
+                        FlowRow(
                             Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
                             itemVerticalAlignment = Alignment.CenterVertically,
                         ) {
+                            SphereBadge(task.sphere) { vm.setSphere(task.id, nextSphere(task.sphere)) }
                             others.forEach { p -> PersonBadge(p, big = true) { data.contact(p)?.let { onOpenPerson(it.id) } ?: vm.offerContact(p) } }
                             if (task.waitingFor != null) PromiseBadge(task, big = true) { dialog = "waiting" }
                             else task.promisedTo?.let { w -> PromiseBadge(task, big = true) { data.contact(w)?.let { p -> onOpenPerson(p.id) } ?: vm.offerContact(w) } }
@@ -239,6 +236,21 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                                 PaperLink("+ " + label.lowercase(), quiet = true) { if (d in typed) fill(d) else dialog = d }
                             }
                         }
+                    }
+                }
+                // The user's own comments: typed right on the page, each with its day and hour on the margin, no AI.
+                WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 10.dp),
+                    onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
+                    onAdd = { t, at -> vm.addComment(task.id, t, at); savedAt = System.currentTimeMillis() })
+                Hairline(Modifier.padding(start = MarginW, top = 14.dp))
+                // Where it came from — below the shared part of every matter's card, quietly.
+                Margined(Modifier.padding(top = 6.dp)) {
+                    Column {
+                        // From a note without a matching idea: one quiet line.
+                        if (task.noteId != null) originLine(task, data)?.let { o ->
+                            Text("↳ $o", style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(6.dp)).clickable { task.noteId?.let(onOpenNote) })
+                        }
                         // Where it came from: «↳ из сообщения 6 окт, 17:42» — the words open on a tap.
                         if (task.source != null && task.noteId == null) {
                             androidx.compose.runtime.LaunchedEffect(task.id) { vm.tidySource(task.id) }
@@ -249,11 +261,6 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         }
                     }
                 }
-                // The user's own comments: typed right on the page, each with its day and hour on the margin, no AI.
-                WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 10.dp),
-                    onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
-                    onAdd = { t, at -> vm.addComment(task.id, t, at); savedAt = System.currentTimeMillis() })
-                Hairline(Modifier.padding(start = MarginW, top = 14.dp))
 
                 // Follow-up is late: offer to nudge the person (SMS if we know the number, else share).
                 if (task.waitingFor != null && task.isOverdue()) {
