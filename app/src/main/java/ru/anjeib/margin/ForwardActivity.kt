@@ -4,136 +4,78 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
-import ru.anjeib.margin.ai.Forward
-import ru.anjeib.margin.ai.Processor
-import ru.anjeib.margin.data.Attachment
 import ru.anjeib.margin.data.Files
 import ru.anjeib.margin.data.Prefs
-import ru.anjeib.margin.data.Queued
-import ru.anjeib.margin.i18n.L
+import ru.anjeib.margin.data.ThemeMode
+import ru.anjeib.margin.i18n.Lang
 import ru.anjeib.margin.i18n.resolveLang
-import ru.anjeib.margin.i18n.stringsFor
-import ru.anjeib.margin.ui.ForwardSheet
-import ru.anjeib.margin.ui.MarginTheme
+import ru.anjeib.margin.paper.BookVm
+import ru.anjeib.margin.paper.HandedSheet
+import ru.anjeib.margin.paper.PaperTheme
+import ru.anjeib.margin.paper.WordsEn
+import ru.anjeib.margin.paper.WordsRu
 
 /**
- * «Поделиться → Margin» and «В Margin» in the text-selection menu: a sheet over the app the user is in
- * (Telegram, MAX, mail, a browser). The words go to «Входящие» to be sorted; the user stays where they were.
+ * «Поделиться → Margin» and «В Margin» in the text-selection menu: a sheet over the app the person is in (Telegram,
+ * mail, a browser). The same field as in the notebook, with the words in it and Margin's notes beside them; «записать»
+ * puts the lines on their pages and shows them — the person stays where they were.
  */
 class ForwardActivity : ComponentActivity() {
-    private val vm: ru.anjeib.margin.ui.MainVm by viewModels()
-    private val files = mutableStateListOf<Attachment>()
-    private val loading = mutableStateOf(false)
-    private val sorting = mutableStateOf(false)
-    private val result = mutableStateOf<Processor.Sorted?>(null)
+    private val vm: BookVm by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val prefs = Prefs.get(this)
         val i = intent
         val text = when (i.action) {
             Intent.ACTION_PROCESS_TEXT -> i.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
             else -> i.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
-        }.orEmpty()
+        }.orEmpty().trim()
         val subject = i.getStringExtra(Intent.EXTRA_SUBJECT)?.takeIf { it.isNotBlank() && !text.startsWith(it) }
-        val pkg = sourcePackage()
-        val via = Forward.viaOf(pkg)
-        val app = (if (BuildConfig.DEBUG) i.getStringExtra("margin.app") else null) ?: Forward.appName(this, pkg)?.takeIf { pkg != "com.android.shell" }
-        // Debug builds can show a sender for screenshots; real ones read it from the words.
-        val sender = (if (BuildConfig.DEBUG) i.getStringExtra("margin.from")?.let { Forward.Sender(it, i.getStringExtra("margin.address"), i.getStringExtra("margin.company")) } else null)
-            ?: Forward.sender(listOfNotNull(subject, text).joinToString("\n"))
         val uris: List<Uri> = when (i.action) {
             Intent.ACTION_SEND -> listOfNotNull(stream(i))
             Intent.ACTION_SEND_MULTIPLE -> streams(i)
             else -> emptyList()
         }
         if (text.isBlank() && uris.isEmpty()) { finish(); return }
-        // The links to shared files only live while this screen does — copy them in now.
-        if (uris.isNotEmpty() && savedInstanceState == null) {
-            loading.value = true
-            lifecycleScope.launch {
-                uris.take(10).forEach { u -> Files.import(this@ForwardActivity, u)?.let { files += it } }
-                loading.value = false
+        if (savedInstanceState == null) {
+            vm.handIn(listOfNotNull(subject, text.ifBlank { null }).joinToString("\n"))
+            // The links to shared files only live while this screen does — copy them in now.
+            if (uris.isNotEmpty()) lifecycleScope.launch {
+                vm.handInFiles(uris.take(10).mapNotNull { u -> Files.import(this@ForwardActivity, u) })
             }
         }
-
+        val from = sourceName()
         setContent {
-            val settings by prefs.settings.collectAsState()
-            val lang = resolveLang(settings.lang)
-            L.lang = lang
-            val strings = remember(lang) { stringsFor(lang) }
-            MarginTheme(settings.theme, strings) {
-                val data by vm.data.collectAsState()
-                ForwardSheet(
-                    vm = vm,
-                    from = strings.forwardFrom(app ?: Forward.viaName(via)).let { if (app != null) app else it },
-                    sender = sender,
-                    isContact = Forward.isContact(data, sender),
-                    text = listOfNotNull(subject, text).joinToString("\n"),
-                    files = files.size,
-                    loading = loading.value,
-                    onAddContact = { sender?.let { Forward.addContact(this, it) } },
-                    onSend = { comment, extra ->
-                        val q = Queued(
-                            text = text, files = files.toList() + extra, via = via, comment = comment.ifBlank { null }, subject = subject,
-                            from = sender?.let { it.name ?: it.company ?: it.address },
-                        )
-                        Processor.enqueue(this, q)
-                        currentFocus?.let { v -> getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.hideSoftInputFromWindow(v.windowToken, 0) }
-                        // Online: read it here and show what it became. Offline: it waits in «Входящие», as before.
-                        if (!Processor.ready(prefs.settings.value) || !Processor.online(this)) {
-                            Toast.makeText(this, strings.forwardDone, Toast.LENGTH_SHORT).show(); finish()
-                        } else {
-                            sorting.value = true
-                            lifecycleScope.launch {
-                                // A slow network must not hold the user here: after 35 s (a forward goes to the stronger, slower model) the words simply wait in the queue
-                                // (leaving cancels the request; the worker sorts it later and says so).
-                                val r = kotlinx.coroutines.withTimeoutOrNull(35_000) {
-                                    runCatching { Processor.drainItems(this@ForwardActivity) }.getOrDefault(emptyList()).find { it.queueId == q.id }
-                                }
-                                sorting.value = false
-                                // Sorted elsewhere meanwhile (the worker) — it will say so in a notification.
-                                if (r == null) { Toast.makeText(this@ForwardActivity, strings.forwardDone, Toast.LENGTH_SHORT).show(); finish() } else result.value = r
-                            }
-                        }
-                    },
-                    onDismiss = {
-                        // Files belong to the queued item once sent; only an unsent share drops them.
-                        if (result.value == null && !sorting.value) files.forEach { Files.delete(this, it) }
-                        finish()
-                    },
-                    sorting = sorting.value,
-                    result = result.value,
-                    onOpen = {
-                        result.value?.open?.let { id ->
-                            startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN).putExtra(MainActivity.EXTRA_ID, id)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
-                        }
-                        finish()
-                    },
-                )
+            val s by Prefs.get(this).settings.collectAsState()
+            val words = if (resolveLang(s.lang) == Lang.Ru) WordsRu else WordsEn
+            vm.words = words
+            val dark = when (s.theme) { ThemeMode.Light -> false; ThemeMode.Dark -> true; ThemeMode.Auto -> isSystemInDarkTheme() }
+            PaperTheme(dark, words) {
+                HandedSheet(vm, from, onDone = { finish() }, onOpen = { id ->
+                    startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN).putExtra(MainActivity.EXTRA_ID, id?.let { "line:$it" } ?: "today")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                    finish()
+                })
             }
         }
     }
 
-    /** Which app sent it: the text-selection menu tells it directly; a share goes through the system chooser. */
-    private fun sourcePackage(): String? {
-        callingPackage?.let { return it }
-        if (Build.VERSION.SDK_INT >= 34) launchedFromPackage?.let { if (it != "android") return it }
-        return referrer?.takeIf { it.scheme == "android-app" }?.host
+    /** The app the words came from, by its own name («Telegram», «Gmail»); null when the system does not say. */
+    private fun sourceName(): String? {
+        val pkg = callingPackage ?: (if (Build.VERSION.SDK_INT >= 34) launchedFromPackage?.takeIf { it != "android" } else null)
+            ?: referrer?.takeIf { it.scheme == "android-app" }?.host ?: return null
+        if (pkg == packageName || pkg == "com.android.shell") return null
+        return runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrNull()
     }
 
     @Suppress("DEPRECATION")

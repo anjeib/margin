@@ -45,6 +45,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         if (settings.lock && Lock.available(this)) locked.value = true
         if (savedInstanceState == null) take(intent)
         askBellOnce()
+        publishShortcuts()
         setContent {
             val s by Prefs.get(this).settings.collectAsState()
             val words = if (resolveLang(s.lang) == Lang.Ru) WordsRu else WordsEn
@@ -69,6 +70,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
     /** Text handed in («Поделиться» → Margin) waits in the field; a notification opens its line or the ritual. Taken once. */
     private fun take(i: android.content.Intent?) {
+        if (i?.action == ACTION_WRITE || i?.action == ACTION_DICTATE) {
+            if (i.action == ACTION_DICTATE) vm.dictateNow() else vm.focusNow()
+            vm.launchWith("today")
+            setIntent(android.content.Intent(i).setAction(android.content.Intent.ACTION_MAIN))
+            return
+        }
         if (i?.action == ACTION_OPEN) {
             vm.launchWith(i.getStringExtra(EXTRA_ID))
             setIntent(android.content.Intent(i).setAction(android.content.Intent.ACTION_MAIN))
@@ -77,6 +84,19 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         if (i?.action != android.content.Intent.ACTION_SEND) return
         vm.handIn(i.getStringExtra(android.content.Intent.EXTRA_TEXT))
         setIntent(android.content.Intent(i).apply { action = android.content.Intent.ACTION_MAIN; removeExtra(android.content.Intent.EXTRA_TEXT) })
+    }
+
+    /** «Записать» and «Надиктовать» on a long press of the icon. */
+    private fun publishShortcuts() = runCatching {
+        val w = if (resolveLang(Prefs.get(this).settings.value.lang) == Lang.Ru) WordsRu else WordsEn
+        fun one(id: String, label: String, action: String, icon: Int) =
+            androidx.core.content.pm.ShortcutInfoCompat.Builder(this, id).setShortLabel(label)
+                .setIcon(androidx.core.graphics.drawable.IconCompat.createWithResource(this, icon))
+                .setIntent(android.content.Intent(this, MainActivity::class.java).setAction(action)).build()
+        androidx.core.content.pm.ShortcutManagerCompat.setDynamicShortcuts(this, listOf(
+            one("write", w.a11ySend, ACTION_WRITE, R.drawable.ic_shortcut_write),
+            one("dictate", w.a11yMic, ACTION_DICTATE, R.drawable.ic_shortcut_dictate),
+        ))
     }
 
     private val bellAsk = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }

@@ -55,6 +55,10 @@ import ru.anjeib.margin.book.Line
 import ru.anjeib.margin.book.Repeat
 import ru.anjeib.margin.book.State
 import ru.anjeib.margin.book.retext
+import ru.anjeib.margin.book.addFiles
+import ru.anjeib.margin.book.removeFile
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.horizontalScroll
 import ru.anjeib.margin.book.setPlace
 import ru.anjeib.margin.book.setRepeat
 import ru.anjeib.margin.book.setThread
@@ -82,6 +86,12 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
     if (l == null) { LaunchedEffect(Unit) { onClose() }; return }
     var text by remember(id) { mutableStateOf(l.text) }
     var ask by remember { mutableStateOf<String?>(null) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var photo by remember { mutableStateOf<ru.anjeib.margin.data.Attachment?>(null) }
+    val pickFile = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { u ->
+        if (u != null) scope.launch { ru.anjeib.margin.data.Files.import(ctx, u)?.let { f -> vm.edit { it.addFiles(id, listOf(f)) } } }
+    }
     fun commit() { if (text.isNotBlank() && text.trim() != l.text) vm.edit { it.retext(id, text) } }
     DisposableEffect(id) { onDispose { commit() } }
 
@@ -115,12 +125,18 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                 }
                 Prop(v, name, onValue = go) { ask = k }
             }
-            val unset = props.filter { it.second == null && (it.first != "when" || l.kind != Kind.Note) }
-            if (unset.isNotEmpty()) FlowRow(Modifier.fillMaxWidth().padding(start = Grid.text, end = Grid.right), verticalArrangement = Arrangement.Center) {
-                unset.forEachIndexed { i, (k, _, name) ->
+            // Files kept with the line: photos as themselves, the rest by name; a tap opens.
+            if (l.files.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = Grid.text - 4.dp, end = Grid.right, top = 4.dp, bottom = 8.dp)
+                .horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                l.files.forEach { f -> FileChip(f, 72.dp, onClick = { openFile(ctx, f) { photo = it } }) }
+            }
+            val unset = props.filter { it.second == null && (it.first != "when" || l.kind != Kind.Note) }.map { it.first to it.third } + ("file" to w.propFile)
+            FlowRow(Modifier.fillMaxWidth().padding(start = Grid.text, end = Grid.right), verticalArrangement = Arrangement.Center) {
+                unset.forEachIndexed { i, (k, name) ->
                     if (i > 0) Text(" · ", style = Voice.reply.copy(color = c.pencil), modifier = Modifier.padding(vertical = 12.dp))
                     Text("+ $name", style = Voice.reply.copy(color = c.link),
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { ask = k }.padding(vertical = 12.dp, horizontal = 2.dp))
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { if (k == "file") pickFile.launch(arrayOf("*/*")) else ask = k }
+                            .padding(vertical = 12.dp, horizontal = 2.dp))
                 }
             }
             if (notes.any { it.tone == Tone.Attention }) Row(Modifier.padding(top = 4.dp)) {
@@ -162,6 +178,8 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
             }
         }
     }
+
+    photo?.let { f -> PhotoViewer(f, onClose = { photo = null }, onRemove = { vm.edit { it.removeFile(id, f.id) } }) }
 
     when (ask) {
         "when" -> WhenDialog(l, today, w, onDismiss = { ask = null }) { d, t, later ->

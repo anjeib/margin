@@ -138,6 +138,10 @@ fun Book.delete(id: String): Book {
     return copy(lines = lines.filterNot { it.id in ids })
 }
 
+/** Files kept with a line (a photo of the receipt, the contract). */
+fun Book.addFiles(id: String, files: List<ru.anjeib.margin.data.Attachment>): Book = edit(id) { it.copy(files = it.files + files) }
+fun Book.removeFile(id: String, fileId: String): Book = edit(id) { l -> l.copy(files = l.files.filterNot { it.id == fileId }) }
+
 /** A question on the margin answered «no matter»: it leaves the margin. */
 fun Book.dismissAsk(id: String, what: String): Book = edit(id) { it.copy(ask = it.ask - what) }
 

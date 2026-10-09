@@ -64,10 +64,10 @@ object Yandex {
         return ((u.input - u.cached).coerceAtLeast(0) * i + u.cached * c + u.output * o) / 1000.0
     }
 
-    suspend fun chat(apiKey: String, folder: String, model: String, system: String, messages: List<Pair<String, String>>, json: Boolean = true): YaReply =
-        chat(Door(apiKey, folder), model, system, messages, json)
+    suspend fun chat(apiKey: String, folder: String, model: String, system: String, messages: List<Pair<String, String>>, json: Boolean = true, maxTokens: Int = 1500): YaReply =
+        chat(Door(apiKey, folder), model, system, messages, json, maxTokens)
 
-    suspend fun chat(door: Door, model: String, system: String, messages: List<Pair<String, String>>, json: Boolean = true): YaReply =
+    suspend fun chat(door: Door, model: String, system: String, messages: List<Pair<String, String>>, json: Boolean = true, maxTokens: Int = 1500): YaReply =
         withContext(Dispatchers.IO) {
             fun body(withFormat: Boolean) = buildJsonObject {
                 put("model", "gpt://${door.modelFolder}/$model/latest")
@@ -76,7 +76,7 @@ object Yandex {
                     messages.forEach { (r, c) -> add(buildJsonObject { put("role", r); put("content", c) }) }
                 })
                 put("temperature", 0.2)
-                put("max_tokens", 1500)
+                put("max_tokens", maxTokens)
                 if (withFormat) put("response_format", buildJsonObject { put("type", "json_object") })
             }.toString()
             var (code, text) = try { post(door, body(json)) } catch (e: java.io.IOException) { throw AiException(ru.anjeib.margin.i18n.L.s.errNet) }

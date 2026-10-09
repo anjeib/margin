@@ -37,11 +37,13 @@ object Llm {
         complex: Boolean = false,
         json: Boolean = true,
         images: List<String> = emptyList(),
+        /** A model that thinks before it answers needs room for both. */
+        maxTokens: Int = 1500,
     ): LlmReply {
         if (!ready(s)) throw AiException(L.s.errNoKey)
         return if (yandex(s)) {
             // Yandex text models don't read images; the words still go through.
-            val r = Yandex.chat(door(s), yaModel(s, smart, complex), system, messages, json)
+            val r = Yandex.chat(door(s), yaModel(s, smart, complex), system, messages, json, maxTokens)
             LlmReply(r.content, r.rub)
         } else {
             val r = OpenRouter.chat(s.apiKey, if (smart) s.mainModel else s.fastModel, system, messages, json = json, quick = !smart, images = images)

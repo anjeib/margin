@@ -124,7 +124,9 @@ fun BookScreen(vm: BookVm) {
                     }
                 }
             }
-            if (target != null && !ritual) Composer(vm, target, book, today, Modifier.navigationBarsPadding())
+            if (target != null && !ritual) Composer(vm, target, book, today, Modifier.navigationBarsPadding(),
+                onOpen = { open = it }, onPerson = { push("person:$it") }, onThread = { push("thread:$it") },
+                onDay = { d -> stack = emptyList(); go(d) }, onSearch = { push("search") })
             else Spacer(Modifier.navigationBarsPadding())
         }
         open?.let { id ->

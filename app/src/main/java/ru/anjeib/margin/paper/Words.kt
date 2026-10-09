@@ -2,7 +2,12 @@ package ru.anjeib.margin.paper
 
 import ru.anjeib.margin.book.Repeat
 import ru.anjeib.margin.book.Summary
+import ru.anjeib.margin.book.Ask
+import ru.anjeib.margin.book.Kind
+import ru.anjeib.margin.book.Line
+import ru.anjeib.margin.book.daysBetween
 import ru.anjeib.margin.data.dative
+import ru.anjeib.margin.data.genitive
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -37,7 +42,6 @@ interface Words {
     fun movedOn(d: LocalDate?, today: LocalDate): String
     fun linesN(n: Int): String
     val deleted: String
-    val askLater: String
     val undo: String
     val toToday: String
     fun doneMore(n: Int): String
@@ -135,6 +139,31 @@ interface Words {
     val bellDone: String
     val bellHour: String
     fun morningLine(n: Int, tails: Int): String
+    /** An answer's sentence around its link (a name, a thread, a day): before, the link, after. */
+    fun answer(a: ru.anjeib.margin.book.Ask.Answer, today: LocalDate): Triple<String, String?, String>
+    val thinking: String
+    val needNet: String
+    fun more(n: Int): String
+    val close: String
+    val rereading: String
+    val reread: String
+    fun markedDone(n: Int): String
+    val attachPhoto: String
+    val attachCamera: String
+    val attachFile: String
+    val attachContact: String
+    val listening: String
+    val transcribing: String
+    val voiceOff: String
+    val micDenied: String
+    val stop: String
+    fun personAdded(name: String): String
+    val handedTitle: String
+    fun handedFrom(app: String): String
+    val openInMargin: String
+    val propFile: String
+    val share: String
+    val removeFile: String
 }
 
 private fun plural(n: Int, one: String, few: String, many: String): String {
@@ -219,7 +248,6 @@ object WordsRu : Words {
     override fun movedOn(d: LocalDate?, today: LocalDate) = "перенесено " + (d?.let { "на " + near(it, today) } ?: "на потом")
     override val deleted = "строка удалена"
     override fun linesN(n: Int) = "$n " + plural(n, "строка", "строки", "строк")
-    override val askLater = "Вопросы Margin пока не понимает — напишите, что сделать."
     override val undo = "вернуть"
     override val toToday = "к сегодня ›"
     override fun doneMore(n: Int) = "× ещё $n " + plural(n, "сделано", "сделано", "сделано")
@@ -334,6 +362,72 @@ object WordsRu : Words {
     override val bellHour = "Через час"
     override fun morningLine(n: Int, tails: Int) = "$n " + plural(n, "строка", "строки", "строк") + " на сегодня" +
         (if (tails > 0) ", из них $tails " + plural(tails, "хвост", "хвоста", "хвостов") else "")
+    override fun answer(a: Ask.Answer, today: LocalDate): Triple<String, String?, String> {
+        val n = a.lines.size
+        val t = things(a.lines)
+        val name = a.name
+        return when (a.about) {
+            Ask.About.Promised -> when {
+                name == null -> Triple(if (n > 0) "Обещано: $t" else "Открытых обещаний нет", null, "")
+                n > 0 -> Triple("", name.dative(), " обещано: $t")
+                else -> Triple("", name.dative(), " ничего не обещано")
+            }
+            Ask.About.Waited -> when {
+                name == null -> Triple(if (n > 0) "Ждём: $t" else "Ничего не ждём", null, "")
+                n > 0 -> Triple("От ", name.genitive(), " ждём: $t")
+                else -> Triple("От ", name.genitive(), " ничего не ждём")
+            }
+            Ask.About.Person -> Triple("", name ?: "", if (n > 0) ": открыто $t" else ": открытого нет")
+            Ask.About.Thread -> Triple("", name ?: "", if (n > 0) ": открыто $t" else ": всё сделано")
+            Ask.About.Day -> {
+                val d0 = a.from ?: today; val d1 = a.to ?: d0
+                if (d0 == d1) Triple("", dayName(d0, today), if (n > 0) " — $t" else " — пусто")
+                else Triple((if (!d0.isAfter(today)) "На этой неделе" else "На следующей неделе") + if (n > 0) " — $t" else " — пусто", null, "")
+            }
+            Ask.About.Tails -> Triple(if (n > 0) "Горит: $t" else "Ничего не горит", null, "")
+            Ask.About.Done -> {
+                val span = when { a.from == today && a.to == today -> "сегодня"; a.from == a.to -> "вчера"; (a.from?.let { daysBetween(it, today) } ?: 0) <= 7 -> "за неделю"; else -> "за месяц" }
+                Triple(if (n > 0) "Сделано $span: $t" else span.replaceFirstChar { it.uppercase() } + " ничего не сделано", null, "")
+            }
+            Ask.About.Found -> Triple(if (n > 0) "Нашлось: $t" else "Не нашлось", null, "")
+            Ask.About.Unknown -> Triple(a.said ?: needNet, null, "")
+        }
+    }
+    private fun things(lines: List<Line>): String = listOfNotNull(
+        lines.count { it.kind == Kind.Todo }.takeIf { it > 0 }?.let { "$it " + plural(it, "дело", "дела", "дел") },
+        lines.count { it.kind == Kind.Event }.takeIf { it > 0 }?.let { "$it " + plural(it, "встреча", "встречи", "встреч") },
+        lines.count { it.kind == Kind.Note }.takeIf { it > 0 }?.let { "$it " + plural(it, "запись", "записи", "записей") },
+    ).joinToString(", ")
+    private fun dayName(d: LocalDate, today: LocalDate) = when {
+        d == today -> "Сегодня"
+        d == today.plusDays(1) -> "Завтра"
+        d == today.minusDays(1) -> "Вчера"
+        d.isAfter(today) && d.isBefore(today.plusDays(7)) -> weekday(d)
+        else -> dayMonth(d)
+    }
+    override val thinking = "читаю записи…"
+    override val needNet = "Такой вопрос понимает только ИИ — нужна сеть."
+    override fun more(n: Int) = "ещё $n ›"
+    override val close = "Закрыть"
+    override val rereading = "перечитываю…"
+    override val reread = "перечитано"
+    override fun markedDone(n: Int) = "перечитано, закрыто: $n"
+    override val attachPhoto = "Фото"
+    override val attachCamera = "Камера"
+    override val attachFile = "Файл"
+    override val attachContact = "Контакт"
+    override val listening = "слушаю…"
+    override val transcribing = "расшифровываю…"
+    override val voiceOff = "Голос сейчас недоступен — нужна сеть."
+    override val micDenied = "Без микрофона диктовать нельзя."
+    override val stop = "Остановить"
+    override fun personAdded(name: String) = "$name — в людях"
+    override val handedTitle = "В Margin"
+    override fun handedFrom(app: String) = "из $app"
+    override val openInMargin = "открыть в Margin ›"
+    override val propFile = "файл"
+    override val share = "Поделиться"
+    override val removeFile = "убрать из строки"
 }
 
 object WordsEn : Words {
@@ -392,7 +486,6 @@ object WordsEn : Words {
     override fun movedOn(d: LocalDate?, today: LocalDate) = "moved to " + (d?.let { near(it, today) } ?: "later")
     override val deleted = "line deleted"
     override fun linesN(n: Int) = "$n line" + if (n == 1) "" else "s"
-    override val askLater = "Margin doesn't answer questions yet — write what to do."
     override val undo = "undo"
     override val toToday = "to today ›"
     override fun doneMore(n: Int) = "× $n more done"
@@ -506,4 +599,70 @@ object WordsEn : Words {
     override val bellDone = "Done"
     override val bellHour = "In an hour"
     override fun morningLine(n: Int, tails: Int) = "$n line" + (if (n == 1) "" else "s") + " for today" + (if (tails > 0) ", $tails left over" else "")
+    override fun answer(a: Ask.Answer, today: LocalDate): Triple<String, String?, String> {
+        val n = a.lines.size
+        val t = things(a.lines)
+        val name = a.name
+        return when (a.about) {
+            Ask.About.Promised -> when {
+                name == null -> Triple(if (n > 0) "Promised: $t" else "No open promises", null, "")
+                n > 0 -> Triple("Promised to ", name, ": $t")
+                else -> Triple("Nothing promised to ", name, "")
+            }
+            Ask.About.Waited -> when {
+                name == null -> Triple(if (n > 0) "Expected: $t" else "Waiting for nothing", null, "")
+                n > 0 -> Triple("Expected from ", name, ": $t")
+                else -> Triple("Nothing expected from ", name, "")
+            }
+            Ask.About.Person -> Triple("", name ?: "", if (n > 0) ": $t open" else ": nothing open")
+            Ask.About.Thread -> Triple("", name ?: "", if (n > 0) ": $t open" else ": all done")
+            Ask.About.Day -> {
+                val d0 = a.from ?: today; val d1 = a.to ?: d0
+                if (d0 == d1) Triple("", dayName(d0, today), if (n > 0) " — $t" else " — empty")
+                else Triple((if (!d0.isAfter(today)) "This week" else "Next week") + if (n > 0) " — $t" else " — empty", null, "")
+            }
+            Ask.About.Tails -> Triple(if (n > 0) "Burning: $t" else "Nothing is burning", null, "")
+            Ask.About.Done -> {
+                val span = when { a.from == today && a.to == today -> "today"; a.from == a.to -> "yesterday"; (a.from?.let { daysBetween(it, today) } ?: 0) <= 7 -> "this week"; else -> "this month" }
+                Triple(if (n > 0) "Done $span: $t" else "Nothing done $span", null, "")
+            }
+            Ask.About.Found -> Triple(if (n > 0) "Found: $t" else "Nothing found", null, "")
+            Ask.About.Unknown -> Triple(a.said ?: needNet, null, "")
+        }
+    }
+    private fun things(lines: List<Line>): String = listOfNotNull(
+        lines.count { it.kind == Kind.Todo }.takeIf { it > 0 }?.let { "$it to-do" + if (it == 1) "" else "s" },
+        lines.count { it.kind == Kind.Event }.takeIf { it > 0 }?.let { "$it meeting" + if (it == 1) "" else "s" },
+        lines.count { it.kind == Kind.Note }.takeIf { it > 0 }?.let { "$it note" + if (it == 1) "" else "s" },
+    ).joinToString(", ")
+    private fun dayName(d: LocalDate, today: LocalDate) = when {
+        d == today -> "Today"
+        d == today.plusDays(1) -> "Tomorrow"
+        d == today.minusDays(1) -> "Yesterday"
+        d.isAfter(today) && d.isBefore(today.plusDays(7)) -> weekday(d)
+        else -> dayMonth(d)
+    }
+    override val thinking = "reading the notebook…"
+    override val needNet = "Only the AI understands this question — it needs a network."
+    override fun more(n: Int) = "$n more ›"
+    override val close = "Close"
+    override val rereading = "re-reading…"
+    override val reread = "re-read"
+    override fun markedDone(n: Int) = "re-read, closed: $n"
+    override val attachPhoto = "Photo"
+    override val attachCamera = "Camera"
+    override val attachFile = "File"
+    override val attachContact = "Contact"
+    override val listening = "listening…"
+    override val transcribing = "transcribing…"
+    override val voiceOff = "Voice needs a network right now."
+    override val micDenied = "Dictation needs the microphone."
+    override val stop = "Stop"
+    override fun personAdded(name: String) = "$name — in people"
+    override val handedTitle = "To Margin"
+    override fun handedFrom(app: String) = "from $app"
+    override val openInMargin = "open in Margin ›"
+    override val propFile = "file"
+    override val share = "Share"
+    override val removeFile = "remove from the line"
 }

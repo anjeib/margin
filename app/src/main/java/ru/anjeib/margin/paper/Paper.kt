@@ -76,7 +76,8 @@ object Voice {
     /** Your words. */
     val words = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 16.sp, lineHeight = 24.sp)
     /** Margin says something longer: an answer, a hint over the field. */
-    val reply = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontWeight = FontWeight(400), fontSize = 15.sp, lineHeight = 22.sp)
+    val reply = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontWeight = FontWeight(400), fontSize = 15.sp, lineHeight = 22.sp,
+        fontFeatureSettings = "lnum")
     /** A note on the margin. */
     val note = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontWeight = FontWeight(400), fontSize = 13.sp, lineHeight = 17.sp,
         fontFeatureSettings = "tnum, lnum")
