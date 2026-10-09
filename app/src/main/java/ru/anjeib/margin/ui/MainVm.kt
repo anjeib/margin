@@ -1,15 +1,5 @@
 package ru.anjeib.margin.ui
 
-import ru.anjeib.margin.ai.LocalParser
-
-import ru.anjeib.margin.data.toggleSlot
-
-import ru.anjeib.margin.data.syncSlots
-
-import ru.anjeib.margin.data.slotRef
-
-import ru.anjeib.margin.data.questionRef
-
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -24,40 +14,12 @@ import ru.anjeib.margin.ai.Command
 import ru.anjeib.margin.ai.Commands
 import ru.anjeib.margin.ai.Applied
 import ru.anjeib.margin.ai.Assistant
+import ru.anjeib.margin.ai.LocalParser
 import ru.anjeib.margin.ai.ModelInfo
 import ru.anjeib.margin.ai.OpenRouter
 import ru.anjeib.margin.ai.Processor
 import ru.anjeib.margin.ai.Scope
-import ru.anjeib.margin.data.AppData
-import ru.anjeib.margin.data.logged
-import ru.anjeib.margin.data.bareFromNote
-import ru.anjeib.margin.data.address
-import ru.anjeib.margin.data.properName
-import ru.anjeib.margin.data.sentence
-import ru.anjeib.margin.data.withNames
-import ru.anjeib.margin.data.Attachment
-import ru.anjeib.margin.data.Brief
-import ru.anjeib.margin.data.ChatMsg
-import ru.anjeib.margin.data.ContactInfo
-import ru.anjeib.margin.data.Entry
-import ru.anjeib.margin.data.Files
-import ru.anjeib.margin.data.Note
-import ru.anjeib.margin.data.Person
-import ru.anjeib.margin.data.contact
-import ru.anjeib.margin.data.Prefs
-import ru.anjeib.margin.data.Settings
-import ru.anjeib.margin.data.Store
-import ru.anjeib.margin.data.Feedback
-import ru.anjeib.margin.data.Subtask
-import ru.anjeib.margin.data.Task
-import ru.anjeib.margin.data.mapTree
-import ru.anjeib.margin.data.nextOccurrence
-import ru.anjeib.margin.data.postponed
-import ru.anjeib.margin.data.shortLabel
-import ru.anjeib.margin.data.newId
-import ru.anjeib.margin.data.nowStamp
-import ru.anjeib.margin.data.text
-import ru.anjeib.margin.data.withDone
+import ru.anjeib.margin.data.*
 import ru.anjeib.margin.i18n.L
 import ru.anjeib.margin.notify.Reminders
 import java.time.LocalDate
@@ -88,7 +50,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private val _busy = MutableStateFlow<String?>(null) // scope key in flight
     val busy: StateFlow<String?> = _busy
 
-    /** Note/brief/person operations in flight, by key. */
+    /** Note/person/AI operations in flight, by key. */
     private val _working = MutableStateFlow<Set<String>>(emptySet())
     val working: StateFlow<Set<String>> = _working
 
@@ -134,7 +96,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     init {
         // The demo copy opens with the sample already in it, once.
         if (ru.anjeib.margin.BuildConfig.DEMO && !ru.anjeib.margin.data.Demo.asked(ctx)) loadDemo()
-        viewModelScope.launch { store.data.collect { Reminders.syncTasks(getApplication(), it.tasks, it.notes); watchBrief(it) } }
+        viewModelScope.launch { store.data.collect { Reminders.syncTasks(getApplication(), it.tasks, it.notes) } }
         // A quiet line under the field says what happened — and then leaves.
         viewModelScope.launch {
             _notice.collect { n -> if (n != null) { kotlinx.coroutines.delay(7000); if (_notice.value == n) _notice.value = null } }
@@ -448,51 +410,29 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     // ---------------- blocks: a note's stream or a task's records, edited anywhere ----------------
 
-    /** Where a block lives: «note:<id>» or «task:<id>». */
-    private fun editEntries(owner: String, f: (List<Entry>) -> List<Entry>) {
-        val id = owner.substringAfter(':')
-        if (owner.startsWith("note:")) updateNote(id) { it.copy(entries = f(it.entries), updatedAt = nowStamp()) }
-        else updateTask(id) { it.copy(entries = f(it.entries)) }
-    }
-
-    private fun entriesOf(owner: String): List<Entry> {
-        val id = owner.substringAfter(':')
-        return if (owner.startsWith("note:")) data.value.notes.find { it.id == id }?.entries.orEmpty() else data.value.tasks.find { it.id == id }?.entries.orEmpty()
-    }
-
     /** The visit going on in a note or a task card: what is written now groups under one date line. */
     private val sessions = mutableMapOf<String, String>()
     fun startSession(owner: String) { sessions[owner] = newId() }
     private fun stamp(owner: String, e: Entry) = if (e.session == null) e.copy(session = sessions[owner]) else e
 
-    /** Puts [e] right after [afterId] (at the end when null or gone). */
-    fun insertEntry(owner: String, afterId: String?, e0: Entry) = stamp(owner, e0).let { e -> editEntries(owner) { l ->
-        val i = l.indexOfFirst { it.id == afterId }
-        if (i < 0) l + e else l.take(i + 1) + e + l.drop(i + 1)
-    } }
+    /** Puts [e] right after [afterId] (at the end when null or gone). Where a block lives: «note:<id>» or «task:<id>». */
+    fun insertEntry(owner: String, afterId: String?, e0: Entry) = stamp(owner, e0).let { e -> store.update { it.insertEntry(owner, afterId, e) } }
 
-    fun moveEntry(owner: String, id: String, delta: Int) = editEntries(owner) { l ->
-        val i = l.indexOfFirst { it.id == id }
-        val j = i + delta
-        if (i < 0 || j !in l.indices) l else l.toMutableList().apply { add(j, removeAt(i)) }
-    }
+    fun moveEntry(owner: String, id: String, delta: Int) = store.update { it.moveEntry(owner, id, delta) }
 
     fun deleteEntry(owner: String, id: String) {
-        entriesOf(owner).find { it.id == id }?.attachments?.forEach { Files.delete(ctx, it) }
-        editEntries(owner) { l -> l.filterNot { it.id == id } }
+        data.value.entriesOf(owner).find { it.id == id }?.attachments?.forEach { Files.delete(ctx, it) }
+        store.update { it.removeEntry(owner, id) }
     }
 
     fun editEntryText(owner: String, id: String, text: String) {
-        editEntries(owner) { l -> l.mapNotNull { if (it.id != id) it else if (text.isBlank() && it.attachments.isEmpty() && !it.isList) null else it.copy(text = text.sentence()) } }
+        store.update { it.editEntryText(owner, id, text) }
         linkTitles(owner, id)
     }
 
-    private fun updateAttachment(owner: String, entryId: String, attId: String, f: (Attachment) -> Attachment) = editEntries(owner) { l ->
-        l.map { e -> if (e.id != entryId) e else e.copy(attachments = e.attachments.map { if (it.id == attId) f(it) else it }) }
-    }
+    private fun updateAttachment(owner: String, entryId: String, attId: String, f: (Attachment) -> Attachment) = store.update { it.editAttachment(owner, entryId, attId, f) }
 
-    fun setCaption(owner: String, entryId: String, attId: String, text: String) =
-        updateAttachment(owner, entryId, attId) { it.copy(caption = text.trim().ifBlank { null }?.sentence()) }
+    fun setCaption(owner: String, entryId: String, attId: String, text: String) = store.update { it.setCaption(owner, entryId, attId, text) }
 
     /** A text block after [afterId]: a written thought in the middle of the stream. */
     fun insertText(owner: String, afterId: String?, text: String) {
@@ -504,14 +444,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     fun insertList(owner: String, afterId: String?): String = Entry(isList = true).also { insertEntry(owner, afterId, it) }.id
 
-    fun addListItems(owner: String, entryId: String, text: String) = editEntries(owner) { l ->
-        val items = Commands.items(text).ifEmpty { listOf(text.trim()) }.filter { it.isNotBlank() }.map { Subtask(title = it.sentence()) }
-        l.map { if (it.id == entryId) it.copy(items = it.items + items) else it }
-    }
+    /** «молоко, хлеб и сыр» → the items; the whole text when nothing splits it. */
+    private fun listItems(text: String) = Commands.items(text).ifEmpty { listOf(text.trim()) }
 
-    fun toggleItem(owner: String, entryId: String, itemId: String) = editEntries(owner) { l ->
-        l.map { e -> if (e.id != entryId) e else e.copy(items = e.items.map { if (it.id == itemId) it.copy(done = !it.done) else it }) }
-    }
+    fun addListItems(owner: String, entryId: String, text: String) = store.update { it.addListItems(owner, entryId, listItems(text)) }
+
+    fun toggleItem(owner: String, entryId: String, itemId: String) = store.update { it.toggleItem(owner, entryId, itemId) }
 
     /**
      * A photo, video, voice note, file or contact as its own block after [afterId] — then made meaningful:
@@ -593,13 +531,13 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** Addresses in a text block get their page title as a quiet line under it. */
     fun linkTitles(owner: String, entryId: String) {
-        val e = entriesOf(owner).find { it.id == entryId } ?: return
+        val e = data.value.entriesOf(owner).find { it.id == entryId } ?: return
         val urls = Regex("https?://[^\\s)>\\]]+").findAll(e.text).map { it.value.trimEnd('.', ',') }.filter { u -> e.attachments.none { it.url == u } }.toList().take(3)
         if (urls.isEmpty() || !Processor.online(ctx)) return
         viewModelScope.launch {
             urls.forEach { u ->
                 val title = withContext(Dispatchers.IO) { pageTitle(u) } ?: android.net.Uri.parse(u).host ?: u
-                editEntries(owner) { l -> l.map { x -> if (x.id == entryId && x.attachments.none { it.url == u }) x.copy(attachments = x.attachments + Attachment(kind = "link", name = title, url = u)) else x } }
+                store.update { it.addLink(owner, entryId, u, title) }
             }
         }
     }
@@ -630,21 +568,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun clearNotePeople(id: String) = updateNote(id) { it.copy(people = emptyList()) }
 
     /** «Список»: a new list block at the end of the note; [items] — what was already said («молоко, хлеб»). */
-    fun addNoteList(id: String, items: List<String> = emptyList()) = updateNote(id) { n ->
-        n.copy(entries = n.entries + Entry(isList = true, items = items.map { Subtask(title = it.sentence()) }), updatedAt = nowStamp())
-    }
+    fun addNoteList(id: String, items: List<String> = emptyList()) = store.update { it.addNoteList(id, items) }
 
     /** Items go to the last list of the note (a new one if there is none). */
-    fun addNoteItems(id: String, text: String) = updateNote(id) { n ->
-        val items = Commands.items(text).ifEmpty { listOf(text.trim()) }.filter { it.isNotBlank() }.map { Subtask(title = it.sentence()) }
-        val last = n.entries.lastOrNull()
-        if (last?.isList == true) n.copy(entries = n.entries.dropLast(1) + last.copy(items = last.items + items), updatedAt = nowStamp())
-        else n.copy(entries = n.entries + Entry(isList = true, items = items), updatedAt = nowStamp())
-    }
+    fun addNoteItems(id: String, text: String) = store.update { it.addNoteItems(id, listItems(text)) }
 
-    fun toggleNoteItem(noteId: String, entryId: String, itemId: String) = updateNote(noteId) { n ->
-        n.copy(entries = n.entries.map { e -> if (e.id != entryId) e else e.copy(items = e.items.map { if (it.id == itemId) it.copy(done = !it.done) else it }) })
-    }
+    fun toggleNoteItem(noteId: String, entryId: String, itemId: String) = store.update { it.toggleNoteItem(noteId, entryId, itemId) }
 
     /**
      * What is typed in a note: a fill mode («Список», «Место»…) or a command («добавь список: …») is done here;
@@ -675,7 +604,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         else _notice.value = Notice(key(scope), L.s.offlineSaved, null)
     }
 
-    fun dropQueued(id: String) = store.update { d -> d.copy(queue = d.queue.filterNot { it.id == id }) }
+    fun dropQueued(id: String) = store.update { it.dropQueued(id) }
 
     /** Reads the phone calendar into the AI context (only when the user turned it on and allowed it). */
     fun refreshCalendar() {
@@ -760,10 +689,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val inbox = data.value.inboxNote() ?: return
         val e = inbox.entries.find { it.id == entryId } ?: return
         val title = data.value.tasks.find { it.id == topicId }?.title ?: return
-        store.update { d -> d.copy(
-            notes = d.notes.map { if (it.id == inbox.id) it.copy(entries = it.entries.filterNot { x -> x.id == entryId }, updatedAt = nowStamp()) else it },
-            tasks = d.tasks.map { if (it.id == topicId) it.copy(entries = (it.entries + e.copy(session = null)).sortedBy { x -> x.at }) else it },
-        ) }
+        store.update { it.inboxToTopic(inbox.id, e.id, topicId) }
         _toast.value = L.s.movedToTopic(title)
         land(listOf(topicId))
     }
@@ -884,75 +810,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         aiChanges.remove(id)?.let { count("undo:$it") }
         val snap = snapshots.remove(id) ?: return
         store.restore { d ->
-            snap.copy(
-                chat = d.chat.map { if (it.id == id) it.copy(caption = L.s.undone, taskIds = emptyList(), options = emptyList()) else it },
-                brief = d.brief,
-            )
+            snap.copy(chat = d.chat.map { if (it.id == id) it.copy(caption = L.s.undone, taskIds = emptyList(), options = emptyList()) else it })
         }
         if (_notice.value?.undoId == id) _notice.value = _notice.value?.copy(text = L.s.undone, undoId = null)
     }
 
     fun canUndo(id: String) = snapshots.containsKey(id)
-
-    fun makeBrief(force: Boolean = false) {
-        val s = settings.value
-        val today = LocalDate.now().toString()
-        if (!Processor.ready(s) || "brief" in _working.value) return
-        refreshCalendar()
-        val prev = data.value.brief?.takeIf { it.date == today && it.lang == L.lang.name }
-        // After 18:00 the brief turns to tomorrow — one rebuild if the morning one is still up.
-        val evening = java.time.LocalTime.now().hour >= 18
-        if (!force && prev?.headline != null && !(evening && (prev.at ?: "") < "18:00")) return
-        _working.value += "brief"
-        viewModelScope.launch {
-            try {
-                val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.briefPrompt(data.value, s, evening), listOf("user" to "brief"), smart = true)
-                prefs.addSpend(r.rub)
-                val o = Assistant.parseObject(r.content)
-                val text = Assistant.field(o, "text") ?: r.content.trim()
-                val main = Assistant.field(o, "main_task_id")?.takeIf { id -> data.value.tasks.any { it.id == id } }
-                store.update {
-                    it.copy(brief = Brief(today, text, Assistant.field(o, "focus"), L.lang.name, Assistant.field(o, "headline"),
-                        mainTaskId = main, at = java.time.LocalTime.now().toString().take(5), fingerprint = briefFingerprint(it),
-                        revisions = (prev?.revisions ?: -1) + 1))
-                }
-            } catch (e: Exception) {
-                if (force) _toast.value = e.message
-            } finally {
-                _working.value -= "brief"
-            }
-        }
-    }
-
-    /** Today's and tomorrow's open tasks with their dates — compared with what the brief was built on. */
-    fun briefFingerprint(d: AppData): String {
-        val tomorrow = LocalDate.now().plusDays(1)
-        return d.tasks.filter { !it.done && (isToday(it) || isRunning(it) || it.dueDate == tomorrow) }
-            .map { it.id + it.due + it.time }.sorted().joinToString(",")
-    }
-
-    /**
-     * Keeps «Главное» honest: when the task it names is done, moved off today or deleted, the brief is rebuilt
-     * (at most 4 times a day — each rebuild costs a request).
-     */
-    private fun watchBrief(d: AppData) {
-        val b = d.brief?.takeIf { it.date == LocalDate.now().toString() && it.lang == L.lang.name } ?: return
-        val t = b.mainTaskId?.let { main -> d.tasks.find { it.id == main } }
-        val stillOn = b.mainTaskId == null || (t != null && !t.done && (isToday(t) || isRunning(t) || t.dueDate == LocalDate.now().plusDays(1)))
-        // The day changed under the brief: rebuild it quietly — at once when «главное» is gone,
-        // otherwise at most every half hour, so a busy morning doesn't burn the day's rebuilds in minutes.
-        val changed = b.fingerprint != null && b.fingerprint != briefFingerprint(d)
-        val age = runCatching { java.time.Duration.between(java.time.LocalTime.parse(b.at), java.time.LocalTime.now()).toMinutes() }.getOrDefault(999)
-        if ((!stillOn || (changed && age >= 30)) && b.revisions < 8 && d.tasks.any { !it.done }) {
-            briefJob?.cancel()
-            briefJob = viewModelScope.launch { kotlinx.coroutines.delay(4000); makeBrief(force = true) }
-        }
-    }
-    private var briefJob: kotlinx.coroutines.Job? = null
-
-    fun collapseBrief() { if (settings.value.briefCollapsed != LocalDate.now().toString()) prefs.update { it.copy(briefCollapsed = LocalDate.now().toString()) } }
-    fun expandBrief() = prefs.update { it.copy(briefCollapsed = "") }
-    fun hideBrief() = prefs.update { it.copy(briefHidden = LocalDate.now().toString()) }
 
     // ---------------- dictation ----------------
 
@@ -997,25 +860,16 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     // ---------------- tasks ----------------
 
-    private fun updateTask(id: String, by: String = "you", f: (Task) -> Task) =
-        store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) f(it).logged(it, by) else it }) }
+    private fun updateTask(id: String, by: String = "you", f: (Task) -> Task) = store.update { it.editTask(id, by, f) }
 
-    fun toggleTask(id: String) = store.update { d ->
-        questionRef(id)?.let { (tid, qid) -> return@update d.copy(tasks = d.tasks.map { t -> if (t.id != tid) t else t.copy(subtasks = t.subtasks.mapTree(qid) { val x = !it.done; it.withDone(x).copy(doneAt = if (x) LocalDate.now().toString() else null) }) }) }
-        val t = d.tasks.find { it.id == id } ?: return@update d
-        if (t.done) d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = false, doneAt = null, dropped = false).logged(it, "you") else it })
-        else {
-            // A repeating task leaves its next occurrence behind.
-            val next = t.nextOccurrence()
-            d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, doneAt = LocalDate.now().toString()).logged(it, "you") else it } + listOfNotNull(next))
-        }
-    }
+    /** Done or open again; a repeating task leaves its next occurrence behind. */
+    fun toggleTask(id: String) = store.update { it.toggleTask(id) }
 
     /** «Не буду делать»: closed without doing it — off the lists, honest in the history and reviews. A repeating one comes back as usual. */
     fun dropTask(id: String) {
         val before = data.value
-        val t = before.tasks.find { it.id == id && !it.done } ?: return
-        store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, dropped = true, doneAt = LocalDate.now().toString()).logged(it, "you") else it } + listOfNotNull(t.nextOccurrence())) }
+        if (before.tasks.none { it.id == id && !it.done }) return
+        store.update { it.dropTask(id) }
         offerUndo(before, L.s.droppedDone)
     }
 
@@ -1025,28 +879,15 @@ class MainVm(app: Application) : AndroidViewModel(app) {
      */
     fun taskToNote(id: String): String? {
         val before = data.value
-        val t = before.tasks.find { it.id == id } ?: return null
-        val text = (listOf(t.title) + t.entries.map { it.text }.filter { it.isNotBlank() }).joinToString("\n")
+        if (before.tasks.none { it.id == id }) return null
         val ideas = if (L.s.aiLanguage == "English") "ideas" else "идеи"
-        val home = t.project?.let { p -> before.notes.find { it.project == p && it.title.endsWith(ideas) } } ?: t.noteId?.let { nid -> before.notes.find { it.id == nid } }
-        // Its steps stay with it, as a list.
-        fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it.copy(children = emptyList())) + flat(it.children) }
-        val steps = flat(t.subtasks).takeIf { it.isNotEmpty() }?.let { Entry(isList = true, items = it) }
-        val fresh = Note(title = t.title, project = t.project, people = t.people, place = t.place,
-            entries = t.entries.filter { it.text.isNotBlank() || it.attachments.isNotEmpty() } + listOfNotNull(steps))
-        store.update { d ->
-            val rest = d.tasks.filterNot { it.id == id }
-            if (home != null) d.copy(tasks = rest, notes = d.notes.map { if (it.id == home.id) it.copy(entries = it.entries + Entry(text = text) + listOfNotNull(steps), updatedAt = nowStamp()) else it })
-            else d.copy(tasks = rest, notes = listOf(fresh) + d.notes)
-        }
-        val noteId = home?.id ?: fresh.id
+        var noteId: String? = null
+        store.update { d -> d.taskToNote(id, ideas)?.let { (next, nid) -> noteId = nid; next } ?: d }
         offerUndo(before, L.s.madeNote)
         return noteId
     }
 
-    fun toggleSubtask(taskId: String, subId: String) = updateTask(taskId) { t ->
-        t.copy(subtasks = t.subtasks.mapTree(subId) { val d = !it.done; it.withDone(d).copy(doneAt = if (d) LocalDate.now().toString() else null) })
-    }
+    fun toggleSubtask(taskId: String, subId: String) = store.update { it.toggleSubtask(taskId, subId) }
 
     /** A topic's question from the lists or the questions page: settled (or back), with a moment to take it back. */
     fun toggleQuestion(taskId: String, subId: String) {
@@ -1056,36 +897,25 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         offerUndo(before, if (q.done) L.s.reopened else if (q.from != null) L.s.gotIt else L.s.solvedWord)
     }
 
-    /** The hour of a task or of a topic's question («q:…»), set from the clock that opens on its time. */
-    fun setTime(id: String, time: String?) {
-        slotRef(id)?.let { (base, sid) -> moveSlot(base, sid, null, time, true); return }
-        questionRef(id)?.let { (tid, qid) -> updateTask(tid) { t -> t.copy(subtasks = t.subtasks.map { if (it.id == qid) it.copy(time = time, due = it.due ?: if (time != null) LocalDate.now().toString() else null) else it }) }; return }
-        updateTask(id) { t -> Assistant.withAutoReminder(t.copy(time = time, due = t.due ?: if (time != null && t.start == null) LocalDate.now().toString() else t.due, remindAt = null)) }
-    }
+    /** The hour of a task, one of its days or a topic's question («q:…»), set from the clock that opens on its time. */
+    fun setTime(id: String, time: String?) = store.update { it.setTime(id, time) }
 
-    fun setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null) = updateTask(taskId) { t ->
-        t.copy(subtasks = t.subtasks.mapTree(subId) { it.copy(due = due, time = if (due == null) null else time ?: it.time) })
-    }
+    fun setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null) = store.update { it.setQuestionDue(taskId, subId, due, time) }
 
     /** «Решено · в архив»: the topic with its materials leaves the lists; news in it brings it back. */
     fun archiveTopic(id: String) {
         val before = data.value
         val t = before.tasks.find { it.id == id } ?: return
-        store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, doneAt = LocalDate.now().toString()) else it }) }
+        store.update { it.archiveTopic(id) }
         offerUndo(before, L.s.archivedTopic(t.title))
     }
 
-    fun reviveTopic(id: String) = store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = false, doneAt = null) else it }) }
+    fun reviveTopic(id: String) = store.update { it.reviveTopic(id) }
 
     /** «+ шаг» on a matter: the step becomes its first question, the matter grows into a topic. */
     fun addStep(id: String, text: String) {
-        val t = text.trim().takeIf { it.isNotEmpty() } ?: return
-        updateTask(id) { m ->
-            // The first step takes the matter's day and hour — they were about doing it.
-            val first = m.subtasks.isEmpty()
-            m.copy(topic = true, subtasks = m.subtasks + ru.anjeib.margin.data.Subtask(title = t.sentence(),
-                due = if (first) m.due ?: m.start else null, time = if (first) m.time else null))
-        }
+        if (text.trim().isEmpty()) return
+        store.update { it.addStep(id, text) }
     }
 
     /** What the marks in the words say: «/дело», «#тема», «@Маша», «/жду», «/обещал», «/готово», «/запись», «/работа». */
@@ -1100,32 +930,16 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private val hashRx = Regex("(?:^|\\s)#(\\[[^\\]]+]|[\\p{L}\\d_-]+)")
     private val atRx = Regex("(?:^|\\s)@(\\[[^\\]]+]|[\\p{L}\\d_-]+)")
 
-    /** «#ремонт» → the open topic whose title has a word starting so; «#[id]» — chosen from the window. */
-    fun topicFor(token: String, d: AppData = data.value): Task? {
-        val open = d.tasks.filter { it.topic && !it.done }
-        if (token.startsWith("[")) return open.find { it.id == token.trim('[', ']') }
-        val q = token.lowercase().replace('_', ' ').replace('ё', 'е')
-        fun words(t: Task) = t.title.lowercase().replace('ё', 'е').split(Regex("[^\\p{L}\\d]+")).filter { it.isNotBlank() }
-        return open.firstOrNull { it.title.lowercase().replace('ё', 'е') == q } ?: open.filter { t -> words(t).any { it.startsWith(q) } || t.title.lowercase().replace('ё', 'е').contains(q) }
-            .maxByOrNull { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.createdAt) }
-    }
-
-    /** «@маша» → the contact; «@[Кофейня «Зерно»]» — chosen; someone new keeps the name as written. */
-    fun personFor(token: String, d: AppData = data.value): String {
-        val n = token.trim('[', ']').replace('_', ' ')
-        val people = d.persons.filter { !it.archived }
-        return people.find { it.matches(n) }?.name ?: people.firstOrNull { it.name.lowercase().startsWith(n.lowercase()) }?.name ?: n.properName()
-    }
-
     fun parseTags(text: String): Tags {
+        val d = data.value
         val tags = slashRx.findAll(text).map { it.groupValues[1].lowercase() }.toSet()
         fun has(vararg w: String) = tags.any { t -> w.any { t.startsWith(it) } }
-        val topic = hashRx.find(text)?.groupValues?.get(1)?.let { topicFor(it) }
-        val people = atRx.findAll(text).map { personFor(it.groupValues[1]) }.toList()
+        val topic = hashRx.find(text)?.groupValues?.get(1)?.let { d.topicFor(it) }
+        val people = atRx.findAll(text).map { d.personFor(it.groupValues[1]) }.toList()
         // «позвонить @ЖЭК» keeps the name in the words; with «/жду» / «/обещал» the person is the other side, not the title.
         val sides = has("жду", "wait") || has("обещал", "promised")
-        var t = text.replace(slashRx, " ").replace(hashRx) { m -> if (topicFor(m.groupValues[1]) != null) " " else m.value }
-            .replace(atRx) { m -> if (sides) " " else " " + personFor(m.groupValues[1]) }
+        var t = text.replace(slashRx, " ").replace(hashRx) { m -> if (d.topicFor(m.groupValues[1]) != null) " " else m.value }
+            .replace(atRx) { m -> if (sides) " " else " " + d.personFor(m.groupValues[1]) }
         t = t.replace(Regex("\\s{2,}"), " ").trim()
         return Tags(
             text = t,
@@ -1135,32 +949,17 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** «/дело /работа Отправить счёт» → the words, the kind (task | note | topic), the sphere. */
-    private fun splitTags(text: String): Triple<String, String?, String?> = parseTags(text).let { Triple(it.text, it.kind, it.sphere) }
-
-    /** «/готово [#тема] слова[: что сказать]» → the open matter these words name best, or null. */
-    fun matterFor(words: String, topicId: String?, d: AppData = data.value): Pair<String, String>? {
-        fun stems(x: String) = x.lowercase().replace('ё', 'е').split(Regex("[^\\p{L}\\d]+")).filter { it.length >= 3 }.map { it.take(5) }.toSet()
-        val q = stems(words)
-        if (q.isEmpty()) return null
-        val cands = buildList {
-            d.tasks.filter { it.topic && !it.done && (topicId == null || it.id == topicId) }.forEach { t -> t.subtasks.filter { !it.done }.forEach { add("q:${t.id}:${it.id}" to it.title) } }
-            if (topicId == null) d.tasks.filter { !it.topic && !it.done }.forEach { add(it.id to it.title) }
-        }
-        return cands.map { it to (stems(it.second) intersect q).size }.filter { it.second > 0 }.maxByOrNull { it.second }?.first
-    }
-
     /** «/готово»: the matter is ticked, words after «:» go into its topic's feed — no AI, works offline. */
     private fun doneByWords(tg: Tags, scope: Scope) {
         val topicId = tg.topicId ?: (scope as? Scope.InTask)?.taskId
         val what = tg.text.substringBefore(':')
         val said = tg.text.substringAfter(':', "").trim()
-        val hit = matterFor(what, topicId) ?: matterFor(what, null)
+        val hit = data.value.let { d -> d.matterFor(what, topicId) ?: d.matterFor(what, null) }
         if (hit == null) { _toast.value = L.s.doneNotFound; return }
         completeWithUndo(hit.first)
         if (said.isNotEmpty()) {
             val owner = questionRef(hit.first)?.first ?: hit.first
-            updateTask(owner) { it.copy(entries = it.entries + Entry(text = said.sentence())) }
+            store.update { it.addRecord(owner, said) }
         }
         _toast.value = L.s.doneMarked(hit.second)
     }
@@ -1171,7 +970,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val t = tg.text
         val kind = tg.kind
         if (t.isBlank() || Commands.parse(t) != null) return null
-        if (tg.done) return matterFor(t.substringBefore(':'), tg.topicId)?.let { L.s.previewDone(it.second) } ?: L.s.doneNotFound
+        if (tg.done) return data.value.matterFor(t.substringBefore(':'), tg.topicId)?.let { L.s.previewDone(it.second) } ?: L.s.doneNotFound
         val topic = tg.topicId?.let { id -> data.value.tasks.find { it.id == id } }
         if (tg.record) return listOfNotNull(L.s.previewRecord, topic?.let { L.s.intoTopic(it.title) }).joinToString("  ·  ")
         val who = tg.people.firstOrNull()
@@ -1208,103 +1007,63 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** «+» on a line of the feed: a new matter under it (another matter or a record), shown indented. */
     fun addChildDeal(topicId: String, parentId: String, text: String) {
-        val t = text.trim().takeIf { it.isNotEmpty() } ?: return
-        updateTask(topicId) { it.copy(subtasks = it.subtasks + ru.anjeib.margin.data.Subtask(title = t.sentence(), parent = parentId)) }
+        if (text.trim().isEmpty()) return
+        store.update { it.addChildDeal(topicId, parentId, text) }
     }
 
     /** «−» on a matter: it leaves the counts and the lists but stays in the feed struck through (with what hangs under it). */
-    fun removeDeal(topicId: String, subId: String) = updateTask(topicId) { t ->
-        fun under(id: String): List<String> = listOf(id) + t.subtasks.filter { it.parent == id }.flatMap { under(it.id) }
-        val ids = under(subId).toSet()
-        t.copy(subtasks = t.subtasks.filterNot { it.id in ids }, removed = t.removed + t.subtasks.filter { it.id in ids })
-    }
-
-    fun restoreDeal(topicId: String, subId: String) = updateTask(topicId) { t ->
-        val back = t.removed.filter { it.id == subId || it.parent == subId }
-        t.copy(removed = t.removed - back.toSet(), subtasks = t.subtasks + back)
-    }
-
-    fun purgeDeal(topicId: String, subId: String) = updateTask(topicId) { t -> t.copy(removed = t.removed.filterNot { it.id == subId || it.parent == subId }) }
+    fun removeDeal(topicId: String, subId: String) = store.update { it.removeDeal(topicId, subId) }
+    fun restoreDeal(topicId: String, subId: String) = store.update { it.restoreDeal(topicId, subId) }
+    fun purgeDeal(topicId: String, subId: String) = store.update { it.purgeDeal(topicId, subId) }
 
     /** «−» on a record of the feed: struck through, its files kept until removed for good. */
-    fun removeRecord(topicId: String, entryId: String) = updateTask(topicId) { t ->
-        val e = t.entries.find { it.id == entryId } ?: return@updateTask t
-        t.copy(entries = t.entries - e, removedEntries = t.removedEntries + e)
-    }
-
-    fun restoreRecord(topicId: String, entryId: String) = updateTask(topicId) { t ->
-        val e = t.removedEntries.find { it.id == entryId } ?: return@updateTask t
-        t.copy(removedEntries = t.removedEntries - e, entries = (t.entries + e).sortedBy { it.at })
-    }
+    fun removeRecord(topicId: String, entryId: String) = store.update { it.removeRecord(topicId, entryId) }
+    fun restoreRecord(topicId: String, entryId: String) = store.update { it.restoreRecord(topicId, entryId) }
 
     fun purgeRecord(topicId: String, entryId: String) {
         data.value.tasks.find { it.id == topicId }?.removedEntries?.find { it.id == entryId }?.attachments?.forEach { Files.delete(ctx, it) }
-        updateTask(topicId) { t -> t.copy(removedEntries = t.removedEntries.filterNot { it.id == entryId }) }
+        store.update { it.purgeRecord(topicId, entryId) }
     }
 
-    fun setSphere(id: String, sphere: String?) = updateTask(id) { it.copy(sphere = sphere) }
+    fun setSphere(id: String, sphere: String?) = store.update { it.setSphere(id, sphere) }
 
-    fun setOrg(personId: String, org: Boolean) = store.update { d -> d.copy(persons = d.persons.map { if (it.id == personId) it.copy(org = org) else it }) }
+    fun setOrg(personId: String, org: Boolean) = store.update { it.setOrg(personId, org) }
 
-    fun setTopicLabel(id: String, label: String?) = store.update { d ->
-        val p = label?.trim()?.removePrefix("#")?.lowercase()?.ifBlank { null }
-        d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(project = p) else it }, projects = if (p != null && p !in d.projects) d.projects + p else d.projects)
-    }
+    fun setTopicLabel(id: String, label: String?) = store.update { it.setTopicLabel(id, label) }
 
     fun addSubtask(taskId: String, title: String, parent: String? = null) {
-        val st = Subtask(title = title.sentence()).takeIf { it.title.isNotEmpty() } ?: return
-        updateTask(taskId) { t ->
-            if (parent == null) t.copy(subtasks = t.subtasks + st, done = false)
-            else t.copy(subtasks = t.subtasks.mapTree(parent) { it.copy(children = it.children + st, done = false) })
-        }
+        if (title.sentence().isEmpty()) return
+        store.update { it.addSubtask(taskId, title, parent) }
     }
 
-    fun renameSubtask(taskId: String, subId: String, title: String) = updateTask(taskId) { t ->
-        t.copy(subtasks = t.subtasks.mapTree(subId) { if (title.isBlank()) null else it.copy(title = title.sentence()) })
-    }
+    fun renameSubtask(taskId: String, subId: String, title: String) = store.update { it.renameSubtask(taskId, subId, title) }
 
-    fun deleteSubtask(taskId: String, subId: String) = updateTask(taskId) { t ->
-        t.copy(subtasks = t.subtasks.mapTree(subId) { null })
-    }
+    fun deleteSubtask(taskId: String, subId: String) = store.update { it.deleteSubtask(taskId, subId) }
 
     fun saveTask(t0: Task) {
-        val t = t0.copy(title = t0.title.sentence().withNames(t0.people + listOfNotNull(t0.waitingFor, t0.promisedTo)),
-            people = t0.people.map { if (it == L.s.me) it else data.value.person(it)?.name ?: it.properName() },
-            waitingFor = t0.waitingFor?.let { data.value.person(it)?.name ?: it.properName() }, promisedTo = t0.promisedTo?.let { data.value.person(it)?.name ?: it.properName() })
+        val t = data.value.namesFixed(t0, L.s.me)
         updateTask(t.id) { Assistant.withAutoReminder(t) }
-        store.update { d ->
-            val newPeople = (t.people + listOfNotNull(t.waitingFor, t.promisedTo)).filter { p -> p != L.s.me && d.person(p) == null }.distinct().map { Person(name = it, draft = true) }
-            val newProject = t.project?.takeIf { p -> d.projects.none { it.equals(p, true) } }
-            d.copy(persons = d.persons + newPeople, projects = d.projects + listOfNotNull(newProject))
-        }
+        store.update { it.withMentionsOf(t, L.s.me) }
     }
 
-    fun deleteTask(id: String) = store.update { d -> d.copy(tasks = d.tasks.filterNot { it.id == id }) }
+    fun deleteTask(id: String) = store.update { it.deleteTask(id) }
 
-    fun editTaskEntry(taskId: String, entryId: String, text: String) = updateTask(taskId) { t ->
-        t.copy(entries = t.entries.mapNotNull { if (it.id != entryId) it else if (text.isBlank() && it.attachments.isEmpty()) null else it.copy(text = text.sentence()) })
+    fun editTaskEntry(taskId: String, entryId: String, text: String) = store.update { it.editTaskEntry(taskId, entryId, text) }
+
+    fun deleteTaskEntry(taskId: String, entryId: String) {
+        data.value.tasks.find { it.id == taskId }?.entries?.find { it.id == entryId }?.attachments?.forEach { Files.delete(ctx, it) }
+        store.update { it.deleteTaskEntry(taskId, entryId) }
     }
 
-    fun deleteTaskEntry(taskId: String, entryId: String) = updateTask(taskId) { t ->
-        t.entries.find { it.id == entryId }?.attachments?.forEach { Files.delete(ctx, it) }
-        t.copy(entries = t.entries.filterNot { it.id == entryId })
-    }
-
-    /** Moves a task [days] later; overdue and undated tasks count from today. Ranges keep their length. */
     /** «Отложить» to a chosen day: the task moves there whole (a range keeps its length). */
     fun postponeTo(id: String, day: LocalDate) {
         val before = data.value
-        slotRef(id)?.let { (base, sid) -> moveSlot(base, sid, day.toString(), null, false); offerUndo(before, L.s.movedTo(day.shortLabel().lowercase())); return }
-        questionRef(id)?.let { (tid, qid) -> setQuestionDue(tid, qid, day.toString()); offerUndo(before, L.s.movedTo(day.shortLabel().lowercase())); return }
-        val t = before.tasks.find { it.id == id } ?: return
-        val base = t.dueDate ?: t.startDate ?: LocalDate.now()
-        val shift = java.time.temporal.ChronoUnit.DAYS.between(base, day)
-        val moved = t.copy(due = (t.dueDate?.plusDays(shift) ?: day).toString(), start = t.startDate?.plusDays(shift)?.toString()?.takeIf { t.dueDate != null },
-            remindAt = t.time?.let { "${day}T$it" }, postponed = t.postponed + 1)
-        updateTask(id) { moved }
+        if (slotRef(id) == null && questionRef(id) == null && before.tasks.none { it.id == id }) return
+        store.update { it.postponeTo(id, day) }
         offerUndo(before, L.s.movedTo(day.shortLabel().lowercase()))
     }
 
+    /** Moves a task [days] later; overdue and undated tasks count from today. Ranges keep their length. */
     fun postpone(id: String, days: Long) {
         val before = data.value
         val t = before.tasks.find { it.id == id } ?: return
@@ -1316,34 +1075,17 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     // ---------------- several days of one matter («<row>@<slot>») ----------------
 
-    /** Applies [f] to the day [slotId] of the row [base]: a task id or a topic's matter «q:<topic>:<matter>». */
-    private fun onSlotOwner(base: String, task: (Task) -> Task, sub: (Subtask) -> Subtask) {
-        questionRef(base)?.let { (tid, qid) -> updateTask(tid) { t -> t.copy(subtasks = t.subtasks.map { if (it.id == qid) sub(it) else it }) }; return }
-        updateTask(base, f = task)
-    }
-
     /** Ticks one day of a matter done on several days; all ticked — the matter is done. */
     fun toggleSlot(base: String, slotId: String) {
         val before = data.value
-        onSlotOwner(base, { it.toggleSlot(slotId) }, { it.toggleSlot(slotId) })
+        store.update { it.toggleSlot(base, slotId) }
         offerUndo(before, L.s.markedDone)
     }
 
     /** «+ день»: one more day for the matter; its single date becomes the first of the days. */
-    fun addSlot(taskId: String, date: String) = updateTask(taskId) { t ->
-        val base = if (t.slots.isEmpty()) listOfNotNull((t.due ?: t.start)?.let { ru.anjeib.margin.data.Slot(date = it, time = t.time) }) else t.slots
-        t.copy(slots = base + ru.anjeib.margin.data.Slot(date = date)).syncSlots()
-    }
+    fun addSlot(taskId: String, date: String) = store.update { it.addSlot(taskId, date) }
 
-    fun removeSlot(taskId: String, slotId: String) = updateTask(taskId) { t ->
-        val l = t.slots.filterNot { it.id == slotId }
-        if (l.size <= 1) t.copy(slots = emptyList(), due = l.firstOrNull()?.date ?: t.due, time = l.firstOrNull()?.time ?: t.time) else t.copy(slots = l).syncSlots()
-    }
-
-    private fun moveSlot(base: String, slotId: String, date: String?, time: String?, timeToo: Boolean) {
-        fun f(l: List<ru.anjeib.margin.data.Slot>) = l.map { if (it.id != slotId) it else it.copy(date = date ?: it.date, time = if (timeToo) time else it.time) }
-        onSlotOwner(base, { it.copy(slots = f(it.slots)).syncSlots() }, { it.copy(slots = f(it.slots)).syncSlots() })
-    }
+    fun removeSlot(taskId: String, slotId: String) = store.update { it.removeSlot(taskId, slotId) }
 
     /** Swipe-right: done, with a few seconds to take it back. */
     fun completeWithUndo(id: String) {
@@ -1369,22 +1111,16 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val n = _undoBar.value ?: return
         _undoBar.value = null
         val snap = n.undoId?.let { snapshots.remove(it) } ?: return
-        store.restore { d -> snap.copy(chat = d.chat, brief = d.brief) }
+        store.restore { d -> snap.copy(chat = d.chat) }
     }
     private var undoJob: kotlinx.coroutines.Job? = null
 
     fun moveOverdue() {
         val before = data.value
         val today = LocalDate.now()
-        val n = data.value.tasks.count { !it.done && it.dueDate?.isBefore(today) == true }
+        val n = before.overdueCount(today)
         if (n == 0) { _toast.value = L.s.nothingOverdue; return }
-        store.update { d ->
-            d.copy(tasks = d.tasks.map { t ->
-                if (!t.done && t.dueDate?.isBefore(today) == true)
-                    Assistant.withAutoReminder(t.copy(due = today.toString(), start = null, remindAt = null, postponed = t.postponed + 1)).logged(t, "you")
-                else t
-            })
-        }
+        store.update { it.moveOverdue(today) }
         offerUndo(before, L.s.movedOverdue(n))
     }
 
@@ -1396,53 +1132,38 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         return n.id
     }
 
-    private fun updateNote(id: String, f: (Note) -> Note) =
-        store.update { d -> d.copy(notes = d.notes.map { if (it.id == id) f(it) else it }) }
+    private fun updateNote(id: String, f: (Note) -> Note) = store.update { it.editNote(id, f) }
 
-    fun renameNote(id: String, title: String) = updateNote(id) { val x = title.sentence(); if (it.title == x) it else it.copy(title = x) }
-    fun setNoteProject(id: String, project: String?) = store.update { d ->
-        val p = project?.trim()?.removePrefix("#")?.lowercase()?.ifBlank { null }
-        d.copy(notes = d.notes.map { if (it.id == id) it.copy(project = p) else it },
-            projects = d.projects + listOfNotNull(p?.takeIf { x -> d.projects.none { it == x } }))
-    }
+    fun renameNote(id: String, title: String) = store.update { it.renameNote(id, title) }
+    fun setNoteProject(id: String, project: String?) = store.update { it.setNoteProject(id, project) }
 
     /** Adds a dated entry to a note directly (inside the note the user is the author, no AI needed). */
     fun appendToNote(id: String, text: String, files: List<Attachment> = emptyList()) {
         if (text.isBlank() && files.isEmpty()) return
-        store.update { d ->
-            val n = d.notes.find { it.id == id } ?: return@update d
-            val e = stamp("note:$id", Entry(text = text.sentence(), attachments = files))
-            val upd = n.copy(entries = n.entries + e, updatedAt = nowStamp())
-            d.copy(notes = listOf(upd) + d.notes.filterNot { it.id == id })
-        }
+        val e = stamp("note:$id", Entry(text = text.sentence(), attachments = files))
+        store.update { it.appendToNote(id, e) }
         // The new block is the last one: give its links titles, its photos and voice notes their text.
         data.value.notes.find { it.id == id }?.entries?.lastOrNull()?.let { e -> linkTitles("note:$id", e.id); e.attachments.forEach { enrich("note:$id", e.id, it) } }
     }
 
-    fun editNoteEntry(noteId: String, entryId: String, text: String) = updateNote(noteId) { n ->
-        n.copy(entries = n.entries.mapNotNull { if (it.id != entryId) it else if (text.isBlank() && it.attachments.isEmpty()) null else it.copy(text = text.trim()) })
-    }
+    fun editNoteEntry(noteId: String, entryId: String, text: String) = store.update { it.editNoteEntry(noteId, entryId, text) }
 
-    fun deleteNoteEntry(noteId: String, entryId: String) = updateNote(noteId) { n ->
-        n.entries.find { it.id == entryId }?.attachments?.forEach { Files.delete(ctx, it) }
-        n.copy(entries = n.entries.filterNot { it.id == entryId })
+    fun deleteNoteEntry(noteId: String, entryId: String) {
+        data.value.notes.find { it.id == noteId }?.entries?.find { it.id == entryId }?.attachments?.forEach { Files.delete(ctx, it) }
+        store.update { it.deleteNoteEntry(noteId, entryId) }
     }
 
     // ---------------- swipes: archive and delete, each with «Отменить» ----------------
 
     fun archiveNote(id: String, on: Boolean = true) {
         val before = data.value
-        store.update { d -> d.copy(notes = d.notes.map { if (it.id == id) it.copy(archived = on) else it }) }
+        store.update { it.archiveNote(id, on) }
         offerUndo(before, if (on) L.s.archivedOne else L.s.restoredOne)
     }
 
     /** «+ контакт»: a draft (or a bare name) becomes a contact. */
     fun keepContact(name: String) {
-        store.update { d ->
-            val known = d.person(name)
-            if (known != null) d.copy(persons = d.persons.map { if (it.id == known.id) it.copy(draft = false, kept = true, archived = false) else it })
-            else d.copy(persons = d.persons + Person(name = name.properName(), kept = true))
-        }
+        store.update { it.keepContact(name) }
         _contactOffer.value = null
         _toast.value = L.s.contactMade(name)
     }
@@ -1466,14 +1187,14 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     fun archivePerson(id: String, on: Boolean = true) {
         val before = data.value
-        store.update { d -> d.copy(persons = d.persons.map { if (it.id == id) it.copy(archived = on) else it }) }
+        store.update { it.archivePerson(id, on) }
         offerUndo(before, if (on) L.s.archivedOne else L.s.restoredOne)
     }
 
     /** Deleting by swipe keeps the files until the undo window has passed — so «Отменить» brings everything back. */
     fun removeNote(id: String) {
         val before = data.value
-        store.update { d -> d.copy(notes = d.notes.filterNot { it.id == id }, tasks = d.tasks.map { if (it.noteId == id) it.copy(noteId = null) else it }) }
+        store.update { it.removeNote(id) }
         offerUndo(before, L.s.deletedOne)
         val files = before.notes.find { it.id == id }?.entries?.flatMap { it.attachments }.orEmpty()
         viewModelScope.launch { kotlinx.coroutines.delay(9000); if (data.value.notes.none { it.id == id }) files.forEach { Files.delete(ctx, it) } }
@@ -1481,48 +1202,32 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     fun removePerson(id: String) {
         val before = data.value
-        store.update { d -> d.copy(persons = d.persons.filterNot { it.id == id }) }
+        store.update { it.removePerson(id) }
         offerUndo(before, L.s.deletedOne)
     }
 
     fun removeEntry(owner: String, id: String) {
         val before = data.value
-        val files = entriesOf(owner).find { it.id == id }?.attachments.orEmpty()
-        editEntries(owner) { l -> l.filterNot { it.id == id } }
+        val files = data.value.entriesOf(owner).find { it.id == id }?.attachments.orEmpty()
+        store.update { it.removeEntry(owner, id) }
         offerUndo(before, L.s.deletedOne)
-        viewModelScope.launch { kotlinx.coroutines.delay(9000); if (entriesOf(owner).none { it.id == id }) files.forEach { Files.delete(ctx, it) } }
+        viewModelScope.launch { kotlinx.coroutines.delay(9000); if (data.value.entriesOf(owner).none { it.id == id }) files.forEach { Files.delete(ctx, it) } }
     }
 
-    fun deleteNote(id: String) = store.update { d ->
-        d.notes.find { it.id == id }?.entries?.flatMap { it.attachments }?.forEach { Files.delete(ctx, it) }
-        d.copy(notes = d.notes.filterNot { it.id == id }, tasks = d.tasks.map { if (it.noteId == id) it.copy(noteId = null) else it })
+    fun deleteNote(id: String) {
+        data.value.notes.find { it.id == id }?.entries?.flatMap { it.attachments }?.forEach { Files.delete(ctx, it) }
+        store.update { it.removeNote(id) }
     }
 
     /** Removes notes left completely empty (e.g. "new note" opened and closed). */
-    fun dropEmptyNote(id: String) = store.update { d ->
-        d.copy(notes = d.notes.filterNot { it.id == id && it.title.isBlank() && it.entries.isEmpty() })
-    }
+    fun dropEmptyNote(id: String) = store.update { it.dropEmptyNote(id) }
 
     // ---------------- people ----------------
 
-    private fun updatePerson(id: String, f: (Person) -> Person) =
-        store.update { d -> d.copy(persons = d.persons.map { if (it.id == id) f(it) else it }) }
+    private fun updatePerson(id: String, f: (Person) -> Person) = store.update { it.editPerson(id, f) }
 
     /** One contact or fact of a person, typed by hand. «personal» takes one fact per line. */
-    fun setPersonField(id: String, field: String, value: String) = updatePerson(id) { p ->
-        val v = value.trim().ifBlank { null }
-        when (field) {
-            "about" -> p.copy(about = v, aboutFromUser = v != null)
-            "company" -> p.copy(company = v)
-            "phone" -> p.copy(phone = v)
-            "email" -> p.copy(email = v)
-            "address" -> p.copy(address = v?.address())
-            "max" -> p.copy(max = v)
-            "telegram" -> p.copy(telegram = v?.removePrefix("https://t.me/")?.removePrefix("@")?.let { "@$it" })
-            "personal" -> p.copy(personal = value.lines().map { it.trim() }.filter { it.isNotEmpty() }.map { it.sentence() })
-            else -> p
-        }
-    }
+    fun setPersonField(id: String, field: String, value: String) = store.update { it.setPersonField(id, field, value) }
 
     fun say(text: String) { _toast.value = text }
 
@@ -1625,31 +1330,14 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** Renames a person everywhere their name is used. */
     fun renamePerson(id: String, newName: String) {
-        val n = newName.properName().ifEmpty { return }
-        store.update { d ->
-            val p = d.persons.find { it.id == id } ?: return@update d
-            d.copy(persons = d.persons.map { if (it.id == id) it.copy(name = n, aliases = (it.aliases + p.name).distinct()) else it }, tasks = d.tasks.map { it.renamed(p, n) })
-        }
+        if (newName.properName().isEmpty()) return
+        store.update { it.renamePerson(id, newName) }
     }
 
     /** Merges [fromId] into [intoId]: one person, all mentions point to the survivor. */
-    fun mergePersons(fromId: String, intoId: String) = store.update { d ->
-        val from = d.persons.find { it.id == fromId } ?: return@update d
-        val into = d.persons.find { it.id == intoId } ?: return@update d
-        val merged = into.copy(
-            aliases = (into.aliases + from.name + from.aliases).distinct().filterNot { it.equals(into.name, true) },
-            about = into.about ?: from.about, phone = into.phone ?: from.phone, email = into.email ?: from.email,
-        )
-        d.copy(persons = d.persons.filterNot { it.id == fromId }.map { if (it.id == intoId) merged else it }, tasks = d.tasks.map { it.renamed(from, into.name) })
-    }
+    fun mergePersons(fromId: String, intoId: String) = store.update { it.mergePersons(fromId, intoId) }
 
-    fun deletePerson(id: String) = store.update { d -> d.copy(persons = d.persons.filterNot { it.id == id }) }
-
-    private fun Task.renamed(p: Person, n: String): Task {
-        fun fix(x: String?) = if (x != null && p.matches(x)) n else x
-        fun subs(l: List<Subtask>): List<Subtask> = l.map { it.copy(assignee = fix(it.assignee), children = subs(it.children)) }
-        return copy(people = people.map { fix(it)!! }.distinct(), waitingFor = fix(waitingFor), promisedTo = fix(promisedTo), subtasks = subs(subtasks))
-    }
+    fun deletePerson(id: String) = store.update { it.removePerson(id) }
 
     /** «Свежая сводка» about a person: who they are + what's going on now. */
     fun personFingerprint(p: Person, d: AppData): String = d.tasks.filter { t ->
@@ -1676,30 +1364,6 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 _toast.value = e.message
             } finally {
                 _working.value -= "person:$id"
-            }
-        }
-    }
-
-    /** «Сводка недели» for a project page. */
-    /** What the project summary is about: its tasks' state and its ideas — a change means the summary is out of date. */
-    fun projectFingerprint(project: String, d: AppData): String =
-        d.tasks.filter { it.project == project }.map { it.id + it.done + it.due + it.waitingFor + it.promisedTo }.sorted().joinToString(",") +
-            "|" + d.notes.filter { it.project == project }.sumOf { it.entries.size }
-
-    fun refreshProject(project: String) {
-        val s = settings.value
-        if (!Processor.ready(s) || "project:$project" in _working.value) return
-        _working.value += "project:$project"
-        viewModelScope.launch {
-            try {
-                val r = ru.anjeib.margin.ai.Llm.complete(s, Assistant.projectPrompt(data.value, project), listOf("user" to "summary"), smart = true)
-                prefs.addSpend(r.rub)
-                val text = Assistant.field(Assistant.parseObject(r.content), "summary") ?: return@launch
-                store.update { it.copy(projectSummaries = it.projectSummaries + (project to ru.anjeib.margin.data.ProjectSummary(text, nowStamp(), projectFingerprint(project, it)))) }
-            } catch (e: Exception) {
-                _toast.value = e.message
-            } finally {
-                _working.value -= "project:$project"
             }
         }
     }
@@ -1736,14 +1400,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** A picked phone contact: remembered on the person and returned as an attachment. */
     fun contactAttachment(c: ContactInfo): Attachment {
-        store.update { d ->
-            val first = c.name.substringBefore(' ')
-            val existing = d.person(c.name) ?: d.person(first)
-            if (existing != null) d.copy(persons = d.persons.map {
-                if (it.id == existing.id) it.copy(draft = false, kept = true, phone = it.phone ?: c.phone, email = it.email ?: c.email, aliases = (it.aliases + c.name).distinct().filterNot { a -> a.equals(it.name, true) }) else it
-            })
-            else d.copy(persons = d.persons + Person(name = c.name, phone = c.phone, email = c.email, kept = true))
-        }
+        store.update { it.rememberContact(c) }
         return Attachment(kind = "contact", name = c.name, contact = c)
     }
 

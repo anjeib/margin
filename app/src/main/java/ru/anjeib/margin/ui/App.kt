@@ -203,7 +203,6 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                 if (v == Views.WEEK) CalendarScreen(shown, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
                                 else TaskList(
                                     v, shown, settings, working, vm, if (feedFilter == "all" || feedFilter == "deals") events else emptyList(),
-                                    briefQuiet = typing || tray != null || pending != null || busy == "main",
                                     onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
                                     onOpenNotes = { screen = NOTES }, onOpenInbox = { screen = INBOX },
                                     onTry = { prefill = it; focusKey = System.currentTimeMillis() }, contentPadding = pad,

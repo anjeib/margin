@@ -47,3 +47,30 @@ fun Task.slotRows(): List<Task> =
 
 /** Which of its days a row is: (number, of how many). */
 fun Task.dayOf(): Pair<Int, Int>? = slotRef(id)?.second?.let { sid -> slots.indexOfFirst { it.id == sid }.takeIf { it >= 0 }?.let { it + 1 to slots.size } }
+
+/** Applies [task] / [sub] to the row [base]: a task id or a topic's matter «q:<topic>:<matter>». */
+private fun AppData.onSlotOwner(base: String, task: (Task) -> Task, sub: (Subtask) -> Subtask): AppData {
+    questionRef(base)?.let { (tid, qid) -> return editTask(tid) { t -> t.copy(subtasks = t.subtasks.map { if (it.id == qid) sub(it) else it }) } }
+    return editTask(base, f = task)
+}
+
+/** Ticks one day of the row [base] (a task or a topic's matter); all ticked — the matter is done. */
+fun AppData.toggleSlot(base: String, slotId: String) = onSlotOwner(base, { it.toggleSlot(slotId) }, { it.toggleSlot(slotId) })
+
+/** «+ день»: one more day for the matter; its single date becomes the first of the days. */
+fun AppData.addSlot(taskId: String, date: String) = editTask(taskId) { t ->
+    val base = if (t.slots.isEmpty()) listOfNotNull((t.due ?: t.start)?.let { Slot(date = it, time = t.time) }) else t.slots
+    t.copy(slots = base + Slot(date = date)).syncSlots()
+}
+
+/** One day less; the last one left becomes a plain date again. */
+fun AppData.removeSlot(taskId: String, slotId: String) = editTask(taskId) { t ->
+    val l = t.slots.filterNot { it.id == slotId }
+    if (l.size <= 1) t.copy(slots = emptyList(), due = l.firstOrNull()?.date ?: t.due, time = l.firstOrNull()?.time ?: t.time) else t.copy(slots = l).syncSlots()
+}
+
+/** Moves one day of the row [base] to [date] (null — stays) and, when [timeToo], sets its hour. */
+fun AppData.moveSlot(base: String, slotId: String, date: String?, time: String?, timeToo: Boolean): AppData {
+    fun f(l: List<Slot>) = l.map { if (it.id != slotId) it else it.copy(date = date ?: it.date, time = if (timeToo) time else it.time) }
+    return onSlotOwner(base, { it.copy(slots = f(it.slots)).syncSlots() }, { it.copy(slots = f(it.slots)).syncSlots() })
+}
