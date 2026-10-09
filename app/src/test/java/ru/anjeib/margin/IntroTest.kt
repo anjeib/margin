@@ -55,4 +55,13 @@ class IntroTest {
             ru.anjeib.margin.ai.Assistant.clean("1) «Список гостей» (subtask_id=intro-q2) ждёт ответа от Анны, срок 11 октября."))
         assertEquals("Перенесла «Стоматолог».", ru.anjeib.margin.ai.Assistant.clean("Перенесла «Стоматолог» [task_id: demo-d7]."))
     }
+
+    /** «что я обещал Анне?» — the promise and the topic waiting on Anna reach the AI (they were left out before). */
+    @Test fun aPersonsPromisesReachTheAssistant() {
+        L.lang = Lang.Ru
+        val d = AppData().withSamples(L.s.intro)
+        val ctx = ru.anjeib.margin.ai.Assistant.context(d, ru.anjeib.margin.data.Settings(), query = "что я обещал Анне?")
+        assertTrue(ctx, ctx.contains("Прислать фото с отпуска") && ctx.contains("promised to Анна"))
+        assertTrue(ctx, ctx.contains("Знакомство с Margin"))
+    }
 }

@@ -145,7 +145,10 @@ object Assistant {
         var sc = 0
         val low = text.lowercase()
         if (t.project != null && low.contains(t.project)) sc += 5
-        (t.people + listOfNotNull(t.waitingFor)).forEach { p -> if (p.length >= 3 && low.contains(p.lowercase().take(p.length - 1))) sc += 3 }
+        // Everyone the matter is about: its people, who owes it, whom it was promised to, who owes the topic's matters —
+        // «что я обещал Анне?» has to find the promise to Anna.
+        (t.people + listOfNotNull(t.waitingFor, t.promisedTo) + t.subtasks.filter { !it.done }.mapNotNull { it.from }).distinct()
+            .forEach { p -> if (p.length >= 3 && low.contains(p.lowercase().take(p.length - 1))) sc += 3 }
         sc += 2 * (stems(t.title + " " + t.subtasks.joinToString(" ") { it.allText() } + " " + t.entries.takeLast(3).joinToString(" ") { it.fullText }) intersect q).size
         if (t.id in recent) sc += 3
         return sc

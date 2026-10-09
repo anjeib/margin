@@ -16,7 +16,7 @@ object Llm {
     const val YA_STRONG = "deepseek-v4.1-flash"
 
     fun yandex(s: Settings) = s.provider == "yandex"
-    fun door(s: Settings) = Yandex.Door(s.yaKey, s.yaFolder, s.invite)
+    fun door(s: Settings) = Yandex.Door(s.yaKey, s.yaFolder, s.invite, s.device)
     /** With a key (developer builds) or, in what people install, with an invite code for Margin's own door. */
     fun ready(s: Settings) = if (yandex(s)) (s.yaKey.isNotBlank() && s.yaFolder.isNotBlank()) || door(s).proxy else s.apiKey.isNotBlank()
 

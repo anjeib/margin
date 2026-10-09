@@ -154,10 +154,11 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                 val status by vm.keyStatus.collectAsState()
                 Divider()
                 ValueRow(s.inviteTitle, if (settings.invite.isNotBlank() && status != null) status else s.inviteHint,
-                    settings.invite.ifBlank { s.inviteNone }, onClick = { inviteDraft = settings.invite })
+                    when { settings.invite.isBlank() -> s.inviteNone; settings.invite == ru.anjeib.margin.BuildConfig.ALPHA_CODE -> s.inviteAlpha; else -> settings.invite },
+                    onClick = { inviteDraft = if (settings.invite == ru.anjeib.margin.BuildConfig.ALPHA_CODE) "" else settings.invite })
                 inviteDraft?.let { d ->
                     TextDialog(s.inviteTitle, d, "", onDismiss = { inviteDraft = null }) { v ->
-                        vm.updateSettings { it.copy(invite = v.trim(), provider = "yandex") }; inviteDraft = null; vm.checkKey()
+                        vm.updateSettings { it.copy(invite = v.trim().ifBlank { ru.anjeib.margin.BuildConfig.ALPHA_CODE }, provider = "yandex") }; inviteDraft = null; vm.checkKey()
                     }
                 }
             }

@@ -35,12 +35,12 @@ object Yandex {
      * Where a request goes. With a key (the developer's debug build) — straight to Yandex. Without one — through
      * Margin's own door in Yandex Cloud (server/proxy), let in by the user's invite code; the folder is filled in there.
      */
-    class Door(val key: String, val folder: String, val invite: String = "") {
+    class Door(val key: String, val folder: String, val invite: String = "", val device: String = "") {
         val proxy get() = key.isBlank() && invite.isNotBlank() && ru.anjeib.margin.BuildConfig.PROXY_URL.isNotBlank()
         val modelFolder get() = if (proxy) "-" else folder
         fun url(op: String, direct: String) = if (proxy) ru.anjeib.margin.BuildConfig.PROXY_URL + "?op=" + op else direct
         fun sign(c: HttpURLConnection) {
-            if (proxy) c.setRequestProperty("X-Margin-Code", invite.trim())
+            if (proxy) { c.setRequestProperty("X-Margin-Code", invite.trim()); if (device.isNotBlank()) c.setRequestProperty("X-Margin-Device", device) }
             else { c.setRequestProperty("Authorization", "Api-Key $key"); c.setRequestProperty("OpenAI-Project", folder); c.setRequestProperty("x-folder-id", folder) }
             c.setRequestProperty("x-data-logging-enabled", "false")
         }

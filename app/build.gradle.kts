@@ -27,8 +27,8 @@ android {
         applicationId = "ru.margin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "0.23"
+        versionCode = 24
+        versionName = "0.24"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild { cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_static") } }
@@ -38,6 +38,8 @@ android {
         buildConfigField("String", "YC_KEY", "\"\"")
         buildConfigField("String", "YC_FOLDER", "\"\"")
         buildConfigField("String", "PROXY_URL", "\"${secrets.getProperty("PROXY_URL", "")}\"")
+        // Closed alpha: one shared code built in, so testers need not type anything (switched off by itself in server/alpha.local).
+        buildConfigField("String", "ALPHA_CODE", "\"${secrets.getProperty("ALPHA_CODE", "")}\"")
         buildConfigField("boolean", "DEMO", "false")
         // The developer's own Telegram bot and IMAP: only in debug builds — they need setup and a server-side redo.
         buildConfigField("boolean", "FORWARD_CHANNELS", "false")

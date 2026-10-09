@@ -20,6 +20,8 @@ import urllib.request
 FOLDER = os.environ["FOLDER_ID"]
 # Invite codes, separated by spaces or commas; remove one and redeploy to switch that tester off.
 CODES = {c for c in re.split(r"[\s,;]+", os.environ.get("MARGIN_CODES", "")) if c}
+# Installs switched off one by one (the shared alpha code stays on for everyone else).
+BLOCKED = {c for c in re.split(r"[\s,;]+", os.environ.get("BLOCKED_DEVICES", "")) if c}
 MAX_BODY = 3_000_000
 
 TARGETS = {
@@ -40,6 +42,9 @@ def handler(event, context):
     code = headers.get("x-margin-code", "")
     if code not in CODES:
         return reply(401, '{"error":"invite"}')
+    device = headers.get("x-margin-device", "")[:36]
+    if device and device in BLOCKED:
+        return reply(403, '{"error":"device"}')
     op = query.get("op", "")
     if op not in TARGETS:
         return reply(404, '{"error":"op"}')
@@ -74,5 +79,5 @@ def handler(event, context):
     except Exception as e:  # network trouble on the way to Yandex
         return reply(502, json.dumps({"error": str(e)[:200]}))
     # Who used how much, without any of the words: enough to see a code being abused.
-    print(json.dumps({"code": code[:4] + "…", "op": op, "status": status, "in": len(body), "out": len(text)}))
+    print(json.dumps({"code": code[:4] + "…", "device": device[:8], "op": op, "status": status, "in": len(body), "out": len(text)}))
     return reply(status, text)

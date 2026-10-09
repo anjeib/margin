@@ -74,6 +74,7 @@ interface Strings {
     val inviteTitle: String
     val inviteHint: String
     val inviteNone: String
+    val inviteAlpha: String
     val privacyPolicy: String
     val forwardSorting: String
     val forwardResult: String
@@ -949,6 +950,7 @@ object Ru : Strings {
     override val inviteTitle = "Код приглашения"
     override val inviteHint = "Включает ИИ: сложные фразы, голос, текст с фото. Без кода всё разбирается в телефоне."
     override val inviteNone = "не введён"
+    override val inviteAlpha = "альфа-доступ"
     override val privacyPolicy = "Политика конфиденциальности"
     override val forwardSorting = "Разбираю…"
     override val forwardResult = "Вот что получилось"
@@ -1745,6 +1747,7 @@ object En : Strings {
     override val inviteTitle = "Invite code"
     override val inviteHint = "Turns on the AI: hard phrases, voice, text on photos. Without it everything is read on the phone."
     override val inviteNone = "not set"
+    override val inviteAlpha = "alpha access"
     override val privacyPolicy = "Privacy policy"
     override val forwardSorting = "Sorting…"
     override val forwardResult = "Here is what came of it"

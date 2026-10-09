@@ -50,8 +50,10 @@ data class Settings(
     val yaMode: String = "hybrid",
     val yaKey: String = "",
     val yaFolder: String = "",
-    /** The invite code that lets this phone through Margin's door to the AI (closed alpha). */
+    /** The invite code that lets this phone through Margin's door to the AI (closed alpha); the shared one by default. */
     val invite: String = "",
+    /** A random id of this install, made once: lets the door see (and stop) one phone without knowing who it is. */
+    val device: String = "",
     /** Hidden developer section (providers, keys, models, spend) — long-press the version to toggle. */
     val devMode: Boolean = false,
 ) {
@@ -97,7 +99,8 @@ class Prefs private constructor(context: Context) {
         yaMode = sp.getString("yaMode", null) ?: "hybrid",
         yaKey = sp.getString("yaKey", null) ?: ru.anjeib.margin.BuildConfig.YC_KEY,
         yaFolder = sp.getString("yaFolder", null) ?: ru.anjeib.margin.BuildConfig.YC_FOLDER,
-        invite = sp.getString("invite", null) ?: "",
+        invite = sp.getString("invite", null) ?: ru.anjeib.margin.BuildConfig.ALPHA_CODE,
+        device = sp.getString("device", null) ?: java.util.UUID.randomUUID().toString().also { sp.edit().putString("device", it).apply() },
         devMode = sp.getBoolean("devMode", false),
     )
 
@@ -134,6 +137,7 @@ class Prefs private constructor(context: Context) {
             putString("yaKey", s.yaKey.trim())
             putString("yaFolder", s.yaFolder.trim())
             putString("invite", s.invite.trim())
+            putString("device", s.device)
             putBoolean("devMode", s.devMode)
         }
         _s.value = s.copy(apiKey = s.apiKey.trim())
