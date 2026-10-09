@@ -96,8 +96,16 @@ fun Book.page(date: LocalDate, today: LocalDate = LocalDate.now()): Page {
  * What the evening asks a decision for: open to-dos whose last day is [today] or before. A soft window still open
  * («до ср») rides on by itself; a repeat's coming occurrence is not a line yet.
  */
-fun Book.toDecide(today: LocalDate = LocalDate.now()): List<Line> =
-    page(today, today).open.filter { l -> splitOccurrence(l.id) == null && l.lastDay()?.let { !it.isAfter(today) } != false }
+fun Book.toDecide(day: LocalDate = ritualDay()): List<Line> =
+    lines.filter { l -> l.parentId == null && l.isTodo && l.open && l.lastDay()?.let { !it.isAfter(day) } == true }
+        .sortedWith(compareBy({ it.lastDay() }, { it.time ?: "99" }, { it.writtenAt }))
+
+/**
+ * The day the evening closes. Until four at night it is still yesterday: at 01:50 on Saturday the person is finishing
+ * Friday, and «завтра» for them is Saturday.
+ */
+fun ritualDay(now: java.time.LocalDateTime = java.time.LocalDateTime.now()): LocalDate =
+    if (now.hour < 4) now.toLocalDate().minusDays(1) else now.toLocalDate()
 
 /** How many open to-dos the day holds (with tails on today) — the one number for every screen. */
 fun Book.openCount(date: LocalDate, today: LocalDate = LocalDate.now()): Int = page(date, today).open.size
@@ -174,17 +182,10 @@ fun Book.personLines(name: String): PersonLines {
     return PersonLines(promised, waited, (all - promised.toSet() - waited.toSet()).sortedByDescending { it.writtenAt })
 }
 
-/** What a closed day came to: done, not doing, moved on — for the stamp on its page. */
+/** What a closed day came to: done, not doing, moved on — as its stamp keeps it. */
 data class DayStats(val done: Int, val dropped: Int, val moved: Int)
 
-fun Book.dayStats(date: LocalDate, today: LocalDate = LocalDate.now()): DayStats {
-    fun on(s: String?) = s?.take(10) == date.toString()
-    return DayStats(
-        done = lines.count { it.state == State.Done && it.isTodo && on(it.doneAt) },
-        dropped = lines.count { it.state == State.Dropped && on(it.doneAt) },
-        moved = page(date, today).traces.size,
-    )
-}
+fun Book.dayStats(date: LocalDate): DayStats? = closed[date.toString()]?.let { DayStats(it.done, it.dropped, it.moved) }
 
 /** How many days between two dates — for «3-й перенос» and the age of a tail. */
 fun daysBetween(a: LocalDate, b: LocalDate) = ChronoUnit.DAYS.between(a, b)

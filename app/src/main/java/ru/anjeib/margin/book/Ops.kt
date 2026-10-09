@@ -116,7 +116,9 @@ fun Book.retext(id: String, text: String): Book {
 fun Book.addChild(parentId: String, text: String, kind: Kind): Book {
     val p = line(parentId) ?: return this
     val t = text.trim().takeIf { it.isNotEmpty() } ?: return this
-    return copy(lines = lines + Line(text = t.replaceFirstChar { it.uppercase() }, kind = kind, parentId = p.id, threadId = p.threadId))
+    // An address or a link stays as typed («zoom.us/j/123»); words get their capital.
+    val link = Regex("^(?:https?://|www\\.|[\\w-]+\\.[a-z]{2,}(?:/|$))", RegexOption.IGNORE_CASE).containsMatchIn(t)
+    return copy(lines = lines + Line(text = if (link) t else t.replaceFirstChar { it.uppercase() }, kind = kind, parentId = p.id, threadId = p.threadId))
 }
 
 /** «Сделать нитью»: the line names a new thread and goes into it with everything written under it. */
@@ -150,8 +152,25 @@ fun Book.carryAll(date: LocalDate, to: LocalDate, today: LocalDate = LocalDate.n
     toDecide(date).fold(this) { b, l -> b.move(l.id, to, today) }
 
 /** The day is closed: every open line has its decision. The page keeps the stamp with the hour. */
-fun Book.closeDay(date: java.time.LocalDate, at: java.time.LocalTime = java.time.LocalTime.now()): Book =
-    copy(closed = closed + (date.toString() to "%02d:%02d".format(at.hour, at.minute)))
+fun Book.closeDay(date: java.time.LocalDate, at: java.time.LocalTime = java.time.LocalTime.now(), decided: Set<String> = emptySet()): Book {
+    val day = date.toString()
+    fun on(s: String?) = s?.take(10) == day
+    // What came of the day: what was done on it, and what the evening decided about the lines it asked for.
+    val done = lines.count { it.isTodo && it.state == State.Done && (on(it.doneAt) || it.id in decided) }
+    val dropped = lines.count { it.state == State.Dropped && (on(it.doneAt) || it.id in decided) }
+    val moved = lines.count { it.id in decided && it.state == State.Open }
+    return copy(closed = closed + (day to DayClose("%02d:%02d".format(at.hour, at.minute), done, moved, dropped)))
+}
 
-/** How many times a line has been put off — the margin says «3-й перенос» from the third on. */
-fun Line.moves(): Int = trail.size
+/**
+ * How many times a line has been put off — the margin says «3 переноса» from the third on. A move back (to an earlier
+ * day, or back where it was) takes one away: changing your mind is not putting off.
+ */
+fun Line.moves(): Int = trail.fold(0) { n, m ->
+    val to = m.to
+    when {
+        to == null -> n + 1
+        to > m.from -> n + 1
+        else -> (n - 1).coerceAtLeast(0)
+    }
+}

@@ -44,7 +44,6 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         val settings = Prefs.get(this).settings.value
         if (settings.lock && Lock.available(this)) locked.value = true
         if (savedInstanceState == null) take(intent)
-        askBellOnce()
         publishShortcuts()
         setContent {
             val s by Prefs.get(this).settings.collectAsState()
@@ -58,6 +57,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         isAppearanceLightNavigationBars = !dark
                     }
                 }
+                // The right to ring is asked once the title page is behind — not over it.
+                val welcomed by vm.welcomed.collectAsState()
+                androidx.compose.runtime.LaunchedEffect(welcomed) { if (welcomed) askBellOnce() }
                 if (locked.value) Locked { unlock() } else BookScreen(vm)
             }
         }
@@ -99,15 +101,17 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         ))
     }
 
-    private val bellAsk = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+    // Remembered only once the person has answered: a start that never got to ask will ask next time.
+    private val bellAsk = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {
+        getSharedPreferences("polya", MODE_PRIVATE).edit().putBoolean("bellAsked", true).apply()
+    }
 
-    /** The bell needs the right to notify (Android 13+): asked once, on the first start. */
+    /** The bell needs the right to notify (Android 13+): asked once, after the title page; later — in the settings. */
     private fun askBellOnce() {
         if (android.os.Build.VERSION.SDK_INT < 33) return
-        val sp = getSharedPreferences("polya", MODE_PRIVATE)
-        if (sp.getBoolean("bellAsked", false)) return
-        sp.edit().putBoolean("bellAsked", true).apply()
-        bellAsk.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        if (getSharedPreferences("polya", MODE_PRIVATE).getBoolean("bellAsked", false)) return
+        runCatching { bellAsk.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
     }
 
     override fun onResume() {

@@ -34,6 +34,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import ru.anjeib.margin.book.Book
+import ru.anjeib.margin.book.hasSamples
 import ru.anjeib.margin.book.Dir
 import ru.anjeib.margin.book.Kind
 import ru.anjeib.margin.book.Line
@@ -115,7 +116,7 @@ fun HelpPage(book: Book, today: LocalDate) {
                 LineOnPage(l, today, today, book, if (l.day == today.minusDays(2).toString()) Seen.Tail else Seen.Page, false, {}, {})
                 Row(Modifier.fillMaxWidth().padding(end = Grid.right, bottom = 10.dp)) {
                     Spacer(Modifier.width(Grid.text))
-                    Text(explain, style = Voice.reply.copy(color = c.graphite))
+                    Text(withPlainSigns(explain), style = Voice.reply.copy(color = c.graphite))
                 }
             }
         }
@@ -165,7 +166,31 @@ fun SettingsPage(vm: BookVm, onExamples: () -> Unit) {
                 else ask.launch(android.Manifest.permission.READ_CALENDAR)
             }
         }
-        item { SettingRow(w.examples, if (vm.samplesShown()) w.examplesRemove else w.examplesBack, onExamples) }
+        item {
+            val b by vm.book.collectAsState()
+            SettingRow(w.examples, if (b.hasSamples()) w.examplesRemove else w.examplesBack, onExamples)
+        }
+        // Reminders need the phone's permission: asked here again if it was refused.
+        item {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            fun granted() = android.os.Build.VERSION.SDK_INT < 33 ||
+                androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            var on by remember { mutableStateOf(granted()) }
+            val ask = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+                on = ok
+                if (!ok) runCatching {
+                    ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }
+            SettingRow(w.bellSetting, if (on) w.bellOn else w.bellOff) {
+                if (!on && android.os.Build.VERSION.SDK_INT >= 33) ask.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                else runCatching {
+                    ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }
+        }
         // Voice: written straight away, or into the field first; and words without a network (a model on the phone).
         item { SettingRow(w.voiceSetting, if (s.voiceSendNow) w.voiceNow else w.voiceField) { set { it.copy(voiceSendNow = !it.voiceSendNow) } } }
         item {

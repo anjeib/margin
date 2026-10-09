@@ -7,6 +7,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
@@ -19,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -28,8 +35,9 @@ import ru.anjeib.margin.book.Line
 import ru.anjeib.margin.book.State
 import ru.anjeib.margin.book.page
 import ru.anjeib.margin.book.summary
-import ru.anjeib.margin.book.dayStats
+import ru.anjeib.margin.book.DayStats
 import ru.anjeib.margin.book.toDecide
+import ru.anjeib.margin.book.ritualDay
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -53,6 +61,8 @@ fun DayPage(
     stamping: LocalDate? = null,
     /** Meetings from the phone's calendar for this day: read only, among the hours. */
     calendar: List<Line> = emptyList(),
+    /** To the next page (after the stamp). */
+    onNext: () -> Unit = {},
 ) {
     val c = P.c
     val w = P.w
@@ -66,26 +76,55 @@ fun DayPage(
     val folded = doneRest.size > 5 && !showDone
     val rest = if (folded) page.rest - doneRest.toSet() else page.rest
 
-    LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = bottom)) {
+    // The hour now, refreshed every minute — for the tick among the hours.
+    var clock by remember { mutableStateOf(LocalTime.now().let { "%02d:%02d".format(it.hour, it.minute) }) }
+    LaunchedEffect(date) {
+        while (date == today) {
+            kotlinx.coroutines.delay(30_000)
+            clock = LocalTime.now().let { "%02d:%02d".format(it.hour, it.minute) }
+        }
+    }
+    // Words just written land on this page: it scrolls to them if they would be out of sight.
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(fresh) {
+        if (fresh.isEmpty()) return@LaunchedEffect
+        val shown = page.tails + page.timed + rest
+        val i = shown.indexOfFirst { it.id in fresh }
+        if (i >= 0) runCatching { list.animateScrollToItem(i + 1) }
+    }
+    LazyColumn(Modifier.fillMaxSize().rule(c.rule), state = list, contentPadding = PaddingValues(bottom = bottom)) {
         item("head") {
             val near = if (date != today) w.near(date, today).takeIf { it != w.dayMonth(date) && it != w.dow(date) } else null
             Box {
+                // While the stamp lands: what the next page holds, the way there.
+                val closing = stamping == date
+                val next = remember(book, date, closing) {
+                    if (!closing) emptyList() else book.page(date.plusDays(1), today).let { p -> (p.timed + p.rest).filter { (it.isTodo && it.open) || it.kind == Kind.Event } }
+                }
                 PageHead(
-                    marginTop = date.dayOfMonth.toString(), marginBottom = w.mon(date.monthValue),
+                    marginTop = date.dayOfMonth.toString(), marginBottom = w.mon(date.monthValue) + " ▾",
                     title = w.weekday(date),
-                    line = listOfNotNull(near, w.summary(sum).ifBlank { null }).joinToString(" · ").ifBlank { null },
+                    line = if (closing) w.nextPage(next) else listOfNotNull(near, w.summary(sum).ifBlank { null }).joinToString(" · ").ifBlank { null },
                     onMargin = onMonth,
+                    onLine = if (closing) onNext else null,
+                    lineColor = if (closing) c.link else c.graphite,
                 )
                 // A day closed in the evening keeps its stamp in the corner: the hour, what was done, what moved on.
-                book.closed[date.toString()]?.let { at ->
-                    val st = remember(book, date) { book.dayStats(date, today) }
-                    DayStamp(w.stampTitle, at, st, w.stampTitle + ". " + w.stampLine(at, st), fresh = stamping == date,
+                book.closed[date.toString()]?.let { close ->
+                    val st = DayStats(close.done, close.dropped, close.moved)
+                    DayStamp(w.stampTitle, close.at, st, w.stampTitle + ". " + w.stampLine(close.at, st), fresh = stamping == date,
                         modifier = Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 22.dp))
                 }
             }
         }
         items(page.tails, key = { "t" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Tail, l.id in fresh, onMark, onOpen) }
-        items(page.timed, key = { "h" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Page, l.id in fresh, onMark, onOpen) }
+        // Today, among the hours: a red tick on the rule where «now» is — the page shows where the day stands.
+        val nowAt = if (date == today && page.timed.isNotEmpty()) page.timed.indexOfFirst { (it.time ?: "") > clock } .let { if (it < 0) page.timed.size else it } else -1
+        page.timed.forEachIndexed { i, l ->
+            if (i == nowAt) item("now") { NowTick(clock) }
+            item("h" + l.id) { LineOnPage(l, date, today, book, Seen.Page, l.id in fresh, onMark, onOpen) }
+        }
+        if (nowAt == page.timed.size && nowAt > 0) item("now") { NowTick(clock) }
         items(rest, key = { "r" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Page, l.id in fresh, onMark, onOpen) }
         if (folded) item("folded") { MarginLink(w.doneMore(doneRest.size)) { showDone = true } }
         items(page.traces, key = { "m" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Trace, false, onMark, onOpen) }
@@ -93,7 +132,7 @@ fun DayPage(
             MarginSays(if (date == today) w.emptyToday else w.emptyDay, Modifier.padding(top = 8.dp))
         }
         // The evening: one quiet way to close the day — every open line gets a decision.
-        if (date == today && LocalTime.now().hour.let { it >= eveningHour - 3 || it < 4 } && book.toDecide(today).isNotEmpty()) item("turn") {
+        if (date == today && LocalTime.now().hour.let { it >= eveningHour - 3 || it < 4 } && book.toDecide(ritualDay()).isNotEmpty()) item("turn") {
             MarginLink(w.turnDay, Modifier.padding(top = 8.dp), onTurn)
         }
     }
@@ -116,14 +155,41 @@ fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Se
         else -> c.ink
     }
     val pen = remember(l.id) { Animatable(if (fresh) 0f else 1f) }
-    LaunchedEffect(fresh) { if (fresh) pen.animateTo(1f, tween(420)) }
+    // A line just written glows for a moment in the link's wash — easy to find where it landed.
+    val wash = remember(l.id) { Animatable(0f) }
+    LaunchedEffect(fresh) {
+        if (fresh) {
+            wash.snapTo(1f)
+            pen.animateTo(1f, tween(420))
+            kotlinx.coroutines.delay(700)
+            wash.animateTo(0f, tween(1400))
+        }
+    }
     MarginRow(
         notes = notes, mark = markOf(l, trace),
-        modifier = Modifier.graphicsLayer { alpha = pen.value; translationX = (1f - pen.value) * -24.dp.toPx() },
+        modifier = Modifier.drawBehind { if (wash.value > 0f) drawRect(c.linkWash.copy(alpha = wash.value)) }
+            .graphicsLayer { alpha = pen.value; translationX = (1f - pen.value) * -24.dp.toPx() },
         markLabel = w.a11yMark(l.state == State.Done),
         onMark = if (l.kind == Kind.Todo && !trace) ({ onMark(l.id) }) else null,
         onOpen = { onOpen(l.id) },
     ) {
         PenText(l.text, Voice.words.copy(color = ink), struck = !trace && l.state != State.Open && l.kind == Kind.Todo, lineColor = c.graphite)
+    }
+}
+
+/** «Сейчас»: the hour on the margin in red pen and a short stroke across the rule — no line of its own to read. */
+@Composable
+private fun NowTick(clock: String) {
+    val c = P.c
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(18.dp).semantics { contentDescription = clock }) {
+        androidx.compose.foundation.layout.Box(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp).align(androidx.compose.ui.Alignment.CenterStart),
+            contentAlignment = androidx.compose.ui.Alignment.CenterEnd) {
+            Text(clock, style = Voice.note.copy(color = c.red, fontSize = 11.sp))
+        }
+        androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(18.dp)) {
+            val x = Grid.margin.toPx(); val y = size.height / 2
+            drawLine(c.red, androidx.compose.ui.geometry.Offset(x - 6.dp.toPx(), y), androidx.compose.ui.geometry.Offset(x + 6.dp.toPx(), y), 1.6.dp.toPx(),
+                cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        }
     }
 }

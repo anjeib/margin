@@ -113,7 +113,9 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
             val props = listOf(
                 Triple("when", whenOf(l, today, w), w.propWhen),
                 Triple("repeat", l.repeat?.let { w.repeat(it) }, w.propRepeat),
-                Triple("who", l.who.firstOrNull()?.let { who -> when (who.dir) { Dir.To -> w.to(who.name); Dir.From -> w.from(who.name); Dir.With -> w.with(who.name) } }, w.propWho),
+                Triple("who", l.who.firstOrNull()?.let { who -> when (who.dir) { Dir.To -> w.to(who.name); Dir.From -> w.from(who.name); Dir.With -> w.with(who.name) } },
+                    // The arrow taught in words where it is chosen: «→ Лёше — вы обещали», «← Дима — ждёте».
+                    when (l.who.firstOrNull()?.dir) { Dir.To -> w.propWhoTo; Dir.From -> w.propWhoFrom; else -> w.propWho }),
                 Triple("place", l.place, w.propPlace),
                 Triple("thread", book.thread(l.threadId)?.let { w.threadPrefix + it.title }, w.propThread),
             )
@@ -154,7 +156,8 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                     runCatching { ctx.startActivity(android.content.Intent.createChooser(i, w.remind).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 }
                 if (l.kind == Kind.Todo && l.state == State.Open) {
-                    Offer(w.offerTomorrow) { vm.move(id, today.plusDays(1)); onClose() }
+                    if (l.date != today) Offer(w.offerToday) { vm.move(id, today); onClose() }
+                    if (l.date != today.plusDays(1)) Offer(w.offerTomorrow) { vm.move(id, today.plusDays(1)); onClose() }
                     Offer(w.offerLater) { vm.move(id, null); onClose() }
                     Offer(w.dropped) { vm.drop(id); onClose() }
                 }
@@ -167,7 +170,7 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                 kids.sortedBy { it.writtenAt }.forEach { k ->
                     MarginRow(notes = listOf(Note(w.stamp(k.written, today), Tone.Quiet)), mark = markOf(k),
                         onMark = if (k.kind == Kind.Todo) ({ vm.toggle(k.id) }) else null) {
-                        Text(k.text, style = Voice.words.copy(color = if (k.state == State.Open) c.ink else c.graphite,
+                        Text(linked(k.text, c.link), style = Voice.words.copy(color = if (k.state == State.Open) c.ink else c.graphite,
                             textDecoration = if (k.state != State.Open && k.kind == Kind.Todo) TextDecoration.LineThrough else null))
                     }
                 }
@@ -191,7 +194,7 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
     photo?.let { f -> PhotoViewer(f, onClose = { photo = null }, onRemove = { vm.edit { it.removeFile(id, f.id) } }) }
 
     when (ask) {
-        "when" -> WhenDialog(l, today, w, onDismiss = { ask = null }) { d, t, later ->
+        "when" -> WhenDialog(book, l, today, w, onDismiss = { ask = null }) { d, t, later ->
             if (later) vm.move(id, null) else vm.edit { it.setWhen(id, d, t, today = today) }
             ask = null
         }
@@ -237,7 +240,7 @@ private fun Offer(text: String, danger: Boolean = false, onClick: () -> Unit) {
 /** When: quick days, a day from the calendar, an hour, or «потом». */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun WhenDialog(l: Line, today: LocalDate, w: Words, onDismiss: () -> Unit, onPick: (LocalDate?, String?, Boolean) -> Unit) {
+private fun WhenDialog(book: Book, l: Line, today: LocalDate, w: Words, onDismiss: () -> Unit, onPick: (LocalDate?, String?, Boolean) -> Unit) {
     val c = P.c
     var day by remember { mutableStateOf(l.date ?: today) }
     var time by remember { mutableStateOf(l.time) }
@@ -253,6 +256,7 @@ private fun WhenDialog(l: Line, today: LocalDate, w: Words, onDismiss: () -> Uni
                         Chip(w.near(d, today) + if (d == monday && d != today.plusDays(1)) "" else "", d == day) { day = d }
                     }
                     Chip(w.pickDay, false) { calendar = true }
+                    Chip(w.later, false) { onPick(null, null, true) }
                 }
                 Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(w.near(day, today) + (time?.let { " · $it" } ?: ""), style = Voice.reply.copy(color = c.ink), modifier = Modifier.weight(1f))
@@ -262,15 +266,9 @@ private fun WhenDialog(l: Line, today: LocalDate, w: Words, onDismiss: () -> Uni
             }
         },
         confirmButton = { TextButton({ onPick(day, time, false) }) { Text(w.ok, color = c.link) } },
-        dismissButton = { TextButton({ onPick(null, null, true) }) { Text(w.later.replaceFirstChar { it.uppercase() }, color = c.graphite) } },
+        dismissButton = { TextButton(onDismiss) { Text(w.cancel, color = c.graphite) } },
     )
-    if (calendar) {
-        val st = rememberDatePickerState(initialSelectedDateMillis = day.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli())
-        DatePickerDialog(onDismissRequest = { calendar = false },
-            confirmButton = { TextButton({ st.selectedDateMillis?.let { day = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }; calendar = false }) { Text(w.ok, color = c.link) } }) {
-            DatePicker(st, showModeToggle = false)
-        }
-    }
+    if (calendar) MonthSheet(book, today, day, onPick = { d -> day = d; calendar = false }, onClose = { calendar = false })
     if (clock) {
         val now = l.hour ?: LocalTime.of(10, 0)
         val st = rememberTimePickerState(now.hour, now.minute, true)

@@ -183,11 +183,19 @@ interface Words {
     val backupSetting: String
     val on: String
     val off: String
+    val bellSetting: String
+    val bellOn: String
+    val bellOff: String
     val inviteSetting: String
     val inviteOwn: String
     val inviteShared: String
     val inviteNone: String
     val inviteHint: String
+    /** Under a page just closed: what the next one holds. */
+    fun nextPage(lines: List<Line>): String
+    val propWhoTo: String
+    val propWhoFrom: String
+    val offerToday: String
     val threadClosed: String
     val threadOpened: String
     val closeThread: String
@@ -275,7 +283,7 @@ object WordsRu : Words {
     override fun summary(s: Summary) = listOfNotNull(
         s.promises.takeIf { it > 0 }?.let { "$it " + plural(it, "обещание", "обещания", "обещаний") },
         s.questions.takeIf { it > 0 }?.let { "$it " + plural(it, "вопрос", "вопроса", "вопросов") },
-        s.tails.takeIf { it > 0 }?.let { "$it " + plural(it, "хвост", "хвоста", "хвостов") },
+        s.tails.takeIf { it > 0 }?.let { "$it с прошлых дней" },
     ).joinToString(" · ").let { if (it.isEmpty()) "" else "на полях: $it" }
     override val composerHint = "Пишите как думаете…"
     override fun writtenOn(d: LocalDate?, today: LocalDate) = "записано " + (d?.let { "на " + near(it, today) } ?: "на потом")
@@ -353,7 +361,7 @@ object WordsRu : Words {
     override val emptyPerson = "Строк с этим человеком пока нет."
     override val emptyLater = "Ничего не отложено."
     override val ritualTitle = "Перелистнуть день"
-    override fun ritualLine(n: Int) = "$n " + plural(n, "строка открыта", "строки открыты", "строк открыто") + " — решите каждую"
+    override fun ritualLine(n: Int) = if (n == 1) "1 строка открыта — решите её" else "$n " + plural(n, "строка открыта", "строки открыты", "строк открыто") + " — решите каждую"
     override val ritualDone = "День закрыт."
     override val restTomorrow = "всё остальное — на завтра"
     override val pickDayShort = "› день…"
@@ -367,9 +375,8 @@ object WordsRu : Words {
         Triple("Олег просит зерно круглее", "Тире — запись: мысль, факт, заметка.", "note"),
         Triple("Показать логотип", "Слева — пометки Margin: время, повтор, люди, нить, место.", "time"),
         Triple("Спортзал", "↻ — повтор. Сделали — следующий появится на своей странице.", "repeat"),
-        Triple("Продлить подписку", "Красной ручкой — хвост: не сделано вовремя. Решите, что с ним.", "tail"),
+        Triple("Продлить подписку", "Красной ручкой — дело с прошлых дней: не сделано вовремя. Решите, что с ним.", "tail"),
         Triple("Исходники баннеров", "→ Лёше — вы обещали. ← Дима — обещали вам.", "to"),
-        Triple("Купить лампу", "«когда?» — Margin не уверен. Нажмите строку и ответьте.", "ask"),
     )
     override val helpTitle = "Как читать поля"
     override val helpLine = "справа ваши слова, на линии знак, слева пометки Margin"
@@ -396,7 +403,7 @@ object WordsRu : Words {
     override val bellDone = "Сделано"
     override val bellHour = "Через час"
     override fun morningLine(n: Int, tails: Int) = "$n " + plural(n, "строка", "строки", "строк") + " на сегодня" +
-        (if (tails > 0) ", из них $tails " + plural(tails, "хвост", "хвоста", "хвостов") else "")
+        (if (tails > 0) ", из них $tails с прошлых дней" else "")
     override fun answer(a: Ask.Answer, today: LocalDate): Triple<String, String?, String> {
         val n = a.lines.size
         val t = things(a.lines)
@@ -488,11 +495,18 @@ object WordsRu : Words {
     override val backupSetting = "Копия в Google"
     override val on = "вкл"
     override val off = "выкл"
-    override val inviteSetting = "Код приглашения"
-    override val inviteOwn = "свой"
-    override val inviteShared = "общий"
+    override val bellSetting = "Напоминания"
+    override val bellOn = "разрешены"
+    override val bellOff = "разрешить"
+    override val inviteSetting = "Доступ к ИИ"
+    override val inviteOwn = "свой код"
+    override val inviteShared = "общий код"
     override val inviteNone = "нет"
-    override val inviteHint = "Код открывает ИИ: перечитывание сложных фраз, ответы на вопросы, голос. Пустое поле — общий код."
+    override val inviteHint = "ИИ перечитывает сложные фразы, отвечает на трудные вопросы и расшифровывает голос. Если вам дали свой код — введите его; пусто — общий."
+    override fun nextPage(lines: List<Line>) = "завтра — " + things(lines).ifBlank { "пусто" } + " ›"
+    override val propWhoTo = "вы обещали"
+    override val propWhoFrom = "ждёте"
+    override val offerToday = "› сегодня"
     override val threadClosed = "нить закрыта"
     override val threadOpened = "нить открыта снова"
     override val closeThread = "закрыть нить ›"
@@ -637,7 +651,7 @@ object WordsEn : Words {
     override val emptyPerson = "No lines with them yet."
     override val emptyLater = "Nothing put off."
     override val ritualTitle = "Turn the page"
-    override fun ritualLine(n: Int) = "$n line" + (if (n == 1) " is" else "s are") + " open — decide each"
+    override fun ritualLine(n: Int) = if (n == 1) "1 line is open — decide it" else "$n lines are open — decide each"
     override val ritualDone = "The day is closed."
     override val restTomorrow = "all the rest — tomorrow"
     override val pickDayShort = "› a day…"
@@ -653,7 +667,6 @@ object WordsEn : Words {
         Triple("Gym", "↻ — a repeat. Done — the next one appears on its page.", "repeat"),
         Triple("Renew the subscription", "In red pen — left over: not done in time. Decide what to do.", "tail"),
         Triple("Banner sources", "→ Lyosha — you promised. ← Dima — promised to you.", "to"),
-        Triple("Buy a lamp", "«when?» — Margin isn't sure. Tap the line and answer.", "ask"),
     )
     override val helpTitle = "How to read the margin"
     override val helpLine = "your words on the right, the mark on the rule, Margin's notes on the left"
@@ -753,7 +766,7 @@ object WordsEn : Words {
         Triple("tomorrow", "open", "A dot on the rule is a to-do. Tap it."),
         Triple("17:00", "event", "A ring is a meeting, a dash is a note."),
         Triple("→ Mon", "moved", "In the evening turn the page: every open line gets its decision."),
-        Triple("?", "none", "Ask «what did I promise Lyosha?» — the answer appears over the field."),
+        Triple("?", "none", "Ask «what did I promise Alex?» — the answer appears over the field."),
     )
     override val welcomeTry = "Tap the dot — done. Tap again — it comes back."
     override val welcomeTried = "That's how it works. The rest is as simple."
@@ -771,11 +784,18 @@ object WordsEn : Words {
     override val backupSetting = "Google backup"
     override val on = "on"
     override val off = "off"
-    override val inviteSetting = "Invite code"
-    override val inviteOwn = "your own"
-    override val inviteShared = "shared"
+    override val bellSetting = "Reminders"
+    override val bellOn = "allowed"
+    override val bellOff = "allow"
+    override val inviteSetting = "AI access"
+    override val inviteOwn = "your code"
+    override val inviteShared = "shared code"
     override val inviteNone = "none"
-    override val inviteHint = "The code opens the AI: re-reading hard phrases, answers, voice. Leave it empty for the shared code."
+    override val inviteHint = "The AI re-reads hard phrases, answers difficult questions and transcribes voice. If you were given your own code, enter it; empty — the shared one."
+    override fun nextPage(lines: List<Line>) = "tomorrow — " + things(lines).ifBlank { "nothing yet" } + " ›"
+    override val propWhoTo = "you promised"
+    override val propWhoFrom = "waiting for"
+    override val offerToday = "› today"
     override val threadClosed = "thread closed"
     override val threadOpened = "thread open again"
     override val closeThread = "close the thread ›"

@@ -119,14 +119,19 @@ private fun Notebook(vm: BookVm) {
                     }
                     when {
                         // The ritual ends on today's page: the stamp is pressed, a breath, then the page turns.
-                        rit -> RitualPage(book, today, vm, bottom = 24.dp, onDone = {
-                            vm.closeDay(today); ritual = false
-                            scope.launch { pager.scrollToPage(MIDDLE); kotlinx.coroutines.delay(2600); go(today.plusDays(1)) }
+                        rit -> RitualPage(book, today, vm, bottom = 24.dp, onDone = { day, asked ->
+                            vm.closeDay(day, asked); ritual = false
+                            scope.launch {
+                                pager.scrollToPage(MIDDLE + ChronoUnit.DAYS.between(today, day).toInt())
+                                kotlinx.coroutines.delay(3200)
+                                // Still looking at the closed page (not gone elsewhere meanwhile): turn it.
+                                if (dateOf(pager.currentPage) == day && stack.isEmpty()) go(day.plusDays(1))
+                            }
                         })
                         r == null -> HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { it }) { i ->
                             DayPage(dateOf(i), book, today, fresh, bottom = 24.dp, onMark = vm::toggle, onOpen = onOpen,
                                 onMonth = { month = true }, onTurn = { ritual = true }, eveningHour = vm.eveningHour(), stamping = stamping,
-                                calendar = cal[dateOf(i)].orEmpty())
+                                calendar = cal[dateOf(i)].orEmpty(), onNext = { go(dateOf(i).plusDays(1)) })
                         }
                         r == "index" -> IndexPage(book, today, onThread = { push("thread:$it") }, onPerson = { push("person:$it") }, onLater = { push("later") },
                             onSettings = { push("settings") }, onHelp = { push("help") }, onSearch = { push("search") },

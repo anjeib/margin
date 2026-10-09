@@ -12,12 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,9 +29,8 @@ import ru.anjeib.margin.book.Book
 import ru.anjeib.margin.book.lastDay
 import ru.anjeib.margin.book.page
 import ru.anjeib.margin.book.toDecide
-import java.time.Instant
+import ru.anjeib.margin.book.ritualDay
 import java.time.LocalDate
-import java.time.ZoneOffset
 
 /*
  * «Перелистнуть день» (DESIGN.md §10): the evening ritual. Only the open to-dos of today, each with Margin's offers
@@ -43,23 +38,28 @@ import java.time.ZoneOffset
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun RitualPage(book: Book, today: LocalDate, vm: BookVm, bottom: Dp, onDone: () -> Unit) {
+fun RitualPage(book: Book, today: LocalDate, vm: BookVm, bottom: Dp, onDone: (LocalDate, Set<String>) -> Unit) {
     val c = P.c
     val w = P.w
-    val open = book.toDecide(today)
+    // The day being closed: until four at night still yesterday — and «завтра» is the day that has begun.
+    val day = remember { ritualDay() }
+    val next = day.plusDays(1)
+    val open = book.toDecide(day)
+    // What the evening was asked to decide — the stamp counts what came of it.
+    val asked = remember { open.map { it.id }.toSet() }
     var picking by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = bottom)) {
         item("head") {
-            PageHead(marginTop = today.dayOfMonth.toString(), marginBottom = w.mon(today.monthValue), title = w.ritualTitle,
+            PageHead(marginTop = day.dayOfMonth.toString(), marginBottom = w.mon(day.monthValue), title = w.ritualTitle,
                 line = if (open.isEmpty()) null else w.ritualLine(open.size))
         }
         items(open, key = { it.id }) { l ->
             Column(Modifier.animateItem()) {
-                val tail = l.lastDay()?.isBefore(today) == true
-                LineOnPage(l, today, today, book, if (tail) Seen.Tail else Seen.Page, false, onMark = vm::toggle, onOpen = {})
+                val tail = l.lastDay()?.isBefore(day) == true
+                LineOnPage(l, day, today, book, if (tail) Seen.Tail else Seen.Page, false, onMark = vm::toggle, onOpen = {})
                 FlowRow(Modifier.fillMaxWidth().offset(y = (-14).dp).padding(start = Grid.text - 6.dp, end = Grid.right)) {
-                    Reply(w.offerTomorrow) { vm.move(l.id, today.plusDays(1), quiet = true) }
+                    Reply(w.offerTomorrow) { vm.move(l.id, next, quiet = true) }
                     Reply(w.pickDayShort) { picking = l.id }
                     Reply(w.offerLater) { vm.move(l.id, null, quiet = true) }
                     Reply(w.dropped) { vm.drop(l.id, quiet = true) }
@@ -67,23 +67,17 @@ fun RitualPage(book: Book, today: LocalDate, vm: BookVm, bottom: Dp, onDone: () 
             }
         }
         if (open.isNotEmpty()) item("rest") {
-            MarginLink(w.restTomorrow, Modifier.padding(top = 10.dp)) { vm.carryAll(today, today.plusDays(1)) }
+            MarginLink(w.restTomorrow, Modifier.padding(top = 10.dp)) { vm.carryAll(day, next) }
         } else item("done") {
             // Every line has its decision: a breath, then the page turns.
-            LaunchedEffect(Unit) { delay(900); onDone() }
+            LaunchedEffect(Unit) { delay(900); onDone(day, asked) }
             MarginSays(w.ritualDone, Modifier.padding(top = 8.dp))
         }
     }
 
+    // Another day: the notebook's own month, the days' load in dots — a choice made with the week in view.
     picking?.let { id ->
-        val st = rememberDatePickerState(initialSelectedDateMillis = today.plusDays(2).atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli())
-        DatePickerDialog(onDismissRequest = { picking = null },
-            confirmButton = {
-                TextButton({
-                    st.selectedDateMillis?.let { vm.move(id, Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate(), quiet = true) }
-                    picking = null
-                }) { Text(w.ok, color = c.link) }
-            }) { DatePicker(st, showModeToggle = false) }
+        MonthSheet(book, today, next, onPick = { d -> vm.move(id, d, quiet = true); picking = null }, onClose = { picking = null })
     }
 }
 

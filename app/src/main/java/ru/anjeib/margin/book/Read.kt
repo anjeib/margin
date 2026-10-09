@@ -1,6 +1,7 @@
 package ru.anjeib.margin.book
 
 import ru.anjeib.margin.ai.LocalParser
+import ru.anjeib.margin.data.dative
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -19,6 +20,12 @@ object Read {
     private val eventCue = Regex("^\\s*(?:встреча|созвон|при[её]м|собеседование|звонок с|концерт|спектакль|день рождения|свадьба|вебинар|лекция|урок|тренировка)(?!\\p{L})", RegexOption.IGNORE_CASE)
     private val noteCue = Regex("^\\s*(?:запись|заметка|мысль|идея|на заметку)\\s*[:—–-]\\s*", RegexOption.IGNORE_CASE)
     private val threadTag = Regex("(?:^|\\s)#([\\p{L}\\d][\\p{L}\\d_-]*)")
+    /** «до пятницы», «к среде», «до 12-го»: a deadline — the line stands on the page from now until that day. */
+    private val deadline = Regex("(?<!\\p{L})(?:до|к|ко)\\s+(?:понедельник\\p{L}*|вторник\\p{L}*|сред\\p{L}*|четверг\\p{L}*|пятниц\\p{L}*|суббот\\p{L}*|воскресень\\p{L}*|" +
+        "пн|вт|ср|чт|пт|сб|вс|послезавтр\\p{L}*|\\d{1,2}(?:-?го|-?е)?(?:\\s+\\p{L}+)?)(?!\\p{L})", RegexOption.IGNORE_CASE)
+    /** Giving something to someone: «прислать бриф Диме», «вернуть книгу Маше» — what you owe them (→). */
+    private val giving = Regex("(?<!\\p{L})(?:присл|пришл|отправ|скин|показ|покаж|перед|верн|отда|подар|принес|принёс|привез|привёз|занес|занёс|заплат|переве)\\p{L}*" +
+        "(?:ть|ти|ю|у|ешь|ет|ем|ете|ут|ют|ит|им|ите|ат|ят|л|ла|ли|ло|й|йте)(?!\\p{L})", RegexOption.IGNORE_CASE)
 
     /** What a phrase will become — for the live margin next to the field and for writing it down. */
     data class Draft(val lines: List<Line>, val sure: Boolean, val question: Boolean, val threadTitle: String?)
@@ -48,7 +55,10 @@ object Read {
                 eventCue.containsMatchIn(i.title) && (i.time != null || i.due != null) -> Kind.Event
                 else -> Kind.Todo
             }
-            val who = listOfNotNull(i.promisedTo?.let { Who(it, Dir.To) }, i.waitingFor?.let { Who(it, Dir.From) }) + i.people.map { Who(it, Dir.With) }
+            // A name in the dative after a verb of giving is someone you owe: «прислать бриф Диме» → «→ Диме», not «с Димой».
+            val owed = if (giving.containsMatchIn(i.title)) i.people.filter { n -> said(text, n.dative()) && !together(text, n) } else emptyList()
+            val who = listOfNotNull(i.promisedTo?.let { Who(it, Dir.To) }, i.waitingFor?.let { Who(it, Dir.From) }) +
+                owed.filter { it != i.promisedTo }.map { Who(it, Dir.To) } + (i.people - owed.toSet()).map { Who(it, Dir.With) }
             val repeat = i.repeat?.let { (f, n, d) -> Repeat(f, n, d) }
             val words = calm(i.title, text)
             val base = Line(text = words, kind = kind, who = who, place = i.place, repeat = repeat, part = i.part,
@@ -60,10 +70,26 @@ object Read {
                 // A thread's line written without a day stays in the thread — on its page, not on a day's.
                 threadId != null && tag == null && i.due == null && i.start == null && i.time == null && repeat == null -> listOf(base.copy(day = null))
                 i.start != null && i.due != null && i.start != i.due -> listOf(base.copy(day = i.start.toString(), until = i.due.toString()))
+                // «до пятницы»: from the page it was written on until that day — seen every day, not only on Friday.
+                i.due != null && i.start == null && i.time == null && repeat == null && i.due.isAfter(page) && deadline.containsMatchIn(text) ->
+                    listOf(base.copy(day = page.toString(), until = i.due.toString()))
                 else -> listOf(base.copy(day = (i.due ?: i.start ?: page).toString()))
             }
         }
         return Draft(lines, r.sure, false, tag)
+    }
+
+    /** The words hold this form of a word (case and «ё» aside). */
+    private fun said(text: String, form: String): Boolean {
+        val f = form.lowercase().replace('ё', 'е').trim()
+        if (f.isEmpty()) return false
+        return Regex("(?<!\\p{L})" + Regex.escape(f) + "(?!\\p{L})").containsMatchIn(text.lowercase().replace('ё', 'е'))
+    }
+
+    /** «с Олегом», «со Славой»: together with them, whatever else the words say. */
+    private fun together(text: String, name: String): Boolean {
+        val stem = name.lowercase().replace('ё', 'е').take(3)
+        return stem.length == 3 && Regex("(?<!\\p{L})(?:с|со)\\s+" + Regex.escape(stem)).containsMatchIn(text.lowercase().replace('ё', 'е'))
     }
 
     private val stepCue = Regex("^\\s*(?:\\p{L}+(?:ть|ти|чь|ться|тись)|позвон\\p{L}*|напиш\\p{L}*|купи|сходи|сделай|отправь|забери|заплати|оплати|закажи|запишись|проверь|найди|уточни|спроси|скинь|пришли|подготовь|договорись)(?!\\p{L})",

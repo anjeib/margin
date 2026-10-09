@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -109,10 +110,35 @@ fun NoteText(n: Note, align: TextAlign = TextAlign.End) {
         n.struck?.let { withStyle(SpanStyle(color = c.pencil, textDecoration = TextDecoration.LineThrough)) { append(it) }; append(" ") }
         // Signs (← → ↻ ≡) in the plain sans: the serif italic draws them as feathered ornaments.
         n.text.forEach { ch -> if (ch in SIGNS) withStyle(SpanStyle(fontFamily = Sans, fontStyle = androidx.compose.ui.text.font.FontStyle.Normal)) { append(ch) } else append(ch) }
-    }, style = Voice.note.copy(color = color, textAlign = align), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }, style = Voice.note.copy(color = color, textAlign = align), maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
 
 private const val SIGNS = "←→↻≡›"
+
+private val linkLike = Regex("(?:https?://\\S+|www\\.\\S+|\\b[\\w-]+\\.(?:ru|com|org|net|us|io|me|рф|su|app|dev)(?:/\\S*)?|\\+?\\d[\\d\\s()-]{8,}\\d)", RegexOption.IGNORE_CASE)
+
+/** Your words with their addresses and phones as links — a meeting link or a number written under a line opens. */
+fun linked(text: String, color: Color): androidx.compose.ui.text.AnnotatedString = buildAnnotatedString {
+    var at = 0
+    linkLike.findAll(text).forEach { m ->
+        append(text.substring(at, m.range.first))
+        val v = m.value.trimEnd('.', ',', ')')
+        val url = when {
+            v.first() == '+' || v.first().isDigit() -> "tel:" + v.filter { it.isDigit() || it == '+' }
+            v.startsWith("http", true) -> v
+            else -> "https://$v"
+        }
+        withLink(androidx.compose.ui.text.LinkAnnotation.Url(url, androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = color)))) { append(v) }
+        append(m.value.substring(v.length))
+        at = m.range.last + 1
+    }
+    append(text.substring(at))
+}
+
+/** Margin's words with its signs (← → ↻ ≡ ›) in the plain sans: the serif italic draws them as feathered ornaments. */
+fun withPlainSigns(text: String): androidx.compose.ui.text.AnnotatedString = buildAnnotatedString {
+    text.forEach { ch -> if (ch in SIGNS) withStyle(SpanStyle(fontFamily = Sans, fontStyle = androidx.compose.ui.text.font.FontStyle.Normal)) { append(ch) } else append(ch) }
+}
 
 /** The mark on the rule: • to do, × done, › moved, ○ event, – note. A node of paper cuts the rule under it. */
 @Composable
@@ -180,7 +206,7 @@ private fun Modifier.combinedClickableCompat(onClick: () -> Unit) = this.combine
 fun MarginSays(text: String, modifier: Modifier = Modifier, color: Color = P.c.graphite) {
     Row(modifier.fillMaxWidth().padding(end = Grid.right)) {
         Spacer(Modifier.width(Grid.text))
-        Text(text, style = Voice.reply.copy(color = color), modifier = Modifier.weight(1f))
+        Text(withPlainSigns(text), style = Voice.reply.copy(color = color), modifier = Modifier.weight(1f))
     }
 }
 

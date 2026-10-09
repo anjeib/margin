@@ -67,7 +67,9 @@ fun notesOf(l: Line, page: LocalDate?, today: LocalDate, book: Book, w: Words, s
 
 /** The words name the person already («позвонить Олегу» — Олег): the stem is enough. */
 private fun named(text: String, name: String): Boolean {
-    val stem = name.lowercase().replace('ё', 'е').take(4)
+    // «Мама» in «маме», «Олег» in «Олегу»: the name less its ending.
+    val n = name.lowercase().replace('ё', 'е')
+    val stem = n.take(maxOf(3, n.length - if (n.length > 5) 2 else 1))
     return stem.length >= 3 && Regex("\\p{L}+").findAll(text.lowercase().replace('ё', 'е')).any { it.value.startsWith(stem) }
 }
 

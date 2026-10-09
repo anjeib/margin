@@ -48,7 +48,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     val today: StateFlow<LocalDate> = _today
 
     /** Margin's sentence over the field; [undo] puts the notebook back as it was before the change. */
-    data class Said(val text: String, val undo: Book? = null, val id: Long = System.nanoTime())
+    data class Said(val text: String, val undo: Book? = null, val id: Long = System.nanoTime(), val day: LocalDate? = null)
     private val _said = MutableStateFlow<Said?>(null)
     val said: StateFlow<Said?> = _said
     private var sayJob: Job? = null
@@ -101,7 +101,8 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         val prefs = app.getSharedPreferences("polya", android.content.Context.MODE_PRIVATE)
         if (!prefs.getBoolean("examplesAdded", false)) {
             prefs.edit().putBoolean("examplesAdded", true).apply()
-            if (store.book.value.lines.isEmpty() && java.util.Locale.getDefault().language == "ru") store.update { it.withSamples(Examples.build()) }
+            val ru = ru.anjeib.margin.i18n.resolveLang(Prefs.get(app).settings.value.lang) == ru.anjeib.margin.i18n.Lang.Ru
+            if (store.book.value.lines.isEmpty()) store.update { it.withSamples(Examples.build(ru = ru)) }
         }
     }
 
@@ -134,8 +135,8 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         refreshCalendar()
     }
 
-    private fun say(text: String, undo: Book? = null) {
-        val s = Said(text, undo)
+    private fun say(text: String, undo: Book? = null, day: LocalDate? = null) {
+        val s = Said(text, undo, day = day)
         _said.value = s
         sayJob?.cancel()
         sayJob = viewModelScope.launch { delay(6000); if (_said.value?.id == s.id) _said.value = null }
@@ -186,7 +187,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         val away = if (here) emptyList() else lines.filter { if (t.later) it.date != null else it.date != page }
         when {
             lines.size > 1 -> say(words.writtenN(lines.size), before)
-            away.isNotEmpty() -> say(words.writtenOn(away.first().date, today.value), before)
+            away.isNotEmpty() -> say(words.writtenOn(away.first().date, today.value), before, day = away.first().date)
         }
         // Not sure of the words and the AI is at hand: it re-reads them, and what it reads differently shows as a correction.
         if (!d.sure && text.isNotBlank() && aiReady()) reread(text, t, store.book.value.lines.filter { l -> lines.any { it.id == l.id } })
@@ -334,10 +335,10 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     private val _stamping = MutableStateFlow<LocalDate?>(null)
     val stamping: StateFlow<LocalDate?> = _stamping
 
-    fun closeDay(date: LocalDate) {
-        store.update { it.closeDay(date) }
+    fun closeDay(date: LocalDate, decided: Set<String> = emptySet()) {
+        store.update { it.closeDay(date, decided = decided) }
         _stamping.value = date
-        viewModelScope.launch { delay(2500); if (_stamping.value == date) _stamping.value = null }
+        viewModelScope.launch { delay(4500); if (_stamping.value == date) _stamping.value = null }
     }
 
     /** A thread closed (to the end of the index) or opened again. */
@@ -359,7 +360,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     fun setEveningHour(h: Int) = polya.edit().putInt("eveningHour", h.coerceIn(17, 23)).apply()
 
     /** «Примеры» on and off. */
-    fun toggleExamples() = store.update { if (it.hasSamples()) it.withoutSamples() else it.withSamples(Examples.build(today.value)) }
+    fun toggleExamples() = store.update { if (it.hasSamples()) it.withoutSamples() else it.withSamples(Examples.build(today.value, words.ru)) }
 
     fun delete(id: String) {
         val before = book.value

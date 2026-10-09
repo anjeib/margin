@@ -109,6 +109,10 @@ data class Person(
     fun matches(n: String) = name.equals(n, true) || aliases.any { it.equals(n, true) }
 }
 
+/** A closed day's stamp: the hour, and what came of the day — done, moved on, not doing (the evening's decisions too). */
+@Serializable
+data class DayClose(val at: String, val done: Int = 0, val moved: Int = 0, val dropped: Int = 0)
+
 /** The whole notebook. [v] grows with every change an older build would read wrongly. */
 @Serializable
 data class Book(
@@ -116,8 +120,8 @@ data class Book(
     val lines: List<Line> = emptyList(),
     val threads: List<Thread> = emptyList(),
     val persons: List<Person> = emptyList(),
-    /** Days closed with «перелистнуть день»: the date → the hour it was closed (the stamp on the page). */
-    val closed: Map<String, String> = emptyMap(),
+    /** Days closed with «перелистнуть день»: the date → the stamp on its page. */
+    val closed: Map<String, DayClose> = emptyMap(),
 ) {
     fun line(id: String) = lines.find { it.id == id }
     fun thread(id: String?) = id?.let { i -> threads.find { it.id == i } }

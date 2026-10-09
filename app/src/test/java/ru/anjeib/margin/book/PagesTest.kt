@@ -38,10 +38,16 @@ class PagesTest {
     }
 
     @Test fun aClosedDayKeepsItsHourAndWhatCameOfIt() {
-        val b = book.carryAll(today, today.plusDays(1), today).closeDay(today, LocalTime.of(21, 40))
-        assertEquals("21:40", b.closed[today.toString()])
-        val st = b.dayStats(today, today)
-        assertEquals(1, st.done) // «Сдать макеты лендинга»
-        assertTrue(st.moved >= 3)
+        val asked = book.toDecide(today).map { it.id }.toSet()
+        val b = book.carryAll(today, today.plusDays(1), today).closeDay(today, LocalTime.of(21, 40), asked)
+        val c = b.closed[today.toString()]!!
+        assertEquals("21:40", c.at)
+        assertEquals(1, c.done) // «Сдать макеты лендинга»
+        assertEquals(asked.size, c.moved)
+    }
+
+    @Test fun atNightTheEveningIsYesterdays() {
+        assertEquals(today.minusDays(1), ritualDay(today.atTime(1, 50)))
+        assertEquals(today, ritualDay(today.atTime(21, 0)))
     }
 }

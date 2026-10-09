@@ -205,7 +205,11 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
             last?.let { s ->
                 Row(Modifier.fillMaxWidth().padding(end = Grid.right, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Spacer(Modifier.width(Grid.text))
-                    Text(s.text, style = Voice.reply.copy(color = c.graphite), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    // «записано на пт» leads to that page.
+                    val go = s.day?.let { d -> { vm.hush(); onDay(d) } }
+                    Text(s.text + if (go != null) " ›" else "", style = Voice.reply.copy(color = if (go != null) c.link else c.graphite), maxLines = 2,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
+                            .then(if (go != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = go).padding(vertical = 12.dp) else Modifier))
                     if (s.undo != null) Text("  ·  " + w.undo, style = Voice.reply.copy(color = c.link),
                         modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.undo() }.padding(vertical = 12.dp, horizontal = 4.dp))
                 }

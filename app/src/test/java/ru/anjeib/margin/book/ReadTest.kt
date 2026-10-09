@@ -60,6 +60,22 @@ class ReadTest {
         assertNull(read("подобрать шрифт", threadId = "ex-coffee").lines.single().day)
     }
 
+    @Test fun aDeadlineIsAWindowFromTheOpenPage() {
+        val l = read("обещала Диме прислать бриф до пятницы").lines.single()
+        assertEquals(today.toString(), l.day)
+        assertEquals(next(DayOfWeek.FRIDAY).toString(), l.until)
+        assertEquals(today.toString(), read("к среде подготовить смету").lines.single().day)
+        // «в пятницу» is a day, not a deadline.
+        assertEquals(next(DayOfWeek.FRIDAY).toString(), read("в пятницу купить вино").lines.single().day)
+    }
+
+    @Test fun givingToSomeoneIsWhatYouOweThem() {
+        assertEquals(listOf(Who("Дима", Dir.To)), read("прислать бриф Диме").lines.single().who)
+        // Buying a present for mum is not a promise, and not «с мамой» either.
+        assertTrue(read("купить подарок маме").lines.single().who.none { it.dir == Dir.To })
+        assertEquals(Dir.With, read("встреча с Олегом в пятницу в 12").lines.single().who.single().dir)
+    }
+
     @Test fun kinshipWordsKeepTheirSmallLetter() {
         assertEquals("Позвонить маме", read("позвонить маме вечером").lines.single().text)
     }

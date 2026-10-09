@@ -6,10 +6,37 @@ import java.time.LocalDate
 /*
  * «Примеры»: a few days of the young designer from the demo, one example of each thing a page can show — so a new
  * notebook is never a blank form, and each line teaches by being what it is. All are [Line.sample] and leave in one go.
- * Russian only, like the demo they come from.
+ * In Russian, and in English with the words translated.
  */
 object Examples {
-    fun build(today: LocalDate = LocalDate.now()): Book {
+    /** The same days in English — the words translated, the shape the same (one line of each kind). */
+    private val en = mapOf(
+        "Кофейня «Зерно»" to "«Bean» coffee shop", "Идеи" to "Ideas",
+        "Олег выбрал второй вариант, просит сделать зерно чуть круглее" to "Oliver picked the second option, asks to make the bean a bit rounder",
+        "Показать финальный логотип Олегу" to "Show the final logo to Oliver", "Фидбек по упаковке" to "Packaging feedback",
+        "Макет упаковки для типографии" to "Packaging layout for the printer", "Спортзал" to "Gym", "Покровка, 17" to "12 Bridge St",
+        "Купить молоко и хлеб" to "Buy milk and bread", "Созвон со студией" to "Call with the studio", "Купить лампу в коридор" to "Buy a lamp for the hallway",
+        "Сдать макеты лендинга" to "Hand in the landing page layouts",
+        "Трекер привычек для дизайнеров: каждый день одна маленькая визуальная задача" to "Habit tracker for designers: one small visual task a day",
+        "Продлить подписку Figma" to "Renew the Figma subscription", "Исходники баннеров" to "Banner source files", "3 000 ₽ за билеты" to "$30 for the tickets",
+        "Английский с репетитором" to "Spanish with a tutor", "Записаться к барберу" to "Book a barber", "Курс по 3D в Blender" to "Blender 3D course",
+        "Разобрать фото с отпуска" to "Sort the holiday photos",
+        "Олег" to "Oliver", "Лёша" to "Alex", "Маша" to "Mary",
+        "владелец кофейни «Зерно»" to "owner of the «Bean» coffee shop", "арт-директор" to "art director", "подруга" to "friend",
+    )
+
+    fun build(today: LocalDate = LocalDate.now(), ru: Boolean = true): Book {
+        val b = buildRu(today)
+        if (ru) return b
+        fun t(x: String) = en[x] ?: x
+        return b.copy(
+            lines = b.lines.map { l -> l.copy(text = t(l.text), place = l.place?.let(::t), who = l.who.map { it.copy(name = t(it.name)) }) },
+            threads = b.threads.map { it.copy(title = t(it.title)) },
+            persons = b.persons.map { it.copy(name = t(it.name), about = it.about?.let(::t), phone = it.phone?.let { "+1 555 012 4040" }) },
+        )
+    }
+
+    private fun buildRu(today: LocalDate): Book {
         fun d(n: Long) = today.plusDays(n).toString()
         fun at(n: Long, hm: String) = "${today.plusDays(n)}T$hm"
         val coffee = Thread(id = "ex-coffee", title = "Кофейня «Зерно»", sphere = "work", createdAt = at(-12, "11:20"), sample = true)
@@ -27,7 +54,7 @@ object Examples {
             l("gym", "Спортзал", gym.toString(), at(-30, "09:00")).copy(time = "08:00", repeat = Repeat("weekly", 1, listOf(1, 3, 5)), place = "Покровка, 17"),
             l("milk", "Купить молоко и хлеб", d(0), at(0, "08:10")).copy(time = "19:30"),
             l("call", "Созвон со студией", d(0), at(-3, "10:00"), Kind.Event).copy(time = "17:00"),
-            l("lamp", "Купить лампу в коридор", d(0), at(0, "08:12")).copy(ask = listOf("when")),
+            l("lamp", "Купить лампу в коридор", d(0), at(0, "08:12")),
             l("land", "Сдать макеты лендинга", d(0), at(-4, "11:00")).copy(state = State.Done, doneAt = at(0, "10:40")),
             l("idea", "Трекер привычек для дизайнеров: каждый день одна маленькая визуальная задача", d(0), at(0, "08:40"), Kind.Note).copy(threadId = ideas.id),
             // A tail from before, a promise each way, a thing on two pages, one put off three times.
