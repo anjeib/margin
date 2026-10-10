@@ -793,6 +793,7 @@ interface Strings {
     val commentsTitle: String
     val filesWord: String
     val allTab: String
+    val laneHint: String
 }
 
 object Ru : Strings {
@@ -868,7 +869,7 @@ object Ru : Strings {
             "Когда · Повтор · Контакты · Место" to "что задать; заданное — синим",
             "Ещё" to "Ждём, Обещал, + день (дело на несколько дней), + дело (дело внутри — и дело станет темой)",
             "≡ Тема ›" to "у дела из темы — сверху; ведёт в тему",
-            "Комментарии" to "свой текст к делу, у каждого на полях — дата и время; у дела в списках появляется значок 💬",
+            "под инструментами" to "пишите прямо на странице, как в тетради: дата и время встанут на полях; у дела в списках появится значок 💬",
             "⋯" to "Отложить, В тему…, Личное / Работа, Не буду делать, В идеи, Удалить",
         )),
         HelpSection("Поле ввода и метки", "Наберите «/», «#» или «@» — появится окошко с вариантами; выбранное встанет над полем. Ещё до отправки под полем видно, как Margin понял фразу.", image = "composer_slash", pairs = listOf(
@@ -1716,6 +1717,7 @@ object Ru : Strings {
     override val commentsTitle = "Комментарии"
     override val filesWord = "Файлы"
     override val allTab = "Всё"
+    override val laneHint = "Пишите прямо здесь — дата и время встанут на полях"
 }
 
 object En : Strings {
@@ -1751,7 +1753,7 @@ object En : Strings {
         HelpSection("Today · Calendar · Overview", "", pairs = listOf(
             "Today" to "the summary, promises, to-dos by the hour (the hour on the margin, «since 6 Oct» in terracotta when late), «No date» with their age, «Tomorrow — N»",
             "tap a to-do" to "its card, anywhere on the line; a long press — Time · To a topic · Delete",
-            "the card" to "«when» on its margin, the circle and the title edited in place, one line of who and where, then When · Repeat · Contacts · Place · More; comments under it",
+            "the card" to "«when» on its margin, the circle and the title edited in place, one line of who and where, then When · Repeat · Contacts · Place · More; below them you write right on the page, the date and time go on the margin",
             "Calendar" to "the month as a grid — the number under a day is what its list holds, a dot is a meeting — and the chosen day; a new to-do without a date goes to the chosen day",
             "Overview" to "everything: Topics, To-dos, Ideas as tabs; chips Waiting / Promised and Work / Personal",
         )),
@@ -2556,6 +2558,7 @@ object En : Strings {
     override val commentsTitle = "Comments"
     override val filesWord = "Files"
     override val allTab = "All"
+    override val laneHint = "Write right here — the date and time go on the margin"
 }
 
 /** Current language for code outside composition (dates, notifications, prompts). */

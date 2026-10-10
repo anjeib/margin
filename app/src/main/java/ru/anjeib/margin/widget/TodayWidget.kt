@@ -84,6 +84,7 @@ class TodayWidget : GlanceAppWidget() {
     private fun Body(ctx: Context, dayName: String, dayDate: String, rows: List<Triple<String, String, Boolean>>, more: Int, write: String, free: String, moreWord: String) {
         val bg = ColorProvider(day = Color(0xFFF6F3EE), night = Color(0xFF141210))
         val ink = ColorProvider(day = Color(0xFF1A1A1A), night = Color(0xFFEDE7DD))
+        val inkSoft = ColorProvider(day = Color(0xCC1A1A1A), night = Color(0xCCEDE7DD))
         val graphite = ColorProvider(day = Color(0xFF6B665E), night = Color(0xFFADA596))
         val accent = ColorProvider(day = Color(0xFFC8643B), night = Color(0xFFD9774E))
         val chip = ColorProvider(day = Color(0xFFECE6DC), night = Color(0xFF2A2622))
@@ -103,15 +104,16 @@ class TodayWidget : GlanceAppWidget() {
                 if (rows.isEmpty()) Text(free, style = TextStyle(color = graphite, fontSize = 14.sp, fontStyle = FontStyle.Italic), modifier = GlanceModifier.padding(horizontal = 12.dp, vertical = 4.dp))
                 rows.forEach { (whenText, line, late) ->
                     Row(GlanceModifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(whenText, maxLines = 1, style = TextStyle(color = if (late) accent else graphite, fontSize = 12.sp, fontStyle = FontStyle.Italic,
-                            fontFamily = FontFamily.Serif, textAlign = TextAlign.End), modifier = GlanceModifier.width(52.dp))
+                        // The same «когда» as on the app's margin: larger, medium, in ink a touch softer than the words.
+                        Text(whenText, maxLines = 1, style = TextStyle(color = if (late) accent else inkSoft, fontSize = 13.5.sp, fontStyle = FontStyle.Italic,
+                            fontWeight = FontWeight.Medium, fontFamily = FontFamily.Serif, textAlign = TextAlign.End), modifier = GlanceModifier.width(60.dp))
                         Spacer(GlanceModifier.width(8.dp))
                         Box(GlanceModifier.width(1.dp).height(18.dp).background(rule)) {}
                         Spacer(GlanceModifier.width(10.dp))
                         Text(line, maxLines = 1, style = TextStyle(color = ink, fontSize = 14.sp))
                     }
                 }
-                if (more > 0) Text("$moreWord $more", style = TextStyle(color = graphite, fontSize = 12.sp, fontStyle = FontStyle.Italic), modifier = GlanceModifier.padding(start = 71.dp, top = 2.dp))
+                if (more > 0) Text("$moreWord $more", style = TextStyle(color = graphite, fontSize = 12.sp, fontStyle = FontStyle.Italic), modifier = GlanceModifier.padding(start = 79.dp, top = 2.dp))
             }
             Row(GlanceModifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(GlanceModifier.defaultWeight().height(40.dp).background(card).cornerRadius(20.dp).padding(horizontal = 14.dp).clickable(open(MainActivity.ACTION_WRITE)),

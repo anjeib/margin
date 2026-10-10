@@ -1,6 +1,11 @@
 package ru.anjeib.margin.ui
 
 import androidx.compose.foundation.border
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,11 +42,11 @@ data class LaneItem(val id: String, val at: String, val text: String)
 fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifier, after: String? = null, label: String? = null,
                 onEdit: (String, String) -> Unit, onAdd: (String, String) -> Unit) {
     val c = M.c
-    val text = Type.body.copy(color = c.ink, fontSize = 15.5.sp, lineHeight = 22.sp)
-    // v8: the pieces stand on one panel under their caps label; the last row of the panel is a field that looks like one.
+    val text = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp)
+    // Owner, 10 окт: no field in a frame and no label over it — the card's own page is written on, like a text editor;
+    // each piece gets its day and hour on the margin when its writing begins. [label] is kept for old call sites and not shown.
     Column(modifier.fillMaxWidth()) {
-        label?.let { SectionHead(it, count = items.size.takeIf { n -> n > 0 }, top = 14.dp) }
-        val n = items.size + 1
+        Margined(Modifier.padding(top = 6.dp, bottom = 4.dp)) { Box(Modifier.fillMaxWidth().height(1.dp).background(c.hairline)) }
         // The day is written once: a piece of the same day as the one above it shows only its hour ([after] — what stands above the lane).
         items.forEachIndexed { i, item ->
             val above = if (i == 0) after else items[i - 1].at
@@ -51,29 +56,28 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
                 // Saved a moment after typing stops, and on leaving the page whatever is left.
                 LaunchedEffect(t) { if (t != item.text) { kotlinx.coroutines.delay(800); edit(item.id, t) } }
                 DisposableEffect(item.id) { onDispose { if (t.trim() != item.text.trim()) edit(item.id, t) } }
-                Margined(margin = { Box(Modifier.padding(top = 12.dp)) { Stamp(item.at, sameDay = above?.take(10) == item.at.take(10)) } }) {
-                    PanelPiece(seatOf(i, n), dividerStart = 16.dp) {
-                        BasicTextField(t, { t = it }, textStyle = text, cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp))
-                    }
+                Margined(margin = { Box(Modifier.padding(top = 9.dp)) { Stamp(item.at, sameDay = above?.take(10) == item.at.take(10)) } }) {
+                    BasicTextField(t, { t = it }, textStyle = text, cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
                 }
             }
         }
         var draft by remember { mutableStateOf("") }
         var started by remember { mutableStateOf<String?>(null) }
         var focused by remember { mutableStateOf(false) }
+        val focus = remember { androidx.compose.ui.focus.FocusRequester() }
         val add by rememberUpdatedState(onAdd)
         fun commit() { if (draft.isNotBlank()) add(draft.trim(), started ?: nowStamp()); draft = ""; started = null }
         DisposableEffect(Unit) { onDispose { commit() } }
-        Margined(margin = { started?.let { st -> Box(Modifier.padding(top = 18.dp)) { Stamp(st, sameDay = (items.lastOrNull()?.at ?: after)?.take(10) == st.take(10)) } } }) {
-            PanelPiece(seatOf(n - 1, n), dividerStart = 16.dp) {
-                Box(Modifier.fillMaxWidth().padding(10.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
-                    .border(1.dp, if (focused) c.link.copy(alpha = 0.5f) else c.hairline, androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
-                    .padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    if (draft.isEmpty()) Text(hint + "…", style = text.copy(color = c.graphite))
-                    BasicTextField(draft, { v -> draft = v; if (started == null && v.isNotBlank()) started = nowStamp() },
-                        textStyle = text, cursorBrush = SolidColor(c.link),
-                        modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (focused && !f.isFocused) commit(); focused = f.isFocused })
-                }
+        // The empty rest of the page is the next line: a tap anywhere below puts the cursor there.
+        Margined(margin = { started?.let { st -> Box(Modifier.padding(top = 9.dp)) { Stamp(st, sameDay = (items.lastOrNull()?.at ?: after)?.take(10) == st.take(10)) } } }) {
+            Box(Modifier.fillMaxWidth().heightIn(min = 88.dp).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {
+                runCatching { focus.requestFocus() } }) {
+                // A quiet word only on an empty page — once something is written, the page speaks for itself.
+                if (draft.isEmpty() && items.isEmpty() && !focused) Text(M.s.laneHint, style = Type.italic.copy(color = c.faint, fontSize = 16.sp, lineHeight = 23.sp),
+                    modifier = Modifier.padding(vertical = 8.dp))
+                BasicTextField(draft, { v -> draft = v; if (started == null && v.isNotBlank()) started = nowStamp() },
+                    textStyle = text, cursorBrush = SolidColor(c.link),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).focusRequester(focus).onFocusChanged { f -> if (focused && !f.isFocused) commit(); focused = f.isFocused })
             }
         }
     }

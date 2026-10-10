@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.sp
  */
 
 /** Width of the margin column; the rule runs at this x. */
-val MarginW = 68.dp
+val MarginW = 74.dp
 /** Gap between the rule and the content. */
 val MarginGap = 14.dp
 
@@ -95,8 +95,8 @@ fun Modifier.marginRule(color: Color, fraction: Float = 1f, top: Dp = 0.dp, over
 @Composable
 fun MarginText(text: String, late: Boolean = false, petrol: Boolean = false, faint: Boolean = false) {
     val c = M.c
-    Text(text, style = Type.italic.copy(color = when { late -> c.accentText; petrol -> c.link; faint -> c.faint; else -> c.graphite }, fontSize = 13.5.sp,
-        fontFeatureSettings = "tnum", textAlign = TextAlign.End, lineHeight = 17.sp), modifier = Modifier.padding(top = 3.dp))
+    Text(text, style = Type.italic.copy(color = when { late -> c.accentText; petrol -> c.link; faint -> c.faint; else -> c.ink.copy(alpha = 0.8f) }, fontSize = 15.5.sp,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End, lineHeight = 19.sp), modifier = Modifier.padding(top = 3.dp))
 }
 
 /** The one look of a date or an hour inside a line: ink, medium, figures of one width. */

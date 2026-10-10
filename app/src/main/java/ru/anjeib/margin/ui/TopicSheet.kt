@@ -231,11 +231,14 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     val fold = remember(task.id) { Animatable(0f) }
 
     LaunchedEffect(hl) { if (hl != null) { kotlinx.coroutines.delay(2200); hl = null } }
+    // A topic opens at its start — the title, the summary, the first days (owner, 10 окт); only a line asked for
+    // (a search hit) is scrolled to. When something new is written here, the feed follows it to the end.
     LaunchedEffect(task.id) {
         val i = hl?.let { k -> feed.indexOfFirst { it.key == k } } ?: -1
-        if (i >= 0) feedState.scrollToItem(i + 1) else if (feed.isNotEmpty()) feedState.scrollToItem(feed.size)
+        if (i >= 0) feedState.scrollToItem(i + 1)
     }
-    LaunchedEffect(feed.size) { if (feed.isNotEmpty() && hl == null) feedState.animateScrollToItem(feed.size) }
+    val openedWith = remember(task.id) { feed.size }
+    LaunchedEffect(feed.size) { if (feed.size > openedWith && hl == null) feedState.animateScrollToItem(feed.size) }
     fun archive() {
         scope.launch {
             view.confirmTick()

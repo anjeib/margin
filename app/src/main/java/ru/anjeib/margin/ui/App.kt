@@ -405,7 +405,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         val topic = qr?.let { (tid, _) -> data.tasks.find { it.id == tid } }
         if (qr == null || topic == null) openDeal = null
         else DealSheet(topic, qr.second, vm, onClose = { openDeal = null },
-            onOpenTopic = { openDeal = null; openTask = topic.id; openTab = 1; openHl = qr.second },
+            // Owner, 10 окт: who goes to the topic wants the topic itself — from its start, not at this matter.
+            onOpenTopic = { openDeal = null; openTask = topic.id; openTab = 0; openHl = null },
             onOpenPerson = { openDeal = null; openPerson = it })
     }
 

@@ -124,15 +124,16 @@ val RowTop = 13.dp
 @Composable
 fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modifier: Modifier = Modifier) {
     val c = M.c
-    Text(text, style = Type.italic.copy(color = when { late -> c.accentText; link -> c.link; else -> c.graphite }, fontSize = 13.5.sp, lineHeight = 17.sp,
-        fontFeatureSettings = "tnum", textAlign = TextAlign.End), modifier = modifier)
+    // Owner, 10 окт: «красиво, но мелко и бледно» — larger and in ink (a touch softer than the words), medium italic.
+    Text(text, style = Type.italic.copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink.copy(alpha = 0.8f) }, fontSize = 15.5.sp, lineHeight = 19.sp,
+        fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End), modifier = modifier)
 }
 
 /** The margin of a panel row: the note on the line of the row's first words. */
 @Composable
 fun RowMargin(text: String?, late: Boolean = false, link: Boolean = false) {
     if (text == null) return
-    MarginNote(text, late, link, Modifier.padding(top = RowTop + 3.dp))
+    MarginNote(text, late, link, Modifier.padding(top = RowTop + 2.dp))
 }
 
 /**
