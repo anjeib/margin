@@ -215,13 +215,14 @@ fun SmartComposer(
         val query = trigger?.groupValues?.get(2)?.lowercase()?.replace('ё', 'е')
         val kinds = listOf(s.tagDeal, s.tagTopic, s.tagIdea)
         val spheres = listOf(s.tagWork, s.tagPersonal)
-        val actions = listOf(s.tagWait, s.tagPromise, s.tagDone, s.tagRecord)
+        // «/готово» and «/запись» still work when typed, but are not offered — words say the same (owner's call, 10 окт).
+        val actions = listOf(s.tagWait, s.tagPromise)
         val d = vm.data.collectAsState().value
         // One choice: (the mark it adds, what the window shows, its group, a small sign before it).
         data class Pick(val token: String, val label: String, val group: String, val dot: Color? = null, val topic: Boolean = false)
         val offer: List<Pick> = when (sign) {
             "/" -> (kinds.map { Pick("/$it", "/$it", "kind") } + spheres.map { Pick("/$it", "/$it", "sphere", if (it == s.tagWork) c.link else c.ok) } +
-                actions.map { Pick("/$it", "/$it", "action") }).filter { it.label.drop(1).startsWith(query.orEmpty()) && it.token !in tags }
+                actions.map { Pick("/$it", "/$it", "action") }).filter { it.label.drop(1).startsWith(query.orEmpty()) }
             "#" -> d.tasks.filter { it.topic && !it.done }.sortedByDescending { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.createdAt) }
                 .filter { query.isNullOrEmpty() || it.title.lowercase().replace('ё', 'е').contains(query) }.take(6).map { Pick("#[${it.id}]", it.title, "topic", topic = true) }
             "@" -> d.persons.filter { !it.archived && !it.draft }.filter { query.isNullOrEmpty() || it.name.lowercase().replace('ё', 'е').startsWith(query) || it.name.lowercase().replace('ё', 'е').contains(" $query") }
@@ -229,9 +230,11 @@ fun SmartComposer(
                 (if (!query.isNullOrBlank() && d.persons.none { it.name.equals(query, true) }) listOf(Pick("@[" + query.replaceFirstChar { it.uppercase() } + "]", "+ " + query.replaceFirstChar { it.uppercase() }, "person")) else emptyList())
             else -> emptyList()
         }
-        androidx.compose.animation.AnimatedVisibility(offer.isNotEmpty(), enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) +
-            androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(200), initialScale = 0.92f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 1f)),
-            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))) {
+        // The window floats over the screen: a tap anywhere outside closes it (the typed sign goes with it).
+        fun closeWindow() { text = text.replace(Regex("(?:^|\\s)[/#@][\\p{L}\\d_-]*$"), "").trimEnd().let { if (it.isEmpty()) "" else "$it " } }
+        if (offer.isNotEmpty()) Box(Modifier.height(0.dp)) { androidx.compose.ui.window.Popup(alignment = Alignment.BottomStart,
+            onDismissRequest = { closeWindow() },
+            properties = androidx.compose.ui.window.PopupProperties(focusable = false, dismissOnClickOutside = true)) {
             androidx.compose.material3.Surface(Modifier.padding(start = 6.dp, bottom = 8.dp).widthIn(min = 196.dp, max = 300.dp), shape = RoundedCornerShape(16.dp), color = c.card,
                 shadowElevation = 8.dp, border = androidx.compose.foundation.BorderStroke(1.dp, c.hairline)) {
                 Column(Modifier.padding(vertical = 6.dp)) {
@@ -245,19 +248,23 @@ fun SmartComposer(
                                 t.startsWith("#") -> "topic"; t.startsWith("@") -> "person"
                                 t.drop(1) in kinds -> "kind"; t.drop(1) in spheres -> "sphere"; else -> "action"
                             }
-                            tags = tags.filterNot { groupOf(it) == p.group && p.group != "person" } + p.token
-                            text = text.replace(Regex("(?:^|\\s)[/#@][\\p{L}\\d_-]*$"), "").trimEnd().let { if (it.isEmpty()) "" else "$it " }
+                            // A chosen one again — taken off; «/» keeps its window open to choose more (kind, sphere, who owes).
+                            tags = if (p.token in tags) tags - p.token else tags.filterNot { groupOf(it) == p.group && p.group != "person" } + p.token
+                            text = text.replace(Regex("(?:^|\\s)[/#@][\\p{L}\\d_-]*$"), "").trimEnd().let { if (it.isEmpty()) "" else "$it " } + if (sign == "/") "/" else ""
                         }.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                             when {
                                 p.topic -> { TopicGlyph(c.link, 13.dp); Spacer(Modifier.width(9.dp)) }
                                 p.dot != null -> { Box(Modifier.size(7.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.dot)); Spacer(Modifier.width(9.dp)) }
                             }
-                            Text(p.label, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            val on = p.token in tags
+                            Text(p.label, style = Type.body.copy(color = if (on) c.link else c.ink, fontSize = 15.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false))
+                            if (on) { Spacer(Modifier.width(10.dp)); Text("✓", style = Type.body.copy(color = c.link, fontSize = 15.sp)) }
                         }
                     }
                 }
             }
-        }
+        } }
         // The live reading: «дело · завтра 15:00 · Маша · работа» — what will be made, before it is sent.
         val read = preview?.takeIf { text.isNotBlank() && offer.isEmpty() }?.invoke((tags.joinToString(" ") + " " + text).trim())
         androidx.compose.animation.AnimatedVisibility(read != null, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.expandVertically(),

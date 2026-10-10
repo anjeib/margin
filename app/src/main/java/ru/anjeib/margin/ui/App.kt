@@ -174,6 +174,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         if (screen != TASKS) screen = TASKS else view = Views.TODAY
     }
 
+    // «В тему…» and «Удалить» from a matter's long press or card — one picker for every screen.
+    var topicFor by remember { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.removeMatter(it) })) {
     ModalNavigationDrawer(
         drawerState = drawer,
         scrimColor = c.scrim,
@@ -339,6 +342,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             }
         }
     }
+    }
+    topicFor?.let { ref -> TopicPickDialog(vm.data.value, ref, onDismiss = { topicFor = null }) { tid -> vm.intoTopic(ref, tid); topicFor = null } }
 
     // «Отправить отзыв»: an e-mail to the developer with the crash and misunderstanding logs — never the records.
     LaunchedEffect(feedback) { if (feedback) { sendFeedback(ctx, vm); feedback = false } }

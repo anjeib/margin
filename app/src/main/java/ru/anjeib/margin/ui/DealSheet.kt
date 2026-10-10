@@ -174,7 +174,9 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 // The same visible actions as on a simple matter's card (the long press of the bagel still has them).
                 Margined(Modifier.padding(top = 10.dp)) {
                     val today = LocalDate.now()
+                    val rowActs = LocalRowActions.current
                     val acts = buildList<Triple<String, Boolean, () -> Unit>> {
+                        rowActs?.let { r -> if (!q.done) add(Triple(s.toOtherTopic, false) { commit(); onClose(); r.toTopic(ref) }) }
                         if (!q.done) {
                             add(Triple(s.swipeTomorrow, false) { vm.postponeTo(ref, today.plusDays(1)) })
                             add(Triple(s.plusWeek, false) { vm.postponeTo(ref, (due?.takeIf { !it.isBefore(today) } ?: today).plusDays(7)) })

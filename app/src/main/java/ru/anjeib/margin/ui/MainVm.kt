@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.questionRef
+import ru.anjeib.margin.data.deleteTask
+import ru.anjeib.margin.data.removeDeal
+import ru.anjeib.margin.data.intoTopic
 import ru.anjeib.margin.data.dayMonth
 import ru.anjeib.margin.data.properName
 import ru.anjeib.margin.data.editDeal
@@ -622,6 +626,22 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         Processor.enqueue(ctx, ru.anjeib.margin.data.Queued(text = text, scope = Processor.scopeOf(scope), files = files))
         if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = L.s.offlineSaved, caption = L.s.offline))
         else _notice.value = Notice(key(scope), L.s.offlineSaved, null)
+    }
+
+    /** «В тему…»: the matter becomes one of the topic's matters, with a moment to take it back. */
+    fun intoTopic(ref: String, topicId: String) {
+        val before = data.value
+        val title = before.tasks.find { it.id == topicId }?.title ?: return
+        store.update { it.intoTopic(ref, topicId) }
+        if (data.value != before) offerUndo(before, L.s.movedToTopic(title))
+    }
+
+    /** Removed from a list or a card: a simple matter or a topic's one — with «Отменить», like a swipe. */
+    fun removeMatter(ref: String) {
+        val before = data.value
+        val q = questionRef(ref)
+        store.update { d -> if (q != null) d.removeDeal(q.first, q.second) else d.deleteTask(ref) }
+        offerUndo(before, L.s.deletedOne)
     }
 
     /** Taken out of the queue — with the same few seconds to take it back as everything else removed by a swipe. */

@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.verticalScroll
+import ru.anjeib.margin.data.likelyTopic
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.customActions
@@ -210,7 +212,7 @@ fun TaskList(
     var monthSphere by rememberSaveable { mutableStateOf<String?>(null) }
     // «Обзор · Дела»: only what we wait for, or only what we promised — the whole list of who owes whom, past three days too.
     var monthOwe by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
-    var overviewKinds by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = androidx.compose.runtime.saveable.listSaver<Set<String>, String>(save = { it.toList() }, restore = { it.toSet() })) { mutableStateOf(setOf("topics", "deals", "ideas")) }
+    var overviewKinds by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = androidx.compose.runtime.saveable.listSaver<Set<String>, String>(save = { it.toList() }, restore = { it.toSet() })) { mutableStateOf(emptySet()) }
     var weekDay by rememberSaveable { mutableStateOf<String?>(null) }
     // Swipe left asks «на когда?» instead of quietly moving a day.
     var postponing by remember { mutableStateOf<String?>(null) }
@@ -431,14 +433,16 @@ fun TaskList(
                                 Box(Modifier.size(40.dp).clip(CircleShape).background(if (on) c.linkSoft else Color.Transparent)
                                     .semantics { selected = on; contentDescription = label }.clickable(onClick = onClick), contentAlignment = Alignment.Center) { glyph(if (on) c.link else c.graphite) }
                             @Composable fun gap() = Box(Modifier.padding(horizontal = 4.dp).size(1.dp, 22.dp).background(c.hairline))
-                            fun flip(k: String) { overviewKinds = if (k in overviewKinds) overviewKinds - k else overviewKinds + k; if (overviewKinds.isEmpty()) overviewKinds = setOf("topics", "deals", "ideas") }
-                            val kindsOn = monthOwe == null
-                            mark(kindsOn && "topics" in overviewKinds, s.topicsBadge, { monthOwe = null; flip("topics") }) { TopicGlyph(it, 17.dp) }
-                            mark(kindsOn && "deals" in overviewKinds, s.dealsBadge, { monthOwe = null; flip("deals") }) { Box(Modifier.size(13.dp).border(2.5.dp, it, CircleShape)) }
-                            mark(kindsOn && "ideas" in overviewKinds, s.thoughts, { monthOwe = null; flip("ideas") }) { ThoughtGlyph(it, 18.dp) }
+                            // Nothing chosen — everything; a chosen mark narrows the feed to what it stands for.
+                            fun flip(k: String) { overviewKinds = if (k in overviewKinds) overviewKinds - k else overviewKinds + k }
+                            mark("topics" in overviewKinds, s.topicsBadge, { monthOwe = null; flip("topics") }) { TopicGlyph(it, 18.dp) }
+                            mark("deals" in overviewKinds, s.dealsBadge, { monthOwe = null; flip("deals") }) { Box(Modifier.size(15.dp).border(3.dp, it, CircleShape)) }
+                            mark("ideas" in overviewKinds, s.thoughts, { monthOwe = null; flip("ideas") }) { ThoughtGlyph(it, 20.dp) }
                             gap()
                             listOf("wait" to true, "promise" to false).forEach { (k, incoming) ->
-                                mark(monthOwe == k, if (incoming) s.a11yWaiting else s.a11yPromised, { monthOwe = if (monthOwe == k) null else k }) { ArrowGlyph(it, 16.dp, incoming = incoming) }
+                                mark(monthOwe == k, if (incoming) s.a11yWaiting else s.a11yPromised, { overviewKinds = emptySet(); monthOwe = if (monthOwe == k) null else k }) {
+                                    Box(Modifier.size(26.dp).border(1.5.dp, it, CircleShape), contentAlignment = Alignment.Center) { ArrowGlyph(it, 15.dp, incoming = incoming) }
+                                }
                             }
                             gap()
                             listOf("personal" to c.ok, "work" to c.link).forEach { (k, col) ->
@@ -451,7 +455,7 @@ fun TaskList(
                             when (monthOwe) {
                                 "wait" -> add(s.a11yWaiting)
                                 "promise" -> add(s.a11yPromised)
-                                else -> listOf("topics" to s.topicsBadge, "deals" to s.dealsBadge + " " + s.noDates.lowercase(), "ideas" to s.thoughts)
+                                else -> if (overviewKinds.isEmpty()) add(s.allEverything) else listOf("topics" to s.topicsBadge, "deals" to s.dealsBadge, "ideas" to s.thoughts)
                                     .filter { it.first in overviewKinds }.forEach { add(it.second.lowercase()) }
                             }
                             monthSphere?.let { add(if (it == "work") s.sphereWork.lowercase() else s.spherePersonal.lowercase()) }
@@ -462,11 +466,13 @@ fun TaskList(
                 val data2 = if (monthSphere == null) data else data.copy(tasks = data.tasks.filter { sOk(it) })
                 // «ждём / обещали» is about matters only — and then all of them, with a day or without.
                 val owe = monthOwe
-                val topics = if (owe == null && "topics" in overviewKinds) data2.tasks.filter { it.topic && !it.done && !bare(it) } else emptyList()
-                val ideas = if (owe == null && "ideas" in overviewKinds) data2.tasks.filter { bare(it) && !it.done } else emptyList()
-                val deals = if (owe != null || "deals" in overviewKinds) (data2.listTasks().filter { !it.done && !it.topic || it.topicId != null } + data2.undatedTopicMatters())
-                    .filter { !it.done }.distinctBy { it.id }
-                    .filter { when (owe) { "wait" -> it.waitingFor != null; "promise" -> it.promisedTo != null; else -> (it.dueDate ?: it.startDate) == null } }
+                fun wants(k: String) = overviewKinds.isEmpty() || k in overviewKinds
+                val topics = if (owe == null && wants("topics")) data2.tasks.filter { it.topic && !it.done && !bare(it) } else emptyList()
+                val ideas = if (owe == null && wants("ideas")) data2.tasks.filter { bare(it) && !it.done } else emptyList()
+                // The whole picture: every open matter, with a day or without; its day is said at the right of the row.
+                val deals = if (owe != null || wants("deals")) (data2.listTasks().filter { !it.done && !it.topic || it.topicId != null } + data2.undatedTopicMatters())
+                    .filter { !it.done }.distinctBy { (slotRef(it.id)?.first ?: it.id) }
+                    .filter { when (owe) { "wait" -> it.waitingFor != null; "promise" -> it.promisedTo != null; else -> true } }
                     else emptyList()
                 fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
                 data class Row0(val key: String, val at: LocalDate, val topic: Task? = null, val idea: Task? = null, val deal: Task? = null)
@@ -485,7 +491,9 @@ fun TaskList(
                             Margined(Modifier.padding(top = 4.dp), margin = { day?.let { DayMargin(it, today, false, strong = true) } }) {
                                 Column(Modifier.padding(top = 4.dp)) {
                                     GroupedDeals(listOf(r.deal), today, landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
-                                        age = { t -> if (owe == null) born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() } else null },
+                                        // At the right — its day («пн 12 окт», «просрочено с 8 окт») or, without one, since when it waits.
+                                        age = { t -> (t.dueDate ?: t.startDate)?.let { d -> if (d.isBefore(today)) "" else d.shortLabel(today).lowercase() }?.ifEmpty { null }
+                                            ?: born(t)?.takeIf { it.isBefore(today) && t.dueDate == null }?.let { s.sinceWord + " " + it.dayMonthShort() } },
                                         topicOf = { id -> data.tasks.find { it.id == id } })
                                 }
                             }
@@ -576,7 +584,6 @@ fun PostponeDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill(s.quickTomorrow, onClick = { onPick(today.plusDays(1)) })
                 Pill(s.inAWeek, onClick = { onPick(today.plusWeeks(1)) })
-                Pill(s.inAMonth, onClick = { onPick(today.plusMonths(1)) })
                 Pill(s.pickDay, accent = true, onClick = { custom = true })
             }
         },
@@ -821,19 +828,23 @@ fun TopicRow(t: Task, onOpen: () -> Unit, lit: Boolean = false) {
     }
 }
 
-/** «На завтра» in one move — the most frequent postponing; another day is in the long-press menu («Дата»). */
+/** «На завтра» in one move — kept for TalkBack's named actions; the swipe itself asks «Отложить». */
 val LocalTomorrow = androidx.compose.runtime.staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+/** What a long press on a matter offers beyond the swipes: the topic it belongs in, and removing it. */
+class RowActions(val toTopic: (String) -> Unit, val remove: (String) -> Unit)
+val LocalRowActions = androidx.compose.runtime.staticCompositionLocalOf<RowActions?> { null }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SwipeTask(t: Task, onDone: () -> Unit, onLater: () -> Unit, modifier: Modifier, radius: Int = 18, content: @Composable () -> Unit) {
     val c = M.c
     val s = M.s
-    val tomorrow = LocalTomorrow.current
     val state = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
         when (v) {
             SwipeToDismissBoxValue.StartToEnd -> onDone()
-            SwipeToDismissBoxValue.EndToStart -> if (tomorrow != null) tomorrow(t.id) else onLater()
+            // «Отложить» — a short choice (tomorrow, a week, a day) instead of guessing tomorrow (owner's call, 10 окт).
+            SwipeToDismissBoxValue.EndToStart -> onLater()
             else -> {}
         }
         false // always spring back; the list itself reflects the change
@@ -854,7 +865,7 @@ private fun SwipeTask(t: Task, onDone: () -> Unit, onLater: () -> Unit, modifier
                 if (dir != SwipeToDismissBoxValue.Settled)
                     // Show where the task will land, not an abstract «tomorrow».
                     Text(if (toEnd) (if (t.done) s.undo else s.markDone)
-                        else (if (tomorrow != null) s.swipeTomorrow else s.postponeTitle) + " →",
+                        else s.postponeTitle + " →",
                         style = Type.tab.copy(color = c.bg))
             }
         },
@@ -932,14 +943,16 @@ internal fun DayMargin(date: LocalDate, today: LocalDate, big: Boolean, strong: 
 @Composable
 internal fun KindMark(t: Task?) {
     val c = M.c
-    Box(Modifier.size(20.dp, 24.dp), contentAlignment = Alignment.Center) {
+    // Marks the size of the bagel (owner's call, 10 окт): who owes whom — an arrow on a soft petrol round, as in «Обещания»;
+    // the clock and the loop drawn larger, so the kind is seen before the words.
+    Box(Modifier.size(24.dp, 24.dp), contentAlignment = Alignment.Center) {
         when {
             t == null -> {}
-            t.waitingFor != null -> ArrowGlyph(c.graphite, 14.dp, incoming = true)
-            t.promisedTo != null -> ArrowGlyph(c.graphite, 14.dp)
-            t.repeat != null -> RepeatGlyph(c.graphite, 14.dp)
+            t.waitingFor != null -> SoftRound(c.link, 23.dp) { ArrowGlyph(c.link, 14.dp, incoming = true) }
+            t.promisedTo != null -> SoftRound(c.link, 23.dp) { ArrowGlyph(c.link, 14.dp) }
+            t.repeat != null -> RepeatGlyph(c.graphite, 19.dp)
             // The clock beside an hour: a small accent the owner asked to keep, even though the hour is right there.
-            t.time != null -> ClockGlyph(c.graphite, 14.dp)
+            t.time != null -> ClockGlyph(c.graphite, 20.dp)
         }
     }
 }
@@ -974,11 +987,13 @@ internal fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: ()
     // A tap anywhere opens the matter; a long press — the few things done most: done, the day, the hour.
     Box {
     SoftMenu(quick, { quick = false }) {
-        val tomorrow = LocalTomorrow.current
-        SoftMenuItem(s.markDone) { quick = false; tick() }
-        if (tomorrow != null && t.dueDate != today.plusDays(1)) SoftMenuItem(s.swipeTomorrow) { quick = false; tomorrow(t.id) }
-        if (onLater != null) SoftMenuItem(s.dateWord + "…") { quick = false; onLater() }
+        // Only what the swipes don't do (done — right, put off — left): the hour, the topic it belongs in, removing it.
+        val acts = LocalRowActions.current
         SoftMenuItem(s.fieldTime) { quick = false; onTime() }
+        if (acts != null) {
+            SoftMenuItem(if (t.topicId != null) s.toOtherTopic else s.toTopicPick) { quick = false; acts.toTopic(t.id) }
+            SoftMenuItem(s.delete, danger = true) { quick = false; acts.remove(t.id) }
+        }
     }
     // TalkBack gets the swipes and the long press as named actions — gestures alone are invisible to it.
     val tomorrowAct = LocalTomorrow.current
@@ -1299,7 +1314,7 @@ private fun TopicDayRow(topic: Task, steps: List<ru.anjeib.margin.data.Subtask>,
             val qid = "q:${topic.id}:${q.id}"
             val late = q.due?.let { LocalDate.parse(it).isBefore(today) } == true
             Row(Modifier.fillMaxWidth().clickable { onOpen(qid) }.padding(top = 6.dp), verticalAlignment = Alignment.Top) {
-                Box(Modifier.size(20.dp, 24.dp), contentAlignment = Alignment.Center) { if (q.from != null) ArrowGlyph(c.graphite, 14.dp, incoming = true) }
+                Box(Modifier.size(24.dp, 24.dp), contentAlignment = Alignment.Center) { if (q.from != null) SoftRound(c.link, 23.dp) { ArrowGlyph(c.link, 14.dp, incoming = true) } }
                 Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(false, size = 16.dp) { view.confirmTick(); onSettle(qid) } }
                 Spacer(Modifier.width(8.dp))
                 val hour = hourColor(q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, q.time, today)
@@ -1560,4 +1575,43 @@ private fun HomeDoors(ui: android.content.SharedPreferences, onCalendar: () -> U
         door(s.calendarTitle, onCalendar) { CalendarGlyph(c.link, 20.dp) }
         door(s.overviewWord, onOverview) { OverviewGlyph(c.link, 20.dp) }
     }
+}
+
+
+/**
+ * «В тему…»: where a matter goes — the topic it most likely belongs to first (by its words and people), then the topics
+ * written in lately. A tap moves it there; «Отменить» brings it back.
+ */
+@Composable
+fun TopicPickDialog(data: AppData, ref: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    val c = M.c
+    val s = M.s
+    val matter = data.listTasks().find { it.id == ref } ?: data.undatedTopicMatters().find { it.id == ref } ?: data.tasks.find { it.id == ref }
+    val own = matter?.topicId
+    val likely = remember(ref) { matter?.let { data.likelyTopic(it.title, it.people + listOfNotNull(it.waitingFor, it.promisedTo), except = setOfNotNull(own)) } }
+    val topics = remember(ref) {
+        (listOfNotNull(likely) + data.tasks.filter { it.topic && !it.done && !(it.thought && it.subtasks.isEmpty()) && it.id != own && it.id != likely?.id }
+            .sortedByDescending { it.lastActivity() ?: LocalDate.MIN }).take(9)
+    }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss, containerColor = c.card,
+        title = { Text(s.toTopicPick, style = Type.cardTitle.copy(color = c.ink)) },
+        text = {
+            Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                if (topics.isEmpty()) Text(s.noTopicsYet, style = Type.body.copy(color = c.graphite))
+                topics.forEach { t ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onPick(t.id) }.padding(vertical = 11.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TopicGlyph(c.link, 16.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(t.title, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (t.id == likely?.id) Text(s.likelyWord, style = Type.small.copy(color = c.link, fontSize = 12.5.sp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { androidx.compose.material3.TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
+    )
 }

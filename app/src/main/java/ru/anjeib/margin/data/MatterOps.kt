@@ -331,3 +331,36 @@ fun AppData.editComment(ref: String, id: String, text: String): AppData = editCo
     if (v.isEmpty()) l.filterNot { it.id == id } else l.map { if (it.id == id) it.copy(text = v) else it }
 }
 
+
+/**
+ * «В тему…»: a matter becomes one of [topicId]'s matters — with its day, hour, days, repeat, place, people, comments and
+ * who owes it; its records move into the topic's feed. A topic's matter ([ref] «q:<тема>:<дело>») moves with what is under it.
+ */
+fun AppData.intoTopic(ref: String, topicId: String): AppData {
+    val target = tasks.find { it.id == topicId && it.topic } ?: return this
+    questionRef(ref)?.let { (from, qid) ->
+        if (from == topicId) return this
+        val src = tasks.find { it.id == from } ?: return this
+        fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it) + flat(it.children) }
+        val moving = flat(src.subtasks).filter { s -> s.id == qid || generateSequence(s.parent) { p -> src.subtasks.find { it.id == p }?.parent }.any { it == qid } }
+        if (moving.isEmpty()) return this
+        val ids = moving.map { it.id }.toSet()
+        val stamp = nowStamp()
+        return copy(tasks = tasks.map { t ->
+            when (t.id) {
+                from -> t.copy(subtasks = t.subtasks.filterNot { it.id in ids })
+                topicId -> t.copy(subtasks = t.subtasks + moving.map { if (it.id == qid) it.copy(parent = null) else it },
+                    events = t.events + TopicEvent(at = stamp, kind = if (moving.first().from != null) "wait" else "q", ref = qid))
+                else -> t
+            }
+        })
+    }
+    val t = tasks.find { it.id == ref && !it.topic } ?: return this
+    val sub = Subtask(title = t.title, done = t.done, due = t.due, time = t.time, from = t.waitingFor, doneAt = t.doneAt, slots = t.slots,
+        comments = t.comments, repeat = t.repeat, place = t.place, people = t.people.filter { it != t.waitingFor })
+    val stamp = nowStamp()
+    return copy(tasks = tasks.filterNot { it.id == ref }.map { x ->
+        if (x.id != target.id) x else x.copy(subtasks = x.subtasks + sub, entries = (x.entries + t.entries).sortedBy { it.at },
+            events = x.events + TopicEvent(at = stamp, kind = if (sub.from != null) "wait" else "q", ref = sub.id))
+    })
+}

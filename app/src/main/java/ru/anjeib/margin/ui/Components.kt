@@ -494,7 +494,9 @@ fun namedIn(title: String, name: String): Boolean {
     // Names are written with a capital in titles (data/Writing.kt), so the match is case-sensitive: «Маша» ≠ «машина».
     val stem = name.trim().split(' ').first().let { if (it.length > 4) it.dropLast(2) else it.take(3) }
     if (stem.length < 3) return false
-    return Regex("(?<!\\p{L})" + Regex.escape(stem)).containsMatchIn(title)
+    // «Мама», «Начальник» are written small inside a phrase («позвонить маме») — compare those without case.
+    val opts = if (ru.anjeib.margin.data.isCommonName(name)) setOf(RegexOption.IGNORE_CASE) else emptySet()
+    return Regex("(?<!\\p{L})" + Regex.escape(stem), opts).containsMatchIn(title)
 }
 
 /**

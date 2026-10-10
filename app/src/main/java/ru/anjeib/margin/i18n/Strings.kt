@@ -662,6 +662,9 @@ interface Strings {
     val kindThought: String
     fun lateSince(d: String): String
     fun startedOn(d: String): String
+    val noTopicsYet: String
+    val likelyWord: String
+    val allEverything: String
     val themeWord: String
     val callWord: String
     val smsWord: String
@@ -895,7 +898,7 @@ object Ru : Strings {
         HelpSection("Списки", "Начните строку с «1.», «1)», «-» или «•» — Enter продолжит список, Enter на пустом пункте закончит. Список, отправленный с главного экрана, станет несколькими делами; в записи темы останется просто списком."),
         HelpSection("Жесты", "", pairs = listOf(
             "смахнуть дело вправо" to "сделано",
-            "смахнуть дело влево" to "на завтра (другая дата — в меню)",
+            "смахнуть дело влево" to "отложить: завтра, через неделю или своя дата",
             "нажатие на дело" to "его карточка (в любом месте строки)",
             "долгое нажатие на дело" to "меню: Готово, Завтра, Дата…, Время",
             "долгое нажатие в теме" to "меню строки",
@@ -935,7 +938,7 @@ object Ru : Strings {
     override val tourGesturesTitle = "Нажмите на дело"
     override val tourGesturesText = "Откроется его карточка."
     override val tourSwipeDone = "→ вправо — сделано"
-    override val tourSwipeLater = "← влево — на завтра"
+    override val tourSwipeLater = "← влево — отложить"
     override val tourHold = "удержать — меню"
     override val tourOpened = "В приложении откроется карточка этого дела"
     override fun pageOf(n: Int, of: Int) = "$n из $of"
@@ -1564,6 +1567,9 @@ object Ru : Strings {
     override val kindThought = "идея"
     override fun lateSince(d: String) = "просрочено с $d"
     override fun startedOn(d: String) = "начата $d"
+    override val noTopicsYet = "Тем пока нет"
+    override val likelyWord = "похоже, сюда"
+    override val allEverything = "всё: темы, дела и идеи"
     override val themeWord = "Светлая или тёмная"
     override val callWord = "Позвонить"
     override val smsWord = "Написать"
@@ -1574,7 +1580,7 @@ object Ru : Strings {
     override fun srcMatter(t: String) = "дело «$t»"
     override val samplesHere = "Рядом — примеры, чтобы осмотреться"
     override val removeSamplesShort = "убрать"
-    override val swipeHintLine = "Дело вправо — готово, влево — на завтра; удержать — меню"
+    override val swipeHintLine = "Дело вправо — готово, влево — отложить; удержать — меню"
     override val clearWord = "Очистить"
     override fun dealOnHint(d: String) = "Дело на $d…"
     override fun lateLeft(n: Int) = "с прошлых дней: $n"
@@ -1754,7 +1760,7 @@ object En : Strings {
     override val tourGesturesTitle = "Tap to open"
     override val tourGesturesText = "A tap on a to-do opens its card."
     override val tourSwipeDone = "→ right — done"
-    override val tourSwipeLater = "← left — tomorrow"
+    override val tourSwipeLater = "← left — put off"
     override val tourHold = "hold — menu"
     override val tourOpened = "In the app, this to-do's card opens"
     override fun pageOf(n: Int, of: Int) = "$n of $of"
@@ -2383,6 +2389,9 @@ object En : Strings {
     override val kindThought = "idea"
     override fun lateSince(d: String) = "overdue since $d"
     override fun startedOn(d: String) = "started $d"
+    override val noTopicsYet = "No topics yet"
+    override val likelyWord = "looks like it belongs here"
+    override val allEverything = "everything: topics, to-dos and ideas"
     override val themeWord = "Light or dark"
     override val callWord = "Call"
     override val smsWord = "Message"
@@ -2393,7 +2402,7 @@ object En : Strings {
     override fun srcMatter(t: String) = "to-do “$t”"
     override val samplesHere = "The matters around are examples"
     override val removeSamplesShort = "clear them"
-    override val swipeHintLine = "Swipe right — done, left — tomorrow; hold — menu"
+    override val swipeHintLine = "Swipe right — done, left — put off; hold — menu"
     override val clearWord = "Clear"
     override fun dealOnHint(d: String) = "A to-do for $d…"
     override fun lateLeft(n: Int) = "left from past days: $n"

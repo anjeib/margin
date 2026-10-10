@@ -263,10 +263,12 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
 
                 // What can be done with the matter, in sight (it used to hide behind a long press of the bagel — still there too).
                 Margined(Modifier.padding(top = 10.dp)) {
+                    val rowActs = LocalRowActions.current
                     val acts = buildList<Triple<String, Boolean, () -> Unit>> {
                         if (!task.done) {
                             add(Triple(s.swipeTomorrow, false) { vm.postpone(task.id, 1) })
                             add(Triple(s.plusWeek, false) { vm.postpone(task.id, 7) })
+                            rowActs?.let { r -> add(Triple(s.toTopicPick, false) { commitTitle(); onClose(); r.toTopic(task.id) }) }
                             add(Triple(s.wontDo, false) { commitTitle(); vm.dropTask(task.id); onClose() })
                         }
                         add(Triple(s.toNote, false) { commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) })
