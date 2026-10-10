@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -76,9 +77,9 @@ import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
 
 /*
- * A line's sheet (DESIGN.md §7): the same page, about one line. The line itself on top (the mark, the words edited in
- * place); then what Margin knows — every note whole, one per row, its value on the margin; the empty ones quiet
- * («+ когда»). Under the rule what was written under the line, and Margin's offers: move, not doing, a thread, delete.
+ * A line's sheet (DESIGN.md §7): the same page, about one line. On top, like a menu, what Margin knows (the values on
+ * the margin) and what can be done (the signs, where it goes next); under a hairline the line itself, edited in place,
+ * and what was written under it — one stream, with the field to write more at the end.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -104,7 +105,7 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) }) {
         androidx.compose.runtime.CompositionLocalProvider(LocalGround provides c.lifted) {
         Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().rule(c.rule).verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
-            // The line itself — with everything Margin knows on its margin, whole: the values only, no names for them.
+            // What Margin knows, on the margin, whole: the values only, no names for them.
             // A day, an hour, a repeat, a place: a tap changes it. A person, a thread: a link to their page.
             val values = buildList<Pair<Note, () -> Unit>> {
                 whenOf(l, today, w)?.split("\n")?.forEach { add(Note(it, Tone.Quiet) to { ask = "when" }) }
@@ -116,19 +117,8 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                 book.thread(l.threadId)?.let { t -> add(Note(w.threadPrefix + t.title, Tone.Link) to { commit(); onThread(t.id) }) }
                 notesOf(l, null, today, book, w, Seen.Sheet).filter { it.tone == Tone.Attention }.forEach { add(it to {}) }
             }
-            MarginRow(notes = emptyList(), mark = markOf(l), markLabel = w.a11yMark(l.state == State.Done),
-                onMark = if (l.kind == Kind.Todo) ({ vm.toggle(id) }) else null) {
-                BasicTextField(text, { text = it }, textStyle = Voice.words.copy(color = if (l.state == State.Open) c.ink else c.graphite,
-                    textDecoration = if (l.state != State.Open && l.kind == Kind.Todo) TextDecoration.LineThrough else null),
-                    cursorBrush = SolidColor(c.link), modifier = Modifier.weight(1f))
-            }
-            // Files kept with the line: photos as themselves, the rest by name; a tap opens.
-            if (l.files.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = Grid.text - 4.dp, end = Grid.right, top = 4.dp, bottom = 4.dp)
-                .horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                l.files.forEach { f -> FileChip(f, 72.dp, onClick = { openFile(ctx, f) { photo = it } }) }
-            }
-            // Under the line, one band: on the margin every value Margin knows (a tap changes it, a person or a thread opens);
-            // on the right the signs a line can have and where it goes next.
+            // On top, one band like a menu: on the margin every value Margin knows; on the right the signs a line can have
+            // and where it goes next.
             Row(Modifier.fillMaxWidth()) {
                 Column(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp), horizontalAlignment = Alignment.End) {
                     values.forEach { (n, go) ->
@@ -168,6 +158,20 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                         }
                     }
                 }
+            }
+            // A hairline from the rule: above — what Margin knows and what can be done; below — the line and what follows it,
+            // one stream, as on a page.
+            Box(Modifier.padding(start = Grid.margin, top = 6.dp, bottom = 2.dp).fillMaxWidth().height(1.dp).background(c.hairline))
+            MarginRow(notes = emptyList(), mark = markOf(l), markLabel = w.a11yMark(l.state == State.Done),
+                onMark = if (l.kind == Kind.Todo) ({ vm.toggle(id) }) else null) {
+                BasicTextField(text, { text = it }, textStyle = Voice.words.copy(color = if (l.state == State.Open) c.ink else c.graphite,
+                    textDecoration = if (l.state != State.Open && l.kind == Kind.Todo) TextDecoration.LineThrough else null),
+                    cursorBrush = SolidColor(c.link), modifier = Modifier.weight(1f))
+            }
+            // Files kept with the line: photos as themselves, the rest by name; a tap opens.
+            if (l.files.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = Grid.text - 4.dp, end = Grid.right, top = 4.dp, bottom = 4.dp)
+                .horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                l.files.forEach { f -> FileChip(f, 72.dp, onClick = { openFile(ctx, f) { photo = it } }) }
             }
             // What was written under the line.
             val kids = book.children(id)
