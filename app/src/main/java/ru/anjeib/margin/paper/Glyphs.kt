@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -73,4 +74,79 @@ fun MicGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
 fun SendGlyph(color: Color, size: Dp = 16.dp) = Canvas(Modifier.size(size)) {
     val w = this.size.width; val h = this.size.height
     drawPath(Path().apply { moveTo(w * 0.5f, h * 0.86f); lineTo(w * 0.5f, h * 0.16f); moveTo(w * 0.22f, h * 0.43f); lineTo(w * 0.5f, h * 0.15f); lineTo(w * 0.78f, h * 0.43f) }, color, style = stroke(1.8.dp))
+}
+
+// ---- the line sheet's row of signs: what a line can have, drawn like the marks ----
+
+/** When: a clock face. */
+@Composable
+fun ClockGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawCircle(color, radius = w * 0.38f, center = Offset(w / 2, h / 2), style = stroke(1.5.dp))
+    drawPath(Path().apply { moveTo(w * 0.5f, h * 0.28f); lineTo(w * 0.5f, h * 0.5f); lineTo(w * 0.66f, h * 0.6f) }, color, style = stroke(1.5.dp))
+}
+
+/** Repeat: the margin's ↻ — an arc that comes back with its arrow. */
+@Composable
+fun RepeatGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawArc(color, startAngle = -60f, sweepAngle = 300f, useCenter = false, topLeft = Offset(w * 0.16f, h * 0.16f), size = Size(w * 0.68f, h * 0.68f), style = stroke(1.5.dp))
+    drawPath(Path().apply { moveTo(w * 0.62f, h * 0.1f); lineTo(w * 0.69f, h * 0.24f); lineTo(w * 0.55f, h * 0.3f) }, color, style = stroke(1.5.dp))
+}
+
+/** Who: a head and shoulders. */
+@Composable
+fun PersonGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawCircle(color, radius = w * 0.16f, center = Offset(w / 2, h * 0.34f), style = stroke(1.5.dp))
+    drawArc(color, startAngle = 200f, sweepAngle = 140f, useCenter = false, topLeft = Offset(w * 0.2f, h * 0.58f), size = Size(w * 0.6f, h * 0.56f), style = stroke(1.5.dp))
+}
+
+/** Where: a pin. */
+@Composable
+fun PinGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply {
+        moveTo(w * 0.5f, h * 0.9f)
+        cubicTo(w * 0.3f, h * 0.66f, w * 0.22f, h * 0.52f, w * 0.22f, h * 0.4f)
+        cubicTo(w * 0.22f, h * 0.22f, w * 0.35f, h * 0.1f, w * 0.5f, h * 0.1f)
+        cubicTo(w * 0.65f, h * 0.1f, w * 0.78f, h * 0.22f, w * 0.78f, h * 0.4f)
+        cubicTo(w * 0.78f, h * 0.52f, w * 0.7f, h * 0.66f, w * 0.5f, h * 0.9f)
+        close()
+    }, color, style = stroke(1.5.dp))
+    drawCircle(color, radius = w * 0.08f, center = Offset(w / 2, h * 0.4f), style = stroke(1.4.dp))
+}
+
+/** Thread: the margin's ≡ — three equal lines. */
+@Composable
+fun ThreadGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height; val sw = 1.5.dp.toPx()
+    listOf(0.3f, 0.5f, 0.7f).forEach { y -> drawLine(color, Offset(w * 0.2f, h * y), Offset(w * 0.8f, h * y), strokeWidth = sw, cap = StrokeCap.Round) }
+}
+
+/** A file: a paperclip, a little aslant. */
+@Composable
+fun ClipGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    rotate(40f) {
+        drawPath(Path().apply {
+            moveTo(w * 0.58f, h * 0.32f)
+            lineTo(w * 0.58f, h * 0.64f)
+            arcTo(androidx.compose.ui.geometry.Rect(w * 0.42f, h * 0.56f, w * 0.58f, h * 0.72f), 0f, 180f, false)
+            lineTo(w * 0.42f, h * 0.24f)
+            arcTo(androidx.compose.ui.geometry.Rect(w * 0.42f, h * 0.1f, w * 0.7f, h * 0.38f), 180f, 180f, false)
+            lineTo(w * 0.7f, h * 0.7f)
+            arcTo(androidx.compose.ui.geometry.Rect(w * 0.3f, h * 0.5f, w * 0.7f, h * 0.9f), 0f, 180f, false)
+            lineTo(w * 0.3f, h * 0.36f)
+        }, color, style = stroke(1.5.dp))
+    }
+}
+
+/** Delete: a bin. */
+@Composable
+fun BinGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawLine(color, Offset(w * 0.2f, h * 0.27f), Offset(w * 0.8f, h * 0.27f), strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.4f, h * 0.17f), Offset(w * 0.6f, h * 0.17f), strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)
+    drawPath(Path().apply { moveTo(w * 0.27f, h * 0.27f); lineTo(w * 0.32f, h * 0.84f); lineTo(w * 0.68f, h * 0.84f); lineTo(w * 0.73f, h * 0.27f) }, color, style = stroke(1.5.dp))
 }

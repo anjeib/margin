@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -101,70 +104,70 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) }) {
         androidx.compose.runtime.CompositionLocalProvider(LocalGround provides c.lifted) {
         Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().rule(c.rule).verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
-            // The line itself.
+            // The line itself — with everything Margin knows on its margin, whole: the values only, no names for them.
+            // A day, an hour, a repeat, a place: a tap changes it. A person, a thread: a link to their page.
+            val values = buildList<Pair<Note, () -> Unit>> {
+                whenOf(l, today, w)?.split("\n")?.forEach { add(Note(it, Tone.Quiet) to { ask = "when" }) }
+                l.repeat?.let { add(Note(w.repeat(it), Tone.Quiet) to { ask = "repeat" }) }
+                l.who.sortedBy { it.dir.ordinal }.forEach { who ->
+                    add(Note(when (who.dir) { Dir.To -> w.to(who.name); Dir.From -> w.from(who.name); Dir.With -> w.with(who.name) }, Tone.Link) to { commit(); onPerson(who.name) })
+                }
+                l.place?.let { add(Note(it, Tone.Link) to { ask = "place" }) }
+                book.thread(l.threadId)?.let { t -> add(Note(w.threadPrefix + t.title, Tone.Link) to { commit(); onThread(t.id) }) }
+                notesOf(l, null, today, book, w, Seen.Sheet).filter { it.tone == Tone.Attention }.forEach { add(it to {}) }
+            }
             MarginRow(notes = emptyList(), mark = markOf(l), markLabel = w.a11yMark(l.state == State.Done),
                 onMark = if (l.kind == Kind.Todo) ({ vm.toggle(id) }) else null) {
                 BasicTextField(text, { text = it }, textStyle = Voice.words.copy(color = if (l.state == State.Open) c.ink else c.graphite,
                     textDecoration = if (l.state != State.Open && l.kind == Kind.Todo) TextDecoration.LineThrough else null),
                     cursorBrush = SolidColor(c.link), modifier = Modifier.weight(1f))
             }
-            // What Margin knows: the value on the margin, the name of it in Margin's voice; a tap changes it.
-            val notes = notesOf(l, null, today, book, w, Seen.Sheet)
-            // Set properties one per row (the value on the margin); the unset ones — one quiet line of offers.
-            val props = listOf(
-                Triple("when", whenOf(l, today, w), w.propWhen),
-                Triple("repeat", l.repeat?.let { w.repeat(it) }, w.propRepeat),
-                Triple("who", l.who.firstOrNull()?.let { who -> when (who.dir) { Dir.To -> w.to(who.name); Dir.From -> w.from(who.name); Dir.With -> w.with(who.name) } },
-                    // The arrow taught in words where it is chosen: «→ Лёше — вы обещали», «← Дима — ждёте».
-                    when (l.who.firstOrNull()?.dir) { Dir.To -> w.propWhoTo; Dir.From -> w.propWhoFrom; else -> w.propWho }),
-                Triple("place", l.place, w.propPlace),
-                Triple("thread", book.thread(l.threadId)?.let { w.threadPrefix + it.title }, w.propThread),
-            )
-            props.filter { it.second != null }.forEach { (k, v, name) ->
-                // A person or a thread on the margin is a link: its page; the name of the property changes it.
-                val go: (() -> Unit)? = when (k) {
-                    "thread" -> l.threadId?.let { t -> { commit(); onThread(t) } }
-                    "who" -> l.who.firstOrNull()?.name?.let { n -> { commit(); onPerson(n) } }
-                    else -> null
-                }
-                Prop(v, name, onValue = go) { ask = k }
-            }
             // Files kept with the line: photos as themselves, the rest by name; a tap opens.
-            if (l.files.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = Grid.text - 4.dp, end = Grid.right, top = 4.dp, bottom = 8.dp)
+            if (l.files.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = Grid.text - 4.dp, end = Grid.right, top = 4.dp, bottom = 4.dp)
                 .horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 l.files.forEach { f -> FileChip(f, 72.dp, onClick = { openFile(ctx, f) { photo = it } }) }
             }
-            val unset = props.filter { it.second == null && (it.first != "when" || l.kind != Kind.Note) }.map { it.first to it.third } + ("file" to w.propFile)
-            FlowRow(Modifier.fillMaxWidth().padding(start = Grid.text, end = Grid.right), verticalArrangement = Arrangement.Center) {
-                unset.forEachIndexed { i, (k, name) ->
-                    if (i > 0) Text(" · ", style = Voice.reply.copy(color = c.pencil), modifier = Modifier.padding(vertical = 12.dp))
-                    Text("+ $name", style = Voice.reply.copy(color = c.link),
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { if (k == "file") pickFile.launch(arrayOf("*/*")) else ask = k }
-                            .padding(vertical = 12.dp, horizontal = 2.dp))
+            // Under the line, one band: on the margin every value Margin knows (a tap changes it, a person or a thread opens);
+            // on the right the signs a line can have and where it goes next.
+            Row(Modifier.fillMaxWidth()) {
+                Column(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp), horizontalAlignment = Alignment.End) {
+                    values.forEach { (n, go) ->
+                        Box(Modifier.fillMaxWidth().heightIn(min = 32.dp).clip(RoundedCornerShape(6.dp)).clickable(onClick = go),
+                            contentAlignment = Alignment.CenterEnd) { NoteText(n) }
+                    }
                 }
-            }
-            if (notes.any { it.tone == Tone.Attention }) Row(Modifier.padding(top = 4.dp)) {
-                Spacer(Modifier.width(Grid.text))
-                Column { notes.filter { it.tone == Tone.Attention }.forEach { NoteText(it, androidx.compose.ui.text.style.TextAlign.Start) } }
-            }
-            // Margin's offers for this line.
-            FlowRow(Modifier.fillMaxWidth().padding(start = Grid.text, end = Grid.right, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                // Waiting for someone: a ready message to remind them — sent by you, from your messenger.
-                val from = l.from()
-                if (from != null && l.state == State.Open) Offer(w.remind) {
-                    val i = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                        .putExtra(android.content.Intent.EXTRA_TEXT, w.remindText(from, l.text) .let { t ->
-                            // With the day it was promised for, if there is one: «… — к ср.»
-                            l.lastDay()?.let { d -> t.removeSuffix(".") + " — " + (if (w.ru) "к " else "by ") + w.near(d, today) + "." } ?: t })
-                    runCatching { ctx.startActivity(android.content.Intent.createChooser(i, w.remind).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                Spacer(Modifier.width(Grid.text - Grid.margin + Grid.noteGap - 14.dp))
+                Column(Modifier.weight(1f)) {
+                    // What a line can have, as the signs it gets on the margin: the ones it has in petrol. The bin at the end.
+                    Row(Modifier.fillMaxWidth().padding(end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (l.kind != Kind.Note || l.day != null) SheetSign(w.propWhen, l.day != null || l.time != null, { ask = "when" }) { ClockGlyph(it) }
+                        SheetSign(w.propRepeat, l.repeat != null, { ask = "repeat" }) { RepeatGlyph(it) }
+                        SheetSign(w.propWho, l.who.isNotEmpty(), { ask = "who" }) { PersonGlyph(it) }
+                        SheetSign(w.propPlace, l.place != null, { ask = "place" }) { PinGlyph(it) }
+                        SheetSign(w.propThread, l.threadId != null, { ask = "thread" }) { ThreadGlyph(it) }
+                        SheetSign(w.propFile, l.files.isNotEmpty(), { pickFile.launch(arrayOf("*/*")) }) { ClipGlyph(it) }
+                        Spacer(Modifier.weight(1f))
+                        SheetSign(w.offerDelete, false, { vm.delete(id); onClose() }, tint = c.red) { BinGlyph(it) }
+                    }
+                    // Margin's offers for this line: where it goes next.
+                    FlowRow(Modifier.fillMaxWidth().padding(start = 4.dp, end = Grid.right), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        // Waiting for someone: a ready message to remind them — sent by you, from your messenger.
+                        val from = l.from()
+                        if (from != null && l.state == State.Open) Offer(w.remind) {
+                            val i = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                                .putExtra(android.content.Intent.EXTRA_TEXT, w.remindText(from, l.text).let { t ->
+                                    // With the day it was promised for, if there is one: «… — к ср.»
+                                    l.lastDay()?.let { d -> t.removeSuffix(".") + " — " + (if (w.ru) "к " else "by ") + w.near(d, today) + "." } ?: t })
+                            runCatching { ctx.startActivity(android.content.Intent.createChooser(i, w.remind).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        }
+                        if (l.kind == Kind.Todo && l.state == State.Open) {
+                            if (l.date != today) Offer(w.offerToday) { vm.move(id, today); onClose() }
+                            if (l.date != today.plusDays(1)) Offer(w.offerTomorrow) { vm.move(id, today.plusDays(1)); onClose() }
+                            if (l.day != null || l.until != null) Offer(w.offerLater) { vm.move(id, null); onClose() }
+                            Offer(w.dropped) { vm.drop(id); onClose() }
+                        }
+                    }
                 }
-                if (l.kind == Kind.Todo && l.state == State.Open) {
-                    if (l.date != today) Offer(w.offerToday) { vm.move(id, today); onClose() }
-                    if (l.date != today.plusDays(1)) Offer(w.offerTomorrow) { vm.move(id, today.plusDays(1)); onClose() }
-                    if (l.day != null || l.until != null) Offer(w.offerLater) { vm.move(id, null); onClose() }
-                    Offer(w.dropped) { vm.drop(id); onClose() }
-                }
-                Offer(w.offerDelete, danger = true) { vm.delete(id); onClose() }
             }
             // What was written under the line.
             val kids = book.children(id)
@@ -205,6 +208,16 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
         "who" -> WhoDialog(l, w, onDismiss = { ask = null }) { name, dir -> vm.edit { it.setWho(id, name, dir) }; ask = null }
         "place" -> TextAsk(w.propPlace, l.place.orEmpty(), onDismiss = { ask = null }) { v -> vm.edit { it.setPlace(id, v) }; ask = null }
         "thread" -> ThreadDialog(book, l, w, onDismiss = { ask = null }) { t -> vm.edit { it.setThread(id, t) }; ask = null }
+    }
+}
+
+/** One sign of the sheet's row: in petrol when the line has it, in graphite when it can have it. */
+@Composable
+private fun SheetSign(label: String, set: Boolean, onClick: () -> Unit, tint: androidx.compose.ui.graphics.Color? = null,
+                      glyph: @Composable (androidx.compose.ui.graphics.Color) -> Unit) {
+    val c = P.c
+    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClick).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        glyph(tint ?: if (set) c.link else c.graphite)
     }
 }
 
