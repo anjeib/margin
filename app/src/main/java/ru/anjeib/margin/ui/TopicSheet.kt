@@ -723,7 +723,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
                 .combinedClickable(onClick = { if (removed) menu = true else act.openDeal(q) }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
                 if (depth == 0) KindMark(if (q.done || removed) null else task.questionRow(q))
                 // A removed matter has no bagel at all — three states read by shape: ring open, disc done, nothing removed.
-                Box(Modifier.size(if (depth == 0) 26.dp else 22.dp, 24.dp), contentAlignment = Alignment.CenterStart) { if (!removed) CheckCircle(q.done, size = if (depth == 0) 18.dp else 15.dp, onToggle = ::tick) }
+                Box(Modifier.size(if (depth == 0) 26.dp else 22.dp, 24.dp), contentAlignment = Alignment.CenterStart) { if (!removed) CheckCircle(q.done, size = if (depth == 0) 18.dp else 15.dp, tint = sphereColor(task.sphere), onToggle = ::tick) }
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     val hour = hourColor(due, q.time, today)

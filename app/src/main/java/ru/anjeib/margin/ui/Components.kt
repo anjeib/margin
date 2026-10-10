@@ -112,7 +112,9 @@ fun MenuGlyph(color: Color = M.c.ink) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, interactive: Boolean = true, onToggle: () -> Unit) {
+fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, interactive: Boolean = true,
+                /** The ring's colour — the matter's sphere (sage personal, petrol work); null — graphite. */
+                tint: Color? = null, onToggle: () -> Unit) {
     val c = M.c
     // A bullet the size of the other glyphs — a small «bagel» (owner's call, 10 окт): a thick ring;
     // done — the hole closes into a sage disc and a white tick comes up on it.
@@ -128,7 +130,7 @@ fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, i
                 else Modifier.combinedClickable(role = androidx.compose.ui.semantics.Role.Checkbox, onLongClick = onLong, onClick = onToggle)),
         contentAlignment = Alignment.Center,
     ) {
-        val ring = androidx.compose.ui.graphics.lerp(c.graphite.copy(alpha = 0.78f), c.ok, p)
+        val ring = androidx.compose.ui.graphics.lerp(tint ?: c.graphite.copy(alpha = 0.78f), c.ok, p)
         val tick = c.bg
         androidx.compose.foundation.Canvas(Modifier.size(d)) {
             val w = this.size.width; val h = this.size.height

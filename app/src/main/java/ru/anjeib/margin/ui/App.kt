@@ -398,6 +398,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         dismissButton = { androidx.compose.material3.TextButton({ demoOffer = false; vm.demoSkip() }) { Text(s.demoLater, color = c.graphite) } },
     )
 
+    // The cards get the same «В тему…» / «Удалить» as the rows (their sheets live outside the drawer).
+    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.removeMatter(it) })) {
     openDeal?.let { ref ->
         val qr = ru.anjeib.margin.data.questionRef(ref)
         val topic = qr?.let { (tid, _) -> data.tasks.find { it.id == tid } }
@@ -420,6 +422,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             onOpenPerson = { openTask = null; openPerson = it },
             onOpenTask = { openTask = it },
         )
+    }
     }
 }
 

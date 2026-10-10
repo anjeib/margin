@@ -1007,7 +1007,8 @@ internal fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: ()
             )
         }.padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
         KindMark(t)
-        Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(ticking, size = 18.dp, onToggle = ::tick) }
+        // The bagel wears the sphere: sage — personal, petrol — work.
+        Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(ticking, size = 18.dp, tint = sphereColor(t.sphere), onToggle = ::tick) }
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             val hour = hourColor(t.dueDate, t.time, today)

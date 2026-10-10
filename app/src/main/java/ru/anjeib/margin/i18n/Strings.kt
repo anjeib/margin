@@ -264,6 +264,7 @@ interface Strings {
     val inAMonth: String
     val pickDay: String
     fun fromMessage(stamp: String): String
+    val fromMessageShort: String
     val saveToPhone: String
     val savedToPhone: String
     val saveFailed: String
@@ -662,6 +663,12 @@ interface Strings {
     val kindThought: String
     fun lateSince(d: String): String
     fun startedOn(d: String): String
+    val noDateSet: String
+    fun createdOn(d: String): String
+    val makeWork: String
+    val makePersonal: String
+    val postponeMenu: String
+    val reminderAt: String
     val noTopicsYet: String
     val likelyWord: String
     val allEverything: String
@@ -1163,6 +1170,7 @@ object Ru : Strings {
     override val inAMonth = "Через месяц"
     override val pickDay = "Своя дата…"
     override fun fromMessage(stamp: String) = "из сообщения $stamp"
+    override val fromMessageShort = "из сообщения"
     override val saveToPhone = "Сохранить на телефон"
     override val savedToPhone = "Сохранено в папку Margin"
     override val saveFailed = "Не получилось сохранить — попробуйте «Переслать»"
@@ -1567,6 +1575,12 @@ object Ru : Strings {
     override val kindThought = "идея"
     override fun lateSince(d: String) = "просрочено с $d"
     override fun startedOn(d: String) = "начата $d"
+    override val noDateSet = "Без даты · задать"
+    override fun createdOn(d: String) = "создано $d"
+    override val makeWork = "Сделать рабочим"
+    override val makePersonal = "Сделать личным"
+    override val postponeMenu = "Отложить…"
+    override val reminderAt = "напоминание в"
     override val noTopicsYet = "Тем пока нет"
     override val likelyWord = "похоже, сюда"
     override val allEverything = "всё: темы, дела и идеи"
@@ -1985,6 +1999,7 @@ object En : Strings {
     override val inAMonth = "In a month"
     override val pickDay = "Pick a day…"
     override fun fromMessage(stamp: String) = "from a message, $stamp"
+    override val fromMessageShort = "from a message"
     override val saveToPhone = "Save to phone"
     override val savedToPhone = "Saved to the Margin folder"
     override val saveFailed = "Couldn’t save — try “Share”"
@@ -2389,6 +2404,12 @@ object En : Strings {
     override val kindThought = "idea"
     override fun lateSince(d: String) = "overdue since $d"
     override fun startedOn(d: String) = "started $d"
+    override val noDateSet = "No date · set one"
+    override fun createdOn(d: String) = "created $d"
+    override val makeWork = "Make it work"
+    override val makePersonal = "Make it personal"
+    override val postponeMenu = "Put off…"
+    override val reminderAt = "reminder at"
     override val noTopicsYet = "No topics yet"
     override val likelyWord = "looks like it belongs here"
     override val allEverything = "everything: topics, to-dos and ideas"

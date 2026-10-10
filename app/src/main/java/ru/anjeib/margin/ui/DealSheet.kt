@@ -98,97 +98,77 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
         Column(Modifier.fillMaxWidth().heightIn(max = maxH).imePadding().navigationBarsPadding()) {
             // At least half the screen with the field right under it — the same as a simple matter's card.
             Column(Modifier.weight(1f, fill = false).heightIn(min = ((screen * 0.6f).dp - 76.dp).coerceAtLeast(120.dp)).screenRule().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
-                // Its topic above it — a way back; the few other things are on a long press of the tick.
-                if (onOpenTopic != null) Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.width(MarginW + MarginGap))
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f).clip(RoundedCornerShape(6.dp))) {
-                        TopicGlyph(c.link, 13.dp)
-                        Spacer(Modifier.width(7.dp))
-                        PaperLink(topic.title + "  ›") { commit(); onOpenTopic() }
-                    }
-                }
-                // The top: when, how often, where, with whom — one quiet line, as on a simple matter; then what is not set yet.
+                // The same card as a simple matter (owner's call, 10 окт), with its topic above the title.
                 val row = topic.questionRow(q)
                 val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-                val late = !q.done && due != null && due.isBefore(LocalDate.now())
+                val today = LocalDate.now()
+                val late = !q.done && due != null && due.isBefore(today)
                 val people = row.people.filter { it != q.from }
-                Margined(Modifier.padding(top = if (onOpenTopic != null) 0.dp else 8.dp)) {
+                val rowActs = LocalRowActions.current
+                var more by remember(qid) { mutableStateOf(false) }
+                var postponing by remember(qid) { mutableStateOf(false) }
+                if (postponing) PostponeDialog(onDismiss = { postponing = false }) { d -> vm.postponeTo(ref, d); postponing = false }
+                fun person(n: String) { data.contact(n)?.let { pp -> onOpenPerson?.invoke(pp.id) } ?: vm.offerContact(n) }
+                Margined {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Its topic — a way back to it.
+                        if (onOpenTopic != null) Row(Modifier.weight(1f).clip(RoundedCornerShape(6.dp)), verticalAlignment = Alignment.CenterVertically) {
+                            TopicGlyph(c.link, 13.dp)
+                            Spacer(Modifier.width(7.dp))
+                            PaperLink(topic.title + "  ›") { commit(); onOpenTopic() }
+                        } else Spacer(Modifier.weight(1f))
+                        Box(Modifier.width(48.dp)) {
+                            CardMenu { close ->
+                                if (!q.done) SoftMenuItem(s.postponeMenu) { close(); postponing = true }
+                                rowActs?.let { r -> if (!q.done) SoftMenuItem(s.toOtherTopic) { close(); commit(); onClose(); r.toTopic(ref) } }
+                                if (onOpenTopic != null) SoftMenuItem(s.openTopic) { close(); commit(); onOpenTopic() }
+                                SoftMenuItem(s.delete, danger = true) { close(); vm.removeDeal(topic.id, q.id); onClose() }
+                            }
+                        }
+                    }
+                }
+                Margined(Modifier.padding(top = 4.dp)) {
+                    CardTitle(title, { title = it }, q.done, topic.sphere, onToggle = {
+                        val next = q.slots.firstOrNull { !it.done }
+                        if (next != null) vm.toggleSlot(ref, next.id) else vm.toggleQuestion(topic.id, q.id)
+                    })
+                }
+                Margined(Modifier.padding(top = 12.dp)) {
+                    if (q.slots.isNotEmpty()) DaysProp(q.slots, onToggle = { vm.toggleSlot(ref, it) }, onRemove = { vm.removeSlot(ref, it) })
+                    else WhenPlaque(due?.let { cardDay(it, today, q.done) }, q.time, late, q.from?.let { s.promiseToYou(it) },
+                        onDay = { dialog = "date" }, onHour = { dialog = "time" })
+                }
+                Margined(Modifier.padding(top = 12.dp)) {
                     Column {
-                        if (q.slots.isNotEmpty()) DaysProp(q.slots, onToggle = { vm.toggleSlot(ref, it) }, onRemove = { vm.removeSlot(ref, it) })
-                        fun person(n: String) { data.contact(n)?.let { pp -> onOpenPerson?.invoke(pp.id) } ?: vm.offerContact(n) }
-                        MetaLine(buildList {
-                            if (q.slots.isEmpty()) {
-                                due?.let { add(MetaItem(Meta.plain(if (late) s.lateSince(it.dayMonthShort()) else row.whenLabel()?.substringBefore(" · ${q.time}") ?: it.dayMonthShort()), Meta.date(late)) { dialog = "date" }) }
-                                q.time?.let { add(MetaItem(Meta.plain(it), Meta.date(late)) { dialog = "time" }) }
-                            }
-                            q.repeat?.let { add(MetaItem(Meta.plain(it.label()), Meta.quiet()) { dialog = "repeat" }) }
-                            q.from?.let { w -> add(MetaItem(Meta.promise(s.promiseToYouParts(w)), Meta.quiet(), onLong = { person(w) }) { dialog = "waiting" }) }
-                            people.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { person(p) }) }
-                            q.place?.let { pl -> add(MetaItem(Meta.plain(pl), Meta.link(), onLong = { fill("place") }) {
-                                runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
-                            }) }
-                        }, Modifier.padding(top = if (q.slots.isNotEmpty()) 6.dp else 0.dp))
-                        // What is not set yet — the same list as on a simple matter.
-                        val missing = buildList {
-                            if (due == null && q.slots.isEmpty()) add(s.dateWord to "date")
-                            if (q.time == null && q.slots.isEmpty()) add(s.fieldTime to "time")
-                            // Another day for the same matter («и в четверг»).
-                            if ((due != null || q.slots.isNotEmpty()) && q.repeat == null && !q.done) add(s.addDay to "day")
-                            if (q.repeat == null) add(s.fieldRepeat to "repeat")
-                            if (q.from == null && !q.done) add(s.fieldWait to "waiting")
-                            if (people.isEmpty() && q.from == null) add(s.fieldPeople to "people")
-                            if (q.place == null) add(s.fieldPlace to "place")
-                            if (!q.done) add(s.stepOne to "step")
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ToolRound(q.place != null, s.fieldPlace, { fill("place") }) { Icon(Icons.Outlined.Place, null, tint = it, modifier = Modifier.size(21.dp)) }
+                            ToolRound(people.isNotEmpty(), s.fieldPeople, { fill("people") }) { PeopleGlyph(it, 20.dp) }
+                            ToolRound(q.repeat != null, s.fieldRepeat, { dialog = "repeat" }) { RepeatGlyph(it, 20.dp) }
+                            ToolRound(more, s.moreActions, { more = !more }) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(21.dp)) }
+                            Spacer(Modifier.weight(1f))
+                            if (!q.done) SoonPill(due)
                         }
-                        if (missing.isNotEmpty()) DotFlow(missing.size, Modifier.padding(top = 2.dp), separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
-                            val (label, d) = missing[i]
-                            PaperLink("+ " + label.lowercase(), quiet = true) { if (d in setOf("step", "place", "people")) fill(d) else dialog = d }
+                        val vals = buildList<Pair<String, () -> Unit>> {
+                            q.place?.let { pl -> add(pl to { runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) } }) }
+                            people.forEach { p -> add(p to { person(p) }) }
+                            q.repeat?.let { add(it.label() to { dialog = "repeat" }) }
+                        }
+                        if (vals.isNotEmpty()) DotFlow(vals.size, Modifier.padding(top = 6.dp), separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
+                            PaperLink(vals[i].first, onClick = vals[i].second)
+                        }
+                        androidx.compose.animation.AnimatedVisibility(more) {
+                            androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Pill(if (q.from != null) s.promiseToYou(q.from) else "← " + s.fieldWait.lowercase(), accent = q.from != null) { dialog = "waiting" }
+                                if (!q.done && q.repeat == null) Pill("+ " + s.addDay.lowercase()) { dialog = "day" }
+                                if (!q.done) Pill("+ " + s.stepOne.lowercase()) { fill("step") }
+                            }
                         }
                     }
                 }
-                Hairline(Modifier.padding(start = MarginW, top = 12.dp))  // the stream begins under this line
-                // The stream: the matter's own words first, the day it appeared on the margin; then the comments.
+                Hairline(Modifier.padding(start = MarginW, top = 14.dp))
                 val born = topic.events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at ?: topic.createdAt
-                Margined(Modifier.padding(top = 12.dp), margin = { Stamp(born) }) {
-                    // The same line as on the main screen: what kind of matter, its bagel, the words — not a heading.
-                    Row(verticalAlignment = Alignment.Top) {
-                        KindMark(row)
-                        Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) {
-                            CheckCircle(q.done, size = 18.dp, onLong = { menu = true }) {
-                                val next = q.slots.firstOrNull { !it.done }
-                                if (next != null) vm.toggleSlot(ref, next.id) else vm.toggleQuestion(topic.id, q.id)
-                            }
-                            SoftMenu(menu, { menu = false }) {
-                                if (onOpenTopic != null) SoftMenuItem(s.openTopic) { menu = false; commit(); onOpenTopic() }
-                                SoftMenuItem(s.delete, danger = true) { menu = false; vm.removeDeal(topic.id, q.id); onClose() }
-                            }
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        BasicTextField(title, { title = it },
-                            textStyle = Type.body.copy(color = if (q.done) c.graphite else c.ink, fontSize = 17.sp, lineHeight = 24.sp),
-                            cursorBrush = SolidColor(c.link), modifier = Modifier.weight(1f))
-                    }
-                }
-                WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = born,
+                WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null,
                     onEdit = { id, t -> vm.editComment(ref, id, t) }, onAdd = { t, at -> vm.addComment(ref, t, at) })
-                // The same visible actions as on a simple matter's card (the long press of the bagel still has them).
-                Margined(Modifier.padding(top = 10.dp)) {
-                    val today = LocalDate.now()
-                    val rowActs = LocalRowActions.current
-                    val acts = buildList<Triple<String, Boolean, () -> Unit>> {
-                        rowActs?.let { r -> if (!q.done) add(Triple(s.toOtherTopic, false) { commit(); onClose(); r.toTopic(ref) }) }
-                        if (!q.done) {
-                            add(Triple(s.swipeTomorrow, false) { vm.postponeTo(ref, today.plusDays(1)) })
-                            add(Triple(s.plusWeek, false) { vm.postponeTo(ref, (due?.takeIf { !it.isBefore(today) } ?: today).plusDays(7)) })
-                        }
-                        if (onOpenTopic != null) add(Triple(s.openTopic, false) { commit(); onOpenTopic() })
-                        add(Triple(s.delete, true) { vm.removeDeal(topic.id, q.id); onClose() })
-                    }
-                    DotFlow(acts.size, separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
-                        val (label, danger, act) = acts[i]
-                        PaperLink(label.lowercase(), quiet = !danger, danger = danger, onClick = act)
-                    }
-                }
                 // Their day has come: «напомнить» here too, the same as on a simple matter (one behaviour for every wait).
                 if (q.from != null && !q.done && due?.isAfter(LocalDate.now()) == false) Margined(Modifier.padding(top = 14.dp)) {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.linkSoft).padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -197,6 +177,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                         Pill(s.remindPerson(q.from), filled = true, onClick = { remindAbout(ctxOpen, data, row) })
                     }
                 }
+                Margined { CreatedLine(born) }
             }
             // Changes in words go to the topic, said about this matter; «+ дело» puts a matter under it.
             val scopeKey = MainVm.key(Scope.InTask(topic.id))

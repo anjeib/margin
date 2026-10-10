@@ -168,78 +168,79 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
             // «Поля»: the rule down the card, the day and hour on the margin, everything else right of it.
             // At least half the screen with the field right under it; a longer card grows, the field stays below.
             Column(Modifier.weight(1f, fill = false).heightIn(min = (half - 76.dp).coerceAtLeast(120.dp)).screenRule().verticalScroll(rememberScrollState())) {
-                // The top: when, how often, where, with whom — one quiet line; then what is not set yet.
+                // The card (owner's call, 10 окт): ⋯ for the matter as a whole; the title with its bagel in the sphere's colour;
+                // «когда» as a plaque; three tools (place, people, repeat) and ⋯ for the rest; then the comments.
                 val ctxOpen = androidx.compose.ui.platform.LocalContext.current
-                Margined(Modifier.padding(top = 8.dp)) {
-                    Column {
-                        if (task.slots.isNotEmpty()) DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) })
-                        // A late date reads the same as in the lists: «просрочено с 8 окт», not «Вчера».
-                        val dates = (task.dueDate?.takeIf { it.isBefore(LocalDate.now()) && !task.done }?.let { s.lateSince(it.dayMonthShort()) }
-                            ?: task.whenLabel()?.substringBefore(" · ${task.time}"))?.takeIf { (task.dueDate != null || task.startDate != null) && task.slots.isEmpty() }
-                        val others = task.people.filter { p -> p != task.waitingFor && p != task.promisedTo }
-                        val late = task.dueDate?.isBefore(LocalDate.now()) == true && !task.done
-                        MetaLine(buildList {
-                            dates?.let { add(MetaItem(Meta.plain(it), Meta.date(late)) { dialog = "dates" }) }
-                            task.time?.takeIf { task.slots.isEmpty() }?.let { add(MetaItem(Meta.plain(it), Meta.date(late)) { dialog = "time" }) }
-                            task.repeat?.let { add(MetaItem(Meta.plain(it.label()), Meta.quiet()) { dialog = "repeat" }) }
-                            add(MetaItem(Meta.sphere(task.sphere == "work"), Meta.quiet()) { vm.setSphere(task.id, nextSphere(task.sphere)) })
-                            task.waitingFor?.let { w -> add(MetaItem(Meta.promise(s.promiseToYouParts(w)), Meta.quiet()) { dialog = "waiting" }) }
-                                ?: task.promisedTo?.let { w -> add(MetaItem(Meta.promise(s.promiseFromYouParts(w)), Meta.quiet(), onLong = { data.contact(w)?.let { p -> onOpenPerson(p.id) } }) { dialog = "promised" }) }
-                            others.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { data.contact(p)?.let { onOpenPerson(it.id) } ?: vm.offerContact(p) }) }
-                            task.place?.let { pl -> add(MetaItem(Meta.plain(pl), Meta.link(), onLong = { fill("place") }) {
-                                runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
-                            }) }
-                        }, Modifier.padding(top = if (task.slots.isNotEmpty()) 6.dp else 0.dp))
-                        // What is not set yet: quiet «+ …»; a step turns the matter into a topic.
-                        val typed = setOf("step", "place", "people")
-                        val missing = buildList {
-                            if (task.dueDate == null && task.startDate == null) add(s.fieldDue to "dates")
-                            if (task.time == null && task.slots.isEmpty()) add(s.fieldTime to "time")
-                            // Another day for the same matter («и в четверг»).
-                            if ((task.dueDate != null || task.slots.isNotEmpty()) && task.repeat == null && !task.done) add(s.addDay to "day")
-                            if (task.repeat == null) add(s.fieldRepeat to "repeat")
-                            // Who owes whom can be set by hand too, not only by the words (one side at a time).
-                            if (task.waitingFor == null && task.promisedTo == null && !task.done) { add(s.fieldWait to "waiting"); add(s.fieldPromised to "promised") }
-                            if (task.people.isEmpty() && task.waitingFor == null && task.promisedTo == null) add(s.fieldPeople to "people")
-                            if (task.place == null) add(s.fieldPlace to "place")
-                            if (!task.done) add(s.stepOne to "step")
+                val rowActs = LocalRowActions.current
+                var more by remember(task.id) { mutableStateOf(false) }
+                var postponing by remember(task.id) { mutableStateOf(false) }
+                if (postponing) PostponeDialog(onDismiss = { postponing = false }) { d -> vm.postponeTo(task.id, d); postponing = false }
+                Margined {
+                    CardMenu { close ->
+                        if (!task.done) {
+                            SoftMenuItem(s.postponeMenu) { close(); postponing = true }
+                            rowActs?.let { r -> SoftMenuItem(s.toTopicPick) { close(); commitTitle(); onClose(); r.toTopic(task.id) } }
                         }
-                        if (missing.isNotEmpty()) DotFlow(missing.size, Modifier.padding(top = 2.dp), separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
-                            val (label, d) = missing[i]
-                            PaperLink("+ " + label.lowercase(), quiet = true) { if (d in typed) fill(d) else dialog = d }
-                        }
+                        SoftMenuItem(if (task.sphere == "work") s.makePersonal else s.makeWork) { close(); vm.setSphere(task.id, nextSphere(task.sphere)) }
+                        if (!task.done) SoftMenuItem(s.wontDo) { close(); commitTitle(); vm.dropTask(task.id); onClose() }
+                        SoftMenuItem(s.toNote) { close(); commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }
+                        SoftMenuItem(s.delete, danger = true) { close(); dialog = "delete" }
                     }
                 }
-                Hairline(Modifier.padding(start = MarginW, top = 12.dp))  // the stream begins under this line
-                // The stream: the matter's own words first — the same line as on the main screen, the day it was written on
-                // the margin — then the user's comments, each with its own day and hour.
-                val born = task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
-                Margined(Modifier.padding(top = 12.dp), margin = { Stamp(born) }) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        KindMark(task)
-                        // No corner menu (owner's call): its few things are on a long press of the bagel.
-                        Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) {
-                            CheckCircle(task.done, size = 18.dp, onLong = { menu = true }) { vm.toggleTask(task.id) }
-                            SoftMenu(menu, { menu = false }) {
-                                if (!task.done) {
-                                    SoftMenuItem(s.swipeTomorrow) { menu = false; vm.postpone(task.id, 1) }
-                                    SoftMenuItem(s.plusWeek) { menu = false; vm.postpone(task.id, 7) }
-                                    SoftMenuItem(s.wontDo) { menu = false; commitTitle(); vm.dropTask(task.id); onClose() }
-                                }
-                                SoftMenuItem(s.toNote) { menu = false; commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }
-                                SoftMenuItem(s.delete, danger = true) { menu = false; dialog = "delete" }
+                Margined(Modifier.offset(y = (-6).dp)) {
+                    CardTitle(title, { title = it }, task.done, task.sphere, onToggle = { vm.toggleTask(task.id) },
+                        mark = if (task.repeat != null || task.waitingFor != null || task.promisedTo != null) null else null)
+                }
+                val today = LocalDate.now()
+                val due = task.dueDate ?: task.startDate
+                val late = task.dueDate?.isBefore(today) == true && !task.done
+                Margined(Modifier.padding(top = 12.dp)) {
+                    if (task.slots.isNotEmpty()) DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) })
+                    else {
+                        val window = task.startDate != null && task.dueDate != null && task.startDate != task.dueDate
+                        val day = due?.let { if (window) task.whenLabel()?.substringBefore(" · ${task.time}") else cardDay(it, today, task.done) }
+                        // Under the day: who owes it, and a reminder only when it is not at the matter's own hour.
+                        val owes = task.waitingFor?.let { s.promiseToYou(it) } ?: task.promisedTo?.let { s.promiseFromYou(it) }
+                        val own = task.dueDate?.let { d -> task.time?.let { "${d}T$it" } }
+                        val remind = task.remindAt?.takeIf { it.take(16) != own }?.let { s.reminderAt + " " + it.drop(11).take(5) }
+                        WhenPlaque(day, task.time, late, listOfNotNull(owes, remind).joinToString(" · ").ifBlank { null },
+                            onDay = { dialog = "dates" }, onHour = { dialog = "time" })
+                    }
+                }
+                // The tools: where, with whom, how often — filled ones in petrol; ⋯ opens the rest; «сегодня / завтра» at the end.
+                val others = task.people.filter { p -> p != task.waitingFor && p != task.promisedTo }
+                Margined(Modifier.padding(top = 12.dp)) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ToolRound(task.place != null, s.fieldPlace, { fill("place") }) { Icon(Icons.Outlined.Place, null, tint = it, modifier = Modifier.size(21.dp)) }
+                            ToolRound(others.isNotEmpty(), s.fieldPeople, { fill("people") }) { PeopleGlyph(it, 20.dp) }
+                            ToolRound(task.repeat != null, s.fieldRepeat, { dialog = "repeat" }) { RepeatGlyph(it, 20.dp) }
+                            ToolRound(more, s.moreActions, { more = !more }) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(21.dp)) }
+                            Spacer(Modifier.weight(1f))
+                            if (!task.done) SoonPill(task.dueDate)
+                        }
+                        // What the filled tools hold, in words — a tap changes it.
+                        val vals = buildList<Pair<String, () -> Unit>> {
+                            task.place?.let { pl -> add(pl to { runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) } }) }
+                            others.forEach { p -> add(p to { data.contact(p)?.let { onOpenPerson(it.id) } ?: vm.offerContact(p) }) }
+                            task.repeat?.let { add(it.label() to { dialog = "repeat" }) }
+                        }
+                        if (vals.isNotEmpty()) DotFlow(vals.size, Modifier.padding(top = 6.dp), separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
+                            PaperLink(vals[i].first, onClick = vals[i].second)
+                        }
+                        androidx.compose.animation.AnimatedVisibility(more) {
+                            androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Pill(if (task.waitingFor != null) s.promiseToYou(task.waitingFor) else "← " + s.fieldWait.lowercase(), accent = task.waitingFor != null) { dialog = "waiting" }
+                                Pill(if (task.promisedTo != null) s.promiseFromYou(task.promisedTo) else "→ " + s.fieldPromised.lowercase(), accent = task.promisedTo != null) { dialog = "promised" }
+                                if (!task.done && task.repeat == null) Pill("+ " + s.addDay.lowercase()) { dialog = "day" }
+                                if (!task.done) Pill("+ " + s.stepOne.lowercase()) { fill("step") }
                             }
                         }
-                        Spacer(Modifier.width(8.dp))
-                        BasicTextField(
-                            value = title, onValueChange = { title = it },
-                            textStyle = Type.body.copy(color = if (task.done) c.graphite else c.ink, fontSize = 17.sp, lineHeight = 24.sp),
-                            cursorBrush = SolidColor(c.link),
-                            modifier = Modifier.weight(1f),
-                        )
                     }
                 }
-                WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = born,
+                Hairline(Modifier.padding(start = MarginW, top = 14.dp))
+                val born = task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
+                WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null,
                     onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
                     onAdd = { t, at -> vm.addComment(task.id, t, at); savedAt = System.currentTimeMillis() })
                 // Where it came from — below the shared part of every matter's card, quietly.
@@ -250,33 +251,12 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             Text("↳ $o", style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(6.dp)).clickable { task.noteId?.let(onOpenNote) })
                         }
-                        // Where it came from: «↳ из сообщения 6 окт, 17:42» — the words open on a tap.
+                        // Where it came from: «↳ из сообщения» — the words open on a tap.
                         if (task.source != null && task.noteId == null) {
                             androidx.compose.runtime.LaunchedEffect(task.id) { vm.tidySource(task.id) }
-                            val born = task.history.firstOrNull { it.kind == "created" }?.at?.let { runCatching { java.time.LocalDateTime.parse(it.take(16)) }.getOrNull() }
-                            val stamp = born?.let { it.toLocalDate().dayMonthShort() + ", " + it.toLocalTime().toString().take(5) } ?: LocalDate.parse(task.createdAt).dayMonthShort()
-                            Text("↳ " + s.fromMessage(stamp), style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp),
+                            Text("↳ " + s.fromMessageShort, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp),
                                 modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(6.dp)).clickable { dialog = "source" }.padding(vertical = 2.dp))
                         }
-                    }
-                }
-
-                // What can be done with the matter, in sight (it used to hide behind a long press of the bagel — still there too).
-                Margined(Modifier.padding(top = 10.dp)) {
-                    val rowActs = LocalRowActions.current
-                    val acts = buildList<Triple<String, Boolean, () -> Unit>> {
-                        if (!task.done) {
-                            add(Triple(s.swipeTomorrow, false) { vm.postpone(task.id, 1) })
-                            add(Triple(s.plusWeek, false) { vm.postpone(task.id, 7) })
-                            rowActs?.let { r -> add(Triple(s.toTopicPick, false) { commitTitle(); onClose(); r.toTopic(task.id) }) }
-                            add(Triple(s.wontDo, false) { commitTitle(); vm.dropTask(task.id); onClose() })
-                        }
-                        add(Triple(s.toNote, false) { commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) })
-                        add(Triple(s.delete, true) { dialog = "delete" })
-                    }
-                    DotFlow(acts.size, separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
-                        val (label, danger, act) = acts[i]
-                        PaperLink(label.lowercase(), quiet = !danger, danger = danger, onClick = act)
                     }
                 }
 
@@ -384,7 +364,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Margined { CreatedLine(task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt) }
+                Spacer(Modifier.height(8.dp))
             }
 
             // Scoped composer — everything about this task is said here.
