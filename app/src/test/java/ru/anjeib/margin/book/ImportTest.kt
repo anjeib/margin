@@ -61,6 +61,7 @@ class ImportTest {
     @Test fun peopleAndCommentsComeAlong() {
         assertTrue(book.persons.any { it.name == "Олег" && it.phone != null && it.kept })
         assertTrue("a name on a line becomes a person", book.persons.any { it.name == "Маша" })
+        assertTrue("a company stays a company", book.persons.any { it.name == "Кофейня «Зерно»" && it.org })
         val withComment = Import.from(old.copy(tasks = old.tasks.map { if (it.id == "ex-milk") it.copy(comments = listOf(Comment(at = "${today}T10:00", text = "безлактозное"))) else it }), today)
         assertEquals("безлактозное", withComment.children("ex-milk").single().text)
     }

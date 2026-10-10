@@ -198,6 +198,17 @@ interface Words {
     val inviteShared: String
     val inviteNone: String
     val inviteHint: String
+    fun peopleLine(people: Int, orgs: Int): String
+    fun allThreads(n: Int): String
+    fun allPeople(n: Int): String
+    val addressBook: String
+    val findPerson: String
+    val filterAll: String
+    val filterPeople: String
+    val filterOrgs: String
+    val company: String
+    val markOrg: String
+    val markPerson: String
     val call: String
     val message: String
     val mail: String
@@ -531,6 +542,20 @@ object WordsRu : Words {
     override val inviteNone = "нет"
     override val inviteHint = "ИИ перечитывает сложные фразы, отвечает на трудные вопросы и расшифровывает голос. Если вам дали свой код — введите его; пусто — общий."
     override fun nextPage(lines: List<Line>) = "завтра — " + things(lines).ifBlank { "пусто" } + " ›"
+    override fun peopleLine(people: Int, orgs: Int) = listOfNotNull(
+        "$people " + plural(people, "человек", "человека", "человек"),
+        orgs.takeIf { it > 0 }?.let { "$it " + plural(it, "компания", "компании", "компаний") },
+    ).joinToString(" · ")
+    override fun allThreads(n: Int) = "все нити · $n ›"
+    override fun allPeople(n: Int) = "все люди и компании · $n ›"
+    override val addressBook = "Люди и компании"
+    override val findPerson = "Имя, компания, кто это…"
+    override val filterAll = "все"
+    override val filterPeople = "люди"
+    override val filterOrgs = "компании"
+    override val company = "компания"
+    override val markOrg = "это компания ›"
+    override val markPerson = "это человек ›"
     override val call = "позвонить"
     override val message = "написать"
     override val mail = "письмо"
@@ -844,6 +869,20 @@ object WordsEn : Words {
     override val inviteNone = "none"
     override val inviteHint = "The AI re-reads hard phrases, answers difficult questions and transcribes voice. If you were given your own code, enter it; empty — the shared one."
     override fun nextPage(lines: List<Line>) = "tomorrow — " + things(lines).ifBlank { "nothing yet" } + " ›"
+    override fun peopleLine(people: Int, orgs: Int) = listOfNotNull(
+        "$people " + if (people == 1) "person" else "people",
+        orgs.takeIf { it > 0 }?.let { "$it compan" + if (it == 1) "y" else "ies" },
+    ).joinToString(" · ")
+    override fun allThreads(n: Int) = "all threads · $n ›"
+    override fun allPeople(n: Int) = "all people and companies · $n ›"
+    override val addressBook = "People and companies"
+    override val findPerson = "Name, company, who…"
+    override val filterAll = "all"
+    override val filterPeople = "people"
+    override val filterOrgs = "companies"
+    override val company = "company"
+    override val markOrg = "this is a company ›"
+    override val markPerson = "this is a person ›"
     override val call = "call"
     override val message = "message"
     override val mail = "email"

@@ -105,6 +105,8 @@ data class Person(
     /** Added by the user (a contact, «+ контакт»): stays in the index even with no lines. */
     val kept: Boolean = false,
     val sample: Boolean = false,
+    /** A business, not a person: «Типография «Оттиск»», «ЖЭК» — in the address book with the companies. */
+    val org: Boolean = false,
 ) {
     fun matches(n: String) = name.equals(n, true) || aliases.any { it.equals(n, true) }
 }

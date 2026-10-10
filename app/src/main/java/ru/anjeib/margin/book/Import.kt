@@ -130,7 +130,7 @@ object Import {
         val persons = old.persons.filter { !it.archived && !it.sample }.map { p ->
             Person(id = p.id, name = p.name, aliases = p.aliases,
                 about = listOfNotNull(p.company, p.about?.takeIf { p.aboutFromUser }).joinToString(", ").ifBlank { null },
-                phone = p.phone, email = p.email, telegram = p.telegram, kept = p.kept || !p.draft)
+                phone = p.phone, email = p.email, telegram = p.telegram, kept = p.kept || !p.draft, org = p.org)
         }
         // A name on a line that the old notebook never kept as a person still becomes one (not kept).
         val named = lines.flatMap { l -> l.who.map { it.name } }.distinct().filter { n -> persons.none { it.matches(n) } }.map { Person(name = it) }

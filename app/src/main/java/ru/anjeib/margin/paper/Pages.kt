@@ -1,5 +1,18 @@
 package ru.anjeib.margin.paper
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -49,11 +62,15 @@ fun SectionHead(text: String, modifier: Modifier = Modifier) {
 /** A row of the index: Margin's number or date on the margin, the name right of the rule, a quiet line under it. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun IndexRow(margin: List<Note>, title: String, sub: String?, onClick: () -> Unit, faded: Boolean = false) {
+fun IndexRow(margin: List<Note>, title: String, sub: String?, onClick: () -> Unit, faded: Boolean = false, tab: String? = null) {
     val c = P.c
     Row(Modifier.fillMaxWidth().heightIn(min = Grid.line).combinedClickable(onClick = onClick).padding(end = Grid.right)) {
-        Column(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp, top = 15.dp, bottom = 8.dp), horizontalAlignment = Alignment.End) {
-            margin.forEach { NoteText(it) }
+        Box(Modifier.width(Grid.margin - Grid.noteGap)) {
+            // An address book's tab: the letter at the margin's edge, on the first name that begins with it.
+            tab?.let { Text(it, style = Voice.section.copy(color = c.red, fontSize = 20.sp, lineHeight = 24.sp), modifier = Modifier.padding(start = 10.dp, top = 10.dp)) }
+            Column(Modifier.fillMaxWidth().padding(start = 4.dp, top = 15.dp, bottom = 8.dp), horizontalAlignment = Alignment.End) {
+                margin.forEach { NoteText(it) }
+            }
         }
         Spacer(Modifier.width(Grid.text - Grid.margin + Grid.noteGap))
         Column(Modifier.weight(1f).padding(top = 12.dp, bottom = 12.dp)) {
@@ -63,46 +80,36 @@ fun IndexRow(margin: List<Note>, title: String, sub: String?, onClick: () -> Uni
     }
 }
 
-/** «Оглавление»: threads, people, «Потом», and the rest of the notebook. */
+/** «Оглавление»: what is alive now — a few threads, a few people — and the way to all of them, «Неделя», «Потом». */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun IndexPage(book: Book, today: LocalDate, onThread: (String) -> Unit, onPerson: (String) -> Unit, onLater: () -> Unit,
-              onSettings: () -> Unit, onHelp: () -> Unit, onSearch: () -> Unit, onFeedback: () -> Unit, onWeek: () -> Unit = {}) {
+              onSettings: () -> Unit, onHelp: () -> Unit, onSearch: () -> Unit, onFeedback: () -> Unit, onWeek: () -> Unit = {},
+              onAllThreads: () -> Unit = {}, onAllPeople: () -> Unit = {}) {
     val c = P.c
     val w = P.w
-    val open = book.threads.filter { it.closedAt == null }.map { it to book.threadStats(it.id) }.sortedByDescending { it.second.last }
-    val closed = book.threads.filter { it.closedAt != null }
-    val people = book.persons.mapNotNull { p ->
-        val pl = book.personLines(p.name)
-        val n = pl.promised.size + pl.waited.size + pl.other.size
-        if (n == 0 && !p.kept) null else Triple(p, pl, n)
-    }.sortedWith(compareByDescending<Triple<ru.anjeib.margin.book.Person, ru.anjeib.margin.book.PersonLines, Int>> { it.second.promised.size + it.second.waited.size }.thenBy { it.first.name })
+    val open = book.threads.filter { it.closedAt == null }.map { it to book.threadStats(it.id, today) }.sortedByDescending { it.second.last }
+    // Alive: something open in it, or something happened in the last two weeks. Six at most — the rest is one tap away.
+    val alive = open.filter { (_, st) -> st.open + st.waiting > 0 || !st.last.isBefore(today.minusDays(14)) }.take(6)
+    val people = peopleOf(book)
+    val livePeople = people.filter { (_, pl, _) -> pl.promised.isNotEmpty() || pl.waited.isNotEmpty() || pl.other.any { it.open } }.take(6)
     val later = book.later()
     LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item { PageHead(marginTop = "", marginBottom = null, title = w.indexTitle, line = w.indexLine(open.size, people.size)) }
+        item { PageHead(marginTop = "", marginBottom = null, title = w.indexTitle,
+            line = w.indexLine(book.threads.size, 0).substringBefore(" · ") + " · " + w.peopleLine(people.count { !it.first.org }, people.count { it.first.org })) }
         item { SectionHead(w.threads) }
         if (open.isEmpty()) item { MarginSays(w.noThreads) }
-        items(open, key = { "t" + it.first.id }) { (t, st) ->
+        items(alive, key = { "t" + it.first.id }) { (t, st) ->
             IndexRow(listOf(Note(w.near(st.last, today), Tone.Quiet)), t.title, w.threadLine(st), { onThread(t.id) })
         }
-        item { SectionHead(w.people) }
+        if (book.threads.size > alive.size) item { MarginLink(w.allThreads(book.threads.size), onClick = onAllThreads) }
+        item { SectionHead(if (people.any { it.first.org }) w.addressBook else w.people) }
         if (people.isEmpty()) item { MarginSays(w.noPeople) }
-        items(people, key = { "p" + it.first.id }) { (p, pl, n) ->
-            val m = listOfNotNull(
-                pl.promised.size.takeIf { it > 0 }?.let { Note("→ $it", Tone.Link) },
-                pl.waited.size.takeIf { it > 0 }?.let { Note("← $it", Tone.Link) },
-            )
-            IndexRow(m, p.name, listOfNotNull(p.about, w.linesN(n)).joinToString(" · "), { onPerson(p.name) })
-        }
+        items(livePeople, key = { "p" + it.first.id }) { (p, pl, n) -> PersonRow(p, pl, n, w) { onPerson(p.name) } }
+        if (people.size > livePeople.size) item { MarginLink(w.allPeople(people.size), onClick = onAllPeople) }
         item { Spacer(Modifier.padding(top = 14.dp)) }
         item { IndexRow(emptyList(), w.weekTitle, w.weekSub, onWeek) }
         item { IndexRow(listOf(Note(later.size.toString(), Tone.Quiet)), w.laterTitle, w.laterLine, onLater) }
-        if (closed.isNotEmpty()) {
-            item { SectionHead(w.closedThreads) }
-            items(closed, key = { "c" + it.id }) { t ->
-                IndexRow(emptyList(), t.title, null, { onThread(t.id) }, faded = true)
-            }
-        }
         item {
             androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(top = 30.dp, start = Grid.text - 6.dp, end = Grid.right)) {
                 listOf(w.search to onSearch, w.settings to onSettings, w.help to onHelp, w.feedback to onFeedback).forEachIndexed { i, (t, f) ->
@@ -111,6 +118,93 @@ fun IndexPage(book: Book, today: LocalDate, onThread: (String) -> Unit, onPerson
                 }
             }
         }
+    }
+}
+
+/** Everyone the notebook knows (named on a line, or kept), with their lines: open promises first, then by name. */
+private fun peopleOf(book: Book): List<Triple<ru.anjeib.margin.book.Person, ru.anjeib.margin.book.PersonLines, Int>> = book.persons.mapNotNull { p ->
+    val pl = book.personLines(p.name)
+    val n = pl.promised.size + pl.waited.size + pl.other.size
+    if (n == 0 && !p.kept) null else Triple(p, pl, n)
+}.sortedWith(compareByDescending<Triple<ru.anjeib.margin.book.Person, ru.anjeib.margin.book.PersonLines, Int>> { it.second.promised.size + it.second.waited.size }
+    .thenByDescending { t -> (t.second.promised + t.second.waited + t.second.other).maxOfOrNull { it.writtenAt } ?: "" }.thenBy { it.first.name })
+
+/** A person in a list: → and ← counts on the margin, the name, what they are and how many lines. */
+@Composable
+private fun PersonRow(p: ru.anjeib.margin.book.Person, pl: ru.anjeib.margin.book.PersonLines, n: Int, w: Words, tab: String? = null, onClick: () -> Unit) {
+    val m = listOfNotNull(
+        pl.promised.size.takeIf { it > 0 }?.let { Note("→\u00A0$it", Tone.Link) },
+        pl.waited.size.takeIf { it > 0 }?.let { Note("←\u00A0$it", Tone.Link) },
+    )
+    IndexRow(m, p.name, listOfNotNull(p.about ?: if (p.org) w.company else null, w.linesN(n).takeIf { n > 0 }).joinToString(" · "), onClick, tab = tab)
+}
+
+/** All threads, by the last thing that happened; the month on the margin once; the closed ones at the end, faded. */
+@Composable
+fun AllThreadsPage(book: Book, today: LocalDate, onThread: (String) -> Unit) {
+    val c = P.c
+    val w = P.w
+    val open = book.threads.filter { it.closedAt == null }.map { it to book.threadStats(it.id, today) }.sortedByDescending { it.second.last }
+    val closed = book.threads.filter { it.closedAt != null }.sortedByDescending { it.closedAt }
+    LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { PageHead(marginTop = "≡", marginBottom = null, title = w.threads, line = w.indexLine(book.threads.size, 0).substringBefore(" · ")) }
+        var month: java.time.YearMonth? = null
+        open.forEach { (t, st) ->
+            val ym = java.time.YearMonth.from(st.last)
+            val mark = if (ym != month) { month = ym; w.monthName(ym).lowercase() } else null
+            item("t" + t.id) { IndexRow(listOfNotNull(mark?.let { Note(it, Tone.Quiet) }), t.title, w.threadLine(st).ifBlank { w.since(st.since) }, { onThread(t.id) }) }
+        }
+        if (closed.isNotEmpty()) {
+            item { SectionHead(w.closedThreads) }
+            items(closed, key = { "c" + it.id }) { t -> IndexRow(emptyList(), t.title, null, { onThread(t.id) }, faded = true) }
+        }
+    }
+}
+
+/**
+ * The address book: everyone and every company by the alphabet, the letter on the margin where it begins — as in a paper
+ * one; a field on top finds by any part of a name or of what they are; «все · люди · компании».
+ */
+@Composable
+fun AddressBookPage(book: Book, onPerson: (String) -> Unit) {
+    val c = P.c
+    val w = P.w
+    var q by rememberSaveable { mutableStateOf("") }
+    var kind by rememberSaveable { mutableStateOf(0) } // 0 all, 1 people, 2 companies
+    val key = q.trim().lowercase().replace('ё', 'е')
+    val all = peopleOf(book).sortedBy { it.first.name.lowercase().replace('ё', 'е') }
+    val shown = all.filter { (p, _, _) ->
+        (kind == 0 || (kind == 1 && !p.org) || (kind == 2 && p.org)) &&
+            (key.isEmpty() || (p.name + " " + (p.about ?: "") + " " + p.aliases.joinToString(" ")).lowercase().replace('ё', 'е').contains(key))
+    }
+    LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { PageHead(marginTop = "А", marginBottom = "Я", title = w.addressBook, line = w.peopleLine(all.count { !it.first.org }, all.count { it.first.org })) }
+        item {
+            Row(Modifier.fillMaxWidth().padding(end = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(Grid.text - 6.dp))
+                val shape = RoundedCornerShape(22.dp)
+                Box(Modifier.weight(1f).heightIn(min = 44.dp).clip(shape).background(c.sheet).border(1.dp, c.hairline, shape).padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    if (q.isEmpty()) Text(w.findPerson, style = Voice.words.copy(color = c.graphite))
+                    BasicTextField(q, { q = it }, textStyle = Voice.words.copy(color = c.ink), cursorBrush = SolidColor(c.link), singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth().padding(start = Grid.text - 6.dp)) {
+                listOf(w.filterAll, w.filterPeople, w.filterOrgs).forEachIndexed { i, t ->
+                    if (i > 0) Text(" · ", style = Voice.reply.copy(color = c.pencil), modifier = Modifier.padding(vertical = 12.dp))
+                    Text(t, style = Voice.reply.copy(color = if (kind == i) c.ink else c.link),
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { kind = i }.padding(vertical = 12.dp, horizontal = 4.dp))
+                }
+            }
+        }
+        var letter: Char? = null
+        shown.forEach { (p, pl, n) ->
+            val first = p.name.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar() ?: '#'
+            val tab = if (first != letter) first.toString().also { letter = first } else null
+            item("p" + p.id) { PersonRow(p, pl, n, w, tab) { onPerson(p.name) } }
+        }
+        if (shown.isEmpty()) item { MarginSays(w.nothingFound, Modifier.padding(top = 12.dp)) }
     }
 }
 
@@ -157,7 +251,7 @@ fun ThreadPage(book: Book, id: String, today: LocalDate, onMark: (String) -> Uni
 /** A person's page: what you promised them, what they promised you, everything else with them. */
 @Composable
 fun PersonPage(book: Book, name: String, today: LocalDate, onMark: (String) -> Unit, onOpen: (String) -> Unit, onCall: (String) -> Unit,
-               bottom: androidx.compose.ui.unit.Dp) {
+               bottom: androidx.compose.ui.unit.Dp, onOrg: (Boolean) -> Unit = {}) {
     val c = P.c
     val w = P.w
     val p = book.person(name)
@@ -193,6 +287,8 @@ fun PersonPage(book: Book, name: String, today: LocalDate, onMark: (String) -> U
             items(pl.other, key = { "c" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name) }
         }
         if (pl.promised.isEmpty() && pl.waited.isEmpty() && pl.other.isEmpty()) item { MarginSays(w.emptyPerson) }
+        // A company or a person — how the address book files them.
+        if (p != null) item { MarginLink(if (p.org) w.markPerson else w.markOrg, Modifier.padding(top = 16.dp)) { onOrg(!p.org) } }
     }
 }
 

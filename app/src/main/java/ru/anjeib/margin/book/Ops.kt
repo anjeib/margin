@@ -16,8 +16,14 @@ fun Book.add(new: List<Line>): Book = copy(lines = lines + new).withPeopleOf(new
 /** Everyone named on the new lines becomes a person (not yet «kept» — the index shows them from the second line on). */
 private fun Book.withPeopleOf(new: List<Line>): Book {
     val names = new.flatMap { l -> l.who.map { it.name } }.distinct().filter { n -> persons.none { it.matches(n) } }
-    return if (names.isEmpty()) this else copy(persons = persons + names.map { Person(name = it) })
+    // «ООО …», «ИП …», a name in quotes: a company.
+    return if (names.isEmpty()) this else copy(persons = persons + names.map { Person(name = it, org = looksLikeCompany(it)) })
 }
+
+private fun looksLikeCompany(n: String) = Regex("^(?:ООО|ОАО|ЗАО|АО|ИП|ПАО|LLC|Inc)\\b|«.+»", RegexOption.IGNORE_CASE).containsMatchIn(n.trim())
+
+/** A person is a company, or a company a person: the address book files them so. */
+fun Book.setOrg(name: String, org: Boolean): Book = copy(persons = persons.map { if (it.matches(name)) it.copy(org = org) else it })
 
 /**
  * Done or open again. A repeating to-do, done, leaves its next occurrence behind (a new line on the next page).
