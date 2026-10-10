@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import ru.anjeib.margin.data.dayMonth
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -423,7 +424,13 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
     val c = M.c
     var filterMenu by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-        Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape).clickable(onClickLabel = s.a11yMenu, onClick = onMenu)
+        // The day is home: from «Календарь» and «Обзор» an arrow leads back to it, from the day — the menu.
+        val away = screen == TASKS && (view == Views.WEEK || view == Views.ALL)
+        if (away) Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape).clickable(onClickLabel = s.backWord) { onTab(0) }
+            .semantics { contentDescription = s.backWord }, contentAlignment = Alignment.Center) {
+            Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = M.c.ink, modifier = Modifier.size(22.dp))
+        }
+        else Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape).clickable(onClickLabel = s.a11yMenu, onClick = onMenu)
             .semantics { contentDescription = s.a11yMenu }, contentAlignment = Alignment.Center) {
             MenuGlyph()
         }
@@ -433,11 +440,7 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Outlined.Search, s.search, tint = M.c.graphite, modifier = Modifier.size(21.dp)) }
         }
-        // The tabs start where the content starts, leaving room on the right for the funnel and the search.
-        if (screen == TASKS) Box(Modifier.align(Alignment.CenterStart).padding(start = 48.dp)) {
-            // No numbers on the tabs: how much is today is said in its summary.
-            QuietTabs(listOf(s.today, s.calendarTitle, s.overviewWord), listOf(Views.TODAY, Views.WEEK, Views.ALL).indexOf(view), onTab)
-        }
+        // No tabs: «Календарь» and «Обзор» open from the doors beside the day's name.
     }
 }
 

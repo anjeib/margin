@@ -146,10 +146,12 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
             Text("${d.dayOfMonth}", style = Type.body.copy(color = when { sel -> c.bg; past -> c.graphite; else -> c.ink }, fontSize = 15.sp, fontWeight = if (sel || d == today) FontWeight.SemiBold else FontWeight.Normal))
             // How busy the day is — a number, never a colour per project: open matters ahead (terracotta when today has late ones),
             // done ones on a past day with a tick; a meeting from the phone calendar — a small dot beside it.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(when { count == 0 -> " "; past -> "✓$count"; else -> "$count" },
-                    style = Type.small.copy(color = when { sel -> c.bg; past -> c.graphite; late -> c.accentText; else -> c.link }, fontSize = 11.sp, fontFeatureSettings = "tnum"))
-                if (meets) Box(Modifier.padding(start = 3.dp).size(4.dp).clip(CircleShape).background(if (sel) c.bg else c.graphite))
+            // Dots, not a second number under the date: one per matter up to three; petrol ahead, terracotta when today
+            // has late ones, sage for what got done on a past day; a meeting — a small grey ring beside them.
+            Row(Modifier.height(10.dp).padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.5.dp)) {
+                val dot = when { sel -> c.bg; past -> c.ok; late -> c.accent; else -> c.link }
+                repeat(count.coerceAtMost(3)) { Box(Modifier.size(5.dp).clip(CircleShape).background(dot)) }
+                if (meets) Box(Modifier.size(5.dp).border(1.dp, if (sel) c.bg else c.graphite, CircleShape))
             }
         }
     }

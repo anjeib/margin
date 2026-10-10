@@ -589,3 +589,15 @@ fun hourColor(due: java.time.LocalDate?, time: String?, today: java.time.LocalDa
         else -> c.ink
     }
 }
+
+
+/** «Обзор»: three lines of different length — everything there is, one under another. */
+@Composable
+fun OverviewGlyph(color: Color, size: Dp = 18.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply {
+        moveTo(w * 0.16f, h * 0.3f); lineTo(w * 0.84f, h * 0.3f)
+        moveTo(w * 0.16f, h * 0.5f); lineTo(w * 0.7f, h * 0.5f)
+        moveTo(w * 0.16f, h * 0.7f); lineTo(w * 0.78f, h * 0.7f)
+    }, color, style = stroke(1.4.dp))
+}
