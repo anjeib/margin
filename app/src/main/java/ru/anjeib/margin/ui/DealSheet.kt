@@ -127,45 +127,30 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                         }
                     }
                 }
-                Margined(Modifier.padding(top = 4.dp)) {
-                    CardTitle(title, { title = it }, q.done, topic.sphere, onToggle = {
+                Margined(Modifier.padding(top = 2.dp), margin = { if (q.slots.isEmpty()) CardDay(due, late) { dialog = "date" } }) {
+                    CardBlock(title, { title = it }, q.done, topic.sphere, onToggle = {
                         val next = q.slots.firstOrNull { !it.done }
                         if (next != null) vm.toggleSlot(ref, next.id) else vm.toggleQuestion(topic.id, q.id)
-                    })
+                    }, hour = q.time?.takeIf { q.slots.isEmpty() }, onHour = if (q.slots.isEmpty() && due != null) ({ dialog = "time" }) else null,
+                        quiet = q.from?.let { s.promiseToYou(it) }, due = due)
                 }
-                Margined(Modifier.padding(top = 12.dp)) {
-                    if (q.slots.isNotEmpty()) DaysProp(q.slots, onToggle = { vm.toggleSlot(ref, it) }, onRemove = { vm.removeSlot(ref, it) })
-                    else WhenPlaque(due?.let { cardDay(it, today, q.done) }, q.time, late, q.from?.let { s.promiseToYou(it) },
-                        onDay = { dialog = "date" }, onHour = { dialog = "time" })
-                }
-                Margined(Modifier.padding(top = 12.dp)) {
+                if (q.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(q.slots, onToggle = { vm.toggleSlot(ref, it) }, onRemove = { vm.removeSlot(ref, it) }) }
+                Margined(Modifier.padding(top = 2.dp)) {
                     Column {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ToolRound(q.place != null, s.fieldPlace, { fill("place") }) { Icon(Icons.Outlined.Place, null, tint = it, modifier = Modifier.size(21.dp)) }
-                            ToolRound(people.isNotEmpty(), s.fieldPeople, { fill("people") }) { PeopleGlyph(it, 20.dp) }
-                            ToolRound(q.repeat != null, s.fieldRepeat, { dialog = "repeat" }) { RepeatGlyph(it, 20.dp) }
-                            ToolRound(more, s.moreActions, { more = !more }) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(21.dp)) }
-                            Spacer(Modifier.weight(1f))
-                            if (!q.done) SoonPill(due)
-                        }
-                        val vals = buildList<Pair<String, () -> Unit>> {
-                            q.place?.let { pl -> add(pl to { runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) } }) }
-                            people.forEach { p -> add(p to { person(p) }) }
-                            q.repeat?.let { add(it.label() to { dialog = "repeat" }) }
-                        }
-                        if (vals.isNotEmpty()) DotFlow(vals.size, Modifier.padding(top = 6.dp), separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
-                            PaperLink(vals[i].first, onClick = vals[i].second)
-                        }
+                        CardTools(listOf(
+                            CardTool(s.fieldPlace, q.place, { fill("place") }) { Icon(Icons.Outlined.Place, null, tint = it, modifier = Modifier.size(16.dp)) },
+                            CardTool(s.fieldPeople, people.takeIf { it.isNotEmpty() }?.joinToString(", "), { if (people.size == 1) person(people[0]) else fill("people") }) { PeopleGlyph(it, 16.dp) },
+                            CardTool(s.fieldRepeat, q.repeat?.label(), { dialog = "repeat" }) { RepeatGlyph(it, 16.dp) },
+                            CardTool(s.moreWord, null, { more = !more }, bare = true) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(16.dp)) },
+                        ))
                         androidx.compose.animation.AnimatedVisibility(more) {
-                            androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Pill(if (q.from != null) s.promiseToYou(q.from) else "← " + s.fieldWait.lowercase(), accent = q.from != null) { dialog = "waiting" }
-                                if (!q.done && q.repeat == null) Pill("+ " + s.addDay.lowercase()) { dialog = "day" }
-                                if (!q.done) Pill("+ " + s.stepOne.lowercase()) { fill("step") }
-                            }
+                            CardTools(listOf(CardTool(s.fieldWait, q.from?.let { s.promiseToYou(it) }, { dialog = "waiting" }) { ArrowGlyph(it, 15.dp, incoming = true) }) +
+                                (if (!q.done && q.repeat == null) listOf(CardTool(s.addDay, null, { dialog = "day" }) { CalendarGlyph(it, 15.dp) }) else emptyList()) +
+                                (if (!q.done) listOf(CardTool(s.stepOne, null, { fill("step") }) { TopicGlyph(it, 15.dp) }) else emptyList()))
                         }
                     }
                 }
-                Hairline(Modifier.padding(start = MarginW, top = 14.dp))
+                Hairline(Modifier.padding(start = MarginW, top = 6.dp))
                 val born = topic.events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at ?: topic.createdAt
                 WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null,
                     onEdit = { id, t -> vm.editComment(ref, id, t) }, onAdd = { t, at -> vm.addComment(ref, t, at) })

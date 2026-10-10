@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,10 +68,10 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
                     SoftMenuItem(s.delete, danger = true) { close(); vm.removeMatter(task.id); onClose() }
                 }
             }
-            Margined(Modifier.padding(top = 0.dp)) {
-                CardTitle(title, { title = it }, false, task.sphere, onToggle = {}, mark = { IdeaMark(30.dp) })
+            Margined(Modifier.offset(y = (-8).dp)) {
+                CardBlock(title, { title = it }, false, task.sphere, onToggle = {}, hour = null, onHour = null, quiet = null, due = null, mark = { IdeaMark(26.dp) })
             }
-            Hairline(Modifier.padding(start = MarginW, top = 14.dp))
+            Hairline(Modifier.padding(start = MarginW, top = 2.dp))
             val born = task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
             WrittenLane(task.entries.filter { it.text.isNotBlank() }.map { LaneItem(it.id, it.at, it.text) }, s.ideaHint, Modifier.padding(top = 4.dp), after = null,
                 onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },

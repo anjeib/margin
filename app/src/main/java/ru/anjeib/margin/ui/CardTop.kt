@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.runtime.setValue
@@ -191,4 +192,88 @@ fun CreatedLine(stamp: String?) {
     val d = at?.toLocalDate() ?: stamp?.let { runCatching { java.time.LocalDate.parse(it.take(10)) }.getOrNull() } ?: return
     Text(M.s.createdOn(d.dayMonthYear() + (at?.let { ", " + it.toLocalTime().toString().take(5) } ?: "")),
         style = Type.small.copy(color = M.c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(top = 18.dp, bottom = 6.dp))
+}
+
+/* ---------------- the card in the main screen's language (owner, 10 окт: «грубо, не в стиле главной») ---------------- */
+
+/** The matter's day on the card's margin — the same mark as a day on «Сегодня»; a tap changes it. Without a day — a quiet «без даты». */
+@Composable
+fun CardDay(due: java.time.LocalDate?, late: Boolean, onDay: () -> Unit) {
+    val c = M.c
+    androidx.compose.foundation.layout.Box(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).clickable(onClickLabel = M.s.dateWord, onClick = onDay).padding(vertical = 2.dp, horizontal = 2.dp)) {
+        if (due == null) Text(M.s.noDateShort, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(top = 14.dp))
+        else androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            DayMargin(due, java.time.LocalDate.now(), false, strong = true)
+        }
+    }
+}
+
+/** «сегодня / завтра» — the small caps badge that sits over a row in the lists, here at the end of the title's quiet line. */
+@Composable
+fun SoonMark(d: java.time.LocalDate?) {
+    val c = M.c
+    val today = java.time.LocalDate.now()
+    val (text, fg, bg) = when (d) {
+        today -> Triple(M.s.quickToday, c.accentText, c.accentSoft)
+        today.plusDays(1) -> Triple(M.s.quickTomorrow, c.link, c.linkSoft)
+        else -> return
+    }
+    Text(text.uppercase(), style = Type.label.copy(color = fg, fontSize = 10.5.sp, letterSpacing = 1.sp),
+        modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(bg).padding(horizontal = 8.dp, vertical = 2.dp))
+}
+
+/** The head of a card on its soft block: the bagel in the sphere's colour and the title, then one quiet line — the hour, who owes it. */
+@Composable
+fun CardBlock(title: String, onTitle: (String) -> Unit, done: Boolean, sphere: String?, onToggle: () -> Unit,
+              hour: String?, onHour: (() -> Unit)?, quiet: String?, due: java.time.LocalDate?, mark: (@Composable () -> Unit)? = null) {
+    val soon = due.takeIf { !done }
+    val c = M.c
+    Tile {
+        androidx.compose.foundation.layout.Row(Modifier.padding(top = 8.dp, bottom = if (hour == null && quiet == null && soon == null) 10.dp else 2.dp), verticalAlignment = Alignment.Top) {
+            androidx.compose.foundation.layout.Box(Modifier.size(28.dp, 28.dp), contentAlignment = Alignment.Center) {
+                if (mark != null) mark() else CheckCircle(done, size = 20.dp, tint = sphereColor(sphere), onToggle = onToggle)
+            }
+            androidx.compose.foundation.layout.Spacer(Modifier.size(8.dp))
+            androidx.compose.foundation.text.BasicTextField(title, onTitle,
+                textStyle = Type.body.copy(color = if (done) c.graphite else c.ink, fontSize = 18.sp, lineHeight = 25.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link), modifier = Modifier.weight(1f).padding(top = 1.dp))
+        }
+        // A day gone by is said as on «Сегодня»: «просрочено с 8 окт» in terracotta, under the title.
+        val lateDay = due?.takeIf { !done && it.isBefore(java.time.LocalDate.now()) }
+        lateDay?.let { Text(ru.anjeib.margin.i18n.L.s.lateSince(it.dayMonthShort()), style = Type.small.copy(color = c.accentText, fontSize = 13.5.sp), modifier = Modifier.padding(start = 36.dp)) }
+        if (hour != null || quiet != null || soon != null || onHour != null) androidx.compose.foundation.layout.Row(Modifier.padding(start = 36.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (hour != null || onHour != null) {
+                Text(hour ?: ("+ " + M.s.fieldTime.lowercase()), style = Type.small.copy(color = if (hour == null) c.graphite else hourColor(due, hour),
+                    fontSize = 14.5.sp, fontWeight = if (hour != null) androidx.compose.ui.text.font.FontWeight.Medium else null, fontFeatureSettings = "tnum"),
+                    modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).then(if (onHour != null) Modifier.clickable(onClick = onHour) else Modifier).padding(vertical = 6.dp))
+            }
+            quiet?.let {
+                if (hour != null || onHour != null) Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 14.5.sp))
+                Text(it, style = Type.small.copy(color = c.graphite, fontSize = 14.5.sp), modifier = Modifier.weight(1f, fill = false))
+            }
+            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+            SoonMark(soon)
+        }
+    }
+}
+
+/** One quiet tool under the block: a small drawn mark and a word; filled — its value in petrol (a tap changes it). */
+class CardTool(val label: String, val value: String?, val onClick: () -> Unit, val bare: Boolean = false, val glyph: @Composable (androidx.compose.ui.graphics.Color) -> Unit)
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun CardTools(tools: List<CardTool>) {
+    val c = M.c
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
+        tools.forEach { t ->
+            val col = if (t.value != null) c.link else c.graphite
+            androidx.compose.foundation.layout.Row(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).clickable(onClickLabel = t.label, onClick = t.onClick)
+                .padding(horizontal = 6.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                t.glyph(col)
+                if (!t.bare || t.value != null) androidx.compose.foundation.layout.Spacer(Modifier.size(6.dp))
+                if (!t.bare || t.value != null) Text(t.value ?: t.label.lowercase(), style = Type.small.copy(color = col, fontSize = 14.sp, fontWeight = if (t.value != null) androidx.compose.ui.text.font.FontWeight.Medium else null),
+                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp))
+            }
+        }
+    }
 }

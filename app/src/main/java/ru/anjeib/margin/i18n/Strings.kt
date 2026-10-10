@@ -663,6 +663,8 @@ interface Strings {
     val kindThought: String
     fun lateSince(d: String): String
     fun startedOn(d: String): String
+    val noDateShort: String
+    val lateWord: String
     val noDateSet: String
     fun createdOn(d: String): String
     val makeWork: String
@@ -1575,6 +1577,8 @@ object Ru : Strings {
     override val kindThought = "идея"
     override fun lateSince(d: String) = "просрочено с $d"
     override fun startedOn(d: String) = "начата $d"
+    override val noDateShort = "без даты"
+    override val lateWord = "просрочено"
     override val noDateSet = "Без даты · задать"
     override fun createdOn(d: String) = "создано $d"
     override val makeWork = "Сделать рабочим"
@@ -2404,6 +2408,8 @@ object En : Strings {
     override val kindThought = "idea"
     override fun lateSince(d: String) = "overdue since $d"
     override fun startedOn(d: String) = "started $d"
+    override val noDateShort = "no date"
+    override val lateWord = "late"
     override val noDateSet = "No date · set one"
     override fun createdOn(d: String) = "created $d"
     override val makeWork = "Make it work"

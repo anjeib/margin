@@ -187,58 +187,41 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         SoftMenuItem(s.delete, danger = true) { close(); dialog = "delete" }
                     }
                 }
-                Margined(Modifier.offset(y = (-6).dp)) {
-                    CardTitle(title, { title = it }, task.done, task.sphere, onToggle = { vm.toggleTask(task.id) },
-                        mark = if (task.repeat != null || task.waitingFor != null || task.promisedTo != null) null else null)
-                }
+                // The head in the main screen's language: the day on the margin, the matter on its soft block, a quiet line under.
                 val today = LocalDate.now()
                 val due = task.dueDate ?: task.startDate
                 val late = task.dueDate?.isBefore(today) == true && !task.done
-                Margined(Modifier.padding(top = 12.dp)) {
-                    if (task.slots.isNotEmpty()) DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) })
-                    else {
-                        val window = task.startDate != null && task.dueDate != null && task.startDate != task.dueDate
-                        val day = due?.let { if (window) task.whenLabel()?.substringBefore(" · ${task.time}") else cardDay(it, today, task.done) }
-                        // Under the day: who owes it, and a reminder only when it is not at the matter's own hour.
-                        val owes = task.waitingFor?.let { s.promiseToYou(it) } ?: task.promisedTo?.let { s.promiseFromYou(it) }
-                        val own = task.dueDate?.let { d -> task.time?.let { "${d}T$it" } }
-                        val remind = task.remindAt?.takeIf { it.take(16) != own }?.let { s.reminderAt + " " + it.drop(11).take(5) }
-                        WhenPlaque(day, task.time, late, listOfNotNull(owes, remind).joinToString(" · ").ifBlank { null },
-                            onDay = { dialog = "dates" }, onHour = { dialog = "time" })
-                    }
+                val owes = task.waitingFor?.let { s.promiseToYou(it) } ?: task.promisedTo?.let { s.promiseFromYou(it) }
+                val own = task.dueDate?.let { d -> task.time?.let { "${d}T$it" } }
+                val remind = task.remindAt?.takeIf { it.take(16) != own }?.let { s.reminderAt + " " + it.drop(11).take(5) }
+                val window = task.startDate != null && task.dueDate != null && task.startDate != task.dueDate
+                Margined(Modifier.offset(y = (-8).dp), margin = { if (task.slots.isEmpty()) CardDay(due, late) { dialog = "dates" } }) {
+                    CardBlock(title, { title = it }, task.done, task.sphere, onToggle = { vm.toggleTask(task.id) },
+                        hour = task.time?.takeIf { task.slots.isEmpty() }, onHour = if (task.slots.isEmpty() && due != null) ({ dialog = "time" }) else null,
+                        quiet = listOfNotNull(if (window) task.whenLabel()?.substringBefore(" · ${task.time}") else null, owes, remind).joinToString("  ·  ").ifBlank { null },
+                        due = task.dueDate)
                 }
-                // The tools: where, with whom, how often — filled ones in petrol; ⋯ opens the rest; «сегодня / завтра» at the end.
+                if (task.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) }) }
+                // Where, with whom, how often — a quiet line of marks; filled ones in petrol; «ещё» opens the rest.
                 val others = task.people.filter { p -> p != task.waitingFor && p != task.promisedTo }
-                Margined(Modifier.padding(top = 12.dp)) {
+                Margined(Modifier.padding(top = 2.dp)) {
                     Column {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ToolRound(task.place != null, s.fieldPlace, { fill("place") }) { Icon(Icons.Outlined.Place, null, tint = it, modifier = Modifier.size(21.dp)) }
-                            ToolRound(others.isNotEmpty(), s.fieldPeople, { fill("people") }) { PeopleGlyph(it, 20.dp) }
-                            ToolRound(task.repeat != null, s.fieldRepeat, { dialog = "repeat" }) { RepeatGlyph(it, 20.dp) }
-                            ToolRound(more, s.moreActions, { more = !more }) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(21.dp)) }
-                            Spacer(Modifier.weight(1f))
-                            if (!task.done) SoonPill(task.dueDate)
-                        }
-                        // What the filled tools hold, in words — a tap changes it.
-                        val vals = buildList<Pair<String, () -> Unit>> {
-                            task.place?.let { pl -> add(pl to { runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) } }) }
-                            others.forEach { p -> add(p to { data.contact(p)?.let { onOpenPerson(it.id) } ?: vm.offerContact(p) }) }
-                            task.repeat?.let { add(it.label() to { dialog = "repeat" }) }
-                        }
-                        if (vals.isNotEmpty()) DotFlow(vals.size, Modifier.padding(top = 6.dp), separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
-                            PaperLink(vals[i].first, onClick = vals[i].second)
-                        }
+                        CardTools(listOf(
+                            CardTool(s.fieldPlace, task.place, { fill("place") }) { Icon(Icons.Outlined.Place, null, tint = it, modifier = Modifier.size(16.dp)) },
+                            CardTool(s.fieldPeople, others.takeIf { it.isNotEmpty() }?.joinToString(", "), { if (others.size == 1) data.contact(others[0])?.let { p -> onOpenPerson(p.id) } ?: fill("people") else fill("people") }) { PeopleGlyph(it, 16.dp) },
+                            CardTool(s.fieldRepeat, task.repeat?.label(), { dialog = "repeat" }) { RepeatGlyph(it, 16.dp) },
+                            CardTool(s.moreWord, null, { more = !more }, bare = true) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(16.dp)) },
+                        ))
                         androidx.compose.animation.AnimatedVisibility(more) {
-                            androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Pill(if (task.waitingFor != null) s.promiseToYou(task.waitingFor) else "← " + s.fieldWait.lowercase(), accent = task.waitingFor != null) { dialog = "waiting" }
-                                Pill(if (task.promisedTo != null) s.promiseFromYou(task.promisedTo) else "→ " + s.fieldPromised.lowercase(), accent = task.promisedTo != null) { dialog = "promised" }
-                                if (!task.done && task.repeat == null) Pill("+ " + s.addDay.lowercase()) { dialog = "day" }
-                                if (!task.done) Pill("+ " + s.stepOne.lowercase()) { fill("step") }
-                            }
+                            CardTools(listOf(
+                                CardTool(s.fieldWait, task.waitingFor?.let { s.promiseToYou(it) }, { dialog = "waiting" }) { ArrowGlyph(it, 15.dp, incoming = true) },
+                                CardTool(s.fieldPromised, task.promisedTo?.let { s.promiseFromYou(it) }, { dialog = "promised" }) { ArrowGlyph(it, 15.dp) },
+                            ) + (if (!task.done && task.repeat == null) listOf(CardTool(s.addDay, null, { dialog = "day" }) { CalendarGlyph(it, 15.dp) }) else emptyList()) +
+                                (if (!task.done) listOf(CardTool(s.stepOne, null, { fill("step") }) { TopicGlyph(it, 15.dp) }) else emptyList()))
                         }
                     }
                 }
-                Hairline(Modifier.padding(start = MarginW, top = 14.dp))
+                Hairline(Modifier.padding(start = MarginW, top = 6.dp))
                 val born = task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
                 WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null,
                     onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
