@@ -1,5 +1,6 @@
 package ru.anjeib.margin.paper
 
+import ru.anjeib.margin.book.Change
 import ru.anjeib.margin.book.Repeat
 import ru.anjeib.margin.book.Summary
 import ru.anjeib.margin.book.Ask
@@ -83,8 +84,11 @@ interface Words {
     fun ofDone(done: Int, total: Int): String
     /** A line changed by words: «Стоматолог» → пт 15:00 / → потом; «Figma» — не делаем; «Лампа» — сделано. */
     fun changedTo(text: String, day: LocalDate?, time: String?, today: LocalDate): String
-    fun changedDropped(text: String): String
+    fun changedDropped(text: String, day: LocalDate? = null, today: LocalDate = LocalDate.now()): String
+    fun rereadOn(day: LocalDate, today: LocalDate): String
     val editing: String
+    /** «перенести «Родительское собрание 9Б» на чт?» — asked when another line fits the words as well. */
+    fun changeAsk(text: String, p: Change.Plan, today: LocalDate): String
     val doneWord: String
     fun changedDone(text: String): String
     fun movedAll(n: Int, to: LocalDate?, today: LocalDate): String
@@ -120,6 +124,7 @@ interface Words {
     val youPromised: String
     val theyPromised: String
     val withThem: String
+    val pastWithThem: String
     val emptyPerson: String
     val emptyLater: String
     val ritualTitle: String
@@ -154,6 +159,7 @@ interface Words {
     val bellDay: String
     val today: String
     val bellDone: String
+    val bellGot: String
     val bellHour: String
     fun morningLine(n: Int, tails: Int): String
     /** An answer's sentence around its link (a name, a thread, a day): before, the link, after. */
@@ -195,6 +201,7 @@ interface Words {
     fun stepsAdded(n: Int): String
     val whole: String
     val longNote: String
+    val asWritten: String
     val calendarTitle: String
     val calendarSub: String
     fun calendarLine(open: Int, events: Int): String
@@ -243,6 +250,10 @@ interface Words {
     val filterOrgs: String
     val company: String
     val markOrg: String
+    fun stampDone(n: Int): String
+    fun stampMoved(n: Int): String
+    fun stampDropped(n: Int): String
+    fun turnDayCount(n: Int): String
     val markPerson: String
     val call: String
     val message: String
@@ -396,11 +407,18 @@ object WordsRu : Words {
     override val deleteForGood = "удалить совсем"
     override val backToWork = "вернуть в дела"
     override fun remindWho(name: String) = "напомнить " + name.dative()
-    override fun ofDone(done: Int, total: Int) = "$done из $total"
+    override fun ofDone(done: Int, total: Int) = if (total == 1) (if (done == 1) "шаг сделан" else "1 шаг") else "$done из $total"
     override fun changedTo(text: String, day: LocalDate?, time: String?, today: LocalDate) =
         "«${short(text)}» → " + (listOfNotNull(day?.let { near(it, today) }, time).joinToString(" ").ifEmpty { "потом" })
-    override fun changedDropped(text: String) = "«${short(text)}» — не делаем"
+    override fun changedDropped(text: String, day: LocalDate?, today: LocalDate) =
+        "«${short(text)}»" + (day?.let { " " + (if (it == today) "сегодня" else "в " + near(it, today)) } ?: "") + " — не делаем"
+    override fun rereadOn(day: LocalDate, today: LocalDate) = "Margin уточнил: на " + near(day, today)
     override val editing = "правка"
+    override fun changeAsk(text: String, p: Change.Plan, today: LocalDate) = when (p.what) {
+        Change.What.Drop -> "не делаем «${short(text)}»" + (p.day?.let { " в " + near(it, today) } ?: "") + "?"
+        Change.What.Done -> "сделано «${short(text)}»?"
+        else -> "перенести «${short(text)}» на " + (if (p.later) "потом" else listOfNotNull(p.day?.let { near(it, today) }, p.time).joinToString(" ")) + "?"
+    }
     override val doneWord = "сделано"
     override fun changedDone(text: String) = "«${short(text)}» — сделано"
     override fun movedAll(n: Int, to: LocalDate?, today: LocalDate) = "$n " + plural(n, "строка", "строки", "строк") + " → " + (to?.let { near(it, today) } ?: "потом")
@@ -441,6 +459,7 @@ object WordsRu : Words {
     override val youPromised = "Вы обещали"
     override val theyPromised = "Вам обещали"
     override val withThem = "Вместе"
+    override val pastWithThem = "Было"
     override val emptyPerson = "Строк с этим человеком пока нет."
     override val emptyLater = "Ничего не отложено."
     override val ritualTitle = "Перелистнуть день"
@@ -484,6 +503,7 @@ object WordsRu : Words {
     override val bellDay = "Утро и вечер"
     override val today = "сегодня"
     override val bellDone = "Сделано"
+    override val bellGot = "Получено"
     override val bellHour = "Через час"
     override fun morningLine(n: Int, tails: Int) = "$n " + plural(n, "строка", "строки", "строк") + " на сегодня" +
         (if (tails > 0) ", из них $tails с прошлых дней" else "")
@@ -535,8 +555,8 @@ object WordsRu : Words {
     override val needNet = "Такой вопрос понимает только ИИ — нужна сеть."
     override fun more(n: Int) = "ещё $n ›"
     override val close = "Закрыть"
-    override val rereading = "перечитываю…"
-    override val reread = "перечитано"
+    override val rereading = "уточняю…"
+    override val reread = "Margin уточнил"
     override fun markedDone(n: Int) = "перечитано, закрыто: $n"
     override fun closeAsk(lines: List<Pair<String, Boolean>>) = when {
         lines.size == 1 && lines[0].second -> "больше не нужно «${lines[0].first}»?"
@@ -572,6 +592,7 @@ object WordsRu : Words {
     override fun stepsAdded(n: Int) = "$n " + plural(n, "шаг", "шага", "шагов") + " под записью"
     override val whole = "целиком ›"
     override val longNote = "одной записью"
+    override val asWritten = "как было написано ›"
     override val calendarTitle = "Календарь"
     override val calendarSub = "месяц и дни вперёд — что на какой день"
     override fun calendarLine(open: Int, events: Int) = listOfNotNull(
@@ -637,8 +658,12 @@ object WordsRu : Words {
     override val filterPeople = "люди"
     override val filterOrgs = "компании"
     override val company = "компания"
-    override val markOrg = "это компания ›"
-    override val markPerson = "это человек ›"
+    override val markOrg = "отметить как компанию ›"
+    override val markPerson = "отметить как человека ›"
+    override fun stampDone(n: Int) = "$n сделано"
+    override fun stampMoved(n: Int) = "$n дальше"
+    override fun stampDropped(n: Int) = "$n не делаем"
+    override fun turnDayCount(n: Int) = "вечер: $n " + plural(n, "строка ждёт", "строки ждут", "строк ждут") + " решения — перелистнуть день ›"
     override val call = "позвонить"
     override val message = "написать"
     override val mail = "письмо"
@@ -771,11 +796,18 @@ object WordsEn : Words {
     override val deleteForGood = "delete for good"
     override val backToWork = "bring it back"
     override fun remindWho(name: String) = "remind $name"
-    override fun ofDone(done: Int, total: Int) = "$done of $total"
+    override fun ofDone(done: Int, total: Int) = if (total == 1) (if (done == 1) "step done" else "1 step") else "$done of $total"
     override fun changedTo(text: String, day: LocalDate?, time: String?, today: LocalDate) =
         "«${short(text)}» → " + (listOfNotNull(day?.let { near(it, today) }, time).joinToString(" ").ifEmpty { "later" })
-    override fun changedDropped(text: String) = "«${short(text)}» — not doing"
+    override fun changedDropped(text: String, day: LocalDate?, today: LocalDate) =
+        "«${short(text)}»" + (day?.let { " on " + near(it, today) } ?: "") + " — not doing"
+    override fun rereadOn(day: LocalDate, today: LocalDate) = "Margin made it clearer: " + near(day, today)
     override val editing = "a change"
+    override fun changeAsk(text: String, p: Change.Plan, today: LocalDate) = when (p.what) {
+        Change.What.Drop -> "not doing «${short(text)}»" + (p.day?.let { " on " + near(it, today) } ?: "") + "?"
+        Change.What.Done -> "done: «${short(text)}»?"
+        else -> "move «${short(text)}» to " + (if (p.later) "later" else listOfNotNull(p.day?.let { near(it, today) }, p.time).joinToString(" ")) + "?"
+    }
     override val doneWord = "done"
     override fun changedDone(text: String) = "«${short(text)}» — done"
     override fun movedAll(n: Int, to: LocalDate?, today: LocalDate) = "$n line" + (if (n == 1) "" else "s") + " → " + (to?.let { near(it, today) } ?: "later")
@@ -816,6 +848,7 @@ object WordsEn : Words {
     override val youPromised = "You promised"
     override val theyPromised = "Promised to you"
     override val withThem = "Together"
+    override val pastWithThem = "Before"
     override val emptyPerson = "No lines with them yet."
     override val emptyLater = "Nothing put off."
     override val ritualTitle = "Turn the page"
@@ -859,6 +892,7 @@ object WordsEn : Words {
     override val bellDay = "Morning and evening"
     override val today = "today"
     override val bellDone = "Done"
+    override val bellGot = "Got it"
     override val bellHour = "In an hour"
     override fun morningLine(n: Int, tails: Int) = "$n line" + (if (n == 1) "" else "s") + " for today" + (if (tails > 0) ", $tails left over" else "")
     override fun answer(a: Ask.Answer, today: LocalDate): Triple<String, String?, String> {
@@ -909,8 +943,8 @@ object WordsEn : Words {
     override val needNet = "Only the AI understands this question — it needs a network."
     override fun more(n: Int) = "$n more ›"
     override val close = "Close"
-    override val rereading = "re-reading…"
-    override val reread = "re-read"
+    override val rereading = "making it clearer…"
+    override val reread = "Margin made it clearer"
     override fun markedDone(n: Int) = "re-read, closed: $n"
     override fun closeAsk(lines: List<Pair<String, Boolean>>) = when {
         lines.size == 1 && lines[0].second -> "no longer needed: «${lines[0].first}»?"
@@ -945,6 +979,7 @@ object WordsEn : Words {
     override fun stepsAdded(n: Int) = "$n step" + (if (n == 1) "" else "s") + " under the note"
     override val whole = "read in full ›"
     override val longNote = "one note"
+    override val asWritten = "as written ›"
     override val calendarTitle = "Calendar"
     override val calendarSub = "the month and the days ahead — what is on which day"
     override fun calendarLine(open: Int, events: Int) = listOfNotNull(
@@ -1010,8 +1045,12 @@ object WordsEn : Words {
     override val filterPeople = "people"
     override val filterOrgs = "companies"
     override val company = "company"
-    override val markOrg = "this is a company ›"
-    override val markPerson = "this is a person ›"
+    override val markOrg = "mark as a company ›"
+    override val markPerson = "mark as a person ›"
+    override fun stampDone(n: Int) = "$n done"
+    override fun stampMoved(n: Int) = "$n moved on"
+    override fun stampDropped(n: Int) = "$n not doing"
+    override fun turnDayCount(n: Int) = "evening: $n line" + (if (n == 1) " waits" else "s wait") + " for a decision — turn the page ›"
     override val call = "call"
     override val message = "message"
     override val mail = "email"

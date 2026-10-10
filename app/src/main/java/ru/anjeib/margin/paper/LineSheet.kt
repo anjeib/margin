@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -116,7 +118,11 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
         containerColor = c.lifted, scrimColor = c.scrim,
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) }) {
         androidx.compose.runtime.CompositionLocalProvider(LocalGround provides c.lifted) {
-        Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().verticalScroll(rememberScrollState()).heightIn(min = tall).rule(c.rule)
+        // With the keyboard up the sheet reaches the top of the screen: it stops under the status bar, not behind the clock.
+        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+        val keyboard = androidx.compose.foundation.layout.WindowInsets.isImeVisible
+        Column(Modifier.fillMaxWidth().then(if (keyboard) Modifier.statusBarsPadding() else Modifier).imePadding().navigationBarsPadding()
+            .verticalScroll(rememberScrollState()).heightIn(min = tall).rule(c.rule)
             // A sheet of paper, taller than what is written: a tap on its empty part goes to the next line.
             .pointerInput(id) { detectTapGestures { runCatching { focus.requestFocus() } } }
             .padding(bottom = 16.dp)) {
@@ -196,6 +202,26 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                 BasicTextField(text, { text = it }, textStyle = Voice.words.copy(color = if (l.state == State.Open) c.ink else c.graphite,
                     textDecoration = if (l.state != State.Open && l.kind == Kind.Todo) TextDecoration.LineThrough else null),
                     cursorBrush = SolidColor(c.link), modifier = Modifier.weight(1f))
+            }
+            // Links in the words (a meeting, a page, a phone): the words above are for writing, so each link is here to open.
+            val links = linksIn(text)
+            if (links.isNotEmpty()) FlowRow(Modifier.fillMaxWidth().padding(start = Grid.text - 4.dp, end = Grid.right)) {
+                links.forEach { (label, url) ->
+                    Text(withPlainSigns("↗ $label"), style = Voice.note.copy(color = c.link), modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable {
+                        runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    }.padding(horizontal = 4.dp, vertical = 8.dp))
+                }
+            }
+            // The words as they were written, when the line kept only part of them (a long message read into several lines,
+            // a phrase Margin made clearer): one tap away, so nothing said is ever lost.
+            val source = l.source?.trim()?.takeIf { src -> src.length > l.text.length + 12 && !src.equals(l.text.trim(), true) }
+            if (source != null) {
+                var shown by remember(id) { mutableStateOf(false) }
+                Row(Modifier.fillMaxWidth().padding(start = Grid.text - 4.dp, end = Grid.right)) {
+                    if (!shown) Text(w.asWritten, style = Voice.note.copy(color = c.link),
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { shown = true }.padding(horizontal = 4.dp, vertical = 8.dp))
+                    else Text("«$source»", style = Voice.note.copy(color = c.graphite), modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
+                }
             }
             // Files kept with the line: photos as themselves, the rest by name; a tap opens.
             if (l.files.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = Grid.text - 4.dp, end = Grid.right, top = 4.dp, bottom = 4.dp)

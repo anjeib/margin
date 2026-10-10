@@ -104,6 +104,7 @@ fun DayPage(
                     if (!closing) emptyList() else book.page(date.plusDays(1), today).let { p -> (p.timed + p.rest).filter { (it.isTodo && it.open) || it.kind == Kind.Event } }
                 }
                 PageHead(
+                    reserve = if (book.closed.containsKey(date.toString())) 118.dp else 0.dp,
                     marginTop = date.dayOfMonth.toString(), marginBottom = w.mon(date.monthValue) + " ▾",
                     title = w.weekday(date),
                     line = if (closing) w.nextPage(next) else listOfNotNull(near, w.summary(sum).ifBlank { null }).joinToString(" · ").ifBlank { null },
@@ -119,9 +120,14 @@ fun DayPage(
                 }
             }
         }
+        // The evening: the way to close the day stands on top, where it is seen — every open line gets a decision.
+        val undecided = if (date == today && LocalTime.now().hour.let { it >= eveningHour - 3 || it < 4 }) book.toDecide(ritualDay()).size else 0
+        if (undecided > 0) item("turn") { MarginLink(w.turnDayCount(undecided), Modifier.padding(bottom = 6.dp), onTurn) }
         items(page.tails, key = { "t" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Tail, l.id in fresh, onMark, onOpen) }
         // Today, among the hours: a red tick on the rule where «now» is — the page shows where the day stands.
-        val nowAt = if (date == today && page.timed.isNotEmpty()) page.timed.indexOfFirst { (it.time ?: "") > clock } .let { if (it < 0) page.timed.size else it } else -1
+        // At night the day not yet turned is still today, and «now» is past all its hours: the tick goes after them.
+        val night = LocalDate.now().isAfter(date)
+        val nowAt = if (date == today && page.timed.isNotEmpty()) (if (night) page.timed.size else page.timed.indexOfFirst { (it.time ?: "") > clock }.let { if (it < 0) page.timed.size else it }) else -1
         page.timed.forEachIndexed { i, l ->
             if (i == nowAt) item("now") { NowTick(clock) }
             item("h" + l.id) { LineOnPage(l, date, today, book, Seen.Page, l.id in fresh, onMark, onOpen) }
@@ -133,10 +139,7 @@ fun DayPage(
         if (page.all.isEmpty() && page.traces.isEmpty()) item("empty") {
             MarginSays(if (date == today) w.emptyToday else w.emptyDay, Modifier.padding(top = 8.dp))
         }
-        // The evening: one quiet way to close the day — every open line gets a decision.
-        if (date == today && LocalTime.now().hour.let { it >= eveningHour - 3 || it < 4 } && book.toDecide(ritualDay()).isNotEmpty()) item("turn") {
-            MarginLink(w.turnDay, Modifier.padding(top = 8.dp), onTurn)
-        }
+
     }
 }
 
@@ -183,7 +186,7 @@ fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Se
         onOpen = { onOpen(l.id) },
     ) {
         PenText(l.text, Voice.words.copy(color = ink), struck = !trace && l.state != State.Open && l.kind == Kind.Todo, lineColor = c.graphite,
-            maxLines = 5, onCut = { if (it != cut) cut = it })
+            maxLines = 5, onCut = { if (it != cut) cut = it }, rich = if (hasLink(l.text)) linked(l.text, c.link) else null)
     }
 }
 

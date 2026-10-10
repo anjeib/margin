@@ -34,6 +34,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import ru.anjeib.margin.book.Book
+import ru.anjeib.margin.book.personLines
 import ru.anjeib.margin.book.hasSamples
 import ru.anjeib.margin.book.Dir
 import ru.anjeib.margin.book.Kind
@@ -64,7 +65,10 @@ fun SearchPage(book: Book, today: LocalDate, onMark: (String) -> Unit, onOpen: (
             l.files.any { f -> has(f.name) || has(f.caption) || has(f.ocr) || has(f.transcript) }
     }
     val threads = if (key.length < 2) emptyList() else book.threads.filter { has(it.title) }
-    val people = if (key.length < 2) emptyList() else book.persons.filter { has(it.name) || has(it.about) }
+    // Only people the notebook has something about: a name met once in a phrase and gone is not a person to find.
+    val people = if (key.length < 2) emptyList() else book.persons.filter { p ->
+        (has(p.name) || has(p.about)) && (p.kept || book.personLines(p.name).let { pl -> pl.promised.size + pl.waited.size + pl.other.size } > 0)
+    }
     LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = 40.dp)) {
         item {
             Row(Modifier.fillMaxWidth().padding(top = 12.dp, end = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {

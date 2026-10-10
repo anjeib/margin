@@ -23,7 +23,11 @@ object Read {
     private val noteCue = Regex("^\\s*(?:запись|заметка|мысль|идея|на заметку|note|idea|thought)\\s*[:—–-]\\s*", RegexOption.IGNORE_CASE)
     private val threadTag = Regex("(?:^|\\s)#([\\p{L}\\d][\\p{L}\\d_-]*)")
     /** Someone comes at an hour: a meeting, wherever the words put it («в 10 приедет Петров», «Саня в чт на замер»). */
-    private val visit = Regex("(?<!\\p{L})(?:приедет|приедут|придёт|придет|заедет|зайдёт|зайдет|на замер|на встречу|созвон)(?!\\p{L})", RegexOption.IGNORE_CASE)
+    private val visit = Regex("(?<!\\p{L})(?:приедет|приедут|придёт|придет|заедет|зайдёт|зайдет|на замер|на встречу|созвон|" +
+        // A meeting by what it is or where one goes: a school meeting, a doctor, a hairdresser.
+        "собрание|совещание|педсовет|планёрка|планерка|линейка|приём у|прием у|" +
+        "к (?:стоматологу|зубному|врачу|терапевту|педиатру|окулисту|ортодонту|лору|неврологу|гинекологу|парикмахеру|барберу|мастеру|нотариусу|юристу)|" +
+        "в (?:поликлинику|больницу|театр|кино|консерваторию))(?!\\p{L})", RegexOption.IGNORE_CASE)
     /** «…, Ленина 5» at the end: a place, not words of the line. */
     private val street = Regex(",\\s*((?:ул\\.?\\s*)?[А-ЯЁ][а-яё]+(?:\\s+[А-ЯЁ]?[а-яё]+)?\\s*,?\\s*\\d+[а-яё]?(?:\\s*/\\s*\\d+)?)\\s*$")
 
@@ -53,7 +57,9 @@ object Read {
         "(?:ть|ти|ю|у|ешь|ет|ем|ете|ут|ют|ит|им|ите|ат|ят|л|ла|ли|ло|й|йте)(?!\\p{L})", RegexOption.IGNORE_CASE)
 
     /** What a phrase will become — for the live margin next to the field and for writing it down. */
-    data class Draft(val lines: List<Line>, val sure: Boolean, val question: Boolean, val threadTitle: String?)
+    data class Draft(val lines: List<Line>, val sure: Boolean, val question: Boolean, val threadTitle: String?,
+                     /** A list written at once: its items, under the first line. */
+                     val under: List<Line> = emptyList())
 
     /**
      * Reads [text] written on the page of [page]. Lines without a day of their own land on that page;
@@ -62,7 +68,7 @@ object Read {
     fun draft(text: String, book: Book, page: LocalDate, today: LocalDate = LocalDate.now(), now: LocalTime? = LocalTime.now().takeIf { page == today },
               threadId: String? = null,
               /** Written on «Потом»: lines without a day of their own get none. */
-              noDay: Boolean = false): Draft {
+              noDay: Boolean = false, lists: Boolean = true): Draft {
         var t = text.trim()
         if (t.isEmpty()) return Draft(emptyList(), true, false, null)
         val tag = threadTag.find(t)?.groupValues?.get(1)
@@ -71,12 +77,21 @@ object Read {
         if (later) t = t.replace(someday, "")
         val note = noteCue.containsMatchIn(t)
         if (note) t = t.replace(noteCue, "")
+        // A list written at once — one line with its items to tick, «0 из 4» beside it.
+        if (lists && !note) listOf(t).firstNotNullOfOrNull { list(it) }?.let { (head, items) ->
+            val first = draft(head, book, page, today, now, threadId, noDay, lists = false).lines.firstOrNull()
+            val parent = (first ?: Line(text = head.replaceFirstChar { it.uppercaseChar() }, day = if (noDay) null else page.toString(), threadId = threadId))
+                .copy(kind = Kind.Todo, threadId = first?.threadId ?: threadId)
+            val kids = items.map { Line(text = it.replaceFirstChar { c -> c.uppercaseChar() }, kind = Kind.Todo, parentId = parent.id, threadId = parent.threadId) }
+            return Draft(listOf(parent), true, false, tag, under = kids)
+        }
         // A long note stays whole: one line with its paragraphs; no day or name is taken out of its words.
         if (isLongNote(t)) {
             val people = book.persons.filter { p -> (listOf(p.name) + p.aliases).any { AiRead.mentions(t, it) } }.map { Who(it.name, Dir.With) }
             val body = t.lines().joinToString("\n") { it.trim() }.replace(Regex("\n{3,}"), "\n\n").trim().replaceFirstChar { it.uppercaseChar() }
             val day = if (later || noDay || (threadId != null && tag == null)) null else page.toString()
-            return Draft(listOf(Line(text = body, kind = Kind.Note, who = people.take(3), day = day, threadId = threadId)), true, false, tag)
+            val named = if (tag == null && threadId == null) threadNamed(t, book) else null
+            return Draft(listOf(Line(text = body, kind = Kind.Note, who = people.take(3), day = day, threadId = threadId ?: named)), true, false, tag)
         }
         val known = book.persons.map { it.name to it.aliases }
         val r = if (English.isEnglish(t)) English.parse(t, known, today = page, now = now)
@@ -99,7 +114,7 @@ object Read {
                 if (n.lowercase().take(4) in known0) null
                 else Who(n, if (owes.containsMatchIn(i.title.substring(m.range.last + 1))) Dir.From else Dir.With)
             }.distinctBy { it.name }.toList()
-            val who = who0 + found
+            val who = withPatronymic(who0 + found, i.title)
             val repeat = i.repeat?.let { (f, n, d) -> Repeat(f, n, d) }
             // «…, Ленина 5» at the end is where: it goes to the margin.
             val at = if (i.place == null) street.find(i.title) else null
@@ -119,7 +134,49 @@ object Read {
                 else -> listOf(base.copy(day = (i.due ?: i.start ?: page).toString()))
             }
         }
-        return Draft(lines, r.sure, false, tag)
+        // The words name an open thread («созвон с самокатом» — thread «самокат»): the lines go into it.
+        val named = if (tag == null && threadId == null) threadNamed(t, book) else null
+        return Draft(if (named != null) lines.map { it.copy(threadId = named) } else lines, r.sure, false, tag)
+    }
+
+    /**
+     * An open thread the words name: its name in quotes («Зерно» in «Кофейня «Зерно»»), or every word of a short name
+     * («самокат» in «созвон с самокатом», any ending). Names shorter than five letters are too much like ordinary words.
+     */
+    fun threadNamed(text: String, book: Book): String? {
+        val words = Regex("\\p{L}+").findAll(text.lowercase().replace('ё', 'е')).map { it.value }.toList()
+        fun has(w: String): Boolean {
+            val n = w.lowercase().replace('ё', 'е')
+            if (n.length < 5) return false
+            val stem = n.take(maxOf(4, n.length - 2))
+            return words.any { it.startsWith(stem) }
+        }
+        return book.threads.filter { it.closedAt == null }.firstOrNull { th ->
+            val quoted = Regex("«([^»]+)»").find(th.title)?.groupValues?.get(1)
+            if (quoted != null) Regex("\\p{L}+").findAll(quoted).map { it.value }.toList().let { q -> q.isNotEmpty() && q.all(::has) }
+            else Regex("\\p{L}+").findAll(th.title).map { it.value }.toList().let { t -> t.size in 1..2 && t.all(::has) }
+        }?.id
+    }
+
+    private val patronymicName = Regex("([А-ЯЁ][а-яё]+)\\s+([А-ЯЁ][а-яё]+(?:ович|евич|ович[ау]|евич[ау]|овн[аеы]|евн[аеы]|ичн[аеы]|ич))(?!\\p{L})")
+
+    /**
+     * «Николай Иванович», «Ирина Петровна» are one person, not a name and a surname: the name takes its patronymic
+     * (in its first form — «Ирине Петровне» → «Ирина Петровна»), and the direction of either goes to both.
+     */
+    private fun withPatronymic(who: List<Who>, text: String): List<Who> {
+        var out = who
+        patronymicName.findAll(text).forEach { m ->
+            val first = m.groupValues[1]; val pat = m.groupValues[2]
+            val patN = pat.replace(Regex("ович[ау]$"), "ович").replace(Regex("евич[ау]$"), "евич")
+                .replace(Regex("овн[еы]$"), "овна").replace(Regex("евн[еы]$"), "евна").replace(Regex("ичн[еы]$"), "ична")
+            val a = out.firstOrNull { it.name.lowercase().take(3) == first.lowercase().take(3) } ?: return@forEach
+            val b = out.firstOrNull { it !== a && it.name.lowercase().take(4) == patN.lowercase().take(4) }
+            val dir = listOfNotNull(a.dir, b?.dir).firstOrNull { it != Dir.With } ?: a.dir
+            val full = Who(a.name.split(' ').first() + " " + patN, dir)
+            out = out.filter { it !== a && it !== b }.toMutableList().also { it.add(out.indexOf(a).coerceAtMost(it.size), full) }
+        }
+        return out.distinctBy { it.name }
     }
 
     /** The words hold this form of a word (case and «ё» aside). */
@@ -161,14 +218,55 @@ object Read {
         if (rows.size >= 2 && rows.all { bullet.containsMatchIn(it) }) return false
         if (rows.size >= 2 && rows.all { it.length <= 60 && isStep(it.replace(bullet, "")) }) return false
         val sentences = Regex("[.!?…](?:\\s|$)").findAll(t).count() + 1
+        // A thought said aloud («думала про каникулы…») is kept whole from a hundred letters on — dictation has no full stops.
+        if (t.length >= 100 && thinking.containsMatchIn(t)) return true
         if (!(t.length >= 200 || (t.length >= 120 && (rows.size >= 2 || sentences >= 3)))) return false
+        // Notes under a heading («Совещание с завучами 13.10⏎…») are kept whole whatever is to be done in them — the things
+        // to do are offered as its steps, nothing is lost.
+        if (rows.size >= 3 && rows[0].length <= 60 && !doingWord.containsMatchIn(rows[0]) && !bullet.containsMatchIn(rows[0])) return true
         val cl = clauses(t)
         return cl.isEmpty() || cl.count { doingWord.containsMatchIn(it) } * 10 <= cl.size * 6
     }
 
+    private val thinking = Regex("(?iu)^\\s*(?:думал[аи]?|думаю|подумал[аи]?|мысли|мысль|хорошо бы|интересно|кажется|вспомнил[аи]?|размышля\\p{L}*|идея)(?!\\p{L})")
+    // Someone else's promise inside a note — a thing to wait for, offered as a step too.
+    private val theirs = Regex("(?iu)(?<!\\p{L})(?:обещал[аи]?|пришл[её]т|пришлют|отдаст|отдадут|вернёт|вернут|скинет|отправит|сделает|подготовит)(?!\\p{L})")
+
+    /**
+     * A list written at once: a heading with a colon and its items on the lines below («список в магазин:⏎хлеб⏎молоко»),
+     * items after a colon («купить: хлеб, молоко, сыр»), or what to do with three short things or more («купить маме
+     * таблетки, хлеб, молоко и корм коту» — the line stays as written, its items under it).
+     */
+    private fun list(t: String): Pair<String, List<String>>? {
+        val rows = t.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+        // Items are short and plain: a message («Тимур, привет! …», «Сможешь до понедельника?») is not a list.
+        if (rows.size >= 3 && (rows[0].endsWith(':') || rows.drop(1).all { bullet.containsMatchIn(it) } && !bullet.containsMatchIn(rows[0])) &&
+            rows.drop(1).all { it.length <= 50 && !it.contains('?') && !it.contains('!') && it.count { c -> c == ',' } <= 1 })
+            return rows[0].trimEnd(':').trim() to rows.drop(1).map { it.replace(bullet, "").trim() }
+        if (rows.size != 1) return null
+        val one = rows[0]
+        val colon = one.indexOf(':')
+        if (colon in 2 until one.length - 1) {
+            val items = enumeration(one.substring(colon + 1))
+            if (items.size >= 2 && items.all { it.split(' ').size <= 4 }) return one.substring(0, colon).trim() to items
+        }
+        val parts = enumeration(one)
+        if (parts.size >= 3 && isStep(parts[0]) && parts.drop(1).all { it.split(' ').size <= 3 && !doingWord.containsMatchIn(it) }) {
+            val first = parts[0].split(Regex("\\s+")).drop(1).joinToString(" ")
+            if (first.isNotBlank()) return one to (listOf(first) + parts.drop(1))
+        }
+        return null
+    }
+
     /** Things to do inside a long note («…взять палатку, проверить билеты, спросить Машу») — offered to become its steps. */
-    fun stepsIn(text: String): List<String> = clauses(text).map { it.replace(clauseLead, "").replace(bullet, "").trim() }
-        .filter { it.length in 4..90 && isStep(it) }.map { it.replaceFirstChar { c -> c.uppercaseChar() } }.distinct().take(8)
+    fun stepsIn(text: String): List<String> {
+        // A list inside the note («1) крупнее фото…», «- кнопку поменять…») is a list of things to do, verb or not.
+        val listed = text.lines().filter { bullet.containsMatchIn(it) }.map { it.replace(bullet, "").trim().trimEnd('.', ';', ',') }
+            .filter { it.length in 3..120 }
+        val rest = text.lines().filterNot { bullet.containsMatchIn(it) }.joinToString("\n")
+        val said = clauses(rest).map { it.replace(clauseLead, "").trim() }.filter { it.length in 4..110 && (isStep(it) || theirs.containsMatchIn(it)) }
+        return (listed + said).map { it.replaceFirstChar { c -> c.uppercaseChar() } }.distinct().take(8)
+    }
 
     /**
      * Words written under a line as the items they are: a line each («молоко⏎хлеб»), or a list after a colon

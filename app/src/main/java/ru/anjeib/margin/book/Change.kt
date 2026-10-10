@@ -10,10 +10,14 @@ import java.time.LocalDate
 object Change {
     enum class What { Move, MoveAll, Drop, Done }
 
-    data class Plan(val what: What, val id: String?, val day: LocalDate? = null, val time: String? = null, val later: Boolean = false)
+    data class Plan(val what: What, val id: String?, val day: LocalDate? = null, val time: String? = null, val later: Boolean = false,
+                    /** False when another line fits the words just as well: Margin asks before changing. */
+                    val sure: Boolean = true)
 
     private val i = setOf(RegexOption.IGNORE_CASE)
     private val moveCue = Regex("^(перенеси(?:те)?|перенести|переносим|сдвинь(?:те)?|сдвинуть|передвинь(?:те)?|отложи(?:те)?|отложить|move|reschedule|postpone|push)\\s+(.+)$", i)
+    // «стоматолог переносится на пятницу в 16», «собрание перенесли на четверг»: the line first, then the move.
+    private val moveTail = Regex("^(.+?)\\s+(переносится|перенесли|переносим|перенесён|перенесена|перенесено|переезжает|сдвигается|сдвинули|откладывается|отложили|is moved|moved)\\s+(.+)$", i)
     private val dropCue = Regex("^(?:отмени(?:те)?|отменить|вычеркни(?:те)?|вычеркнуть|cancel|scrap)\\s+(.+)$", i)
     private val dropTail = Regex("^(.+?)\\s*[—–-]?\\s*(?:отменяется|отменили|отменён|отменена|не делаем|cancelled|canceled)$", i)
     private val doneCue = Regex("^(?:готово|сделано|done)\\s*[:—–-]?\\s*(.+)$", i)
@@ -24,8 +28,8 @@ object Change {
     fun read(text: String, book: Book, today: LocalDate): Plan? {
         val t = text.trim().trimEnd('.', '!')
         if (t.isEmpty() || t.contains('\n') || t.endsWith('?')) return null
-        moveCue.find(t)?.let { m ->
-            val rest = m.groupValues[2]
+        (moveCue.find(t)?.let { it.groupValues[1] to it.groupValues[2] }
+            ?: moveTail.find(t)?.let { it.groupValues[2] to (it.groupValues[1] + " " + it.groupValues[3]) })?.let { (cue, rest) ->
             var later = laterWord.containsMatchIn(rest)
             val bare = rest.replace(laterWord, " ").replace(Regex("\\s+"), " ").trim()
             // A day or an hour was said when reading took words away («лампу на пятницу» → «Лампу»): the page's own day
@@ -35,23 +39,33 @@ object Change {
             val day = a?.day?.takeIf { said }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
             val time = a?.time
             // «отложи лампу» — put off, with no day: to «Потом».
-            if (day == null && time == null && m.groupValues[1].lowercase().let { it.startsWith("отлож") || it == "postpone" }) later = true
+            if (day == null && time == null && cue.lowercase().let { it.startsWith("отлож") || it == "postpone" }) later = true
             if (!later && day == null && time == null) return null
             // What is left is what to move; a preposition left behind by the date goes too («всё на»).
             val what = (a?.text?.takeIf { it.isNotBlank() } ?: bare).replace(Regex("\\s+(?:на|в|во|к|до|с|on|to|at|by|for)$", i), "").trim()
             if (everything.matches(what)) return Plan(What.MoveAll, null, day, time, later)
-            return find(what, book, today)?.let { Plan(What.Move, it, day, time, later) }
+            return find(what, book, today)?.let { Plan(What.Move, it.first, day, time, later, sure = it.second) }
         }
         (dropCue.find(t)?.groupValues?.get(1) ?: dropTail.find(t)?.groupValues?.get(1))?.let { w ->
-            return find(w, book, today)?.let { Plan(What.Drop, it) }
+            // «отмени падел в чт»: a day said — only that day of a repeat is let go.
+            val (what, day) = said(w, book, today)
+            return find(what, book, today)?.let { Plan(What.Drop, it.first, day, sure = it.second) }
         }
         (doneCue.find(t)?.groupValues?.get(1) ?: doneTail.find(t)?.groupValues?.get(1))?.let { w ->
-            return find(w, book, today)?.let { Plan(What.Done, it) }
+            return find(w, book, today)?.let { Plan(What.Done, it.first, sure = it.second) }
         }
         return null
     }
 
     private fun words(t: String) = t.split(Regex("\\s+")).count { it.isNotBlank() }
+
+    /** The words without the day they name, and that day if one was named. */
+    private fun said(w: String, book: Book, today: LocalDate): Pair<String, LocalDate?> {
+        val a = Read.draft(w, book, today, today, now = null).lines.firstOrNull() ?: return w to null
+        if (words(a.text) >= words(w)) return w to null
+        val what = a.text.replace(Regex("\\s+(?:на|в|во|к|до|с|on|to|at|by|for)$", i), "").trim()
+        return what to a.day?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    }
 
     // Roots short enough for Russian endings: «йогу» and «йога» → «йог», «лампу» and «лампа» → «лам», «стоматолога» → «стома».
     private val small = setOf("для", "что", "это", "как", "или", "все", "всё", "надо", "нужно", "with", "that", "this", "from")
@@ -60,22 +74,31 @@ object Change {
     private fun same(a: String, b: String) = a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))
 
     /**
-     * The open line the words are about: the most words in common (people counted too); a tie goes to a to-do,
-     * then to the one nearest today. Null when nothing shares a word.
+     * The open line the words are about, and whether it is the only one: the most words in common (people counted too);
+     * then the line the words cover best («собрание» is all of «Родительское собрание 9Б», little of «Напомнить классным
+     * руководителям про родительские собрания»); then what stands on today's page, a to-do, the nearest. When the
+     * second fits as well as the first, it is not sure — Margin asks.
      */
-    fun find(words: String, book: Book, today: LocalDate): String? {
-        val names = book.persons.flatMap { listOf(it.name) + it.aliases }
+    fun find(words: String, book: Book, today: LocalDate): Pair<String, Boolean>? {
         val named = book.persons.filter { p -> (listOf(p.name) + p.aliases).any { AiRead.mentions(words, it) } }.map { it.name }
         val want = roots(words).filterNot { r -> named.any { AiRead.mentions(r, it) } }
         if (want.isEmpty() && named.isEmpty()) return null
-        fun score(l: Line): Int = roots(l.text).count { r -> want.any { w -> same(r, w) } } * 2 +
-            named.count { n -> l.who.any { it.name.equals(n, true) } || AiRead.mentions(l.text, n) }
-        return book.lines.asSequence().filter { it.state == State.Open }
-            .map { it to score(it) }.filter { it.second > 0 }
-            // A tie goes to what stands on today's page (today's and the tails) — what one is looking at.
-            .sortedWith(compareByDescending<Pair<Line, Int>> { it.second }.thenBy { if (it.first.lastDay()?.isAfter(today) == false) 0 else 1 }
-                .thenBy { if (it.first.kind == Kind.Todo) 0 else 1 }
-                .thenBy { p -> p.first.lastDay()?.let { kotlin.math.abs(java.time.temporal.ChronoUnit.DAYS.between(today, it)) } ?: Long.MAX_VALUE })
-            .firstOrNull()?.first?.id
+        data class Fit(val l: Line, val score: Int, val cover: Double)
+        fun fit(l: Line): Fit {
+            val own = roots(l.text)
+            val hit = own.count { r -> want.any { w -> same(r, w) } }
+            val people = named.count { n -> l.who.any { it.name.equals(n, true) } || AiRead.mentions(l.text, n) }
+            return Fit(l, hit * 2 + people, if (own.isEmpty()) 0.0 else hit.toDouble() / own.size)
+        }
+        val fits = book.lines.asSequence().filter { it.state == State.Open }.map(::fit).filter { it.score > 0 }
+            .sortedWith(compareByDescending<Fit> { it.score }.thenByDescending { it.cover }
+                .thenBy { if (it.l.lastDay()?.isAfter(today) == false) 0 else 1 }
+                .thenBy { if (it.l.kind == Kind.Todo) 0 else 1 }
+                .thenBy { f -> f.l.lastDay()?.let { kotlin.math.abs(java.time.temporal.ChronoUnit.DAYS.between(today, it)) } ?: Long.MAX_VALUE })
+            .toList()
+        val first = fits.firstOrNull() ?: return null
+        val second = fits.getOrNull(1)
+        val sure = second == null || second.score < first.score || first.cover - second.cover >= 0.15
+        return first.l.id to sure
     }
 }

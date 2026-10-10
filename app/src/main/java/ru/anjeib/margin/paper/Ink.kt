@@ -46,14 +46,16 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun PenText(text: String, style: TextStyle, struck: Boolean, lineColor: Color, modifier: Modifier = Modifier,
             /** A long note shows its beginning; [onCut] says whether the rest was left out. */
-            maxLines: Int = Int.MAX_VALUE, onCut: ((Boolean) -> Unit)? = null) {
+            maxLines: Int = Int.MAX_VALUE, onCut: ((Boolean) -> Unit)? = null,
+            /** The words with their links marked (an address, a phone): a tap on a link opens it, elsewhere — the line. */
+            rich: androidx.compose.ui.text.AnnotatedString? = null) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val pen = remember { Animatable(if (struck) 1f else 0f) }
     LaunchedEffect(struck) {
         if (struck && pen.value < 1f) pen.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
         else if (!struck) pen.snapTo(0f)
     }
-    Text(text, style = style, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+    Text(rich ?: androidx.compose.ui.text.AnnotatedString(text), style = style, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         onTextLayout = { layout = it; onCut?.invoke(it.hasVisualOverflow) }, modifier = modifier.drawWithContent {
         drawContent()
         val l = layout ?: return@drawWithContent
@@ -105,9 +107,12 @@ fun DayStamp(title: String, at: String, s: ru.anjeib.margin.book.DayStats, said:
             Text(title.uppercase(), style = TextStyle(fontFamily = Voice.small.fontFamily, fontWeight = FontWeight(600), fontSize = 10.sp,
                 letterSpacing = 1.8.sp, color = ink))
             Text(at, style = Voice.reply.copy(color = ink, fontSize = 17.sp, lineHeight = 20.sp))
-            val marks = listOfNotNull(s.done.takeIf { it > 0 }?.let { "× $it" }, s.moved.takeIf { it > 0 }?.let { "› $it" },
-                s.dropped.takeIf { it > 0 }?.let { "– $it" }).joinToString("   ")
-            if (marks.isNotEmpty()) Text(marks, style = TextStyle(fontFamily = Voice.small.fontFamily, fontSize = 11.sp, letterSpacing = 0.5.sp, color = ink))
+            // What came of the day, in words — the marks alone («× 4 › 6 – 2») did not read.
+            val w = P.w
+            listOfNotNull(s.done.takeIf { it > 0 }?.let { w.stampDone(it) }, s.moved.takeIf { it > 0 }?.let { w.stampMoved(it) },
+                s.dropped.takeIf { it > 0 }?.let { w.stampDropped(it) }).forEach {
+                Text(it, style = TextStyle(fontFamily = Voice.small.fontFamily, fontSize = 10.sp, lineHeight = 13.sp, letterSpacing = 0.3.sp, color = ink))
+            }
         }
     }
 }

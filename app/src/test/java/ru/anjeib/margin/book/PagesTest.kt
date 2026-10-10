@@ -50,4 +50,12 @@ class PagesTest {
         assertEquals(today.minusDays(1), ritualDay(today.atTime(1, 50)))
         assertEquals(today, ritualDay(today.atTime(21, 0)))
     }
+
+    @Test fun aStepWithADayStandsOnItsPage() {
+        val b = book.add(listOf(Line(id = "n", text = "Совещание", kind = Kind.Note, day = today.toString())))
+            .let { it.add(listOf(Line(id = "s", text = "Отдать ключи", parentId = "n", day = today.plusDays(2).toString()))) }
+            .addChild("n", "проверить журналы", Kind.Todo)
+        assertTrue(b.page(today.plusDays(2), today).all.any { it.id == "s" })
+        assertTrue("an undated step stays under its line", b.page(today, today).all.none { it.text == "Проверить журналы" })
+    }
 }

@@ -16,6 +16,9 @@ import ru.anjeib.margin.book.add
 import ru.anjeib.margin.book.addChild
 import ru.anjeib.margin.book.delete
 import ru.anjeib.margin.book.drop
+import ru.anjeib.margin.book.notebookDay
+import ru.anjeib.margin.book.dropOccurrence
+import ru.anjeib.margin.book.beginToday
 import ru.anjeib.margin.book.removeFile
 import ru.anjeib.margin.book.Change.What
 import ru.anjeib.margin.book.setWhen
@@ -48,7 +51,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     private val store = BookStore.get(app)
     val book: StateFlow<Book> = store.book
 
-    private val _today = MutableStateFlow(LocalDate.now())
+    private val _today = MutableStateFlow(store.book.value.notebookDay())
     val today: StateFlow<LocalDate> = _today
 
     /** Margin's sentence over the field; [undo] puts the notebook back as it was before the change. */
@@ -62,8 +65,10 @@ class BookVm(app: Application) : AndroidViewModel(app) {
                     /** Lines the words seem to close, waiting for «да» — Margin never closes your lines by itself. */
                     val ask: List<Pair<String, ru.anjeib.margin.book.State>> = emptyList(),
                     /** Things to do found in a long note, waiting for «да» to become its steps. */
-                    val steps: List<String> = emptyList(), val stepsOf: String? = null) {
-        val asks get() = ask.isNotEmpty() || steps.isNotEmpty()
+                    val steps: List<String> = emptyList(), val stepsOf: String? = null,
+                    /** A change by words Margin is not sure about (another line fits as well): done on «да». */
+                    val change: ru.anjeib.margin.book.Change.Plan? = null) {
+        val asks get() = ask.isNotEmpty() || steps.isNotEmpty() || change != null
     }
     private val _said = MutableStateFlow<Said?>(null)
     val said: StateFlow<Said?> = _said
@@ -122,7 +127,9 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun refreshToday() { _today.value = LocalDate.now(); refreshCalendar() }
+    fun refreshToday() { _today.value = book.value.notebookDay(); refreshCalendar() }
+    /** Today as the notebook counts it now (the night still belongs to the day not yet turned). */
+    fun notebookDay(): LocalDate = book.value.notebookDay()
 
     /**
      * Meetings from the phone's calendar, read only, as ○ lines on their pages (never stored in the notebook): from a week
@@ -152,21 +159,33 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     }
 
     private fun say(text: String, undo: Book? = null, day: LocalDate? = null, ask: List<Pair<String, ru.anjeib.margin.book.State>> = emptyList(),
-                    steps: List<String> = emptyList(), stepsOf: String? = null) {
-        val s = Said(text, undo, day = day, ask = ask, steps = steps, stepsOf = stepsOf)
+                    steps: List<String> = emptyList(), stepsOf: String? = null, change: ru.anjeib.margin.book.Change.Plan? = null) {
+        val s = Said(text, undo, day = day, ask = ask, steps = steps, stepsOf = stepsOf, change = change)
         _said.value = s
         sayJob?.cancel()
         // Long enough to read and reach «вернуть»; a question waits for its answer a good while longer.
-        sayJob = viewModelScope.launch { delay(if (!s.asks) 10_000 else 45_000); if (_said.value?.id == s.id) _said.value = null }
+        // Long enough to read it and change one's mind: «вернуть» stays half a minute, a question a minute.
+        sayJob = viewModelScope.launch { delay(if (!s.asks) 30_000 else 60_000); if (_said.value?.id == s.id) _said.value = null }
     }
 
     /** «да» to Margin's question: the lines it named are closed now (with a way back). */
     fun confirm() {
         val s = _said.value ?: return
+        s.change?.let { apply(it); return }
         val before = book.value
         // Things to do found in a long note: they become its steps, under it.
         if (s.steps.isNotEmpty() && s.stepsOf != null) {
-            store.update { b -> s.steps.fold(b) { x, t -> x.addChild(s.stepsOf, t, ru.anjeib.margin.book.Kind.Todo) } }
+            // Each step read as a line of its own — «Николай Иванович обещал отдать ключи к четвергу» keeps its person and
+            // its day (a step with a day stands on that day's page too); the note's own day is not given to the others.
+            val note = before.line(s.stepsOf) ?: return
+            val page = note.date ?: today.value
+            val kids = s.steps.map { t ->
+                val l = Read.draft(t, before, page, today.value, now = null, lists = false).lines.firstOrNull()
+                val day = l?.day?.takeIf { it != page.toString() || l.time != null || l.until != null }
+                Line(text = l?.text ?: t, kind = ru.anjeib.margin.book.Kind.Todo, parentId = note.id, threadId = note.threadId,
+                    who = l?.who.orEmpty(), day = day, time = l?.time?.takeIf { day != null }, until = l?.until?.takeIf { day != null })
+            }
+            store.update { it.add(kids) }
             say(words.stepsAdded(s.steps.size), before)
             return
         }
@@ -210,10 +229,12 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         val d = d0 ?: Read.Draft(listOf(Line(text = fileWord(files), kind = ru.anjeib.margin.book.Kind.Note,
             day = if (t.later || t.threadId != null) null else page.toString(), threadId = t.threadId)), true, false, null)
         if (d.lines.isEmpty()) return false
-        val lines = if (files.isEmpty()) d.lines else d.lines.mapIndexed { i, l -> if (i == 0) l.copy(files = l.files + files) else l }
+        val lines = (if (files.isEmpty()) d.lines else d.lines.mapIndexed { i, l -> if (i == 0) l.copy(files = l.files + files) else l })
+            // A repeat written on one of its days before its hour starts today.
+            .map { if (page == today.value) it.beginToday(today.value, java.time.LocalTime.now()) else it }
         val before = book.value
         store.update { b ->
-            var x = b.add(lines)
+            var x = b.add(lines + d.under)
             d.threadTitle?.let { tt -> lines.forEach { l -> x = x.setThread(l.id, tt) } }
             x
         }
@@ -246,6 +267,17 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     private fun change(text: String): Boolean {
         val td = today.value
         val p = runCatching { ru.anjeib.margin.book.Change.read(text, book.value, td) }.getOrNull() ?: return false
+        // Another line fits the words as well: ask about the likelier one instead of changing the wrong one.
+        if (!p.sure && p.id != null) {
+            val l = book.value.line(p.id) ?: return false
+            say(words.changeAsk(l.text, p, td), change = p)
+            return true
+        }
+        return apply(p)
+    }
+
+    private fun apply(p: ru.anjeib.margin.book.Change.Plan): Boolean {
+        val td = today.value
         val before = book.value
         if (p.what == What.MoveAll) {
             val to = if (p.later) null else p.day ?: td.plusDays(1)
@@ -264,7 +296,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
                     p.time != null -> b.setWhen(id, p.day ?: l.date ?: td, p.time, today = td)
                     else -> b.move(id, p.day, td)
                 }
-                What.Drop -> b.drop(id)
+                What.Drop -> if (p.day != null && l.repeat != null) b.dropOccurrence(id, p.day) else b.drop(id)
                 else -> b.toggle(id, td)
             }
         }
@@ -273,7 +305,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         if (p.what == What.Move && now?.date != null && now.date != l.date) _flight.value = Flight(now.date!!, listOf(id))
         say(when (p.what) {
             What.Move -> words.changedTo(l.text, if (p.later) null else now?.date, now?.time.takeIf { p.time != null }, td)
-            What.Drop -> words.changedDropped(l.text)
+            What.Drop -> words.changedDropped(l.text, p.day?.takeIf { l.repeat != null }, td)
             else -> words.changedDone(l.text)
         }, before, day = now?.date?.takeIf { p.what == What.Move })
         _fresh.value = setOf(id)
@@ -308,7 +340,12 @@ class BookVm(app: Application) : AndroidViewModel(app) {
             val reading = complete(prompt, text, strong = false) { AiRead.parseRead(it, before0, t.page, text.trim(), t.threadId, noDay = t.later) }
             if (reading == null) { if (_said.value?.text == words.rereading) hush(); return@launch }
             val before = book.value
-            store.update { b -> AiRead.merge(b, phone, reading, today.value) }
+            store.update { b ->
+                val m = AiRead.merge(b, phone, reading, today.value)
+                // A repeat the AI set on its next day while today is one of its days: it begins today, as on the phone.
+                if (t.page != today.value) m else m.copy(lines = m.lines.map { l ->
+                    if (l.id in ids || b.line(l.id) == null) l.beginToday(today.value, java.time.LocalTime.now()) else l })
+            }
             val after = book.value
             // What the words seem to close is asked, never done silently: «сделано: «Приедет Петров»? · да · нет».
             val asking = AiRead.proposals(after, phone, reading)
@@ -320,7 +357,15 @@ class BookVm(app: Application) : AndroidViewModel(app) {
             when {
                 asking.isNotEmpty() -> say(words.closeAsk(asking.mapNotNull { (id, st) -> after.line(id)?.let { it.text to (st == ru.anjeib.margin.book.State.Dropped) } }),
                     if (after != before) before else null, ask = asking)
-                after != before -> say(words.reread, before)
+                after != before -> {
+                    // Where the corrected words now stand, if not on the page in front of you: «Margin уточнил: на вт ›».
+                    val away = after.lines.filter { l -> (l.id in ids || before.line(l.id) == null) && l.parentId == null }
+                        .mapNotNull { it.date }.firstOrNull { it != t.page }
+                    if (away != null && t.threadId == null && t.person == null) {
+                        _flight.value = Flight(away, after.lines.filter { it.date == away && (it.id in ids || before.line(it.id) == null) }.map { it.id })
+                        say(words.rereadOn(away, today.value), before, day = away)
+                    } else say(words.reread, before)
+                }
                 _said.value?.text == words.rereading -> hush()
             }
         }
@@ -441,7 +486,8 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     fun closeDay(date: LocalDate, decided: Set<String> = emptySet()) {
         store.update { it.closeDay(date, decided = decided) }
         _stamping.value = date
-        viewModelScope.launch { delay(4500); if (_stamping.value == date) _stamping.value = null }
+        // A day closed at night: once the stamp has landed, the notebook's today is the calendar's.
+        viewModelScope.launch { delay(4500); if (_stamping.value == date) _stamping.value = null; refreshToday() }
     }
 
     /** A thread closed (to the end of the index) or opened again. */

@@ -171,9 +171,24 @@ fun UnderNotes(notes: List<Note>, modifier: Modifier = Modifier) {
     }, style = Voice.note, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = modifier)
 }
 
-private const val SIGNS = "←→↻≡›"
+private const val SIGNS = "←→↻≡›↗"
 
 private val linkLike = Regex("(?:https?://\\S+|www\\.\\S+|\\b[\\w-]+\\.(?:ru|com|org|net|us|io|me|рф|su|app|dev)(?:/\\S*)?|\\+?\\d[\\d\\s()-]{8,}\\d)", RegexOption.IGNORE_CASE)
+
+/** The words hold an address or a phone. */
+fun hasLink(text: String): Boolean = linkLike.containsMatchIn(text)
+
+/** The links in the words, each as (what to show, what to open): «telemost.yandex.ru» → https://…, a phone → tel:… */
+fun linksIn(text: String): List<Pair<String, String>> = linkLike.findAll(text).map { m ->
+    val v = m.value.trimEnd('.', ',', ')')
+    when {
+        v.first() == '+' || v.first().isDigit() -> v to ("tel:" + v.filter { it.isDigit() || it == '+' })
+        else -> {
+            val url = if (v.startsWith("http", true)) v else "https://$v"
+            (runCatching { java.net.URI(url).host }.getOrNull()?.removePrefix("www.") ?: v) to url
+        }
+    }
+}.distinct().toList()
 
 /** Your words with their addresses and phones as links — a meeting link or a number written under a line opens. */
 fun linked(text: String, color: Color): androidx.compose.ui.text.AnnotatedString = buildAnnotatedString {
@@ -237,7 +252,11 @@ fun Mark(kind: MarkKind, modifier: Modifier = Modifier, size: Dp = Grid.node, pa
 /** A page's head: the date on the margin (a tap — the month), the title right of the rule, Margin's line under it. */
 @Composable
 fun PageHead(marginTop: String, marginBottom: String?, title: String, line: String?, onMargin: (() -> Unit)? = null, onLine: (() -> Unit)? = null,
-             lineColor: Color = P.c.graphite) {
+             lineColor: Color = P.c.graphite,
+             /** Room kept on the right for what stands in the corner (a closed day's stamp): the words wrap before it. */
+             reserve: Dp = 0.dp,
+             /** The small line on the margin is Margin's note («вчера» — when last seen), not a label («окт ▾»). */
+             bottomNote: Boolean = false) {
     val c = P.c
     // Right under the top line: the title is the page's first line, not a poster with air above it.
     Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 8.dp, end = Grid.right)) {
@@ -245,11 +264,11 @@ fun PageHead(marginTop: String, marginBottom: String?, title: String, line: Stri
             contentAlignment = Alignment.TopEnd) {
             Column(horizontalAlignment = Alignment.End) {
                 Text(marginTop, style = Voice.title.copy(color = c.ink, textAlign = TextAlign.End))
-                marginBottom?.let { Text(it, style = Voice.small.copy(color = c.graphite)) }
+                marginBottom?.let { Text(it, style = if (bottomNote) Voice.note.copy(color = c.graphite, textAlign = TextAlign.End) else Voice.small.copy(color = c.graphite)) }
             }
         }
         Spacer(Modifier.width(Grid.text - Grid.margin + Grid.noteGap))
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(end = reserve)) {
             Text(title, style = Voice.title.copy(color = c.ink))
             if (!line.isNullOrBlank()) Text(line, style = Voice.note.copy(color = lineColor),
                 modifier = Modifier.padding(top = 4.dp).then(if (onLine != null) Modifier.combinedClickableCompat(onLine) else Modifier))

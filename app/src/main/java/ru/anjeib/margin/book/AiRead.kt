@@ -130,7 +130,10 @@ ${context(book, question, today, max = 70)}
                 val wo = runCatching { w.jsonObject }.getOrNull() ?: return@mapNotNull null
                 val n = wo.str("name") ?: return@mapNotNull null
                 Who(book.person(n)?.name ?: n, when (wo.str("dir")) { "to" -> Dir.To; "from" -> Dir.From; else -> Dir.With })
-            }?.filter { mentions(source, it.name) } ?: emptyList()
+            }?.filter { mentions(source, it.name) }
+                // «← Лиза» means Лиза promised something: only when the words say so («пришлёт», «обещала», «сдаст», «должен»);
+                // «узнать у Лизы» is with her, not owed by her.
+                ?.map { if (it.dir == Dir.From && !owedBy.containsMatchIn(source)) it.copy(dir = Dir.With) else it } ?: emptyList()
             val thread = x.str("thread")?.let { t -> book.threads.find { it.closedAt == null && it.title.equals(t, true) }?.id }
             val hm = time(x.str("time"))
             Line(text = text, kind = kind,
@@ -155,6 +158,7 @@ ${context(book, question, today, max = 70)}
     /** Common verbs say nothing about which line: «позвонил маме» must not close «Позвонить в банк». */
     private val verbs = setOf("позв", "напи", "купи", "сдел", "отпр", "забр", "запл", "опла", "зака", "прис", "скин", "верн", "подг", "найт", "узна",
         "спро", "пров", "сход", "запи", "отве", "полу", "пере", "обсу", "встр", "созв", "дого", "пого", "сказ", "обещ", "нужн", "надо")
+    private val owedBy = Regex("(?iu)(?<!\\p{L})(?:обещал\\p{L}*|пришл\\p{L}*|пришлют|отдаст|отдадут|вернёт|вернет|вернут|сдаст|сдадут|скинет|скинут|отправит|отправят|сделает|сделают|подготовит|должен|должна|должны|ждём|ждем|жду|will send|will|owes|promised)(?!\\p{L})")
     private val gave = Regex("(?<!\\p{L})(?:прислал\\p{L}*|отправил\\p{L}*|скинул\\p{L}*|вернул\\p{L}*|отдал\\p{L}*|передал\\p{L}*|принес\\p{L}*|принёс|" +
         "оплатил\\p{L}*|сделал\\p{L}*|подписал\\p{L}*|ответил\\p{L}*|sent|returned|paid|gave|signed|replied)", RegexOption.IGNORE_CASE)
 

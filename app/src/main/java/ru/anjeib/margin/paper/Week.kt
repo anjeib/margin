@@ -56,7 +56,10 @@ fun WeekPage(book: Book, today: LocalDate, start: LocalDate, onMark: (String) ->
     LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = bottom)) {
         item("head") {
             Box {
-                PageHead(marginTop = "${mon.dayOfMonth}–${mon.plusDays(6).dayOfMonth}", marginBottom = w.mon(mon.plusDays(6).monthValue),
+                // On the margin the first day large, then «– 18 окт» small: «12–18» in the title size did not fit and broke.
+                val sun = mon.plusDays(6)
+                PageHead(marginTop = "${mon.dayOfMonth}", marginBottom = (if (sun.monthValue != mon.monthValue) w.mon(mon.monthValue) + " – " else "– ") +
+                    "${sun.dayOfMonth} " + w.mon(sun.monthValue),
                     title = w.weekTitle, line = w.weekLine(all.count { it.isTodo && it.open }, all.count { it.isTodo && !it.open }, all.count { it.kind == Kind.Event }))
                 // ‹ › turn the spread.
                 Row(Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = 8.dp)) {

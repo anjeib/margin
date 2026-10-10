@@ -31,6 +31,8 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.flow.drop
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.LaunchedEffect
@@ -86,11 +88,27 @@ private fun Notebook(vm: BookVm) {
     var flown by remember { mutableStateOf<BookVm.Flight?>(null) }
     var calendarFocus by remember { mutableStateOf<BookVm.Flight?>(null) }
     LaunchedEffect(flight?.id) { flight?.let { flown = it; vm.landed(it) } }
+    // The lines that flew may be gone since (Margin made them clearer into one repeat): nothing to show, no pulse.
+    LaunchedEffect(book) { flown?.let { f -> if (f.ids.none { book.line(it) != null }) flown = null } }
     val pager = rememberPagerState(initialPage = MIDDLE) { MIDDLE * 2 }
     val scope = rememberCoroutineScope()
     fun dateOf(i: Int): LocalDate = today.plusDays((i - MIDDLE).toLong())
     fun go(d: LocalDate) = scope.launch { pager.animateScrollToPage(MIDDLE + ChronoUnit.DAYS.between(today, d).toInt()) }
     val current = dateOf(pager.currentPage)
+    // Today moves (midnight, a night closed, the app opened next morning): a page that was today follows to the new today;
+    // any other page stays the date it was — the ritual turned to Friday, Friday stays.
+    var shown by remember { mutableStateOf(today) }
+    var shownToday by remember { mutableStateOf(today) }
+    LaunchedEffect(pager.currentPage) { shown = dateOf(pager.currentPage); shownToday = today }
+    LaunchedEffect(today) {
+        if (shown != shownToday) {
+            val target = MIDDLE + ChronoUnit.DAYS.between(today, shown).toInt()
+            if (pager.currentPage != target) pager.scrollToPage(target)
+        }
+        shownToday = today
+    }
+    // An answer belongs to the page it was asked on: turning the page puts it away.
+    LaunchedEffect(Unit) { snapshotFlow { pager.currentPage }.drop(1).collect { vm.closeAnswer() } }
 
     // Where we are: the book of days, or a page over it («index», «thread:<id>», «person:<name>», «later», «search», …).
     var stack by rememberSaveable { mutableStateOf(listOf<String>()) }
@@ -205,7 +223,7 @@ private fun Notebook(vm: BookVm) {
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(60_000)
-            if (LocalDate.now() != vm.today.value) vm.refreshToday()
+            if (vm.notebookDay() != vm.today.value) vm.refreshToday()
         }
     }
 }

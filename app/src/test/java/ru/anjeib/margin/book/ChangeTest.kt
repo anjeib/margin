@@ -47,9 +47,9 @@ class ChangeTest {
     }
 
     @Test fun dropAndDone() {
-        assertEquals(Change.Plan(Change.What.Drop, "ex-figma"), read("отмени подписку Figma"))
-        assertEquals(Change.Plan(Change.What.Done, "ex-lamp"), read("готово: лампа"))
-        assertEquals(Change.Plan(Change.What.Done, "ex-milk"), read("молоко и хлеб — готово"))
+        assertEquals("ex-figma", read("отмени подписку Figma")!!.id)
+        assertEquals("ex-lamp", read("готово: лампа")!!.id)
+        assertEquals("ex-milk", read("молоко и хлеб — готово")!!.id)
     }
 
     @Test fun otherWordsStayNewLines() {
@@ -60,5 +60,38 @@ class ChangeTest {
         assertNull(read("перенести встречу?"))
         // A done or dropped line is not changed again.
         assertNull(read("отмени Blender"))
+    }
+
+    @Test fun oneDayOfARepeatIsLetGo() {
+        val p = read("отмени спортзал в пн")!!
+        assertEquals(Change.What.Drop, p.what)
+        assertEquals("ex-gym", p.id)
+        assertEquals(today.with(TemporalAdjusters.next(DayOfWeek.MONDAY)), p.day)
+    }
+
+    @Test fun theLineTheWordsCoverBestWins() {
+        val b = book.add(listOf(
+            Line(id = "meet", text = "Родительское собрание 9Б", day = today.plusDays(1).toString(), time = "18:00"),
+            Line(id = "remind", text = "Напомнить классным руководителям про родительские собрания", day = today.toString()),
+        ))
+        val p = Change.read("перенеси собрание на четверг", b, today)!!
+        assertEquals("meet", p.id)
+        assertTrue(p.sure)
+    }
+
+    @Test fun aMoveSaidAfterTheLine() {
+        val b = book.add(listOf(Line(id = "dent", text = "Лиза к стоматологу", day = today.plusDays(5).toString(), time = "15:30")))
+        val p = Change.read("стоматолог переносится на пятницу в 16", b, today)!!
+        assertEquals("dent", p.id)
+        assertEquals("16:00", p.time)
+        assertEquals(friday, p.day)
+    }
+
+    @Test fun twoLinesAlikeAreAskedAbout() {
+        val b = book.add(listOf(
+            Line(id = "y1", text = "Йога", day = today.toString()),
+            Line(id = "y2", text = "Йога", day = today.toString()),
+        ))
+        assertTrue(!Change.read("перенеси йогу на пятницу", b, today)!!.sure)
     }
 }

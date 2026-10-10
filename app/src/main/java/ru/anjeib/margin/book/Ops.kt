@@ -32,22 +32,60 @@ fun Book.setOrg(name: String, org: Boolean): Book = copy(persons = persons.map {
 fun Book.toggle(id: String, today: LocalDate = LocalDate.now()): Book {
     splitOccurrence(id)?.let { (base, d) -> return edit(base) { it.copy(day = d.toString()) }.toggle(base, today) }
     val l = line(id) ?: return this
-    if (!l.isTodo) return this
+    // A note with steps is «done» when its steps are: the evening's «× сделано» closes what is still open under it.
+    if (!l.isTodo) {
+        val open = children(id).filter { it.isTodo && it.open }.map { it.id }.toSet()
+        if (l.kind != Kind.Note || open.isEmpty()) return this
+        val at = LocalDateTime.now().withSecond(0).withNano(0).toString()
+        return copy(lines = lines.map { if (it.id in open) it.copy(state = State.Done, doneAt = at) else it })
+    }
     return if (l.state == State.Open) {
         val done = edit(id) { it.copy(state = State.Done, doneAt = LocalDateTime.now().withSecond(0).withNano(0).toString(), ask = emptyList()) }
         val r = l.repeat
         val anchor = l.date
         if (r == null || anchor == null) done else {
-            var next = r.next(anchor)
-            while (next.isBefore(today)) next = r.next(next)
+            var next = r.nextKept(anchor)
+            while (next.isBefore(today)) next = r.nextKept(next)
             done.copy(lines = done.lines + l.copy(id = newId(), day = next.toString(), state = State.Open, doneAt = null,
                 edits = emptyList(), trail = emptyList(), writtenAt = nowStamp(), ask = emptyList()))
         }
     } else edit(id) { it.copy(state = State.Open, doneAt = null) }
 }
 
-/** «Не делаем»: closed without doing it; the line stays on its page struck through. */
-fun Book.drop(id: String): Book = edit(id) { it.copy(state = State.Dropped, doneAt = nowStamp(), ask = emptyList()) }
+/**
+ * «Не делаем»: closed without doing it; the line stays on its page struck through. A repeat is let go only this time —
+ * the series goes on (its next line appears, as after «сделано»); a coming occurrence («<id>@<date>») is skipped.
+ * A note takes its open steps along.
+ */
+fun Book.drop(id: String): Book {
+    splitOccurrence(id)?.let { (base, d) -> return dropOccurrence(base, d) }
+    val l = line(id) ?: return this
+    val at = nowStamp()
+    val gone = children(id).filter { l.kind == Kind.Note && it.isTodo && it.open }.map { it.id }.toSet()
+    val dropped = copy(lines = lines.map {
+        when {
+            it.id == id -> it.copy(state = State.Dropped, doneAt = at, ask = emptyList())
+            it.id in gone -> it.copy(state = State.Dropped, doneAt = at)
+            else -> it
+        }
+    })
+    val r = l.repeat
+    val anchor = l.date
+    if (r == null || anchor == null || !l.isTodo || l.state != State.Open) return dropped
+    var next = r.nextKept(anchor)
+    while (next.isBefore(LocalDate.now())) next = r.nextKept(next)
+    return dropped.copy(lines = dropped.lines + l.copy(id = newId(), day = next.toString(), state = State.Open, doneAt = null,
+        edits = emptyList(), trail = emptyList(), writtenAt = nowStamp(), ask = emptyList()))
+}
+
+/** One occurrence of a repeat let go: its own day — this line is dropped and the next one appears; a coming day — skipped. */
+fun Book.dropOccurrence(id: String, day: LocalDate): Book {
+    val l = line(id) ?: return this
+    val r = l.repeat ?: return drop(id)
+    if (l.date == day) return drop(id)
+    if (l.date?.isAfter(day) == true) return this
+    return edit(id) { it.copy(repeat = r.copy(skip = (r.skip + day.toString()).distinct())) }
+}
 
 /** Back from «не делаем». */
 fun Book.reopen(id: String): Book = edit(id) { it.copy(state = State.Open, doneAt = null) }

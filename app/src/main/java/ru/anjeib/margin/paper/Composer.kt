@@ -73,6 +73,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -279,9 +280,17 @@ fun FileChip(a: Attachment, size: Dp, onRemove: (() -> Unit)? = null, onClick: (
                 bmp?.let { Image(it.asImageBitmap(), a.name, contentScale = ContentScale.Crop, modifier = Modifier.size(size)) }
             }
         } else {
-            Text(a.name.ifBlank { w.file }, style = Voice.small.copy(color = c.ink), maxLines = 2, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.heightIn(min = size).width(size * 2.2f).clip(RoundedCornerShape(10.dp)).background(c.sheet)
-                    .border(1.dp, c.hairline, RoundedCornerShape(10.dp)).padding(10.dp))
+            // A document as a card: what it is (PDF, DOCX…) in petrol, its name — broken at «_» and «.», never mid-word —
+            // and its size, all within the thumbnail's height.
+            val ext = a.name.substringAfterLast('.', "").takeIf { it.length in 2..5 }?.uppercase() ?: w.file
+            val title = a.name.substringBeforeLast('.').ifBlank { w.file }.replace("_", "_\u200B").replace("-", "-\u200B").replace(".", ".\u200B")
+            Column(Modifier.height(size).width(size * 2.2f).clip(RoundedCornerShape(10.dp)).background(c.sheet)
+                .border(1.dp, c.hairline, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.SpaceBetween) {
+                Text(ext, style = Voice.small.copy(color = c.link, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, letterSpacing = 0.8.sp))
+                Text(title, style = Voice.small.copy(color = c.ink), maxLines = if (size >= 80.dp) 3 else 2, overflow = TextOverflow.Ellipsis)
+                if (a.size > 0) Text(sizeText(a.size, w.ru), style = Voice.small.copy(color = c.graphite, fontSize = 11.sp))
+            }
         }
         if (onRemove != null) Box(Modifier.align(Alignment.TopEnd).padding(2.dp).size(22.dp).clip(CircleShape).background(c.ink.copy(alpha = 0.6f))
             .clickable(onClick = onRemove).semantics { contentDescription = w.close }, contentAlignment = Alignment.Center) {
@@ -366,4 +375,11 @@ fun SaidLine(vm: BookVm, s: BookVm.Said, onDay: (java.time.LocalDate) -> Unit) {
         } else if (s.undo != null) Text("  ·  " + w.undo, style = Voice.reply.copy(color = c.link),
             modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.undo() }.padding(vertical = 12.dp, horizontal = 4.dp))
     }
+}
+
+/** «193 Б», «48 КБ», «2,4 МБ». */
+fun sizeText(bytes: Long, ru: Boolean): String = when {
+    bytes < 1024 -> "$bytes " + if (ru) "Б" else "B"
+    bytes < 1024 * 1024 -> "${bytes / 1024} " + if (ru) "КБ" else "KB"
+    else -> String.format(if (ru) java.util.Locale("ru") else java.util.Locale.ENGLISH, "%.1f ", bytes / 1048576.0) + if (ru) "МБ" else "MB"
 }

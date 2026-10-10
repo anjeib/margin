@@ -150,4 +150,63 @@ class ReadTest {
         assertTrue(read("- позвонить Олегу насчёт упаковки и макетов\n- купить молоко, хлеб и яйца на завтра\n- оплатить интернет до пятницы обязательно").lines.size == 3)
         assertEquals(1, Read.items("Олег выбрал второй вариант, но просит сделать зерно круглее.\nТипография ждёт макеты до пятницы, а бумагу привезут только в среду, так что успеваем впритык.").size)
     }
+
+    @Test fun aListInAMessageIsItsSteps() {
+        val msg = "Олег Самокат:\nТимур, привет! Глянули лендинг, в целом ок, но хотим:\n1) крупнее фото кофе на первом экране\n2) кнопку заказа поменять на терракотовую\n3) добавить блок с отзывами\nСможешь до понедельника?"
+        assertEquals(Kind.Note, read(msg).lines.single().kind)
+        assertEquals(listOf("Крупнее фото кофе на первом экране", "Кнопку заказа поменять на терракотовую", "Добавить блок с отзывами"), Read.stepsIn(msg))
+    }
+
+    @Test fun wordsNamingAThreadGoIntoIt() {
+        val b = book.copy(threads = book.threads + Thread(id = "sam", title = "самокат"))
+        assertEquals("sam", Read.draft("созвон с самокатом в 15 по лендингу", b, today, today, now = null).lines.single().threadId)
+        assertEquals("ex-coffee", Read.draft("отправить счёт Зерну за упаковку", b, today, today, now = null).lines.single().threadId)
+        assertNull("«Идеи» is too like a word", Read.draft("есть идеи для подарка маме", b, today, today, now = null).lines.single().threadId)
+    }
+
+    @Test fun aListIsOneLineWithItsItems() {
+        val shop = read("список в магазин:\nхлеб\nмолоко\nсыр\nяйца")
+        assertEquals("Список в магазин", shop.lines.single().text)
+        assertEquals(listOf("Хлеб", "Молоко", "Сыр", "Яйца"), shop.under.map { it.text })
+        assertTrue(shop.under.all { it.parentId == shop.lines.single().id && it.kind == Kind.Todo })
+        val mom = read("купить маме таблетки, хлеб, молоко и корм коту")
+        assertEquals("Купить маме таблетки, хлеб, молоко и корм коту", mom.lines.single().text)
+        assertEquals(listOf("Маме таблетки", "Хлеб", "Молоко", "Корм коту"), mom.under.map { it.text })
+        val sat = read("в понедельник купить: хлеб, молоко, сыр")
+        assertEquals(next(DayOfWeek.MONDAY).toString(), sat.lines.single().day)
+        assertEquals(3, sat.under.size)
+        // Things to do, not things to buy: separate lines, as before.
+        assertTrue(read("позвонить Олегу, написать Маше и забрать посылку").under.isEmpty())
+    }
+
+    @Test fun notesOfAMeetingStayWholeWithTheirSteps() {
+        val minutes = "Совещание с завучами 13.10\nПо олимпиадам сроки сдвинули, школьный этап до 25 октября\nНиколай Иванович обещал отдать ключи от актового зала к четвергу\nНужно подготовить расписание замен на ноябрь и согласовать с директором\nПроверить журналы 7-х классов, напомнить классным руководителям про родительские собрания"
+        val l = read(minutes).lines.single()
+        assertEquals(Kind.Note, l.kind)
+        assertTrue("nothing is lost", l.text.contains("до 25 октября"))
+        val steps = Read.stepsIn(minutes)
+        assertTrue(steps.any { it.startsWith("Николай Иванович обещал") })
+        assertTrue(steps.any { it.startsWith("Подготовить расписание") })
+        assertTrue(steps.any { it.startsWith("Проверить журналы") })
+        val keys = Read.draft(steps.first { it.startsWith("Николай") }, book, today, today, now = null, lists = false).lines.single()
+        assertTrue(keys.who.any { it.dir == Dir.From && it.name.startsWith("Николай") })
+    }
+
+    @Test fun aThoughtSaidAloudStaysWhole() {
+        val t = "думала про каникулы хорошо бы съездить к маминой сестре в Тверь но Даня хочет в лагерь надо посчитать бюджет и узнать у Лизы про кружок по рисованию может совместить поездку с выходными в ноябре"
+        val l = read(t).lines.single()
+        assertEquals(Kind.Note, l.kind)
+        assertTrue(l.text.contains("Даня хочет в лагерь"))
+    }
+
+    @Test fun aNameWithItsPatronymicIsOnePerson() {
+        assertEquals(listOf(Who("Ирина Петровна", Dir.From)), read("Ирина Петровна сдаст отчёт по олимпиаде до пятницы").lines.single().who)
+        val keys = Read.draft("Николай Иванович обещал отдать ключи от актового зала к четвергу", book, today, today, now = null, lists = false).lines.single()
+        assertEquals(listOf(Who("Николай Иванович", Dir.From)), keys.who)
+    }
+
+    @Test fun remindingSomeoneIsTheThingToDo() {
+        assertEquals("Напомнить классным руководителям про родительские собрания", read("напомнить классным руководителям про родительские собрания").lines.single().text)
+        assertEquals("Купить хлеб", read("напомни купить хлеб").lines.single().text)
+    }
 }

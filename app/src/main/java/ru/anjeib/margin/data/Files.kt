@@ -137,8 +137,21 @@ object Files {
         ByteArrayOutputStream().also { b.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
     }
 
-    fun openIntent(ctx: Context, a: Attachment): Intent? {
+    /**
+     * The file under the name it came with («Brief_Samokat_Coffee.pdf», not «56d20b68.pdf») — the app that opens it, and
+     * whoever it is sent to, see that name: a copy in the cache, made once.
+     */
+    private fun named(ctx: Context, a: Attachment): File? {
         val f = file(ctx, a) ?: return null
+        val name = a.name.trim().replace(Regex("[\\\\/:*?\"<>|]"), "_").takeIf { it.isNotEmpty() && it != f.name } ?: return f
+        val dir = File(ctx.cacheDir, "export/" + a.id).apply { mkdirs() }
+        val out = File(dir, if (name.contains('.')) name else name + "." + f.extension)
+        if (!out.exists() || out.length() != f.length()) runCatching { f.copyTo(out, overwrite = true) }.onFailure { return f }
+        return out
+    }
+
+    fun openIntent(ctx: Context, a: Attachment): Intent? {
+        val f = named(ctx, a) ?: return null
         val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
         return Intent(Intent.ACTION_VIEW).setDataAndType(uri, a.mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
@@ -147,7 +160,7 @@ object Files {
 
     /** «Переслать»: the file itself through the share sheet. */
     fun shareIntent(ctx: Context, a: Attachment): Intent? {
-        val f = file(ctx, a) ?: return null
+        val f = named(ctx, a) ?: return null
         val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
         return Intent.createChooser(Intent(Intent.ACTION_SEND).setType(a.mime ?: "*/*").putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null)

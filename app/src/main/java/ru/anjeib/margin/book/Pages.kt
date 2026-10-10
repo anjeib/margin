@@ -40,9 +40,39 @@ fun Repeat.next(from: LocalDate): LocalDate {
     }
 }
 
-/** The dates of a repeat after [anchor] up to [to] — its future pages. */
+/** The dates of a repeat after [anchor] up to [to] — its future pages (without the ones let go). */
 fun Repeat.between(anchor: LocalDate, to: LocalDate): Sequence<LocalDate> =
-    generateSequence(next(anchor)) { next(it) }.takeWhile { !it.isAfter(to) }
+    generateSequence(next(anchor)) { next(it) }.takeWhile { !it.isAfter(to) }.filter { it.toString() !in skip }
+
+/** The next date of a repeat after [from] that is not let go. */
+fun Repeat.nextKept(from: LocalDate): LocalDate {
+    var d = next(from)
+    var guard = 0
+    while (d.toString() in skip && guard++ < 400) d = next(d)
+    return d
+}
+
+/**
+ * A repeat written on one of its own days before its hour begins today, not on its next day: «падел вт и чт в 20»
+ * written on Thursday at noon — the first is tonight.
+ */
+fun Line.beginToday(today: LocalDate, now: java.time.LocalTime?): Line {
+    val r = repeat ?: return this
+    val d = date ?: return this
+    if (!d.isAfter(today) || r.next(today) != d) return this
+    val todayIs = when (r.freq) {
+        "daily" -> true
+        "weekly" -> r.days.isEmpty() || today.dayOfWeek.value in r.days
+        else -> false
+    }
+    if (!todayIs || r.days.isEmpty() && r.freq == "weekly") return this
+    val past = time?.let { t -> now != null && runCatching { java.time.LocalTime.parse(t) }.getOrNull()?.isBefore(now) == true } ?: (now != null && now.hour >= 20)
+    return if (past) this else copy(day = today.toString())
+}
+
+/** Something still to be done on this line: an open to-do, or a note whose steps are not all done. */
+fun Book.pending(l: Line): Boolean = (l.isTodo && l.open) ||
+    (l.kind == Kind.Note && l.state == State.Open && steps(l.id)?.let { (done, all) -> done < all } == true)
 
 /** Where a line stands: its first page and its last (a soft window «до пт» spans several). */
 private fun Line.span(): Pair<LocalDate, LocalDate>? {
@@ -55,7 +85,7 @@ private fun Line.span(): Pair<LocalDate, LocalDate>? {
 fun Line.lastDay(): LocalDate? = span()?.second
 
 /** A repeat's coming occurrence shown on a future page: the same line, its id marked with the day. */
-fun Line.onDay(d: LocalDate): Line = copy(id = "$id@$d", day = d.toString(), until = null)
+fun Line.onDay(d: LocalDate): Line = copy(id = "$id@$d", day = d.toString(), until = null, files = emptyList())
 
 /** «<id>@<date>» → the line and the day of its coming occurrence. */
 fun splitOccurrence(id: String): Pair<String, LocalDate>? = id.lastIndexOf('@').takeIf { it > 0 }?.let { i ->
@@ -66,7 +96,8 @@ fun splitOccurrence(id: String): Pair<String, LocalDate>? = id.lastIndexOf('@').
 fun Book.on(date: LocalDate, today: LocalDate): List<Line> {
     val out = ArrayList<Line>()
     for (l in lines) {
-        if (l.parentId != null) continue
+        // A step stands only under its line — unless it has a day of its own («отдать ключи к чт»).
+        if (l.parentId != null && l.day == null) continue
         val s = l.span()
         if (s != null && !date.isBefore(s.first) && !date.isAfter(s.second)) {
             // A soft window («до пт») stands where it was written, on its last day, and on today while it is open — not on
@@ -87,7 +118,7 @@ fun Book.on(date: LocalDate, today: LocalDate): List<Line> {
 fun Book.page(date: LocalDate, today: LocalDate = LocalDate.now()): Page {
     val here = on(date, today)
     val tails = if (date == today) lines.filter { l ->
-        l.parentId == null && l.isTodo && l.open && (l.lastDay()?.isBefore(today) == true)
+        (l.parentId == null || l.day != null) && pending(l) && (l.lastDay()?.isBefore(today) == true)
     }.sortedBy { it.lastDay() } else emptyList()
     val timed = here.filter { it.time != null }.sortedBy { it.time }
     val rest = here.filter { it.time == null }.sortedBy { it.writtenAt }
@@ -102,7 +133,7 @@ fun Book.page(date: LocalDate, today: LocalDate = LocalDate.now()): Page {
  * («до ср») rides on by itself; a repeat's coming occurrence is not a line yet.
  */
 fun Book.toDecide(day: LocalDate = ritualDay()): List<Line> =
-    lines.filter { l -> l.parentId == null && l.isTodo && l.open && l.lastDay()?.let { !it.isAfter(day) } == true }
+    lines.filter { l -> (l.parentId == null || l.day != null) && pending(l) && l.lastDay()?.let { !it.isAfter(day) } == true }
         .sortedWith(compareBy({ it.lastDay() }, { it.time ?: "99" }, { it.writtenAt }))
 
 /**
@@ -111,6 +142,15 @@ fun Book.toDecide(day: LocalDate = ritualDay()): List<Line> =
  */
 fun ritualDay(now: java.time.LocalDateTime = java.time.LocalDateTime.now()): LocalDate =
     if (now.hour < 4) now.toLocalDate().minusDays(1) else now.toLocalDate()
+
+/**
+ * The notebook's today. Until four at night it is still yesterday — unless yesterday was already turned: at 01:30 a night
+ * owl is finishing Thursday, its lines are not tails yet; once Thursday is closed, the page is Friday.
+ */
+fun Book.notebookDay(now: java.time.LocalDateTime = java.time.LocalDateTime.now()): LocalDate {
+    val d = now.toLocalDate()
+    return if (now.hour < 4 && !closed.containsKey(d.minusDays(1).toString())) d.minusDays(1) else d
+}
 
 /** How many open to-dos the day holds (with tails on today) — the one number for every screen. */
 fun Book.openCount(date: LocalDate, today: LocalDate = LocalDate.now()): Int = page(date, today).open.size

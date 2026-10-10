@@ -74,4 +74,36 @@ class BookOpsTest {
         assertEquals(1, b.children("ex-lamp").size)
         assertTrue(b.delete("ex-lamp").lines.none { it.parentId == "ex-lamp" || it.id == "ex-lamp" })
     }
+
+    @Test fun aRepeatIsLetGoOnlyThisTime() {
+        val gym = book.line("ex-gym")!!
+        val d = gym.date!!
+        // Its own day: this one is dropped, the next one comes.
+        val b = book.drop("ex-gym")
+        assertEquals(State.Dropped, b.line("ex-gym")!!.state)
+        assertTrue(b.lines.any { it.text == gym.text && it.open && it.date == gym.repeat!!.next(d) })
+        // A coming day: skipped, the series stays.
+        val next = gym.repeat!!.next(d)
+        val s = book.dropOccurrence("ex-gym", next)
+        assertEquals(State.Open, s.line("ex-gym")!!.state)
+        assertTrue(s.page(next, today).all.none { it.id.startsWith("ex-gym") })
+        assertTrue(s.page(gym.repeat!!.next(next), today).all.any { it.id.startsWith("ex-gym") })
+    }
+
+    @Test fun aRepeatWrittenOnItsDayBeginsToday() {
+        val thu = LocalDate.of(2026, 10, 15)
+        val l = Line(text = "Падел", day = LocalDate.of(2026, 10, 20).toString(), time = "20:00", repeat = Repeat("weekly", 1, listOf(2, 4)))
+        assertEquals(thu.toString(), l.beginToday(thu, java.time.LocalTime.of(11, 44)).day)
+        assertEquals(l.day, l.beginToday(thu, java.time.LocalTime.of(21, 0)).day)
+    }
+
+    @Test fun aNoteWithOpenStepsIsATail() {
+        val b = book.add(listOf(Line(id = "n", text = "Запись про отпуск", kind = Kind.Note, day = today.minusDays(1).toString())))
+            .addChild("n", "взять палатку", Kind.Todo)
+        assertTrue(b.page(today, today).tails.any { it.id == "n" })
+        assertTrue(b.toDecide(today).any { it.id == "n" })
+        val done = b.toggle("n", today)
+        assertTrue(done.children("n").all { it.state == State.Done })
+        assertTrue(done.page(today, today).tails.none { it.id == "n" })
+    }
 }

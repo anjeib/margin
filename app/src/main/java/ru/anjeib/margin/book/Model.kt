@@ -29,7 +29,9 @@ data class Who(val name: String, val dir: Dir = Dir.With)
 
 /** A repeat: daily | weekly (days 1..7) | monthly (the same date) | yearly. */
 @Serializable
-data class Repeat(val freq: String, val interval: Int = 1, val days: List<Int> = emptyList())
+data class Repeat(val freq: String, val interval: Int = 1, val days: List<Int> = emptyList(),
+                  /** Single occurrences let go («отмени падел в чт»): the series goes on without them. ISO dates. */
+                  val skip: List<String> = emptyList())
 
 /** A correction seen on the margin as «~~чт~~ пт»: what changed, from what to what, by whom. */
 @Serializable

@@ -263,7 +263,7 @@ fun PersonPage(book: Book, name: String, today: LocalDate, onMark: (String) -> U
             // On the margin under the letter: when they were last on a page.
             val last = (pl.promised + pl.waited + pl.other).maxOfOrNull { it.written.toLocalDate() }
             PageHead(marginTop = name.take(1).uppercase(), marginBottom = last?.let { w.near(it, today) }, title = p?.name ?: name,
-                line = p?.about)
+                line = p?.about, bottomNote = true)
             // Reaching them: in their own app, from here.
             val ctx = androidx.compose.ui.platform.LocalContext.current
             fun go(i: android.content.Intent) = runCatching { ctx.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -284,9 +284,17 @@ fun PersonPage(book: Book, name: String, today: LocalDate, onMark: (String) -> U
             item { SectionHead(w.theyPromised) }
             items(pl.waited, key = { "b" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name) }
         }
-        if (pl.other.isNotEmpty()) {
+        // Open lines with them — «Вместе»; what is closed (done, not doing — a promise let go too) — under «Было», not
+        // passed off as something together.
+        val withOpen = pl.other.filter { it.open || (it.kind != ru.anjeib.margin.book.Kind.Todo && it.state == ru.anjeib.margin.book.State.Open) }
+        val past = pl.other - withOpen.toSet()
+        if (withOpen.isNotEmpty()) {
             item { SectionHead(w.withThem) }
-            items(pl.other, key = { "c" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name) }
+            items(withOpen, key = { "c" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name) }
+        }
+        if (past.isNotEmpty()) {
+            item { SectionHead(w.pastWithThem) }
+            items(past, key = { "p" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name) }
         }
         if (pl.promised.isEmpty() && pl.waited.isEmpty() && pl.other.isEmpty()) item { MarginSays(w.emptyPerson) }
         // A company or a person — how the address book files them.
