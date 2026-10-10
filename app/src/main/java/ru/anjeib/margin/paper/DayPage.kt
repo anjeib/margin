@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.clickable
@@ -68,6 +69,8 @@ fun DayPage(
     onNext: () -> Unit = {},
     /** «на полях: …» tapped: those lines over the field. */
     onExplain: (LocalDate) -> Unit = {},
+    /** A line swiped to the left: deleted (with «вернуть» over the field). */
+    onDelete: ((String) -> Unit)? = null,
 ) {
     val c = P.c
     val w = P.w
@@ -136,17 +139,17 @@ fun DayPage(
         val hour = clock.take(2).toIntOrNull() ?: LocalTime.now().hour
         val undecided = if (date == today && hour.let { it >= eveningHour - 3 || it < 4 }) book.toDecide(ritualDay()).size else 0
         if (undecided > 0) item("turn") { MarginLink(w.turnDayCount(undecided), Modifier.padding(bottom = 6.dp), onTurn) }
-        items(page.tails, key = { "t" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Tail, l.id in fresh, onMark, onOpen) }
+        items(page.tails, key = { "t" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Tail, l.id in fresh, onMark, onOpen, onDelete = onDelete) }
         // Today, among the hours: a red tick on the rule where «now» is — the page shows where the day stands.
         // At night the day not yet turned is still today, and «now» is past all its hours: the tick goes after them.
         val night = LocalDate.now().isAfter(date)
         val nowAt = if (date == today && page.timed.isNotEmpty()) (if (night) page.timed.size else page.timed.indexOfFirst { (it.time ?: "") > clock }.let { if (it < 0) page.timed.size else it }) else -1
         page.timed.forEachIndexed { i, l ->
             if (i == nowAt) item("now") { NowTick(clock) }
-            item("h" + l.id) { LineOnPage(l, date, today, book, Seen.Page, l.id in fresh, onMark, onOpen) }
+            item("h" + l.id) { LineOnPage(l, date, today, book, Seen.Page, l.id in fresh, onMark, onOpen, onDelete = onDelete) }
         }
         if (nowAt == page.timed.size && nowAt > 0) item("now") { NowTick(clock) }
-        items(rest, key = { "r" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Page, l.id in fresh, onMark, onOpen) }
+        items(rest, key = { "r" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Page, l.id in fresh, onMark, onOpen, onDelete = onDelete) }
         if (folded) item("folded") { MarginLink(w.doneMore(doneRest.size)) { showDone = true } }
         items(page.traces, key = { "m" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Trace, false, onMark, onOpen) }
         if (page.all.isEmpty() && page.traces.isEmpty()) item("empty") {
@@ -161,7 +164,9 @@ fun DayPage(
 fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Seen, fresh: Boolean,
                onMark: (String) -> Unit, onOpen: (String) -> Unit, lead: Note? = null, hideThread: String? = null, hidePerson: String? = null,
                /** A thread's or a person's page: every open step stands under its line (no day's page shows the dated ones there). */
-               allSteps: Boolean = false) {
+               allSteps: Boolean = false,
+               /** On a day's page: a swipe to the right — done (the line stays, struck through); to the left — deleted. */
+               onDelete: ((String) -> Unit)? = null) {
     val c = P.c
     val w = P.w
     val notes = remember(l, page, today, book.threads, book.steps(l.id), seen, w, lead) {
@@ -192,6 +197,8 @@ fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Se
     }
     // A long note shows its first lines; the rest is a tap away, and the margin says so.
     var cut by remember(l.id) { mutableStateOf(false) }
+    Swiped(enabled = onDelete != null && !trace, canDone = l.kind == Kind.Todo && l.state == State.Open,
+        onDone = { onMark(l.id) }, onDelete = { onDelete?.invoke(l.id) }) {
     MarginRow(
         notes = if (cut) notes + Note(w.whole, Tone.Link, under = true) else notes, mark = markOf(l, trace),
         modifier = Modifier.drawBehind { if (wash.value > 0f) drawRect(c.linkWash.copy(alpha = wash.value)) }
@@ -203,6 +210,7 @@ fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Se
         PenText(l.text, Voice.words.copy(color = ink), struck = !trace && l.state != State.Open && l.kind == Kind.Todo, lineColor = c.graphite,
             maxLines = 5, onCut = { if (it != cut) cut = it }, rich = if (hasLink(l.text)) linked(l.text, c.link) else null)
     }
+    }
     // What is to be done under the line — a list's items, a note's steps — stands under it on the page, as written in a
     // notebook: open ones, a few at most (the rest in the sheet). Steps with a day of their own stand on that day instead.
     if (!trace && l.parentId == null && l.state == State.Open) {
@@ -212,6 +220,41 @@ fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Se
             (it.open || (it.state == State.Done && it.doneAt?.take(10) == todayIs)) }.sortedBy { it.writtenAt } }
         open.take(6).forEach { k -> StepRow(k, ink, onMark = { onMark(k.id) }, onOpen = { onOpen(l.id) }) }
         if (open.size > 6) MarginLink(w.moreSteps(open.size - 6), Modifier.padding(start = 22.dp)) { onOpen(l.id) }
+    }
+}
+
+/**
+ * A line that can be swiped: to the right — «сделано» (it stays on the page, struck through), to the left — «удалить».
+ * The line springs back: what changed is seen on the line itself and in Margin's sentence over the field.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun Swiped(enabled: Boolean, canDone: Boolean, onDone: () -> Unit, onDelete: () -> Unit, content: @Composable () -> Unit) {
+    if (!enabled) { content(); return }
+    val c = P.c
+    val w = P.w
+    val state = androidx.compose.material3.rememberSwipeToDismissBoxState(confirmValueChange = { v ->
+        when (v) {
+            androidx.compose.material3.SwipeToDismissBoxValue.StartToEnd -> if (canDone) onDone()
+            androidx.compose.material3.SwipeToDismissBoxValue.EndToStart -> onDelete()
+            else -> {}
+        }
+        false
+    }, positionalThreshold = { it * 0.35f })
+    androidx.compose.material3.SwipeToDismissBox(state, enableDismissFromStartToEnd = canDone, enableDismissFromEndToStart = true,
+        backgroundContent = {
+            // Only while the line is being moved: at rest the page — and its red rule — shows through.
+            val dir = state.dismissDirection
+            if (dir == androidx.compose.material3.SwipeToDismissBoxValue.Settled) return@SwipeToDismissBox
+            val toRight = dir == androidx.compose.material3.SwipeToDismissBoxValue.StartToEnd
+            androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(if (toRight) c.linkWash else c.red.copy(alpha = 0.12f))
+                .padding(horizontal = 24.dp), contentAlignment = if (toRight) androidx.compose.ui.Alignment.CenterStart else androidx.compose.ui.Alignment.CenterEnd) {
+                Text(if (toRight) w.doneWord else w.offerDelete, style = Voice.reply.copy(color = if (toRight) c.link else c.red))
+            }
+        }) {
+        // Paper under the line only while it moves; at rest it is transparent, the rule stays whole.
+        val moving = state.dismissDirection != androidx.compose.material3.SwipeToDismissBoxValue.Settled
+        androidx.compose.foundation.layout.Box(if (moving) Modifier.background(LocalGround.current ?: c.paper) else Modifier) { content() }
     }
 }
 

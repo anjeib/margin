@@ -182,6 +182,8 @@ interface Words {
     val attachContact: String
     val listening: String
     val heardNothing: String
+    val voiceNoNet: String
+    fun voiceFailed(why: String?): String
     val doneReply: String
     val transcribing: String
     val voiceOff: String
@@ -577,6 +579,8 @@ object WordsRu : Words {
     override val attachContact = "Контакт"
     override val listening = "слушаю…"
     override val heardNothing = "ничего не слышно — ещё раз?"
+    override val voiceNoNet = "нет сети — голос распознаётся в сети или моделью на телефоне (Настройки → Голос без сети)"
+    override fun voiceFailed(why: String?) = "не получилось распознать" + (why?.takeIf { it.isNotBlank() }?.let { ": " + it.take(80) } ?: "")
     override val doneReply = "× сделано"
     override val transcribing = "разбираю…"
     override val voiceOff = "Голос сейчас недоступен — нужна сеть."
@@ -971,6 +975,8 @@ object WordsEn : Words {
     override val attachContact = "Contact"
     override val listening = "listening…"
     override val heardNothing = "nothing heard — try again?"
+    override val voiceNoNet = "no network — voice needs the network or the on-phone model (Settings → Offline voice)"
+    override fun voiceFailed(why: String?) = "couldn't recognise it" + (why?.takeIf { it.isNotBlank() }?.let { ": " + it.take(80) } ?: "")
     override val doneReply = "× done"
     override val transcribing = "reading…"
     override val voiceOff = "Voice needs a network right now."

@@ -141,6 +141,8 @@ private fun Notebook(vm: BookVm) {
                 onSearch = if (route != "search") ({ push("search") }) else null,
                 onCalendar = if (route?.startsWith("calendar") != true) ({ calendarFocus = flown; calendarFrom = null; flown = null; push("calendar") }) else null,
                 pulse = flown?.id,
+                onPrev = if (route == null && !ritual) ({ go(current.minusDays(1)) }) else null,
+                onNext = if (route == null && !ritual) ({ go(current.plusDays(1)) }) else null,
             )
             Box(Modifier.weight(1f)) {
                 AnimatedContent(targetState = route to ritual, transitionSpec = { fadeIn(tween(180, delayMillis = 100)) togetherWith fadeOut(tween(100)) }, label = "page") { (r, rit) ->
@@ -158,8 +160,9 @@ private fun Notebook(vm: BookVm) {
                                 if (dateOf(pager.currentPage) == day && stack.isEmpty()) go(day.plusDays(1))
                             }
                         })
-                        r == null -> HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { it }) { i ->
-                            DayPage(dateOf(i), book, today, fresh, bottom = 24.dp, onMark = vm::toggle, onOpen = onOpen,
+                        // Days are not swiped (a swipe is the line's: done or delete) — ‹ › at the top, the date, the calendar.
+                        r == null -> HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { it }, userScrollEnabled = false) { i ->
+                            DayPage(dateOf(i), book, today, fresh, bottom = 24.dp, onMark = vm::toggle, onOpen = onOpen, onDelete = vm::delete,
                                 // The date on the margin opens the one calendar — the month and the days ahead — at this page's month.
                                 onMonth = { calendarFrom = dateOf(i); calendarFocus = null; push("calendar") }, onTurn = { ritual = true }, eveningHour = vm.eveningHour(), stamping = stamping,
                                 calendar = cal[dateOf(i)].orEmpty(), onNext = { go(dateOf(i).plusDays(1)) }, onExplain = vm::explain)
@@ -241,7 +244,7 @@ private fun openCalendar(ctx: android.content.Context, l: ru.anjeib.margin.book.
 /** The line above every page: the index (or back) on the margin, the way to today, search at the right. */
 @Composable
 private fun TopLine(back: Boolean, onBack: () -> Unit, onIndex: () -> Unit, awayFromToday: Boolean, onToday: () -> Unit, onSearch: (() -> Unit)?,
-                    onCalendar: (() -> Unit)? = null, pulse: Long? = null) {
+                    onCalendar: (() -> Unit)? = null, pulse: Long? = null, onPrev: (() -> Unit)? = null, onNext: (() -> Unit)? = null) {
     val c = P.c
     val w = P.w
     Row(Modifier.fillMaxWidth().height(46.dp).rule(c.rule).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -255,6 +258,12 @@ private fun TopLine(back: Boolean, onBack: () -> Unit, onIndex: () -> Unit, away
         Box(Modifier.weight(1f)) {
             if (awayFromToday) Text(w.toToday, style = Voice.reply.copy(color = c.link),
                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onToday).padding(vertical = 12.dp))
+        }
+        // The day before and the day after.
+        if (onPrev != null && onNext != null) listOf("‹" to onPrev, "›" to onNext).forEach { (sign, go) ->
+            Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = go).semantics { contentDescription = sign }, contentAlignment = Alignment.Center) {
+                Text(sign, style = Voice.section.copy(color = c.graphite))
+            }
         }
         // The calendar: where lines written for other days are. A line just sent there makes it pulse twice in petrol.
         if (onCalendar != null) {

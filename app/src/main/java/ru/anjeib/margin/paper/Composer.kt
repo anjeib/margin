@@ -129,16 +129,19 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
         else -> emptyList()
     }.take(3)
 
+    // Words that came by voice (until the field is emptied): read again by the AI after the phone's draft.
+    var spoken by remember { mutableStateOf(false) }
     fun send() {
         if (text.isBlank() && files.isEmpty()) return
-        if (vm.write(text, target, files.toList())) { text = ""; files.clear() }
+        if (vm.write(text, target, files.toList(), spoken = spoken)) { text = ""; files.clear(); spoken = false }
     }
 
     // ---- voice: said instead of typed (the same dictation as in a line's sheet) ----
     val sendNow = remember { ru.anjeib.margin.data.Prefs.get(ctx) }.settings.collectAsState().value.voiceSendNow
     val dict = rememberDictation(vm) { t ->
-        if (t.isNullOrBlank()) vm.tell(w.heardNothing)
-        else { text = (text.trimEnd() + " " + t).trim(); if (sendNow) send() }
+        // "" — a failure Margin has already explained; null — nothing was heard.
+        if (t == null) vm.tell(w.heardNothing)
+        else if (t.isNotBlank()) { text = (text.trimEnd() + " " + t).trim(); spoken = true; if (sendNow) send() }
     }
     fun mic() = dict.toggle()
     val dictate by vm.dictate.collectAsState()

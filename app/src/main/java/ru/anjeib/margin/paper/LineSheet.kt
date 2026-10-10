@@ -289,7 +289,7 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
             DisposableEffect(id) { onDispose { draft.value.let { (t, k) -> if (t.isNotBlank()) vm.writeUnder(id, t, k) } } }
             val sendNow = remember { ru.anjeib.margin.data.Prefs.get(ctx) }.settings.collectAsState().value.voiceSendNow
             val dict = rememberDictation(vm) { t ->
-                if (t.isNullOrBlank()) vm.tell(w.heardNothing) else if (sendNow) writeMore(t) else more = (more.trimEnd() + " " + t).trim()
+                if (t == null) vm.tell(w.heardNothing) else if (t.isBlank()) Unit else if (sendNow) writeMore(t) else more = (more.trimEnd() + " " + t).trim()
             }
             MarginRow(notes = listOfNotNull(when {
                     dict.listening -> Note(w.listening, Tone.Attention)

@@ -238,7 +238,9 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     }
 
     /** The words become lines on the target (or on their own day); Margin says where they went if not here. A question gets an answer. */
-    fun write(text: String, t: Target, files: List<Attachment> = emptyList()): Boolean {
+    fun write(text: String, t: Target, files: List<Attachment> = emptyList(),
+              /** Said, not typed: the phone's reading is a draft — the AI always reads it again, as in 0.29. */
+              spoken: Boolean = false): Boolean {
         val page = t.page
         // Words that change a line already written («перенеси стоматолога на пятницу») change it — with «вернуть».
         if (files.isEmpty() && change(text)) return true
@@ -279,7 +281,12 @@ class BookVm(app: Application) : AndroidViewModel(app) {
             away.isNotEmpty() -> say(words.writtenOn(away.first().date, today.value), before, day = away.first().date)
         }
         // Not sure of the words and the AI is at hand: it re-reads them, and what it reads differently shows as a correction.
-        if (!d.sure && text.isNotBlank() && aiReady()) reread(text, t, store.book.value.lines.filter { l -> lines.any { it.id == l.id } })
+        // Not sure of the words, or they were said aloud (no punctuation, one long breath) — the AI re-reads them; what it reads
+        // differently shows as a correction.
+        if ((!d.sure || spoken) && text.isNotBlank() && aiReady())
+            // The quick model: on live dictation it reads a long breath right in a second and a half; the thinking one spent
+            // half a minute and came back empty.
+            reread(text, t, store.book.value.lines.filter { l -> lines.any { it.id == l.id } })
         return true
     }
 
@@ -360,7 +367,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     /** The AI can be asked: a key or an invite code, and a network. */
     fun aiReady() = Llm.ready(prefs.settings.value) && online()
 
-    private fun reread(text: String, t: Target, phone: List<Line>) {
+    private fun reread(text: String, t: Target, phone: List<Line>, strong: Boolean = false) {
         if (phone.isEmpty()) return
         val bookNow = book.value
         // The AI sees the notebook as it was before these words — else it «closes» the lines it is asked to read.
@@ -369,7 +376,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         say(words.rereading)
         viewModelScope.launch {
             val prompt = AiRead.readPrompt(before0, text, t.page, today.value, words.ru)
-            val reading = complete(prompt, text, strong = false) { AiRead.parseRead(it, before0, t.page, text.trim(), t.threadId, noDay = t.later) }
+            val reading = complete(prompt, text, strong = strong) { AiRead.parseRead(it, before0, t.page, text.trim(), t.threadId, noDay = t.later) }
             if (reading == null) { if (_said.value?.text == words.rereading) hush(); return@launch }
             val before = book.value
             store.update { b ->
@@ -461,14 +468,16 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val text = runCatching {
                 val f = ru.anjeib.margin.data.Files.file(ctx, audio) ?: return@runCatching null
+                if (!aiReady() && !ru.anjeib.margin.voice.LocalWhisper.ready(ctx)) throw IllegalStateException(words.voiceNoNet)
                 val hints = book.value.persons.map { it.name }.take(40)
                 if (aiReady() && !s.whisperAlways) {
                     val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { f.readBytes() }
                     Llm.transcribe(s, bytes, hints).also { prefs.addSpend(it.rub) }.content
                 } else ru.anjeib.margin.voice.LocalWhisper.transcribe(ctx, f, if (words.ru) "ru" else "en", hints)
-            }.getOrNull()
+            }.onFailure { e -> say(words.voiceFailed(e.message)) }.getOrNull()
             ru.anjeib.margin.data.Files.delete(ctx, audio)
-            onText(text?.trim()?.ifBlank { null })
+            if (text == null) { onText(""); return@launch }
+            onText(text.trim().ifBlank { null })
         }
     }
 
