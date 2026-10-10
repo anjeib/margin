@@ -74,7 +74,8 @@ android {
         create("polya") {
             initWith(getByName("release"))
             applicationIdSuffix = ".polya"
-            versionNameSuffix = "-polya"
+            // The stage number of «Поля» (app/polya-build.txt, raised before each stage build): 0.29-polya.3 in Settings.
+            versionNameSuffix = "-polya." + rootProject.file("app/polya-build.txt").readText().trim()
             manifestPlaceholders["appLabel"] = "Margin · поля"
             matchingFallbacks += listOf("release")
         }
