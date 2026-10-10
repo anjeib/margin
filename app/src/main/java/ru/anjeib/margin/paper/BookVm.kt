@@ -187,8 +187,13 @@ class BookVm(app: Application) : AndroidViewModel(app) {
                         ?.let { it.until ?: it.day }?.takeIf { it > page.toString() }
                 }
             }
+            // A message from someone («Олег Самокат:⏎…хотим: 1) … 2) …») — what it asks is what you owe them.
+            val sender = Regex("^\\s*([А-ЯЁA-Z][\\p{L}-]+)(?:\\s+[«\"]?[\\p{L}-]+[»\"]?)?\\s*:\\s*\\n").find(note.text)?.groupValues?.get(1)
+                ?.let { n -> before.person(n)?.name ?: n }
             val kids = s.steps.map { t ->
-                val l = Read.draft(t, before, page, today.value, now = null, lists = false).lines.firstOrNull()
+                val l = Read.draft(t, before, page, today.value, now = null, lists = false).lines.firstOrNull()?.let { x ->
+                    if (sender != null && x.who.isEmpty()) x.copy(who = listOf(ru.anjeib.margin.book.Who(sender, ru.anjeib.margin.book.Dir.To))) else x
+                }
                 val day = l?.day?.takeIf { it != page.toString() || l.time != null || l.until != null }
                 Line(text = l?.text ?: t, kind = ru.anjeib.margin.book.Kind.Todo, parentId = note.id, threadId = note.threadId,
                     who = l?.who.orEmpty(), day = day ?: asked?.let { page.toString() }, time = l?.time?.takeIf { day != null },

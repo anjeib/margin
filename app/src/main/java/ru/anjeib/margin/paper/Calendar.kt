@@ -76,7 +76,7 @@ fun CalendarPage(book: Book, today: LocalDate, focus: BookVm.Flight?, onDay: (Lo
     LazyColumn(state = state, modifier = Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = bottom)) {
         item("head") {
             PageHead(marginTop = "", marginBottom = null, title = w.calendarTitle,
-                line = w.weekLine(week.count { it.isTodo && it.open }, week.count { it.isTodo && !it.open }, week.count { it.kind == Kind.Event && it.state == ru.anjeib.margin.book.State.Open }))
+                line = w.thisWeek + w.weekLine(week.count { it.isTodo && it.open }, week.count { it.isTodo && !it.open }, week.count { it.kind == Kind.Event && it.state == ru.anjeib.margin.book.State.Open }))
         }
         item("month") {
             val shown = YearMonth.parse(ym)

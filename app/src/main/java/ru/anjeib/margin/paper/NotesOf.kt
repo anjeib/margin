@@ -48,7 +48,7 @@ fun notesOf(l: Line, page: LocalDate?, today: LocalDate, book: Book, w: Words, s
         }
     }
     // A step standing on a page says whose step it is: «↳ Совещание с завучами».
-    if (seen != Seen.Sheet) l.parentId?.let { book.line(it) }?.let { p -> out += Note("↳ " + w.short(p.text.lineSequence().first()), Tone.Quiet, under = true) }
+    if (seen != Seen.Sheet) l.parentId?.let { book.line(it) }?.let { p -> out += Note("↳ " + w.short(p.text.lineSequence().first().trim().trimEnd(':')), Tone.Quiet, under = true) }
     // A list under the line: how far it has gone.
     if (seen != Seen.Sheet) book.steps(l.id)?.let { (done, all) -> out += Note(w.ofDone(done, all), Tone.Quiet, under = true) }
     if (l.isTodo && l.state == State.Open && l.moves() >= 3 && seen != Seen.Trace) out += Note(w.moveNo(l.moves()), Tone.Attention, under = true)

@@ -221,13 +221,14 @@ fun LazyListScope.linesByDay(groups: List<Pair<LocalDate?, List<Line>>>, book: B
         item(key = "d" + (d?.toString() ?: "none")) {
             Row(Modifier.fillMaxWidth().padding(top = 18.dp, end = Grid.right)) {
                 Box(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp), contentAlignment = Alignment.TopEnd) {
-                    Text(d?.let { w.dayMonth(it) } ?: noDay, style = Voice.small.copy(color = if (d == today) P.c.link else P.c.ink, textAlign = TextAlign.End))
+                    // Margin's hand, as on every margin: italic serif.
+                    Text(d?.let { w.dayMonth(it) } ?: noDay, style = Voice.note.copy(color = if (d == today) P.c.link else P.c.ink, textAlign = TextAlign.End))
                 }
                 Spacer(Modifier.width(Grid.text - Grid.margin + Grid.noteGap))
                 Text(d?.let { w.near(it, today).takeIf { n -> n != w.dayMonth(it) } ?: w.dow(it) } ?: "", style = Voice.note.copy(color = P.c.graphite))
             }
         }
-        items(ls, key = { "l" + it.id }) { l -> LineOnPage(l, d ?: today, today, book, Seen.Page, false, onMark, onOpen, hideThread = hideThread) }
+        items(ls, key = { "l" + it.id }) { l -> LineOnPage(l, d ?: today, today, book, Seen.Page, false, onMark, onOpen, hideThread = hideThread, allSteps = true) }
     }
 }
 
@@ -279,11 +280,11 @@ fun PersonPage(book: Book, name: String, today: LocalDate, onMark: (String) -> U
         }
         if (pl.promised.isNotEmpty()) {
             item { SectionHead(w.youPromised) }
-            items(pl.promised, key = { "a" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name) }
+            items(pl.promised, key = { "a" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name, allSteps = true) }
         }
         if (pl.waited.isNotEmpty()) {
             item { SectionHead(w.theyPromised) }
-            items(pl.waited, key = { "b" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name) }
+            items(pl.waited, key = { "b" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name, allSteps = true) }
         }
         // Open lines with them — «Вместе»; what is closed (done, not doing — a promise let go too) — under «Было», not
         // passed off as something together.
@@ -291,11 +292,11 @@ fun PersonPage(book: Book, name: String, today: LocalDate, onMark: (String) -> U
         val past = pl.other - withOpen.toSet()
         if (withOpen.isNotEmpty()) {
             item { SectionHead(w.withThem) }
-            items(withOpen, key = { "c" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name) }
+            items(withOpen, key = { "c" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name, allSteps = true) }
         }
         if (past.isNotEmpty()) {
             item { SectionHead(w.pastWithThem) }
-            items(past, key = { "p" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name) }
+            items(past, key = { "p" + it.id }) { l -> LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, hidePerson = name, allSteps = true) }
         }
         if (pl.promised.isEmpty() && pl.waited.isEmpty() && pl.other.isEmpty()) item { MarginSays(w.emptyPerson) }
         // A company or a person — how the address book files them.

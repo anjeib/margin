@@ -159,7 +159,9 @@ fun DayPage(
 /** One line on a page: its notes, its mark, your words; a fresh one is written in with the pen. */
 @Composable
 fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Seen, fresh: Boolean,
-               onMark: (String) -> Unit, onOpen: (String) -> Unit, lead: Note? = null, hideThread: String? = null, hidePerson: String? = null) {
+               onMark: (String) -> Unit, onOpen: (String) -> Unit, lead: Note? = null, hideThread: String? = null, hidePerson: String? = null,
+               /** A thread's or a person's page: every open step stands under its line (no day's page shows the dated ones there). */
+               allSteps: Boolean = false) {
     val c = P.c
     val w = P.w
     val notes = remember(l, page, today, book.threads, book.steps(l.id), seen, w, lead) {
@@ -204,9 +206,12 @@ fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Se
     // What is to be done under the line — a list's items, a note's steps — stands under it on the page, as written in a
     // notebook: open ones, a few at most (the rest in the sheet). Steps with a day of their own stand on that day instead.
     if (!trace && l.parentId == null && l.state == State.Open) {
-        val open = remember(book, l.id) { book.children(l.id).filter { it.isTodo && it.open && it.day == null }.sortedBy { it.writtenAt } }
-        open.take(4).forEach { k -> StepRow(k, ink, onMark = { onMark(k.id) }, onOpen = { onOpen(l.id) }) }
-        if (open.size > 4) MarginLink(w.moreSteps(open.size - 4), Modifier.padding(start = 22.dp)) { onOpen(l.id) }
+        // Ticked today stays, struck through — one sees what is bought, not only what is left.
+        val todayIs = today.toString()
+        val open = remember(book, l.id, allSteps) { book.children(l.id).filter { it.isTodo && (allSteps || it.day == null) &&
+            (it.open || (it.state == State.Done && it.doneAt?.take(10) == todayIs)) }.sortedBy { it.writtenAt } }
+        open.take(6).forEach { k -> StepRow(k, ink, onMark = { onMark(k.id) }, onOpen = { onOpen(l.id) }) }
+        if (open.size > 6) MarginLink(w.moreSteps(open.size - 6), Modifier.padding(start = 22.dp)) { onOpen(l.id) }
     }
 }
 
@@ -217,9 +222,12 @@ private fun StepRow(k: Line, ink: androidx.compose.ui.graphics.Color, onMark: ()
     androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().heightIn(min = 38.dp).clickable(onClick = onOpen).padding(end = Grid.right),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         androidx.compose.foundation.layout.Spacer(Modifier.width(Grid.text - 4.dp))
-        androidx.compose.foundation.layout.Box(Modifier.size(34.dp).clickable(onClick = onMark).semantics { contentDescription = w.a11yMark(false) },
+        androidx.compose.foundation.layout.Box(Modifier.size(34.dp).clickable(onClick = onMark).semantics { contentDescription = w.a11yMark(k.state == State.Done) },
             contentAlignment = androidx.compose.ui.Alignment.Center) { Mark(markOf(k), size = Grid.node * 0.8f) }
-        Text(k.text, style = Voice.words.copy(color = ink, fontSize = Voice.words.fontSize * 0.94f), maxLines = 2,
+        // (a tap on a ticked item takes the tick back, as on the line itself)
+        val done = k.state == State.Done
+        Text(k.text, style = Voice.words.copy(color = if (done) P.c.graphite else ink, fontSize = Voice.words.fontSize * 0.94f,
+            textDecoration = if (done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null), maxLines = 2,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 2.dp))
     }
 }

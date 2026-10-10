@@ -276,13 +276,17 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
             var more by remember(id) { mutableStateOf("") }
             var forced by remember(id) { mutableStateOf<Kind?>(null) }
             var lastKind by remember(id) { mutableStateOf(kids.lastOrNull()?.kind) }
-            val kind = forced ?: if (Read.isStep(more)) Kind.Todo else lastKind ?: if (l.kind == Kind.Todo && kids.any { it.isTodo }) Kind.Todo else Kind.Note
+            // Under a to-do one writes its items («кабель», «коврик»); under a note — more about it.
+            val kind = forced ?: if (Read.isStep(more)) Kind.Todo else lastKind ?: if (l.kind == Kind.Todo) Kind.Todo else Kind.Note
             fun writeMore(t: String) {
                 if (t.isBlank()) return
                 // Several things at once — a list — are steps, unless the mark was set by hand.
                 val k = if (forced == null && Read.items(t).size > 1) Kind.Todo else kind
                 vm.writeUnder(id, t, k); lastKind = k; forced = null
             }
+            // What is typed on the next line is never lost: the sheet closed (or the app put away) with words on it — they are written.
+            val draft = androidx.compose.runtime.rememberUpdatedState(more to kind)
+            DisposableEffect(id) { onDispose { draft.value.let { (t, k) -> if (t.isNotBlank()) vm.writeUnder(id, t, k) } } }
             val sendNow = remember { ru.anjeib.margin.data.Prefs.get(ctx) }.settings.collectAsState().value.voiceSendNow
             val dict = rememberDictation(vm) { t ->
                 if (t.isNullOrBlank()) vm.tell(w.heardNothing) else if (sendNow) writeMore(t) else more = (more.trimEnd() + " " + t).trim()

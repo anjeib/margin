@@ -202,6 +202,7 @@ interface Words {
     fun gathered(n: Int, thread: String): String
     val dueDay: String
     fun moreSteps(n: Int): String
+    val thisWeek: String
     val whole: String
     val longNote: String
     val asWritten: String
@@ -596,6 +597,7 @@ object WordsRu : Words {
     override fun gathered(n: Int, thread: String) = "в нить «$thread» — ещё $n " + plural(n, "строка", "строки", "строк")
     override val dueDay = "срок"
     override fun moreSteps(n: Int) = "ещё $n ›"
+    override val thisWeek = "на этой неделе: "
     override val whole = "целиком ›"
     override val longNote = "одной записью"
     override val asWritten = "как было написано ›"
@@ -986,6 +988,7 @@ object WordsEn : Words {
     override fun gathered(n: Int, thread: String) = "into «$thread» — $n more line" + if (n == 1) "" else "s"
     override val dueDay = "due"
     override fun moreSteps(n: Int) = "$n more ›"
+    override val thisWeek = "this week: "
     override val whole = "read in full ›"
     override val longNote = "one note"
     override val asWritten = "as written ›"

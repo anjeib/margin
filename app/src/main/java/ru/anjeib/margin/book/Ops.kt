@@ -98,11 +98,18 @@ fun Book.reopen(id: String): Book = edit(id) { it.copy(state = State.Open, doneA
 fun Book.move(id: String, to: LocalDate?, today: LocalDate = LocalDate.now()): Book {
     val l = line(id) ?: return this
     val from = (l.lastDay()?.takeIf { it.isBefore(today) } ?: l.date ?: today).toString()
-    return edit(id) {
+    val moved = edit(id) {
         it.copy(day = to?.toString(), until = null, ask = it.ask - "when",
             trail = it.trail + Move(from = from, to = to?.toString()),
             edits = it.edits + Edit("day", it.day, to?.toString()))
     }
+    // Its open steps standing on the day it leaves go with it (a step with a later day of its own stays); their
+    // windows («до пн») are kept, as long as they still end ahead.
+    val old = l.day ?: return moved
+    return moved.copy(lines = moved.lines.map { k ->
+        if (k.parentId != id || !k.open || k.day != old) k
+        else k.copy(day = to?.toString(), until = k.until?.takeIf { u -> to != null && u > to.toString() })
+    })
 }
 
 /** The day and the hour, set on the margin; the old value stays as a correction. */
