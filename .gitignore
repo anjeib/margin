@@ -16,3 +16,8 @@ releases/
 server/codes.local
 server/alpha.local
 server/blocked.local
+
+# Native build cache (CMake/ninja output)
+.cxx/
+app/.cxx/
+third_party
