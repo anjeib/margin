@@ -134,6 +134,40 @@ object Read {
     /** Words under a line: a step if they begin with what to do («позвонить», «купи»), otherwise a comment. */
     fun isStep(text: String): Boolean = stepCue.containsMatchIn(text)
 
+    private val bullet = Regex("^\\s*(?:[-–—•*·]|\\d{1,2}[.)])\\s+")
+
+    /**
+     * Words written under a line as the items they are: a line each («молоко⏎хлеб»), or a list after a colon
+     * («купить: молоко, хлеб, яйца»), bullets and numbers off. One item stays one, commas and all.
+     */
+    fun items(text: String): List<String> {
+        val rows = text.split('\n').map { it.replace(bullet, "").trim() }.filter { it.isNotEmpty() }
+        if (rows.size != 1) return rows
+        val one = rows.single()
+        val colon = one.indexOf(':')
+        if (colon in 1 until one.length - 1) {
+            val parts = enumeration(one.substring(colon + 1))
+            if (parts.size >= 2) return parts
+        }
+        // Without a colon only a plain enumeration is a list: three short things or more («молоко, хлеб и яйца»).
+        val parts = enumeration(one)
+        if (parts.size >= 3 && parts.all { it.split(' ').size <= 3 } && !told.containsMatchIn(one)) return parts
+        return rows
+    }
+
+    // What was done or felt is told, not listed: «прочитал, понравилось, но дорого» stays one comment.
+    private val told = Regex("(?iu)(?:^|[\\s,])(?:но|а|зато|хотя|потому)\\s|\\p{L}[аеиоуыя](?:л|ли|лся|лись|лось)(?=[\\s,.;]|$)")
+
+    /** «молоко, хлеб и яйца» → молоко · хлеб · яйца: commas, semicolons and the last «и / and». */
+    private fun enumeration(text: String): List<String> {
+        val parts = text.trim().removeSuffix(".").split(Regex("[,;]")).map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+        if (parts.size >= 2) {
+            val last = parts.removeAt(parts.size - 1)
+            parts += last.split(Regex("\\s+(?:и|and)\\s+", RegexOption.IGNORE_CASE)).map { it.trim() }.filter { it.isNotEmpty() }
+        }
+        return parts
+    }
+
     /** First letter a capital; kinship words keep the small letter they were written with. */
     private fun calm(title: String, said: String): String {
         val small = Regex("\\p{L}+").findAll(said).map { it.value }.filter { w -> w.first().isLowerCase() && w.lowercase() in kin }.map { it.lowercase() }.toSet()

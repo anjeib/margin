@@ -157,7 +157,7 @@ ${context(book, question, today, max = 70)}
     private val gave = Regex("(?<!\\p{L})(?:прислал\\p{L}*|отправил\\p{L}*|скинул\\p{L}*|вернул\\p{L}*|отдал\\p{L}*|передал\\p{L}*|принес\\p{L}*|принёс|" +
         "оплатил\\p{L}*|сделал\\p{L}*|подписал\\p{L}*|ответил\\p{L}*|sent|returned|paid|gave|signed|replied)", RegexOption.IGNORE_CASE)
 
-    private fun stems(text: String, names: List<String>): Set<String> {
+    internal fun stems(text: String, names: List<String>): Set<String> {
         val nameStems = names.map { norm(it).take(4) }
         // A Russian word with a capital inside the words is a name or a surname («Петров», «Олегу»): it says who, not what.
         val proper = Regex("(?<=\\s)[А-ЯЁ][а-яё]{2,}").findAll(text).map { norm(it.value).take(4) }.toSet()

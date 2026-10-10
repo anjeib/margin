@@ -23,6 +23,8 @@ interface Words {
     fun mon(month: Int): String
     fun monthName(m: YearMonth): String
     fun dayMonth(d: LocalDate): String = "${d.dayOfMonth} ${mon(d.monthValue)}"
+    /** A line's words short enough for one line of Margin's answer. */
+    fun short(text: String): String = if (text.length <= 32) text else text.take(30).trimEnd() + "…"
     /** A day as the margin says it, seen from [today]: «завтра», «пт», «12 ноя». */
     fun near(d: LocalDate, today: LocalDate): String
     fun tailSince(d: LocalDate): String
@@ -36,6 +38,8 @@ interface Words {
     fun moveNo(n: Int): String
     fun ask(what: String): String
     fun summary(s: Summary): String
+    /** Promises in words, not arrows: «вы обещали 2 · ждёте 1». */
+    fun owes(promised: Int, waited: Int): String?
     val composerHint: String
     fun writtenOn(d: LocalDate?, today: LocalDate): String
     fun writtenN(n: Int): String
@@ -71,6 +75,18 @@ interface Words {
     val offerDelete: String
     fun stamp(at: java.time.LocalDateTime, today: LocalDate): String
     val writeUnder: String
+    val markKind: String
+    val deleteForGood: String
+    val backToWork: String
+    fun remindWho(name: String): String
+    fun ofDone(done: Int, total: Int): String
+    /** A line changed by words: «Стоматолог» → пт 15:00 / → потом; «Figma» — не делаем; «Лампа» — сделано. */
+    fun changedTo(text: String, day: LocalDate?, time: String?, today: LocalDate): String
+    fun changedDropped(text: String): String
+    val editing: String
+    val doneWord: String
+    fun changedDone(text: String): String
+    fun movedAll(n: Int, to: LocalDate?, today: LocalDate): String
     val pickDay: String
     val addTime: String
     val noTime: String
@@ -204,6 +220,11 @@ interface Words {
     val addressBook: String
     val findPerson: String
     val filterAll: String
+    val filesTitle: String
+    fun filesLine(photos: Int, docs: Int): String
+    val filesSub: String
+    val filesEmpty: String
+    val documents: String
     val filterPeople: String
     val filterOrgs: String
     val company: String
@@ -306,8 +327,11 @@ object WordsRu : Words {
     override fun with(name: String) = "с\u00A0" + name.instrumental()
     override fun moveNo(n: Int) = "$n " + plural(n, "перенос", "переноса", "переносов")
     override fun ask(what: String) = when (what) { "when" -> "когда?"; "who" -> "кто это?"; "thread" -> "в нить?"; else -> "?" }
+    override fun owes(promised: Int, waited: Int) = listOfNotNull(
+        promised.takeIf { it > 0 }?.let { "вы обещали $it" }, waited.takeIf { it > 0 }?.let { "ждёте $it" },
+    ).joinToString(" · ").ifEmpty { null }
     override fun summary(s: Summary) = listOfNotNull(
-        s.promises.takeIf { it > 0 }?.let { "$it " + plural(it, "обещание", "обещания", "обещаний") },
+        owes(s.promised, s.waited),
         s.questions.takeIf { it > 0 }?.let { "$it " + plural(it, "вопрос", "вопроса", "вопросов") },
         s.tails.takeIf { it > 0 }?.let { "$it с прошлых дней" },
     ).joinToString(" · ").let { if (it.isEmpty()) "" else "на полях: $it" }
@@ -346,7 +370,19 @@ object WordsRu : Words {
     override val offerDelete = "удалить"
     override fun stamp(at: java.time.LocalDateTime, today: LocalDate) =
         (if (at.toLocalDate() == today) "" else dayMonth(at.toLocalDate()) + " ") + at.toLocalTime().toString().take(5)
-    override val writeUnder = "Дописать…"
+    override val writeUnder = "дописать…"
+    override val markKind = "Пункт или запись"
+    override val deleteForGood = "удалить совсем"
+    override val backToWork = "вернуть в дела"
+    override fun remindWho(name: String) = "напомнить " + name.dative()
+    override fun ofDone(done: Int, total: Int) = "$done из $total"
+    override fun changedTo(text: String, day: LocalDate?, time: String?, today: LocalDate) =
+        "«${short(text)}» → " + (listOfNotNull(day?.let { near(it, today) }, time).joinToString(" ").ifEmpty { "потом" })
+    override fun changedDropped(text: String) = "«${short(text)}» — не делаем"
+    override val editing = "правка"
+    override val doneWord = "сделано"
+    override fun changedDone(text: String) = "«${short(text)}» — сделано"
+    override fun movedAll(n: Int, to: LocalDate?, today: LocalDate) = "$n " + plural(n, "строка", "строки", "строк") + " → " + (to?.let { near(it, today) } ?: "потом")
     override val pickDay = "другой день…"
     override val addTime = "+ время"
     override val noTime = "без времени"
@@ -354,8 +390,8 @@ object WordsRu : Words {
     override val cancel = "Отмена"
     override val noRepeat = "не повторять"
     override val whoHint = "Имя"
-    override val dirFrom = "← жду от"
-    override val dirTo = "→ обещал(а)"
+    override val dirFrom = "← ждёте от"
+    override val dirTo = "→ вы обещали"
     override val dirWith = "вместе"
     override val newThread = "Новая нить…"
     override val outOfThread = "Убрать из нити"
@@ -365,7 +401,7 @@ object WordsRu : Words {
     override val noThreads = "Нить появится, когда напишете «#Название» или сделаете нитью строку."
     override fun threadLine(st: ru.anjeib.margin.book.ThreadStats) = listOfNotNull(
         st.open.takeIf { it > 0 }?.let { "$it " + plural(it, "дело", "дела", "дел") + " открыто" },
-        st.waiting.takeIf { it > 0 }?.let { "жду $it" },
+        st.waiting.takeIf { it > 0 }?.let { "ждёте $it" },
         st.notes.takeIf { it > 0 }?.let { "$it " + plural(it, "запись", "записи", "записей") },
         st.files.takeIf { it > 0 }?.let { "$it " + plural(it, "файл", "файла", "файлов") },
     ).joinToString(" · ")
@@ -399,13 +435,13 @@ object WordsRu : Words {
         Triple("Сдать отчёт", "Крест — сделано. Нажмите ещё раз — вернётся.", "done"),
         Triple("Созвон со студией", "Кружок — встреча: её не делают, на неё приходят.", "event"),
         Triple("Олег просит зерно круглее", "Тире — запись: мысль, факт, заметка.", "note"),
-        Triple("Показать логотип", "Слева — пометки Margin: время, повтор, люди, нить, место.", "time"),
+        Triple("Показать логотип", "Слева Margin пишет когда: день, час. Под словами — с кем, где, в какой нити.", "time"),
         Triple("Спортзал", "↻ — повтор. Сделали — следующий появится на своей странице.", "repeat"),
         Triple("Продлить подписку", "Красной ручкой — дело с прошлых дней: не сделано вовремя. Решите, что с ним.", "tail"),
         Triple("Исходники баннеров", "→ Лёше — вы обещали. ← Дима — обещали вам.", "to"),
     )
     override val helpTitle = "Как читать поля"
-    override val helpLine = "справа ваши слова, на линии знак, слева пометки Margin"
+    override val helpLine = "слева — когда, на линии — знак, справа — ваши слова и пометки Margin под ними"
     override val helpWriting = "Как писать"
     override val helpWritingText = "Пишите как думаете: «завтра в 15 позвонить Олегу», «Дима пришлёт смету до пт», «каждый вторник бассейн». Слова времени уйдут на поля, остальное останется вашим. «#Зерно» — в нить, «потом» — без дня."
     override val helpEvening = "Вечером"
@@ -502,14 +538,15 @@ object WordsRu : Words {
     override val stop = "Остановить"
     override fun personAdded(name: String) = "$name — в людях"
     override val handedTitle = "В Margin"
-    override fun handedFrom(app: String) = "из $app"
+    // «из Telegram», but «из «Файлы»»: a Russian name in quotes keeps «из» from bending it.
+    override fun handedFrom(app: String) = if (app.any { it in 'а'..'я' || it in 'А'..'Я' }) "из «$app»" else "из $app"
     override val openInMargin = "открыть в Margin ›"
     override val propFile = "файл"
     override val share = "Поделиться"
     override val removeFile = "убрать из строки"
     override val welcomeLine = "ежедневник, который пишет на полях"
     override fun welcomeRows() = listOf(
-        Triple("Margin", "none", "Слева пишет Margin: когда, кто, к чему относится."),
+        Triple("Margin", "none", "На полях Margin пишет когда, а под вашими словами — кто и к чему относится."),
         Triple(null, "note", "Справа — ваши слова. Пишите как думаете, в одно поле внизу."),
         Triple("завтра", "open", "Точка на линии — дело. Нажмите на неё."),
         Triple("→\u00A0Лёше", "none", "Стрелка — обещание: → вы обещали, ← обещали вам."),
@@ -551,6 +588,13 @@ object WordsRu : Words {
     override val addressBook = "Люди и компании"
     override val findPerson = "Имя, компания, кто это…"
     override val filterAll = "все"
+    override val filesTitle = "Файлы"
+    override fun filesLine(photos: Int, docs: Int) = listOfNotNull(
+        photos.takeIf { it > 0 }?.let { "$it фото" }, docs.takeIf { it > 0 }?.let { "$it " + plural(it, "документ", "документа", "документов") },
+    ).joinToString(" · ").ifEmpty { "пока ничего" }
+    override val filesSub = "фото и документы со строк"
+    override val filesEmpty = "Файлов пока нет. Прикрепите к строке — скрепкой в её листе или «+» у поля."
+    override val documents = "документы"
     override val filterPeople = "люди"
     override val filterOrgs = "компании"
     override val company = "компания"
@@ -634,8 +678,11 @@ object WordsEn : Words {
     override fun with(name: String) = "with\u00A0$name"
     override fun moveNo(n: Int) = "moved ${n}×"
     override fun ask(what: String) = when (what) { "when" -> "when?"; "who" -> "who?"; "thread" -> "a thread?"; else -> "?" }
+    override fun owes(promised: Int, waited: Int) = listOfNotNull(
+        promised.takeIf { it > 0 }?.let { "you promised $it" }, waited.takeIf { it > 0 }?.let { "waiting for $it" },
+    ).joinToString(" · ").ifEmpty { null }
     override fun summary(s: Summary) = listOfNotNull(
-        s.promises.takeIf { it > 0 }?.let { "$it promise" + if (it == 1) "" else "s" },
+        owes(s.promised, s.waited),
         s.questions.takeIf { it > 0 }?.let { "$it question" + if (it == 1) "" else "s" },
         s.tails.takeIf { it > 0 }?.let { "$it left over" },
     ).joinToString(" · ").let { if (it.isEmpty()) "" else "on the margin: $it" }
@@ -674,7 +721,19 @@ object WordsEn : Words {
     override val offerDelete = "delete"
     override fun stamp(at: java.time.LocalDateTime, today: LocalDate) =
         (if (at.toLocalDate() == today) "" else dayMonth(at.toLocalDate()) + " ") + at.toLocalTime().toString().take(5)
-    override val writeUnder = "Write under it…"
+    override val writeUnder = "write on…"
+    override val markKind = "Step or note"
+    override val deleteForGood = "delete for good"
+    override val backToWork = "bring it back"
+    override fun remindWho(name: String) = "remind $name"
+    override fun ofDone(done: Int, total: Int) = "$done of $total"
+    override fun changedTo(text: String, day: LocalDate?, time: String?, today: LocalDate) =
+        "«${short(text)}» → " + (listOfNotNull(day?.let { near(it, today) }, time).joinToString(" ").ifEmpty { "later" })
+    override fun changedDropped(text: String) = "«${short(text)}» — not doing"
+    override val editing = "a change"
+    override val doneWord = "done"
+    override fun changedDone(text: String) = "«${short(text)}» — done"
+    override fun movedAll(n: Int, to: LocalDate?, today: LocalDate) = "$n line" + (if (n == 1) "" else "s") + " → " + (to?.let { near(it, today) } ?: "later")
     override val pickDay = "another day…"
     override val addTime = "+ time"
     override val noTime = "no time"
@@ -727,13 +786,13 @@ object WordsEn : Words {
         Triple("Send the report", "A cross — done. Tap again to undo.", "done"),
         Triple("Call with the studio", "A ring — an event: you attend it, you don't do it.", "event"),
         Triple("Oleg wants the bean rounder", "A dash — a note: a thought, a fact.", "note"),
-        Triple("Show the logo", "On the left — Margin's notes: time, repeat, people, thread, place.", "time"),
+        Triple("Show the logo", "On the left Margin writes when: the day, the hour. Under the words — with whom, where, in which thread.", "time"),
         Triple("Gym", "↻ — a repeat. Done — the next one appears on its page.", "repeat"),
         Triple("Renew the subscription", "In red pen — left over: not done in time. Decide what to do.", "tail"),
         Triple("Banner sources", "→ Lyosha — you promised. ← Dima — promised to you.", "to"),
     )
     override val helpTitle = "How to read the margin"
-    override val helpLine = "your words on the right, the mark on the rule, Margin's notes on the left"
+    override val helpLine = "when on the left, the mark on the rule, your words on the right with Margin's notes under them"
     override val helpWriting = "How to write"
     override val helpWritingText = "Write as you think: «call Oleg tomorrow at 3», «Dima sends the estimate by Fri», «pool every Tuesday». Words of time go to the margin, the rest stays yours. «#Name» — into a thread, «later» — no day."
     override val helpEvening = "In the evening"
@@ -836,7 +895,7 @@ object WordsEn : Words {
     override val removeFile = "remove from the line"
     override val welcomeLine = "a planner that writes in the margin"
     override fun welcomeRows() = listOf(
-        Triple("Margin", "none", "On the left Margin writes: when, who, what it belongs to."),
+        Triple("Margin", "none", "On the margin Margin writes when; under your words — who and what it belongs to."),
         Triple(null, "note", "On the right — your words. Write as you think, in one field below."),
         Triple("tomorrow", "open", "A dot on the rule is a to-do. Tap it."),
         Triple("→\u00A0Alex", "none", "An arrow is a promise: → you promised, ← promised to you."),
@@ -878,6 +937,13 @@ object WordsEn : Words {
     override val addressBook = "People and companies"
     override val findPerson = "Name, company, who…"
     override val filterAll = "all"
+    override val filesTitle = "Files"
+    override fun filesLine(photos: Int, docs: Int) = listOfNotNull(
+        photos.takeIf { it > 0 }?.let { "$it photo" + if (it == 1) "" else "s" }, docs.takeIf { it > 0 }?.let { "$it document" + if (it == 1) "" else "s" },
+    ).joinToString(" · ").ifEmpty { "nothing yet" }
+    override val filesSub = "photos and documents from your lines"
+    override val filesEmpty = "No files yet. Attach one to a line — the clip in its sheet, or «+» by the field."
+    override val documents = "documents"
     override val filterPeople = "people"
     override val filterOrgs = "companies"
     override val company = "company"

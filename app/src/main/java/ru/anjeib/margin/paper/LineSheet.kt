@@ -40,6 +40,13 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +60,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import ru.anjeib.margin.book.Book
+import ru.anjeib.margin.book.Read
+import ru.anjeib.margin.book.reopen
 import ru.anjeib.margin.book.Dir
 import ru.anjeib.margin.book.Kind
 import ru.anjeib.margin.book.Line
@@ -98,63 +107,76 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
         if (u != null) scope.launch { ru.anjeib.margin.data.Files.import(ctx, u)?.let { f -> vm.edit { it.addFiles(id, listOf(f)) } } }
     }
     fun commit() { if (text.isNotBlank() && text.trim() != l.text) vm.edit { it.retext(id, text) } }
+    // The next empty line of the sheet takes the focus when the paper around it is tapped.
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val tall = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.62f).dp
     DisposableEffect(id) { onDispose { commit() } }
 
     ModalBottomSheet(onDismissRequest = { commit(); onClose() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = c.lifted, scrimColor = c.scrim,
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) }) {
         androidx.compose.runtime.CompositionLocalProvider(LocalGround provides c.lifted) {
-        Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().rule(c.rule).verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
+        Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().verticalScroll(rememberScrollState()).heightIn(min = tall).rule(c.rule)
+            // A sheet of paper, taller than what is written: a tap on its empty part goes to the next line.
+            .pointerInput(id) { detectTapGestures { runCatching { focus.requestFocus() } } }
+            .padding(bottom = 16.dp)) {
             // What Margin knows, on the margin, whole: the values only, no names for them.
-            // A day, an hour, a repeat, a place: a tap changes it. A person, a thread: a link to their page.
+            // A day, an hour, a repeat, a place: a tap changes it. A person, a thread: a link to their page; someone you
+            // wait for also gets a reminder, ready to send.
+            var whoMenu by remember { mutableStateOf<String?>(null) }
             val values = buildList<Pair<Note, () -> Unit>> {
                 whenOf(l, today, w)?.split("\n")?.forEach { add(Note(it, Tone.Quiet) to { ask = "when" }) }
                 l.repeat?.let { add(Note(w.repeat(it), Tone.Quiet) to { ask = "repeat" }) }
                 l.who.sortedBy { it.dir.ordinal }.forEach { who ->
-                    add(Note(when (who.dir) { Dir.To -> w.to(who.name); Dir.From -> w.from(who.name); Dir.With -> w.with(who.name) }, Tone.Link) to { commit(); onPerson(who.name) })
+                    add(Note(when (who.dir) { Dir.To -> w.to(who.name); Dir.From -> w.from(who.name); Dir.With -> w.with(who.name) }, Tone.Link) to {
+                        if (who.dir == Dir.From && l.state == State.Open) whoMenu = who.name else { commit(); onPerson(who.name) }
+                    })
                 }
                 l.place?.let { add(Note(it, Tone.Link) to { ask = "place" }) }
                 book.thread(l.threadId)?.let { t -> add(Note(w.threadPrefix + t.title, Tone.Link) to { commit(); onThread(t.id) }) }
                 notesOf(l, null, today, book, w, Seen.Sheet).filter { it.tone == Tone.Attention }.forEach { add(it to {}) }
             }
-            // On top, one band like a menu: on the margin every value Margin knows; on the right the signs a line can have
-            // and where it goes next.
+            // On top, one band like a menu: on the margin every value Margin knows; on the right the signs a line can have.
+            // Where it goes next is under the signs themselves: the day under the clock, «не делаем» under the bin.
             Row(Modifier.fillMaxWidth()) {
                 Column(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp), horizontalAlignment = Alignment.End) {
                     values.forEach { (n, go) ->
                         Box(Modifier.fillMaxWidth().heightIn(min = 32.dp).clip(RoundedCornerShape(6.dp)).clickable(onClick = go),
-                            contentAlignment = Alignment.CenterEnd) { NoteText(n) }
+                            contentAlignment = Alignment.CenterEnd) {
+                            NoteText(n)
+                            val name = l.who.firstOrNull { it.dir == Dir.From && n.text == w.from(it.name) }?.name
+                            if (name != null) DropdownMenu(whoMenu == name, { whoMenu = null }, containerColor = c.sheet) {
+                                SheetItem(w.remindWho(name)) {
+                                    whoMenu = null
+                                    val i = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                                        .putExtra(android.content.Intent.EXTRA_TEXT, w.remindText(name, l.text).let { t ->
+                                            // With the day it was promised for, if there is one: «… — к ср.»
+                                            l.lastDay()?.let { d -> t.removeSuffix(".") + " — " + (if (w.ru) "к " else "by ") + w.near(d, today) + "." } ?: t })
+                                    runCatching { ctx.startActivity(android.content.Intent.createChooser(i, w.remind).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                }
+                                SheetItem("$name ›") { whoMenu = null; commit(); onPerson(name) }
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.width(Grid.text - Grid.margin + Grid.noteGap - 14.dp))
-                Column(Modifier.weight(1f)) {
-                    // What a line can have, as the signs it gets on the margin: the ones it has in petrol. The bin at the end.
-                    Row(Modifier.fillMaxWidth().padding(end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (l.kind != Kind.Note || l.day != null) SheetSign(w.propWhen, l.day != null || l.time != null, { ask = "when" }) { ClockGlyph(it) }
-                        SheetSign(w.propRepeat, l.repeat != null, { ask = "repeat" }) { RepeatGlyph(it) }
-                        SheetSign(w.propWho, l.who.isNotEmpty(), { ask = "who" }) { PersonGlyph(it) }
-                        SheetSign(w.propPlace, l.place != null, { ask = "place" }) { PinGlyph(it) }
-                        SheetSign(w.propThread, l.threadId != null, { ask = "thread" }) { ThreadGlyph(it) }
-                        SheetSign(w.propFile, l.files.isNotEmpty(), { pickFile.launch(arrayOf("*/*")) }) { ClipGlyph(it) }
-                        Spacer(Modifier.weight(1f))
-                        SheetSign(w.offerDelete, false, { vm.delete(id); onClose() }, tint = c.red) { BinGlyph(it) }
-                    }
-                    // Margin's offers for this line: where it goes next.
-                    FlowRow(Modifier.fillMaxWidth().padding(start = 4.dp, end = Grid.right), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        // Waiting for someone: a ready message to remind them — sent by you, from your messenger.
-                        val from = l.from()
-                        if (from != null && l.state == State.Open) Offer(w.remind) {
-                            val i = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                                .putExtra(android.content.Intent.EXTRA_TEXT, w.remindText(from, l.text).let { t ->
-                                    // With the day it was promised for, if there is one: «… — к ср.»
-                                    l.lastDay()?.let { d -> t.removeSuffix(".") + " — " + (if (w.ru) "к " else "by ") + w.near(d, today) + "." } ?: t })
-                            runCatching { ctx.startActivity(android.content.Intent.createChooser(i, w.remind).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                        }
-                        if (l.kind == Kind.Todo && l.state == State.Open) {
-                            if (l.date != today) Offer(w.offerToday) { vm.move(id, today); onClose() }
-                            if (l.date != today.plusDays(1)) Offer(w.offerTomorrow) { vm.move(id, today.plusDays(1)); onClose() }
-                            if (l.day != null || l.until != null) Offer(w.offerLater) { vm.move(id, null); onClose() }
-                            Offer(w.dropped) { vm.drop(id); onClose() }
+                // What a line can have, as the signs it gets on the margin: the ones it has in petrol. The bin at the end.
+                Row(Modifier.weight(1f).padding(end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (l.kind != Kind.Note || l.day != null) SheetSign(w.propWhen, l.day != null || l.time != null, { ask = "when" }) { ClockGlyph(it) }
+                    SheetSign(w.propRepeat, l.repeat != null, { ask = "repeat" }) { RepeatGlyph(it) }
+                    SheetSign(w.propWho, l.who.isNotEmpty(), { ask = "who" }) { PersonGlyph(it) }
+                    SheetSign(w.propPlace, l.place != null, { ask = "place" }) { PinGlyph(it) }
+                    SheetSign(w.propThread, l.threadId != null, { ask = "thread" }) { ThreadGlyph(it) }
+                    SheetSign(w.propFile, l.files.isNotEmpty(), { pickFile.launch(arrayOf("*/*")) }) { ClipGlyph(it) }
+                    Spacer(Modifier.weight(1f))
+                    // The bin is a choice, not a deed: a matter can be let go and stay in the notebook, or go for good.
+                    var bin by remember { mutableStateOf(false) }
+                    Box {
+                        SheetSign(w.offerDelete, false, { if (l.kind == Kind.Todo) bin = true else { vm.delete(id); onClose() } }, tint = c.red) { BinGlyph(it) }
+                        DropdownMenu(bin, { bin = false }, containerColor = c.sheet) {
+                            if (l.state == State.Dropped) SheetItem(w.backToWork) { bin = false; vm.edit { it.reopen(id) } }
+                            else if (l.state == State.Open) SheetItem(w.dropped) { bin = false; vm.drop(id); onClose() }
+                            SheetItem(w.deleteForGood, danger = true) { bin = false; vm.delete(id); onClose() }
                         }
                     }
                 }
@@ -175,26 +197,86 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
             }
             // What was written under the line.
             val kids = book.children(id)
+            var editing by remember(id) { mutableStateOf<String?>(null) }
             if (kids.isNotEmpty()) {
                 androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 8.dp))
+                var said: String? = null
                 kids.sortedBy { it.writtenAt }.forEach { k ->
-                    MarginRow(notes = listOf(Note(w.stamp(k.written, today), Tone.Quiet)), mark = markOf(k),
+                    // The time once for what was written at one go — a list does not repeat «00:03» on every item.
+                    val stamp = w.stamp(k.written, today).let { if (it == said) null else { said = it; it } }
+                    val look = Voice.words.copy(color = if (k.state == State.Open) c.ink else c.graphite,
+                        textDecoration = if (k.state != State.Open && k.kind == Kind.Todo) TextDecoration.LineThrough else null)
+                    MarginRow(notes = listOfNotNull(stamp?.let { Note(it, Tone.Quiet) }), mark = markOf(k),
                         onMark = if (k.kind == Kind.Todo) ({ vm.toggle(k.id) }) else null) {
-                        Text(linked(k.text, c.link), style = Voice.words.copy(color = if (k.state == State.Open) c.ink else c.graphite,
-                            textDecoration = if (k.state != State.Open && k.kind == Kind.Todo) TextDecoration.LineThrough else null))
+                        // Written under the line, changed in place, as on paper: a tap puts the pen in it; words wiped out —
+                        // the line is gone. Its links stay links until then.
+                        if (editing == k.id) {
+                            // The pen goes to the end of the words, where one usually adds or fixes.
+                            var tv by remember(k.id) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(k.text, androidx.compose.ui.text.TextRange(k.text.length))) }
+                            val pen = remember { androidx.compose.ui.focus.FocusRequester() }
+                            var had by remember { mutableStateOf(false) }
+                            var saved by remember { mutableStateOf(false) }
+                            fun save() {
+                                if (saved) return
+                                saved = true
+                                // Read live: the sheet may close long after this was first drawn.
+                                val v = tv.text.trim()
+                                if (v.isEmpty()) vm.delete(k.id) else if (v != k.text) vm.edit { it.retext(k.id, v) }
+                            }
+                            BasicTextField(tv, { tv = it }, textStyle = look, cursorBrush = SolidColor(c.link),
+                                modifier = Modifier.weight(1f).focusRequester(pen).onFocusChanged { f ->
+                                    if (f.isFocused) had = true else if (had) { save(); editing = null }
+                                })
+                            LaunchedEffect(k.id) { runCatching { pen.requestFocus() } }
+                            // The sheet closed with the pen still in it: what was written stays.
+                            DisposableEffect(k.id) { onDispose { save() } }
+                        } else Text(linked(k.text, c.link), style = look, modifier = Modifier.weight(1f).clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { editing = k.id })
                     }
                 }
             }
-            // Write more under it: a step if it says what to do, otherwise a comment.
+            // The next empty line of the sheet: written right here, as on paper. Its mark is Margin's guess — • a step,
+            // – a note — and continues the list being written; a tap on it changes it. Enter writes the line and opens
+            // the next one; the microphone says it instead.
             var more by remember(id) { mutableStateOf("") }
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.width(Grid.text - 6.dp))
-                val shape = RoundedCornerShape(22.dp)
-                Box(Modifier.weight(1f).heightIn(min = 44.dp).clip(shape).background(c.sheet).border(1.dp, c.hairline, shape).padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    if (more.isEmpty()) Text(w.writeUnder, style = Voice.words.copy(color = c.graphite))
-                    BasicTextField(more, { more = it }, textStyle = Voice.words.copy(color = c.ink), cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { vm.writeUnder(id, more); more = "" }))
+            var forced by remember(id) { mutableStateOf<Kind?>(null) }
+            var lastKind by remember(id) { mutableStateOf(kids.lastOrNull()?.kind) }
+            val kind = forced ?: if (Read.isStep(more)) Kind.Todo else lastKind ?: if (l.kind == Kind.Todo && kids.any { it.isTodo }) Kind.Todo else Kind.Note
+            fun writeMore(t: String) {
+                if (t.isBlank()) return
+                // Several things at once — a list — are steps, unless the mark was set by hand.
+                val k = if (forced == null && Read.items(t).size > 1) Kind.Todo else kind
+                vm.writeUnder(id, t, k); lastKind = k; forced = null
+            }
+            val sendNow = remember { ru.anjeib.margin.data.Prefs.get(ctx) }.settings.collectAsState().value.voiceSendNow
+            val dict = rememberDictation(vm) { t ->
+                if (t.isNullOrBlank()) vm.tell(w.heardNothing) else if (sendNow) writeMore(t) else more = (more.trimEnd() + " " + t).trim()
+            }
+            MarginRow(notes = listOfNotNull(when {
+                    dict.listening -> Note(w.listening, Tone.Attention)
+                    dict.hearing -> Note(w.transcribing, Tone.Quiet)
+                    more.isNotEmpty() -> Note(w.stamp(java.time.LocalDateTime.now(), today), Tone.Quiet)
+                    else -> null
+                }),
+                mark = if (kind == Kind.Todo) MarkKind.Open else MarkKind.Note, markLabel = w.markKind, pale = more.isEmpty(),
+                onMark = { forced = if (kind == Kind.Todo) Kind.Note else Kind.Todo }) {
+                Box(Modifier.weight(1f)) {
+                    if (dict.listening) Level(dict.level, Modifier.fillMaxWidth().height(24.dp))
+                    else {
+                        if (more.isEmpty()) Text(w.writeUnder, style = Voice.words.copy(color = c.pencil))
+                        BasicTextField(more, { v ->
+                            // Enter: the line is written, the field is ready for the next one.
+                            if (v.contains('\n')) { writeMore(v.substringBeforeLast('\n')); more = v.substringAfterLast('\n') } else more = v
+                        }, textStyle = Voice.words.copy(color = c.ink), cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth().focusRequester(focus))
+                    }
+                }
+                Box(Modifier.size(36.dp).clip(CircleShape).clickable { if (more.isNotBlank() && !dict.listening) { writeMore(more); more = "" } else dict.toggle() }
+                    .semantics { contentDescription = if (more.isNotBlank()) w.a11ySend else if (dict.listening) w.stop else w.a11yMic }, contentAlignment = Alignment.Center) {
+                    when {
+                        dict.listening -> Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(c.redFill))
+                        more.isNotBlank() -> SendGlyph(c.link, 16.dp)
+                        else -> MicGlyph(c.graphite, 20.dp)
+                    }
                 }
             }
         }
@@ -249,12 +331,11 @@ private fun Prop(value: String?, name: String, onValue: (() -> Unit)? = null, on
     }
 }
 
-/** An offer in Margin's voice: a word, a full line high. */
+/** An item of a sheet's menu, in Margin's voice. */
 @Composable
-private fun Offer(text: String, danger: Boolean = false, onClick: () -> Unit) {
+private fun SheetItem(text: String, danger: Boolean = false, onClick: () -> Unit) {
     val c = P.c
-    Text(text, style = Voice.reply.copy(color = if (danger) c.red else c.link),
-        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 12.dp))
+    DropdownMenuItem(text = { Text(text, style = Voice.reply.copy(color = if (danger) c.red else c.ink)) }, onClick = onClick)
 }
 
 /** When: quick days, a day from the calendar, an hour, or «потом». */

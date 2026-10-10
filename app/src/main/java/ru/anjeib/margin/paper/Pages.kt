@@ -85,7 +85,7 @@ fun IndexRow(margin: List<Note>, title: String, sub: String?, onClick: () -> Uni
 @Composable
 fun IndexPage(book: Book, today: LocalDate, onThread: (String) -> Unit, onPerson: (String) -> Unit, onLater: () -> Unit,
               onSettings: () -> Unit, onHelp: () -> Unit, onSearch: () -> Unit, onFeedback: () -> Unit, onWeek: () -> Unit = {},
-              onAllThreads: () -> Unit = {}, onAllPeople: () -> Unit = {}) {
+              onAllThreads: () -> Unit = {}, onAllPeople: () -> Unit = {}, onFiles: () -> Unit = {}) {
     val c = P.c
     val w = P.w
     val open = book.threads.filter { it.closedAt == null }.map { it to book.threadStats(it.id, today) }.sortedByDescending { it.second.last }
@@ -110,6 +110,9 @@ fun IndexPage(book: Book, today: LocalDate, onThread: (String) -> Unit, onPerson
         item { Spacer(Modifier.padding(top = 14.dp)) }
         item { IndexRow(emptyList(), w.weekTitle, w.weekSub, onWeek) }
         item { IndexRow(listOf(Note(later.size.toString(), Tone.Quiet)), w.laterTitle, w.laterLine, onLater) }
+        // Everything attached, in one place — only once there is something to show.
+        val files = book.lines.sumOf { it.files.size }
+        if (files > 0) item { IndexRow(listOf(Note(files.toString(), Tone.Quiet)), w.filesTitle, w.filesSub, onFiles) }
         item {
             androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(top = 30.dp, start = Grid.text - 6.dp, end = Grid.right)) {
                 listOf(w.search to onSearch, w.settings to onSettings, w.help to onHelp, w.feedback to onFeedback).forEachIndexed { i, (t, f) ->
@@ -132,11 +135,9 @@ private fun peopleOf(book: Book): List<Triple<ru.anjeib.margin.book.Person, ru.a
 /** A person in a list: → and ← counts on the margin, the name, what they are and how many lines. */
 @Composable
 private fun PersonRow(p: ru.anjeib.margin.book.Person, pl: ru.anjeib.margin.book.PersonLines, n: Int, w: Words, tab: String? = null, onClick: () -> Unit) {
-    val m = listOfNotNull(
-        pl.promised.size.takeIf { it > 0 }?.let { Note("→\u00A0$it", Tone.Link) },
-        pl.waited.size.takeIf { it > 0 }?.let { Note("←\u00A0$it", Tone.Link) },
-    )
-    IndexRow(m, p.name, listOfNotNull(p.about ?: if (p.org) w.company else null, w.linesN(n).takeIf { n > 0 }).joinToString(" · "), onClick, tab = tab)
+    // Promises in words under the name: an arrow with a number alone does not say who owes whom.
+    IndexRow(emptyList(), p.name, listOfNotNull(p.about ?: if (p.org) w.company else null,
+        w.owes(pl.promised.size, pl.waited.size) ?: w.linesN(n).takeIf { n > 0 }).joinToString(" · "), onClick, tab = tab)
 }
 
 /** All threads, by the last thing that happened; the month on the margin once; the closed ones at the end, faded. */

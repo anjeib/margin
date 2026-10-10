@@ -138,9 +138,10 @@ private fun Notebook(vm: BookVm) {
                         r == "index" -> IndexPage(book, today, onThread = { push("thread:$it") }, onPerson = { push("person:$it") }, onLater = { push("later") },
                             onSettings = { push("settings") }, onHelp = { push("help") }, onSearch = { push("search") },
                             onFeedback = { sendFeedback(ctx, w) }, onWeek = { push("week:$current") },
-                            onAllThreads = { push("threads") }, onAllPeople = { push("people") })
+                            onAllThreads = { push("threads") }, onAllPeople = { push("people") }, onFiles = { push("files") })
                         r == "threads" -> AllThreadsPage(book, today, onThread = { push("thread:$it") })
                         r == "people" -> AddressBookPage(book, onPerson = { push("person:$it") })
+                        r == "files" -> FilesPage(book, today, onOpen = onOpen)
                         r.startsWith("week:") -> WeekPage(book, today, LocalDate.parse(r.removePrefix("week:")), vm::toggle, onOpen,
                             onDay = { d -> stack = emptyList(); go(d) }, bottom = 24.dp)
                         r.startsWith("thread:") -> ThreadPage(book, r.removePrefix("thread:"), today, vm::toggle, onOpen, bottom = 24.dp,

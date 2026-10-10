@@ -109,9 +109,16 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
     val handedFiles by vm.handedFiles.collectAsState()
     LaunchedEffect(handedFiles) { if (handedFiles.isNotEmpty()) { files += handedFiles; vm.handedFilesTaken() } }
     val draft = remember(text, target, book) { if (text.isBlank()) null else vm.preview(text, target) }
+    val change = remember(text, book) { if (text.isBlank() || files.isNotEmpty()) null else vm.previewChange(text) }
     val first = draft?.lines?.firstOrNull()
     val pencil = when {
         draft == null -> emptyList()
+        // Words that change a line: the margin says so, and where it goes — not the notes of a new line.
+        change != null -> listOfNotNull(Note(w.editing, Tone.Link), when (change.what) {
+            ru.anjeib.margin.book.Change.What.Drop -> w.dropped
+            ru.anjeib.margin.book.Change.What.Done -> w.doneWord
+            else -> if (change.later) w.later else listOfNotNull(change.day?.let { w.near(it, today) }, change.time).joinToString(" ").ifEmpty { null }
+        }?.let { Note(it, Tone.Quiet) })
         draft.question -> listOf(Note("?", Tone.Link))
         draft.lines.size > 1 -> listOf(Note(w.linesN(draft.lines.size), Tone.Quiet))
         first != null -> notesOf(first, page, today, book, w) + listOfNotNull(draft.threadTitle?.let { Note(w.threadPrefix + it, Tone.Link) })
@@ -123,46 +130,13 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
         if (vm.write(text, target, files.toList())) { text = ""; files.clear() }
     }
 
-    // ---- voice: a recording read into words; the system's recogniser when nothing here can read it ----
-    var recorder by remember { mutableStateOf<WavRecorder?>(null) }
-    var level by remember { mutableFloatStateOf(0f) }
-    var hearing by remember { mutableStateOf(false) }
+    // ---- voice: said instead of typed (the same dictation as in a line's sheet) ----
     val sendNow = remember { ru.anjeib.margin.data.Prefs.get(ctx) }.settings.collectAsState().value.voiceSendNow
-    fun gotWords(t: String?) {
-        hearing = false
-        if (t.isNullOrBlank()) { vm.tell(w.heardNothing); return }
-        text = (text.trimEnd() + " " + t).trim()
-        if (sendNow) send()
+    val dict = rememberDictation(vm) { t ->
+        if (t.isNullOrBlank()) vm.tell(w.heardNothing)
+        else { text = (text.trimEnd() + " " + t).trim(); if (sendNow) send() }
     }
-    val systemVoice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        gotWords(r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull())
-    }
-    fun startRecording() {
-        val r = WavRecorder(ctx)
-        if (!r.start()) { vm.tell(w.voiceOff); return }
-        recorder = r
-        scope.launch { while (recorder === r) { delay(80); level = r.level } }
-    }
-    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) startRecording() else vm.tell(w.micDenied) }
-    fun stopRecording(andSend: Boolean = true) {
-        val r = recorder ?: return
-        recorder = null
-        val audio = r.stop() ?: return
-        if (!andSend) { Files.delete(ctx, audio); return }
-        hearing = true
-        vm.transcribe(audio) { gotWords(it) }
-    }
-    fun mic() {
-        if (recorder != null) { stopRecording(); return }
-        if (!vm.canHear()) {
-            val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                .putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (w.ru) "ru-RU" else "en-US")
-            runCatching { systemVoice.launch(i) }.onFailure { vm.tell(w.voiceOff) }
-            return
-        }
-        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRecording()
-        else askMic.launch(Manifest.permission.RECORD_AUDIO)
-    }
+    fun mic() = dict.toggle()
     val dictate by vm.dictate.collectAsState()
     LaunchedEffect(dictate) { if (dictate != null) { delay(300); mic(); vm.dictateTaken() } }
     // «Записать» from the tile: asked twice — the window gets its focus only after the shade closes.
@@ -207,7 +181,7 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
                     Spacer(Modifier.width(Grid.text))
                     // «записано на пт» leads to that page.
                     val go = s.day?.let { d -> { vm.hush(); onDay(d) } }
-                    Text(s.text + if (go != null) " ›" else "", style = Voice.reply.copy(color = if (go != null) c.link else c.graphite), maxLines = 2,
+                    Text(withPlainSigns(s.text + if (go != null) " ›" else ""), style = Voice.reply.copy(color = if (go != null) c.link else c.graphite), maxLines = 2,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
                             .then(if (go != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = go).padding(vertical = 12.dp) else Modifier))
                     if (s.ask.isNotEmpty()) {
@@ -231,8 +205,8 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
             // The field's own margin: what Margin has understood so far — or that it is listening.
             Column(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp, bottom = 13.dp), horizontalAlignment = Alignment.End) {
                 when {
-                    recorder != null -> NoteText(Note(w.listening, Tone.Attention))
-                    hearing -> NoteText(Note(w.transcribing, Tone.Quiet))
+                    dict.listening -> NoteText(Note(w.listening, Tone.Attention))
+                    dict.hearing -> NoteText(Note(w.transcribing, Tone.Quiet))
                     else -> pencil.forEach { NoteText(it) }
                 }
             }
@@ -257,7 +231,7 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
                     }
                 }
                 Box(Modifier.weight(1f).padding(vertical = 10.dp)) {
-                    if (recorder != null) Level(level, Modifier.fillMaxWidth().height(24.dp))
+                    if (dict.listening) Level(dict.level, Modifier.fillMaxWidth().height(24.dp))
                     else {
                         if (text.isEmpty()) Text(w.composerHint, style = Voice.words.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         BasicTextField(text, { text = it }, textStyle = Voice.words.copy(color = c.ink), cursorBrush = SolidColor(c.link), maxLines = 6,
@@ -265,12 +239,12 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
                     }
                 }
                 // The microphone gives its place to the words once there are any: dictation starts a thought, it doesn't finish one.
-                if (text.isEmpty() || recorder != null) FieldButton(if (recorder != null) w.stop else w.a11yMic, ::mic) {
-                    if (recorder != null) Box(Modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(c.redFill))
+                if (text.isEmpty() || dict.listening) FieldButton(if (dict.listening) w.stop else w.a11yMic, ::mic) {
+                    if (dict.listening) Box(Modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(c.redFill))
                     else MicGlyph(c.graphite, 20.dp)
                 }
-                val can = text.isNotBlank() || files.isNotEmpty() || recorder != null
-                Box(Modifier.size(42.dp).clip(CircleShape).clickable(enabled = can) { if (recorder != null) stopRecording() else send() }
+                val can = text.isNotBlank() || files.isNotEmpty() || dict.listening
+                Box(Modifier.size(42.dp).clip(CircleShape).clickable(enabled = can) { if (dict.listening) dict.stop() else send() }
                     .semantics { contentDescription = w.a11ySend }, contentAlignment = Alignment.Center) {
                     Box(Modifier.size(32.dp).clip(CircleShape).background(if (can) c.redFill else c.redFill.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
                         SendGlyph(Color.White, 15.dp)
@@ -289,7 +263,7 @@ private fun FieldButton(label: String, onClick: () -> Unit, content: @Composable
 
 /** The voice as a pencil line: strokes that rise with how loud you speak. */
 @Composable
-private fun Level(level: Float, modifier: Modifier) {
+fun Level(level: Float, modifier: Modifier) {
     val c = P.c
     val history = remember { ArrayDeque<Float>() }
     history.addLast(level); while (history.size > 40) history.removeFirst()

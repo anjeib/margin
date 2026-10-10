@@ -1,5 +1,7 @@
 package ru.anjeib.margin.paper
 
+import ru.anjeib.margin.book.addFiles
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +21,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -38,6 +41,12 @@ fun HandedSheet(vm: BookVm, from: String?, onDone: () -> Unit, onOpen: (String?)
     val book by vm.book.collectAsState()
     val today by vm.today.collectAsState()
     val written by vm.written.collectAsState()
+    // A big file can still be copying in when the words are already written: it goes to the first line they became.
+    val late by vm.handedFiles.collectAsState()
+    LaunchedEffect(late, written) {
+        val id = written.firstOrNull()
+        if (id != null && late.isNotEmpty()) { vm.edit { it.addFiles(id, late) }; vm.handedFilesTaken() }
+    }
     ModalBottomSheet(onDismissRequest = onDone, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = c.lifted, scrimColor = c.scrim,
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) }) {

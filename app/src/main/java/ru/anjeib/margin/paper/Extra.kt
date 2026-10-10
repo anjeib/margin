@@ -57,7 +57,12 @@ fun SearchPage(book: Book, today: LocalDate, onMark: (String) -> Unit, onOpen: (
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     val key = q.trim().lowercase().replace('ё', 'е')
     fun has(s: String?) = s != null && key.isNotEmpty() && s.lowercase().replace('ё', 'е').contains(key)
-    val lines = if (key.length < 2) emptyList() else book.lines.filter { l -> has(l.text) || has(l.place) || l.who.any { has(it.name) } || has(l.source) }
+    // A line is found by its words, place, people, the phrase it came from — and by what its files say:
+    // a name, a caption, words recognised on a photo, a voice note's transcript.
+    val lines = if (key.length < 2) emptyList() else book.lines.filter { l ->
+        has(l.text) || has(l.place) || l.who.any { has(it.name) } || has(l.source) ||
+            l.files.any { f -> has(f.name) || has(f.caption) || has(f.ocr) || has(f.transcript) }
+    }
     val threads = if (key.length < 2) emptyList() else book.threads.filter { has(it.title) }
     val people = if (key.length < 2) emptyList() else book.persons.filter { has(it.name) || has(it.about) }
     LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = 40.dp)) {
@@ -99,7 +104,7 @@ fun HelpPage(book: Book, today: LocalDate) {
             "done" -> line(lineText, state = State.Done)
             "event" -> line(lineText, Kind.Event)
             "note" -> line(lineText, Kind.Note)
-            "time" -> line(lineText).copy(time = "15:00")
+            "time" -> line(lineText).copy(time = "15:00", who = listOf(Who(if (w.ru) "Олег" else "Oliver")), place = if (w.ru) "Покровка, 17" else "12 High St")
             "tail" -> line(lineText).copy(day = today.minusDays(2).toString())
             "repeat" -> line(lineText).copy(repeat = Repeat("weekly", 1, listOf(1, 3, 5)), time = "08:00")
             "to" -> line(lineText).copy(who = listOf(Who("Лёша", Dir.To)))

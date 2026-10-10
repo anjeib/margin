@@ -105,4 +105,23 @@ class ReadTest {
         assertTrue(d.question)
         assertTrue(d.lines.isEmpty())
     }
+
+    @Test fun aListUnderALineIsItsItems() {
+        assertEquals(listOf("молоко", "хлеб"), Read.items("- молоко\n- хлеб"))
+        assertEquals(listOf("смета", "договор"), Read.items("1. смета\n2) договор"))
+        assertEquals(listOf("молоко", "хлеб", "яйца"), Read.items("купить: молоко, хлеб, яйца"))
+        assertEquals(listOf("молоко", "хлеб", "яйца"), Read.items("молоко, хлеб и яйца"))
+        assertEquals(listOf("мыло", "шампунь", "паста"), Read.items("мыло, шампунь, паста"))
+        // A comment stays one, commas and all.
+        assertEquals(1, Read.items("прочитал, понравилось, но дорого").size)
+        assertEquals(1, Read.items("позвонить Олегу, если не ответит").size)
+    }
+
+    @Test fun aListBecomesStepsWithCount() {
+        val b = book.addChild("ex-lamp", "молоко", Kind.Todo).addChild("ex-lamp", "хлеб", Kind.Todo)
+        val kids = b.children("ex-lamp")
+        assertEquals(2, kids.size)
+        val done = b.toggle(kids.first().id, today)
+        assertEquals(1 to 2, done.steps("ex-lamp"))
+    }
 }

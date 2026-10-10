@@ -146,8 +146,9 @@ fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Se
                onMark: (String) -> Unit, onOpen: (String) -> Unit, lead: Note? = null, hideThread: String? = null, hidePerson: String? = null) {
     val c = P.c
     val w = P.w
-    val notes = remember(l, page, today, book.threads, seen, w, lead) {
-        (listOfNotNull(lead) + notesOf(l, page, today, book, w, seen, hideThread, hidePerson)).take(3)
+    val notes = remember(l, page, today, book.threads, book.steps(l.id), seen, w, lead) {
+        // Two notes at most on the side (a day and an hour); under the words — all the rest, in one quiet line.
+        (listOfNotNull(lead) + notesOf(l, page, today, book, w, seen, hideThread, hidePerson)).let { n -> n.filter { !it.under }.take(2) + n.filter { it.under } }
     }
     val trace = seen == Seen.Trace
     val ink = when {

@@ -129,6 +129,10 @@ data class Book(
     fun thread(id: String?) = id?.let { i -> threads.find { it.id == i } }
     fun person(name: String) = persons.find { it.matches(name) }
     fun children(id: String) = lines.filter { it.parentId == id }
+
+    /** A list under a line: steps done and steps in all («2 из 5»); null when nothing to do is written under it. */
+    fun steps(id: String): Pair<Int, Int>? = children(id).filter { it.kind == Kind.Todo && it.state != State.Dropped }
+        .takeIf { it.isNotEmpty() }?.let { s -> s.count { it.state == State.Done } to s.size }
 }
 
 fun newId(): String = java.util.UUID.randomUUID().toString().take(12)

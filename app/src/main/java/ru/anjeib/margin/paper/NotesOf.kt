@@ -14,6 +14,7 @@ import java.time.LocalDateTime
  * What the margin says about a line (DESIGN.md §5), in the order of what matters most:
  * a question → a tail → when → a repeated put-off → repeat → who → thread → place → files.
  * Nothing the page itself already says is repeated: on its own page a line shows no date, only the hour.
+ * The side margin keeps «when» (a tail, a day, an hour, a window); the rest is written under the words ([Note.under]).
  */
 
 enum class Seen { Page, Tail, Trace, Sheet }
@@ -22,7 +23,7 @@ fun notesOf(l: Line, page: LocalDate?, today: LocalDate, book: Book, w: Words, s
             /** On a thread's own page its name is not repeated; on a person's page — their own arrow. */
             hideThread: String? = null, hidePerson: String? = null): List<Note> {
     val out = ArrayList<Note>()
-    l.ask.firstOrNull()?.let { if (l.state == State.Open) out += Note(w.ask(it), Tone.Attention) }
+    l.ask.firstOrNull()?.let { if (l.state == State.Open) out += Note(w.ask(it), Tone.Attention, under = it != "when") }
     if (l.state == State.Dropped) out += Note(w.dropped, Tone.Gone)
     when (seen) {
         Seen.Tail -> l.lastDay()?.let { out += Note(w.tailSince(it), Tone.Attention) }
@@ -46,22 +47,27 @@ fun notesOf(l: Line, page: LocalDate?, today: LocalDate, book: Book, w: Words, s
             else -> out += Note(dayText ?: hourText!!, Tone.Quiet, struck = was)
         }
     }
-    if (l.isTodo && l.state == State.Open && l.moves() >= 3 && seen != Seen.Trace) out += Note(w.moveNo(l.moves()), Tone.Attention)
-    l.repeat?.let { out += Note(w.repeat(it), Tone.Quiet) }
+    // A list under the line: how far it has gone.
+    if (seen != Seen.Sheet) book.steps(l.id)?.let { (done, all) -> out += Note(w.ofDone(done, all), Tone.Quiet, under = true) }
+    if (l.isTodo && l.state == State.Open && l.moves() >= 3 && seen != Seen.Trace) out += Note(w.moveNo(l.moves()), Tone.Attention, under = true)
+    l.repeat?.let { out += Note(w.repeat(it), Tone.Quiet, under = true) }
     l.who.sortedBy { it.dir.ordinal }.forEach { who ->
         // «с Олегом» is not repeated when the words already name him; a promise always shows its direction.
         if (who.dir == Dir.With && named(l.text, who.name)) return@forEach
         if (hidePerson != null && who.name.equals(hidePerson, true)) return@forEach
-        out += Note(when (who.dir) { Dir.To -> w.to(who.name); Dir.From -> w.from(who.name); Dir.With -> w.with(who.name) }, Tone.Link)
+        out += Note(when (who.dir) { Dir.To -> w.to(who.name); Dir.From -> w.from(who.name); Dir.With -> w.with(who.name) }, Tone.Link, under = true)
     }
-    if (seen != Seen.Sheet && l.threadId != hideThread) book.thread(l.threadId)?.let { out += Note(w.threadPrefix + shortTitle(it.title), Tone.Link) }
-    l.place?.let { out += Note(it, Tone.Link) }
-    if (l.files.isNotEmpty()) out += Note(when {
+    // Under the words there is room for the thread's whole name — unless the words already say it («Йога: шаг 1»).
+    if (seen != Seen.Sheet && l.threadId != hideThread) book.thread(l.threadId)?.takeIf { !l.text.contains(it.title, ignoreCase = true) }
+        ?.let { out += Note(w.threadPrefix + it.title, Tone.Link, under = true) }
+    l.place?.let { out += Note(it, Tone.Link, under = true) }
+    // What is kept with the line — unless the line is that very thing («Фото» needs no «фото» beside it).
+    if (l.files.isNotEmpty()) when {
         l.files.any { it.kind == "photo" || it.kind == "video" } -> w.photo
         l.files.any { it.kind == "audio" } -> w.voice
         else -> w.file
-    }, Tone.Quiet)
-    if (l.kind == Kind.Event && l.source == "calendar") out += Note(w.calendar, Tone.Quiet)
+    }.takeIf { !it.equals(l.text, ignoreCase = true) }?.let { out += Note(it, Tone.Quiet, under = true) }
+    if (l.kind == Kind.Event && l.source == "calendar") out += Note(w.calendar, Tone.Quiet, under = true)
     return out
 }
 

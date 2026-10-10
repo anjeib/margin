@@ -16,6 +16,9 @@ import ru.anjeib.margin.book.add
 import ru.anjeib.margin.book.addChild
 import ru.anjeib.margin.book.delete
 import ru.anjeib.margin.book.drop
+import ru.anjeib.margin.book.Change.What
+import ru.anjeib.margin.book.setWhen
+import ru.anjeib.margin.book.toDecide
 import ru.anjeib.margin.book.hasSamples
 import ru.anjeib.margin.book.move
 import ru.anjeib.margin.book.setThread
@@ -167,6 +170,9 @@ class BookVm(app: Application) : AndroidViewModel(app) {
 
     /** What the field holds, read on the phone — for the live margin next to it. */
     fun preview(text: String, t: Target): Read.Draft = draft(text, t)
+    /** The words would change a line already written — what and how, for the field's margin. */
+    fun previewChange(text: String): ru.anjeib.margin.book.Change.Plan? =
+        runCatching { ru.anjeib.margin.book.Change.read(text, book.value, today.value) }.getOrNull()
 
     private fun draft(text: String, t: Target): Read.Draft {
         val d = Read.draft(text, book.value, t.page, today.value, threadId = t.threadId, noDay = t.later)
@@ -178,6 +184,8 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     /** The words become lines on the target (or on their own day); Margin says where they went if not here. A question gets an answer. */
     fun write(text: String, t: Target, files: List<Attachment> = emptyList()): Boolean {
         val page = t.page
+        // Words that change a line already written («перенеси стоматолога на пятницу») change it — with «вернуть».
+        if (files.isEmpty() && change(text)) return true
         val d0 = if (text.isBlank() && files.isNotEmpty()) null else draft(text, t)
         if (d0?.question == true) { ask(text); return true }
         // Files alone are a note on the page, named by what they are.
@@ -203,6 +211,42 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         }
         // Not sure of the words and the AI is at hand: it re-reads them, and what it reads differently shows as a correction.
         if (!d.sure && text.isNotBlank() && aiReady()) reread(text, t, store.book.value.lines.filter { l -> lines.any { it.id == l.id } })
+        return true
+    }
+
+    private fun change(text: String): Boolean {
+        val td = today.value
+        val p = runCatching { ru.anjeib.margin.book.Change.read(text, book.value, td) }.getOrNull() ?: return false
+        val before = book.value
+        if (p.what == What.MoveAll) {
+            val to = if (p.later) null else p.day ?: td.plusDays(1)
+            val n = before.toDecide(td).size
+            if (n == 0) return false
+            store.update { b -> before.toDecide(td).fold(b) { x, l -> x.move(l.id, to, td) } }
+            say(words.movedAll(n, to, td), before, day = to)
+            return true
+        }
+        val id = p.id ?: return false
+        val l = before.line(id) ?: return false
+        store.update { b ->
+            when (p.what) {
+                What.Move -> when {
+                    p.later -> b.move(id, null, td)
+                    p.time != null -> b.setWhen(id, p.day ?: l.date ?: td, p.time, today = td)
+                    else -> b.move(id, p.day, td)
+                }
+                What.Drop -> b.drop(id)
+                else -> b.toggle(id, td)
+            }
+        }
+        val now = book.value.line(id)
+        say(when (p.what) {
+            What.Move -> words.changedTo(l.text, if (p.later) null else now?.date, now?.time.takeIf { p.time != null }, td)
+            What.Drop -> words.changedDropped(l.text)
+            else -> words.changedDone(l.text)
+        }, before, day = now?.date?.takeIf { p.what == What.Move })
+        _fresh.value = setOf(id)
+        viewModelScope.launch { delay(1200); _fresh.value = emptySet() }
         return true
     }
 
@@ -338,9 +382,13 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     fun edit(f: (Book) -> Book) = store.update(f)
 
     /** Words written under a line: a step when they say what to do, otherwise a comment. */
-    fun writeUnder(id: String, text: String) {
-        if (text.isBlank()) return
-        store.update { it.addChild(id, text, if (Read.isStep(text)) ru.anjeib.margin.book.Kind.Todo else ru.anjeib.margin.book.Kind.Note) }
+    /** Words under a line: each item of a list on its own row; [kind] — the mark chosen for them (• a step, – a note). */
+    fun writeUnder(id: String, text: String, kind: ru.anjeib.margin.book.Kind? = null) {
+        val items = Read.items(text)
+        if (items.isEmpty()) return
+        store.update { b ->
+            items.fold(b) { x, t -> x.addChild(id, t, kind ?: if (items.size > 1 || Read.isStep(t)) ru.anjeib.margin.book.Kind.Todo else ru.anjeib.margin.book.Kind.Note) }
+        }
     }
 
     fun move(id: String, to: LocalDate?, quiet: Boolean = false) {
