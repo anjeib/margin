@@ -16,6 +16,7 @@ import ru.anjeib.margin.book.add
 import ru.anjeib.margin.book.addChild
 import ru.anjeib.margin.book.delete
 import ru.anjeib.margin.book.drop
+import ru.anjeib.margin.book.removeFile
 import ru.anjeib.margin.book.Change.What
 import ru.anjeib.margin.book.setWhen
 import ru.anjeib.margin.book.toDecide
@@ -53,7 +54,11 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     /** Margin's sentence over the field; [undo] puts the notebook back as it was before the change. */
     data class Said(val text: String, val undo: Book? = null, val id: Long = System.nanoTime(), val day: LocalDate? = null,
                     /** Lines the words seem to close, waiting for «да» — Margin never closes your lines by itself. */
-                    val ask: List<Pair<String, ru.anjeib.margin.book.State>> = emptyList())
+                    val ask: List<Pair<String, ru.anjeib.margin.book.State>> = emptyList(),
+                    /** Things to do found in a long note, waiting for «да» to become its steps. */
+                    val steps: List<String> = emptyList(), val stepsOf: String? = null) {
+        val asks get() = ask.isNotEmpty() || steps.isNotEmpty()
+    }
     private val _said = MutableStateFlow<Said?>(null)
     val said: StateFlow<Said?> = _said
     private var sayJob: Job? = null
@@ -140,19 +145,26 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         refreshCalendar()
     }
 
-    private fun say(text: String, undo: Book? = null, day: LocalDate? = null, ask: List<Pair<String, ru.anjeib.margin.book.State>> = emptyList()) {
-        val s = Said(text, undo, day = day, ask = ask)
+    private fun say(text: String, undo: Book? = null, day: LocalDate? = null, ask: List<Pair<String, ru.anjeib.margin.book.State>> = emptyList(),
+                    steps: List<String> = emptyList(), stepsOf: String? = null) {
+        val s = Said(text, undo, day = day, ask = ask, steps = steps, stepsOf = stepsOf)
         _said.value = s
         sayJob?.cancel()
         // Long enough to read and reach «вернуть»; a question waits for its answer a good while longer.
-        sayJob = viewModelScope.launch { delay(if (ask.isEmpty()) 10_000 else 45_000); if (_said.value?.id == s.id) _said.value = null }
+        sayJob = viewModelScope.launch { delay(if (!s.asks) 10_000 else 45_000); if (_said.value?.id == s.id) _said.value = null }
     }
 
     /** «да» to Margin's question: the lines it named are closed now (with a way back). */
     fun confirm() {
         val s = _said.value ?: return
-        if (s.ask.isEmpty()) return
         val before = book.value
+        // Things to do found in a long note: they become its steps, under it.
+        if (s.steps.isNotEmpty() && s.stepsOf != null) {
+            store.update { b -> s.steps.fold(b) { x, t -> x.addChild(s.stepsOf, t, ru.anjeib.margin.book.Kind.Todo) } }
+            say(words.stepsAdded(s.steps.size), before)
+            return
+        }
+        if (s.ask.isEmpty()) return
         store.update { b -> s.ask.fold(b) { x, (id, st) -> if (x.line(id)?.open != true) x else if (st == ru.anjeib.margin.book.State.Dropped) x.drop(id) else x.toggle(id, today.value) } }
         say(words.closed(s.ask.size), before)
     }
@@ -205,13 +217,23 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         // Margin says where the words went only when they left the page in front of you.
         val here = t.threadId != null || t.person != null
         val away = if (here) emptyList() else lines.filter { if (t.later) it.date != null else it.date != page }
+        // A long note with things to do in it: Margin offers to make them its steps — it does not take them out by itself.
+        val steps = lines.singleOrNull()?.takeIf { it.kind == ru.anjeib.margin.book.Kind.Note && Read.isLongNote(it.text) }?.let { Read.stepsIn(it.text) }.orEmpty()
         when {
+            steps.isNotEmpty() -> say(words.stepsInNote(steps.size), before, steps = steps, stepsOf = lines.single().id)
             lines.size > 1 -> say(words.writtenN(lines.size), before)
             away.isNotEmpty() -> say(words.writtenOn(away.first().date, today.value), before, day = away.first().date)
         }
         // Not sure of the words and the AI is at hand: it re-reads them, and what it reads differently shows as a correction.
         if (!d.sure && text.isNotBlank() && aiReady()) reread(text, t, store.book.value.lines.filter { l -> lines.any { it.id == l.id } })
         return true
+    }
+
+    /** A file taken off its line — with «вернуть»; the file itself stays until the notebook is tidied. */
+    fun removeFile(lineId: String, fileId: String) {
+        val before = book.value
+        store.update { it.removeFile(lineId, fileId) }
+        say(words.fileRemoved, before)
     }
 
     private fun change(text: String): Boolean {

@@ -37,7 +37,8 @@ object AiRead {
                 l.id,
                 if (l.open) l.kind.name.lowercase() else "done",
                 listOfNotNull(l.day, l.time, l.until?.let { "until $it" }).joinToString(" ").ifBlank { "no day" },
-                l.text,
+                // A long note only by its beginning: the context is for finding lines, not for reading them.
+                l.text.replace('\n', ' ').let { if (it.length > 160) it.take(157).trimEnd() + "…" else it },
                 l.who.joinToString(" ") { w -> when (w.dir) { Dir.To -> "promised to ${w.name}"; Dir.From -> "expected from ${w.name}"; Dir.With -> "with ${w.name}" } },
                 book.thread(l.threadId)?.title?.let { "thread: $it" } ?: "",
             ).filter { it.isNotBlank() }.joinToString(" | ")

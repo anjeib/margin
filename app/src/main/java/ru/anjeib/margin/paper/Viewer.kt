@@ -48,6 +48,32 @@ fun openFile(ctx: android.content.Context, a: Attachment, onPhoto: (Attachment) 
     Files.openIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } }
 }
 
+/**
+ * A file kept with a line: a photo opens at a tap; anything else asks first — open, send on, take it off the line —
+ * so a document is never stuck on its line. A long press brings the same menu for both.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun LineFile(a: Attachment, size: androidx.compose.ui.unit.Dp, onPhoto: (Attachment) -> Unit, onRemove: (() -> Unit)?) {
+    val ctx = LocalContext.current
+    val c = P.c
+    val w = P.w
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        FileChip(a, size, onClick = { if (a.kind == "photo") onPhoto(a) else menu = true }, onLongClick = { menu = true })
+        androidx.compose.material3.DropdownMenu(menu, { menu = false }, containerColor = c.sheet) {
+            @Composable fun item(text: String, danger: Boolean = false, go: () -> Unit) =
+                androidx.compose.material3.DropdownMenuItem(text = { Text(text, style = Voice.reply.copy(color = if (danger) c.red else c.ink)) },
+                    onClick = { menu = false; go() })
+            item(w.fileOpen) { openFile(ctx, a, onPhoto) }
+            item(w.fileShare) {
+                Files.shareIntent(ctx, a)?.let { i -> runCatching { ctx.startActivity(android.content.Intent.createChooser(i, null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+            }
+            if (onRemove != null) item(w.removeFile, danger = true, go = onRemove)
+        }
+    }
+}
+
 @Composable
 fun PhotoViewer(a: Attachment, onClose: () -> Unit, onRemove: (() -> Unit)? = null) {
     val ctx = LocalContext.current

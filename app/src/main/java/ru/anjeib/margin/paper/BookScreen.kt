@@ -141,7 +141,7 @@ private fun Notebook(vm: BookVm) {
                             onAllThreads = { push("threads") }, onAllPeople = { push("people") }, onFiles = { push("files") })
                         r == "threads" -> AllThreadsPage(book, today, onThread = { push("thread:$it") })
                         r == "people" -> AddressBookPage(book, onPerson = { push("person:$it") })
-                        r == "files" -> FilesPage(book, today, onOpen = onOpen)
+                        r == "files" -> FilesPage(book, today, onOpen = onOpen, onRemove = vm::removeFile)
                         r.startsWith("week:") -> WeekPage(book, today, LocalDate.parse(r.removePrefix("week:")), vm::toggle, onOpen,
                             onDay = { d -> stack = emptyList(); go(d) }, bottom = 24.dp)
                         r.startsWith("thread:") -> ThreadPage(book, r.removePrefix("thread:"), today, vm::toggle, onOpen, bottom = 24.dp,
@@ -161,7 +161,13 @@ private fun Notebook(vm: BookVm) {
             if (target != null && !ritual) Composer(vm, target, book, today, Modifier.navigationBarsPadding(),
                 onOpen = { open = it }, onPerson = { push("person:$it") }, onThread = { push("thread:$it") },
                 onDay = { d -> stack = emptyList(); go(d) }, onSearch = { push("search") })
-            else Spacer(Modifier.navigationBarsPadding())
+            else {
+                // No field on this page, but what was just done still says so — with «вернуть».
+                val said by vm.said.collectAsState()
+                Column(Modifier.fillMaxWidth().background(c.paper).rule(c.rule).navigationBarsPadding()) {
+                    said?.takeIf { !ritual }?.let { s -> SaidLine(vm, s, onDay = { d -> stack = emptyList(); go(d) }) }
+                }
+            }
         }
         open?.let { id ->
             val baseId = splitOccurrence(id)?.first ?: id

@@ -44,14 +44,17 @@ import androidx.compose.ui.unit.sp
 
 /** Words with a pen line drawn through them when [struck]; it is drawn, not switched on — unless it was there already. */
 @Composable
-fun PenText(text: String, style: TextStyle, struck: Boolean, lineColor: Color, modifier: Modifier = Modifier) {
+fun PenText(text: String, style: TextStyle, struck: Boolean, lineColor: Color, modifier: Modifier = Modifier,
+            /** A long note shows its beginning; [onCut] says whether the rest was left out. */
+            maxLines: Int = Int.MAX_VALUE, onCut: ((Boolean) -> Unit)? = null) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val pen = remember { Animatable(if (struck) 1f else 0f) }
     LaunchedEffect(struck) {
         if (struck && pen.value < 1f) pen.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
         else if (!struck) pen.snapTo(0f)
     }
-    Text(text, style = style, onTextLayout = { layout = it }, modifier = modifier.drawWithContent {
+    Text(text, style = style, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        onTextLayout = { layout = it; onCut?.invoke(it.hasVisualOverflow) }, modifier = modifier.drawWithContent {
         drawContent()
         val l = layout ?: return@drawWithContent
         val p = pen.value

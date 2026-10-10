@@ -166,17 +166,24 @@ fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Se
             pen.animateTo(1f, tween(420))
             kotlinx.coroutines.delay(700)
             wash.animateTo(0f, tween(1400))
+        } else {
+            // «Fresh» may end before the wash has faded (a slow phone, a page redrawn): it fades all the same.
+            if (pen.value < 1f) pen.snapTo(1f)
+            if (wash.value > 0f) wash.animateTo(0f, tween(600))
         }
     }
+    // A long note shows its first lines; the rest is a tap away, and the margin says so.
+    var cut by remember(l.id) { mutableStateOf(false) }
     MarginRow(
-        notes = notes, mark = markOf(l, trace),
+        notes = if (cut) notes + Note(w.whole, Tone.Link, under = true) else notes, mark = markOf(l, trace),
         modifier = Modifier.drawBehind { if (wash.value > 0f) drawRect(c.linkWash.copy(alpha = wash.value)) }
             .graphicsLayer { alpha = pen.value; translationX = (1f - pen.value) * -24.dp.toPx() },
         markLabel = w.a11yMark(l.state == State.Done),
         onMark = if (l.kind == Kind.Todo && !trace) ({ onMark(l.id) }) else null,
         onOpen = { onOpen(l.id) },
     ) {
-        PenText(l.text, Voice.words.copy(color = ink), struck = !trace && l.state != State.Open && l.kind == Kind.Todo, lineColor = c.graphite)
+        PenText(l.text, Voice.words.copy(color = ink), struck = !trace && l.state != State.Open && l.kind == Kind.Todo, lineColor = c.graphite,
+            maxLines = 5, onCut = { if (it != cut) cut = it })
     }
 }
 

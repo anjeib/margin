@@ -71,6 +71,13 @@ object Read {
         if (later) t = t.replace(someday, "")
         val note = noteCue.containsMatchIn(t)
         if (note) t = t.replace(noteCue, "")
+        // A long note stays whole: one line with its paragraphs; no day or name is taken out of its words.
+        if (isLongNote(t)) {
+            val people = book.persons.filter { p -> (listOf(p.name) + p.aliases).any { AiRead.mentions(t, it) } }.map { Who(it.name, Dir.With) }
+            val body = t.lines().joinToString("\n") { it.trim() }.replace(Regex("\n{3,}"), "\n\n").trim().replaceFirstChar { it.uppercaseChar() }
+            val day = if (later || noDay || (threadId != null && tag == null)) null else page.toString()
+            return Draft(listOf(Line(text = body, kind = Kind.Note, who = people.take(3), day = day, threadId = threadId)), true, false, tag)
+        }
         val known = book.persons.map { it.name to it.aliases }
         val r = if (English.isEnglish(t)) English.parse(t, known, today = page, now = now)
             else LocalParser.parse(t, known, today = page, now = now, keepWords = true)
@@ -136,11 +143,40 @@ object Read {
 
     private val bullet = Regex("^\\s*(?:[-–—•*·]|\\d{1,2}[.)])\\s+")
 
+    // A verb of doing anywhere in a clause: an infinitive («позвонить», «забрать»; not «часть», «радость», «может быть») or a request.
+    private val doingWord = Regex("(?iu)(?<!\\p{L})(?!быть(?!\\p{L}))(?:\\p{L}{2,}(?<!с)(?:ть|ти|чь|ться|тись)|купи|сходи|сделай|отправь|забери|заплати|оплати|закажи|запишись|проверь|найди|уточни|спроси|скинь|пришли|подготовь|договорись|позвони|напиши)(?!\\p{L})")
+    private val clauseBreak = Regex("[.!?;…\\n]+|,\\s+|\\s+(?:и|а|а ещё|а также|потом|затем)\\s+")
+    private val clauseLead = Regex("(?iu)^(?:(?:и|а|но|ещё|еще|потом|затем|также|не забыть|надо|нужно|не забудь)\\s+)+")
+    private fun clauses(t: String) = t.split(clauseBreak).map { it.trim() }.filter { it.length >= 3 }
+
+    /**
+     * A long note: written to keep, not a list of things to do — a meeting's notes, a thought, a brief. It stays one line
+     * (–) with its paragraphs. Long: 200 letters and more, or 120 and more in several lines or sentences. Not when it is
+     * a list (every line a bullet, or short lines that each say what to do) or mostly things to do («завтра позвонить
+     * Олегу, потом заехать в типографию, оплатить интернет…» — those stay to-dos).
+     */
+    fun isLongNote(text: String): Boolean {
+        val t = text.trim()
+        val rows = t.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+        if (rows.size >= 2 && rows.all { bullet.containsMatchIn(it) }) return false
+        if (rows.size >= 2 && rows.all { it.length <= 60 && isStep(it.replace(bullet, "")) }) return false
+        val sentences = Regex("[.!?…](?:\\s|$)").findAll(t).count() + 1
+        if (!(t.length >= 200 || (t.length >= 120 && (rows.size >= 2 || sentences >= 3)))) return false
+        val cl = clauses(t)
+        return cl.isEmpty() || cl.count { doingWord.containsMatchIn(it) } * 10 <= cl.size * 6
+    }
+
+    /** Things to do inside a long note («…взять палатку, проверить билеты, спросить Машу») — offered to become its steps. */
+    fun stepsIn(text: String): List<String> = clauses(text).map { it.replace(clauseLead, "").replace(bullet, "").trim() }
+        .filter { it.length in 4..90 && isStep(it) }.map { it.replaceFirstChar { c -> c.uppercaseChar() } }.distinct().take(8)
+
     /**
      * Words written under a line as the items they are: a line each («молоко⏎хлеб»), or a list after a colon
      * («купить: молоко, хлеб, яйца»), bullets and numbers off. One item stays one, commas and all.
      */
     fun items(text: String): List<String> {
+        // A long note written under a line stays one, paragraphs and all.
+        if (isLongNote(text)) return listOf(text.trim())
         val rows = text.split('\n').map { it.replace(bullet, "").trim() }.filter { it.isNotEmpty() }
         if (rows.size != 1) return rows
         val one = rows.single()

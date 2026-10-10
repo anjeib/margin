@@ -124,4 +124,30 @@ class ReadTest {
         val done = b.toggle(kids.first().id, today)
         assertEquals(1 to 2, done.steps("ex-lamp"))
     }
+
+    @Test fun aLongNoteStaysWhole() {
+        val meeting = "Встреча с Олегом по упаковке. Обсудили три варианта коробки, он склоняется ко второму, но хочет зерно чуть круглее и цвет теплее. " +
+            "Типография просит макеты до пятницы, в среду нужен счёт. Бюджет на тираж 120 тысяч, можно поднять до 140, если бумага будет крафтовая."
+        val l = read(meeting).lines.single()
+        assertEquals(Kind.Note, l.kind)
+        assertEquals(today.toString(), l.day)
+        assertTrue("no word is taken out", l.text.contains("до пятницы") && l.text.contains("ко второму"))
+        assertTrue(l.who.any { it.name == "Олег" })
+        val call = "Итоги созвона\nКлиент хочет запуск к 1 ноября\nНужны три баннера и лендинг, бюджет 300 тыс\nОлег пришлёт тексты в понедельник"
+        assertEquals(call, read(call).lines.single().text)
+        assertTrue(Read.stepsIn(meeting).isEmpty())
+    }
+
+    @Test fun thingsToDoInANoteAreOffered() {
+        val trip = "Мысли про отпуск: хочется в горы, но не в сезон дождей. Может быть Алтай в сентябре или Грузия в мае. Взять палатку, проверить билеты заранее, спросить Машу про маршрут."
+        assertEquals(Kind.Note, read(trip).lines.single().kind)
+        assertEquals(listOf("Взять палатку", "Проверить билеты заранее", "Спросить Машу про маршрут"), Read.stepsIn(trip))
+    }
+
+    @Test fun manyThingsToDoStayToDos() {
+        val dump = "Завтра в 10 позвонить Олегу, потом заехать в типографию забрать пробники, в среду встреча с Машей в 15, и не забыть оплатить интернет до пятницы, а ещё купить корм коту и записаться к врачу"
+        assertTrue(read(dump).lines.size > 1)
+        assertTrue(read("- позвонить Олегу насчёт упаковки и макетов\n- купить молоко, хлеб и яйца на завтра\n- оплатить интернет до пятницы обязательно").lines.size == 3)
+        assertEquals(1, Read.items("Олег выбрал второй вариант, но просит сделать зерно круглее.\nТипография ждёт макеты до пятницы, а бумагу привезут только в среду, так что успеваем впритык.").size)
+    }
 }

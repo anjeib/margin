@@ -193,7 +193,7 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
             // Files kept with the line: photos as themselves, the rest by name; a tap opens.
             if (l.files.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = Grid.text - 4.dp, end = Grid.right, top = 4.dp, bottom = 4.dp)
                 .horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                l.files.forEach { f -> FileChip(f, 72.dp, onClick = { openFile(ctx, f) { photo = it } }) }
+                l.files.forEach { f -> LineFile(f, 72.dp, onPhoto = { photo = it }, onRemove = { vm.removeFile(id, f.id) }) }
             }
             // What was written under the line.
             val kids = book.children(id)
@@ -265,8 +265,10 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                     else {
                         if (more.isEmpty()) Text(w.writeUnder, style = Voice.words.copy(color = c.pencil))
                         BasicTextField(more, { v ->
-                            // Enter: the line is written, the field is ready for the next one.
-                            if (v.contains('\n')) { writeMore(v.substringBeforeLast('\n')); more = v.substringAfterLast('\n') } else more = v
+                            // Enter typed at the end: the line is written, the field is ready for the next one. Text pasted
+                            // with its paragraphs stays in the field whole — «записать» writes it (a long note stays one).
+                            if (v.length == more.length + 1 && v.endsWith('\n') && more.isNotBlank()) { writeMore(more); more = "" }
+                            else if (v.isBlank()) more = "" else more = v
                         }, textStyle = Voice.words.copy(color = c.ink), cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth().focusRequester(focus))
                     }
                 }
@@ -283,7 +285,7 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
         }
     }
 
-    photo?.let { f -> PhotoViewer(f, onClose = { photo = null }, onRemove = { vm.edit { it.removeFile(id, f.id) } }) }
+    photo?.let { f -> PhotoViewer(f, onClose = { photo = null }, onRemove = { vm.removeFile(id, f.id) }) }
 
     when (ask) {
         "when" -> WhenDialog(book, l, today, w, onDismiss = { ask = null }) { d, t, later ->

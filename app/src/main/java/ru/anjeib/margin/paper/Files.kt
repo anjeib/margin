@@ -39,7 +39,7 @@ import java.time.YearMonth
  * the day on the margin. A file opens; the line's words open its sheet. A quiet filter: all · photos · documents.
  */
 @Composable
-fun FilesPage(book: Book, today: LocalDate, onOpen: (String) -> Unit) {
+fun FilesPage(book: Book, today: LocalDate, onOpen: (String) -> Unit, onRemove: (lineId: String, fileId: String) -> Unit) {
     val c = P.c
     val w = P.w
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -67,15 +67,16 @@ fun FilesPage(book: Book, today: LocalDate, onOpen: (String) -> Unit) {
         shown.forEach { (l, d, files) ->
             val ym = YearMonth.from(d)
             if (ym != month) { month = ym; item("m$ym") { SectionHead(w.monthName(ym).replaceFirstChar(Char::uppercaseChar)) } }
-            item("l" + l.id) { FileLine(l, d, files, today, w, onOpen = { onOpen(l.id) }, onFile = { f -> openFile(ctx, f) { photo = it } }) }
+            item("l" + l.id) { FileLine(l, d, files, today, w, onOpen = { onOpen(l.id) }, onPhoto = { photo = it }, onRemove = { f -> onRemove(l.id, f.id) }) }
         }
     }
-    photo?.let { f -> PhotoViewer(f, onClose = { photo = null }) }
+    photo?.let { f -> PhotoViewer(f, onClose = { photo = null }, onRemove = all.firstOrNull { (l, _) -> l.files.any { it.id == f.id } }?.let { (l, _) -> { onRemove(l.id, f.id) } }) }
 }
 
 /** One line with its files: the day on the margin, the words as a link to the line, the files in a row under them. */
 @Composable
-private fun FileLine(l: Line, d: LocalDate, files: List<Attachment>, today: LocalDate, w: Words, onOpen: () -> Unit, onFile: (Attachment) -> Unit) {
+private fun FileLine(l: Line, d: LocalDate, files: List<Attachment>, today: LocalDate, w: Words, onOpen: () -> Unit,
+                     onPhoto: (Attachment) -> Unit, onRemove: (Attachment) -> Unit) {
     val c = P.c
     Row(Modifier.fillMaxWidth().padding(end = Grid.right, top = 6.dp, bottom = 10.dp)) {
         Box(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp, top = 3.dp), contentAlignment = Alignment.TopEnd) {
@@ -86,7 +87,7 @@ private fun FileLine(l: Line, d: LocalDate, files: List<Attachment>, today: Loca
             Text(l.text, style = Voice.words.copy(color = c.ink), maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpen).padding(vertical = 2.dp))
             Row(Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                files.forEach { f -> FileChip(f, 96.dp, onClick = { onFile(f) }) }
+                files.forEach { f -> LineFile(f, 96.dp, onPhoto = onPhoto, onRemove = { onRemove(f) }) }
             }
         }
     }

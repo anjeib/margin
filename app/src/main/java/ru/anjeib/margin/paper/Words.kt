@@ -187,6 +187,13 @@ interface Words {
     val propFile: String
     val share: String
     val removeFile: String
+    val fileOpen: String
+    val fileShare: String
+    val fileRemoved: String
+    fun stepsInNote(n: Int): String
+    fun stepsAdded(n: Int): String
+    val whole: String
+    val longNote: String
     val welcomeLine: String
     /** The title page's rows: the note on the margin, the mark, the words. */
     fun welcomeRows(): List<Triple<String?, String, String>>
@@ -544,6 +551,13 @@ object WordsRu : Words {
     override val propFile = "файл"
     override val share = "Поделиться"
     override val removeFile = "убрать из строки"
+    override val fileOpen = "открыть"
+    override val fileShare = "поделиться"
+    override val fileRemoved = "файл убран из строки"
+    override fun stepsInNote(n: Int) = "в записи $n " + plural(n, "дело", "дела", "дел") + " — вынести шагами?"
+    override fun stepsAdded(n: Int) = "$n " + plural(n, "шаг", "шага", "шагов") + " под записью"
+    override val whole = "целиком ›"
+    override val longNote = "одной записью"
     override val welcomeLine = "ежедневник, который пишет на полях"
     override fun welcomeRows() = listOf(
         Triple("Margin", "none", "На полях Margin пишет когда, а под вашими словами — кто и к чему относится."),
@@ -893,6 +907,13 @@ object WordsEn : Words {
     override val propFile = "file"
     override val share = "Share"
     override val removeFile = "remove from the line"
+    override val fileOpen = "open"
+    override val fileShare = "share"
+    override val fileRemoved = "file removed from the line"
+    override fun stepsInNote(n: Int) = "$n to-do" + (if (n == 1) "" else "s") + " in the note — make them steps?"
+    override fun stepsAdded(n: Int) = "$n step" + (if (n == 1) "" else "s") + " under the note"
+    override val whole = "read in full ›"
+    override val longNote = "one note"
     override val welcomeLine = "a planner that writes in the margin"
     override fun welcomeRows() = listOf(
         Triple("Margin", "none", "On the margin Margin writes when; under your words — who and what it belongs to."),

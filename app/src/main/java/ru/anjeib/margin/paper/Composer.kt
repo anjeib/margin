@@ -16,6 +16,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -120,6 +121,8 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
             else -> if (change.later) w.later else listOfNotNull(change.day?.let { w.near(it, today) }, change.time).joinToString(" ").ifEmpty { null }
         }?.let { Note(it, Tone.Quiet) })
         draft.question -> listOf(Note("?", Tone.Link))
+        // A long note stays one: the margin says so before it is written.
+        first?.kind == ru.anjeib.margin.book.Kind.Note && draft.lines.size == 1 && ru.anjeib.margin.book.Read.isLongNote(first.text) -> listOf(Note(w.longNote, Tone.Quiet))
         draft.lines.size > 1 -> listOf(Note(w.linesN(draft.lines.size), Tone.Quiet))
         first != null -> notesOf(first, page, today, book, w) + listOfNotNull(draft.threadTitle?.let { Note(w.threadPrefix + it, Tone.Link) })
         else -> emptyList()
@@ -176,25 +179,7 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
         AnimatedVisibility(said != null && asked == null, enter = fadeIn(), exit = fadeOut()) {
             var last by remember { mutableStateOf<BookVm.Said?>(null) }
             if (said != null) last = said
-            last?.let { s ->
-                Row(Modifier.fillMaxWidth().padding(end = Grid.right, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.width(Grid.text))
-                    // «записано на пт» leads to that page.
-                    val go = s.day?.let { d -> { vm.hush(); onDay(d) } }
-                    Text(withPlainSigns(s.text + if (go != null) " ›" else ""), style = Voice.reply.copy(color = if (go != null) c.link else c.graphite), maxLines = 2,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
-                            .then(if (go != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = go).padding(vertical = 12.dp) else Modifier))
-                    if (s.ask.isNotEmpty()) {
-                        // A question: «да» closes, «нет» leaves everything as it is.
-                        Text("  " + w.yes, style = Voice.reply.copy(color = c.link),
-                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.confirm() }.padding(vertical = 12.dp, horizontal = 8.dp))
-                        Text("·", style = Voice.reply.copy(color = c.pencil))
-                        Text(w.no, style = Voice.reply.copy(color = c.graphite),
-                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.hush() }.padding(vertical = 12.dp, horizontal = 8.dp))
-                    } else if (s.undo != null) Text("  ·  " + w.undo, style = Voice.reply.copy(color = c.link),
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.undo() }.padding(vertical = 12.dp, horizontal = 4.dp))
-                }
-            }
+            last?.let { s -> SaidLine(vm, s, onDay) }
         }
         // What goes with the words: thumbnails, a tap on × takes one back.
         if (files.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = Grid.text - 6.dp, end = 12.dp, bottom = 6.dp).horizontalScroll(rememberScrollState()),
@@ -281,12 +266,13 @@ fun Level(level: Float, modifier: Modifier) {
 
 /** A file going with the words, or kept on a line: a photo as itself, anything else as its name. */
 @Composable
-fun FileChip(a: Attachment, size: Dp, onRemove: (() -> Unit)? = null, onClick: (() -> Unit)? = null) {
+fun FileChip(a: Attachment, size: Dp, onRemove: (() -> Unit)? = null, onClick: (() -> Unit)? = null, onLongClick: (() -> Unit)? = null) {
     val c = P.c
     val w = P.w
     val ctx = LocalContext.current
     val visual = a.kind == "photo" || a.kind == "video"
-    Box(Modifier.then(if (onClick != null) Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick) else Modifier)) {
+    Box(Modifier.then(if (onClick != null || onLongClick != null) Modifier.clip(RoundedCornerShape(10.dp))
+        .combinedClickable(onClick = { onClick?.invoke() }, onLongClick = onLongClick) else Modifier)) {
         if (visual) {
             val bmp by produceState<android.graphics.Bitmap?>(null, a.id) { value = Files.thumb(ctx, a) }
             Box(Modifier.size(size).clip(RoundedCornerShape(10.dp)).background(c.hairline)) {
@@ -355,5 +341,29 @@ private fun AnswerPanel(a: BookVm.Asked, book: Book, today: LocalDate, onClose: 
         shown.take(if (all) shown.size else 5).forEach { l -> LineOnPage(l, pageOf, today, book, Seen.Page, false, onMark, onOpen) }
         // The rest unfolds right here; a page of its own only where there is one (a person, a thread, a day).
         if (shown.size > 5 && !all) MarginLink(w.more(shown.size - 5)) { all = true }
+    }
+}
+
+/** Margin's sentence after something was done: where the words went, with a way back («вернуть») or a question («да · нет»). */
+@Composable
+fun SaidLine(vm: BookVm, s: BookVm.Said, onDay: (java.time.LocalDate) -> Unit) {
+    val c = P.c
+    val w = P.w
+    Row(Modifier.fillMaxWidth().padding(end = Grid.right, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.width(Grid.text))
+        // «записано на пт» leads to that page.
+        val go = s.day?.let { d -> { vm.hush(); onDay(d) } }
+        Text(withPlainSigns(s.text + if (go != null) " ›" else ""), style = Voice.reply.copy(color = if (go != null) c.link else c.graphite), maxLines = 2,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
+                .then(if (go != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = go).padding(vertical = 12.dp) else Modifier.padding(vertical = 12.dp)))
+        if (s.asks) {
+            // A question: «да» does it, «нет» leaves everything as it is.
+            Text("  " + w.yes, style = Voice.reply.copy(color = c.link),
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.confirm() }.padding(vertical = 12.dp, horizontal = 8.dp))
+            Text("·", style = Voice.reply.copy(color = c.pencil))
+            Text(w.no, style = Voice.reply.copy(color = c.graphite),
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.hush() }.padding(vertical = 12.dp, horizontal = 8.dp))
+        } else if (s.undo != null) Text("  ·  " + w.undo, style = Voice.reply.copy(color = c.link),
+            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.undo() }.padding(vertical = 12.dp, horizontal = 4.dp))
     }
 }
