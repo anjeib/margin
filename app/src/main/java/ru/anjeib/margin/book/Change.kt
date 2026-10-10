@@ -12,7 +12,9 @@ object Change {
 
     data class Plan(val what: What, val id: String?, val day: LocalDate? = null, val time: String? = null, val later: Boolean = false,
                     /** False when another line fits the words just as well: Margin asks before changing. */
-                    val sure: Boolean = true)
+                    val sure: Boolean = true,
+                    /** «готово: кабель» on «Купить кабель usb-c и коврик»: the part done — the line becomes its items, this one ticked. */
+                    val part: String? = null)
 
     private val i = setOf(RegexOption.IGNORE_CASE)
     private val moveCue = Regex("^(перенеси(?:те)?|перенести|переносим|сдвинь(?:те)?|сдвинуть|передвинь(?:те)?|отложи(?:те)?|отложить|move|reschedule|postpone|push)\\s+(.+)$", i)
@@ -53,7 +55,11 @@ object Change {
         }
         (doneCue.find(t)?.groupValues?.get(1) ?: doneTail.find(t)?.groupValues?.get(1))?.let { w ->
             // «готово: кабель» on «Купить кабель usb-c и коврик»: the words name only part of what the line holds — asked.
-            return find(w, book, today)?.let { (id, sure) -> Plan(What.Done, id, sure = sure && !partOf(w, book.line(id)?.text.orEmpty())) }
+            return find(w, book, today)?.let { (id, sure) ->
+                val l = book.line(id)
+                val part = l?.takeIf { book.children(id).isEmpty() }?.let { partNamed(w, it.text) }
+                Plan(What.Done, id, sure = sure && part == null && !partOf(w, l?.text.orEmpty()), part = part)
+            }
         }
         return null
     }
@@ -78,6 +84,29 @@ object Change {
         if (parts.size < 2) return false
         val want = roots(words)
         return parts.any { p -> roots(p).none { r -> want.any { w -> same(r, w) } } }
+    }
+
+    /** A line's things as items: «Купить кабель usb-c и коврик» → «Кабель usb-c», «Коврик» (the verb stays with the line). */
+    fun itemsOf(line: String): List<String> {
+        val parts = line.split(Regex(",\\s*|\\s+и\\s+")).map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+        if (parts.size < 2) return emptyList()
+        if (Read.isStep(parts[0])) parts[0] = parts[0].split(Regex("\\s+"), 2).getOrNull(1).orEmpty()
+        return parts.filter { it.isNotBlank() }.map { it.replaceFirstChar { c -> c.uppercaseChar() } }.takeIf { it.size >= 2 }.orEmpty()
+    }
+
+    /** The one item of a line of several things the words name, if exactly one. */
+    private fun partNamed(words: String, line: String): String? {
+        val want = roots(words)
+        return itemsOf(line).filter { p -> roots(p).any { r -> want.any { w -> same(r, w) } } }.singleOrNull()
+    }
+
+    /** Two lines say the same thing: the same words, an ending aside («напомнить классным руководителям…» twice). */
+    fun alike(a: String, b: String): Boolean {
+        if (a.trim().equals(b.trim(), true)) return true
+        val x = roots(a).toSet(); val y = roots(b).toSet()
+        if (x.size < 2 || y.size < 2) return false
+        val common = x.count { r -> y.any { same(r, it) } }
+        return common >= 0.8 * maxOf(x.size, y.size)
     }
 
     private fun same(a: String, b: String) = a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))

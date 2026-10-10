@@ -199,8 +199,13 @@ class BookVm(app: Application) : AndroidViewModel(app) {
                     who = l?.who.orEmpty(), day = day ?: asked?.let { page.toString() }, time = l?.time?.takeIf { day != null },
                     until = if (day != null) l?.until else asked)
             }
-            store.update { it.add(kids) }
-            say(words.stepsAdded(s.steps.size), before)
+            // A step already written as a line of its own («напомнить классным руководителям…») is that line: it goes under
+            // the note (keeping its day) — one «сделано» closes it, not two copies.
+            val open = before.lines.filter { it.open && it.parentId == null && it.id != note.id }
+            val same = kids.mapNotNull { k -> open.firstOrNull { ru.anjeib.margin.book.Change.alike(it.text, k.text) }?.let { k to it } }
+            val fresh = kids - same.map { it.first }.toSet()
+            store.update { b -> b.add(fresh).let { x -> x.copy(lines = x.lines.map { l -> if (same.any { it.second.id == l.id }) l.copy(parentId = note.id) else l }) } }
+            say(if (same.isEmpty()) words.stepsAdded(s.steps.size) else words.stepsJoined(s.steps.size, same.size), before)
             return
         }
         if (s.ask.isEmpty()) return
@@ -291,7 +296,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         // Another line fits the words as well: ask about the likelier one instead of changing the wrong one.
         if (!p.sure && p.id != null) {
             val l = book.value.line(p.id) ?: return false
-            say(words.changeAsk(l.text, p, td, of = l.parentId?.let { book.value.line(it)?.text }), change = p)
+            say(if (p.part != null) words.changeAsk(p.part, p, td, of = l.text) else words.changeAsk(l.text, p, td, of = l.parentId?.let { book.value.line(it)?.text }), change = p)
             return true
         }
         return apply(p)
@@ -318,7 +323,12 @@ class BookVm(app: Application) : AndroidViewModel(app) {
                     else -> b.move(id, p.day, td)
                 }
                 What.Drop -> if (p.day != null && l.repeat != null) b.dropOccurrence(id, p.day) else b.drop(id)
-                else -> b.toggle(id, td)
+                else -> p.part?.let { part ->
+                    // A line of several things, one of them done: it becomes its items, that one ticked.
+                    val items = ru.anjeib.margin.book.Change.itemsOf(l.text)
+                    val withItems = items.fold(b) { x, t -> x.addChild(id, t, ru.anjeib.margin.book.Kind.Todo) }
+                    withItems.children(id).firstOrNull { it.text.equals(part, true) }?.let { withItems.toggle(it.id, td) } ?: withItems
+                } ?: b.toggle(id, td)
             }
         }
         val now = book.value.line(id)
@@ -327,7 +337,8 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         say(when (p.what) {
             What.Move -> words.changedTo(l.text, if (p.later) null else now?.date, now?.time.takeIf { p.time != null }, td)
             What.Drop -> words.changedDropped(l.text, p.day?.takeIf { l.repeat != null }, td)
-            else -> words.changedDone(l.parentId?.let { pid -> before.line(pid)?.let { "${l.text}» в «${words.short(it.text)}" } } ?: l.text)
+            else -> words.changedDone(p.part?.let { "$it» в «${words.short(l.text)}" }
+                ?: l.parentId?.let { pid -> before.line(pid)?.let { "${l.text}» в «${words.short(it.text)}" } } ?: l.text)
         }, before, day = now?.date?.takeIf { p.what == What.Move })
         _fresh.value = setOf(id)
         viewModelScope.launch { delay(1200); _fresh.value = emptySet() }

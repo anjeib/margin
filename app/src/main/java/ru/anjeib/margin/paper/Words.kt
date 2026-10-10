@@ -200,6 +200,7 @@ interface Words {
     fun stepsInNote(n: Int): String
     fun stepsAdded(n: Int): String
     fun gathered(n: Int, thread: String): String
+    fun stepsJoined(n: Int, joined: Int): String
     val dueDay: String
     fun moreSteps(n: Int): String
     val thisWeek: String
@@ -596,6 +597,8 @@ object WordsRu : Words {
     override fun stepsAdded(n: Int) = "$n " + plural(n, "шаг", "шага", "шагов") + " под записью"
     override fun gathered(n: Int, thread: String) = "в нить «$thread» — ещё $n " + plural(n, "строка", "строки", "строк")
     override val dueDay = "срок"
+    override fun stepsJoined(n: Int, joined: Int) = "$n " + plural(n, "шаг", "шага", "шагов") + " под записью · " +
+        "$joined уже " + (if (joined == 1) "была строкой" else "были строками")
     override fun moreSteps(n: Int) = "ещё $n ›"
     override val thisWeek = "на этой неделе: "
     override val whole = "целиком ›"
@@ -987,6 +990,7 @@ object WordsEn : Words {
     override fun stepsAdded(n: Int) = "$n step" + (if (n == 1) "" else "s") + " under the note"
     override fun gathered(n: Int, thread: String) = "into «$thread» — $n more line" + if (n == 1) "" else "s"
     override val dueDay = "due"
+    override fun stepsJoined(n: Int, joined: Int) = "$n step" + (if (n == 1) "" else "s") + " under the note · $joined already written — joined"
     override fun moreSteps(n: Int) = "$n more ›"
     override val thisWeek = "this week: "
     override val whole = "read in full ›"

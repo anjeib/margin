@@ -57,7 +57,8 @@ fun RitualPage(book: Book, today: LocalDate, vm: BookVm, bottom: Dp, onDone: (Lo
         items(open, key = { it.id }) { l ->
             Column(Modifier.animateItem()) {
                 val tail = l.lastDay()?.isBefore(day) == true
-                LineOnPage(l, day, today, book, if (tail) Seen.Tail else Seen.Page, false, onMark = vm::toggle, onOpen = {})
+                // Every open step stands under its line here, its dot to tick; the line's answer below takes the rest along.
+                LineOnPage(l, day, today, book, if (tail) Seen.Tail else Seen.Page, false, onMark = vm::toggle, onOpen = {}, allSteps = true)
                 FlowRow(Modifier.fillMaxWidth().offset(y = (-14).dp).padding(start = Grid.text - 6.dp, end = Grid.right)) {
                     Reply(w.doneReply) { vm.toggle(l.id) }
                     Reply(w.offerTomorrow) { vm.move(l.id, next, quiet = true) }

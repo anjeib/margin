@@ -102,4 +102,17 @@ class ChangeTest {
         assertTrue(!p.sure)
         assertTrue(Change.read("готово: лампа", book, today)!!.sure)
     }
+
+    @Test fun partOfALineIsItsItem() {
+        val b = book.add(listOf(Line(id = "cab", text = "Купить кабель usb-c и коврик", day = today.toString())))
+        val p = Change.read("готово: кабель", b, today)!!
+        assertEquals("Кабель usb-c", p.part)
+        assertEquals(listOf("Кабель usb-c", "Коврик"), Change.itemsOf("Купить кабель usb-c и коврик"))
+    }
+
+    @Test fun theSameThingTwiceIsAlike() {
+        assertTrue(Change.alike("Напомнить классным руководителям про родительские собрания", "напомнить классным руководителям про родительские собрания"))
+        assertTrue(Change.alike("Узнать у Лизы про кружок по рисованию", "Узнать у Лизы про кружок рисования"))
+        assertTrue(!Change.alike("Купить хлеб", "Купить молоко"))
+    }
 }
