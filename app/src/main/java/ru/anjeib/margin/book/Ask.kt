@@ -47,7 +47,8 @@ object Ask {
         "неделе", "неделю", "неделя", "недели", "следующей", "этой", "месяце", "выходные", "выходных", "week", "next", "this", "weekend",
         "ли", "есть", "там", "как", "какие", "какой", "какая", "где", "когда", "кто", "это", "был", "была", "было", "были", "сегодня", "завтра", "вчера",
         "дела", "дело", "делах", "надо", "нужно", "ещё", "еще", "всё", "все", "the", "a", "an", "what", "when", "is", "are", "do", "did", "i", "my", "me",
-        "on", "in", "about", "with", "for", "have", "has", "to", "of", "at", "any", "there")
+        "on", "in", "about", "with", "for", "have", "has", "to", "of", "at", "any", "there",
+        "найди", "найти", "поищи", "покажи", "find", "search", "show", "where")
 
     /** The words worth looking for: «когда стрижка?» → «стриж». */
     private fun stems(q: String): List<String> = Regex("\\p{L}{3,}").findAll(norm(q)).map { it.value }.filter { it !in stop }
@@ -76,7 +77,8 @@ object Ask {
             book.persons.firstOrNull { per -> (listOf(per.name) + per.aliases).any { norm(p).startsWith(norm(it).take(maxOf(3, it.length - 2))) } }?.name
         }
         fun mine(w: Who) = name != null && (book.person(name)?.matches(w.name) ?: w.name.equals(name, true))
-        val top = book.lines.filter { it.parentId == null }
+        // Lines of the page — and steps that carry a promise or a day of their own (a meeting's «ключи — Николай Иванович»).
+        val top = book.lines.filter { it.parentId == null || it.who.isNotEmpty() || it.day != null }
         // What the question says beyond a name, a thread and a day: «о чём договорились с Олегом по логотипу» is not «что с Олегом».
         val words = Regex("\\p{L}+").findAll(q).map { it.value }.toList()
         val thread = book.threads.filter { it.closedAt == null }.firstOrNull { t ->

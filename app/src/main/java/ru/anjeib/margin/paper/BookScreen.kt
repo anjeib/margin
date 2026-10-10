@@ -87,6 +87,7 @@ private fun Notebook(vm: BookVm) {
     val flight by vm.flight.collectAsState()
     var flown by remember { mutableStateOf<BookVm.Flight?>(null) }
     var calendarFocus by remember { mutableStateOf<BookVm.Flight?>(null) }
+    var calendarFrom by remember { mutableStateOf<LocalDate?>(null) }
     LaunchedEffect(flight?.id) { flight?.let { flown = it; vm.landed(it) } }
     // The lines that flew may be gone since (Margin made them clearer into one repeat): nothing to show, no pulse.
     LaunchedEffect(book) { flown?.let { f -> if (f.ids.none { book.line(it) != null }) flown = null } }
@@ -138,7 +139,7 @@ private fun Notebook(vm: BookVm) {
                 awayFromToday = route == null && !ritual && current != today,
                 onToday = { go(today) },
                 onSearch = if (route != "search") ({ push("search") }) else null,
-                onCalendar = if (route?.startsWith("calendar") != true) ({ calendarFocus = flown; flown = null; push("calendar") }) else null,
+                onCalendar = if (route?.startsWith("calendar") != true) ({ calendarFocus = flown; calendarFrom = null; flown = null; push("calendar") }) else null,
                 pulse = flown?.id,
             )
             Box(Modifier.weight(1f)) {
@@ -159,17 +160,18 @@ private fun Notebook(vm: BookVm) {
                         })
                         r == null -> HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { it }) { i ->
                             DayPage(dateOf(i), book, today, fresh, bottom = 24.dp, onMark = vm::toggle, onOpen = onOpen,
-                                onMonth = { month = true }, onTurn = { ritual = true }, eveningHour = vm.eveningHour(), stamping = stamping,
+                                // The date on the margin opens the one calendar — the month and the days ahead — at this page's month.
+                                onMonth = { calendarFrom = dateOf(i); calendarFocus = null; push("calendar") }, onTurn = { ritual = true }, eveningHour = vm.eveningHour(), stamping = stamping,
                                 calendar = cal[dateOf(i)].orEmpty(), onNext = { go(dateOf(i).plusDays(1)) }, onExplain = vm::explain)
                         }
                         r == "index" -> IndexPage(book, today, onThread = { push("thread:$it") }, onPerson = { push("person:$it") }, onLater = { push("later") },
                             onSettings = { push("settings") }, onHelp = { push("help") }, onSearch = { push("search") },
-                            onFeedback = { sendFeedback(ctx, w) }, onWeek = { calendarFocus = null; push("calendar") },
+                            onFeedback = { sendFeedback(ctx, w) }, onWeek = { calendarFocus = null; calendarFrom = null; push("calendar") },
                             onAllThreads = { push("threads") }, onAllPeople = { push("people") }, onFiles = { push("files") })
                         r == "threads" -> AllThreadsPage(book, today, onThread = { push("thread:$it") })
                         r == "people" -> AddressBookPage(book, onPerson = { push("person:$it") })
                         r == "calendar" -> CalendarPage(book, today, calendarFocus, onDay = { d -> stack = emptyList(); go(d) }, onMark = vm::toggle,
-                            onOpen = onOpen, onLater = { push("later") }, bottom = 24.dp)
+                            onOpen = onOpen, onLater = { push("later") }, bottom = 24.dp, from = calendarFrom, onWeek = { d -> push("week:$d") })
                         r == "files" -> FilesPage(book, today, onOpen = onOpen, onRemove = vm::removeFile)
                         r.startsWith("week:") -> WeekPage(book, today, LocalDate.parse(r.removePrefix("week:")), vm::toggle, onOpen,
                             onDay = { d -> stack = emptyList(); go(d) }, bottom = 24.dp)

@@ -126,8 +126,8 @@ object Bell {
                 val n = NotificationCompat.Builder(ctx, LINES).setSmallIcon(R.drawable.ic_notify)
                     .setContentTitle(l.text).setContentText(title).setAutoCancel(true)
                     .setContentIntent(open(ctx, "line:${l.id}", l.id.hashCode()))
-                    // Someone else's promise is not «done» by you — it is «получено».
-                    .addAction(0, if (from != null) w.bellGot else w.bellDone, pi(ctx, ("done" + l.id).hashCode(), intent(ctx, "done", l.id)))
+                    // Someone else's promise is not «done» by you — it is «получено»; a meeting is not done at all.
+                    .apply { if (l.kind != ru.anjeib.margin.book.Kind.Event) addAction(0, if (from != null) w.bellGot else w.bellDone, pi(ctx, ("done" + l.id).hashCode(), intent(ctx, "done", l.id))) }
                     .addAction(0, w.bellHour, pi(ctx, ("hour" + l.id).hashCode(), intent(ctx, "hour", l.id)))
                     .build()
                 runCatching { nm.notify(l.id.hashCode(), n) }

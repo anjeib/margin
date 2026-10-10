@@ -88,7 +88,7 @@ interface Words {
     fun rereadOn(day: LocalDate, today: LocalDate): String
     val editing: String
     /** «перенести «Родительское собрание 9Б» на чт?» — asked when another line fits the words as well. */
-    fun changeAsk(text: String, p: Change.Plan, today: LocalDate): String
+    fun changeAsk(text: String, p: Change.Plan, today: LocalDate, of: String? = null): String
     val doneWord: String
     fun changedDone(text: String): String
     fun movedAll(n: Int, to: LocalDate?, today: LocalDate): String
@@ -199,6 +199,9 @@ interface Words {
     val fileRemoved: String
     fun stepsInNote(n: Int): String
     fun stepsAdded(n: Int): String
+    fun gathered(n: Int, thread: String): String
+    val dueDay: String
+    fun moreSteps(n: Int): String
     val whole: String
     val longNote: String
     val asWritten: String
@@ -407,16 +410,16 @@ object WordsRu : Words {
     override val deleteForGood = "удалить совсем"
     override val backToWork = "вернуть в дела"
     override fun remindWho(name: String) = "напомнить " + name.dative()
-    override fun ofDone(done: Int, total: Int) = if (total == 1) (if (done == 1) "шаг сделан" else "1 шаг") else "$done из $total"
+    override fun ofDone(done: Int, total: Int) = if (total == 1) (if (done == 1) "шаг сделан" else "1 шаг") else "сделано $done из $total"
     override fun changedTo(text: String, day: LocalDate?, time: String?, today: LocalDate) =
         "«${short(text)}» → " + (listOfNotNull(day?.let { near(it, today) }, time).joinToString(" ").ifEmpty { "потом" })
     override fun changedDropped(text: String, day: LocalDate?, today: LocalDate) =
         "«${short(text)}»" + (day?.let { " " + (if (it == today) "сегодня" else "в " + near(it, today)) } ?: "") + " — не делаем"
     override fun rereadOn(day: LocalDate, today: LocalDate) = "Margin уточнил: на " + near(day, today)
     override val editing = "правка"
-    override fun changeAsk(text: String, p: Change.Plan, today: LocalDate) = when (p.what) {
+    override fun changeAsk(text: String, p: Change.Plan, today: LocalDate, of: String?) = when (p.what) {
         Change.What.Drop -> "не делаем «${short(text)}»" + (p.day?.let { " в " + near(it, today) } ?: "") + "?"
-        Change.What.Done -> "сделано «${short(text)}»?"
+        Change.What.Done -> "сделано «${short(text)}»" + (of?.let { " в «${short(it)}»" } ?: "") + "?"
         else -> "перенести «${short(text)}» на " + (if (p.later) "потом" else listOfNotNull(p.day?.let { near(it, today) }, p.time).joinToString(" ")) + "?"
     }
     override val doneWord = "сделано"
@@ -590,6 +593,9 @@ object WordsRu : Words {
     override val fileRemoved = "файл убран из строки"
     override fun stepsInNote(n: Int) = "в записи $n " + plural(n, "дело", "дела", "дел") + " — вынести шагами?"
     override fun stepsAdded(n: Int) = "$n " + plural(n, "шаг", "шага", "шагов") + " под записью"
+    override fun gathered(n: Int, thread: String) = "в нить «$thread» — ещё $n " + plural(n, "строка", "строки", "строк")
+    override val dueDay = "срок"
+    override fun moreSteps(n: Int) = "ещё $n ›"
     override val whole = "целиком ›"
     override val longNote = "одной записью"
     override val asWritten = "как было написано ›"
@@ -796,16 +802,16 @@ object WordsEn : Words {
     override val deleteForGood = "delete for good"
     override val backToWork = "bring it back"
     override fun remindWho(name: String) = "remind $name"
-    override fun ofDone(done: Int, total: Int) = if (total == 1) (if (done == 1) "step done" else "1 step") else "$done of $total"
+    override fun ofDone(done: Int, total: Int) = if (total == 1) (if (done == 1) "step done" else "1 step") else "$done of $total done"
     override fun changedTo(text: String, day: LocalDate?, time: String?, today: LocalDate) =
         "«${short(text)}» → " + (listOfNotNull(day?.let { near(it, today) }, time).joinToString(" ").ifEmpty { "later" })
     override fun changedDropped(text: String, day: LocalDate?, today: LocalDate) =
         "«${short(text)}»" + (day?.let { " on " + near(it, today) } ?: "") + " — not doing"
     override fun rereadOn(day: LocalDate, today: LocalDate) = "Margin made it clearer: " + near(day, today)
     override val editing = "a change"
-    override fun changeAsk(text: String, p: Change.Plan, today: LocalDate) = when (p.what) {
+    override fun changeAsk(text: String, p: Change.Plan, today: LocalDate, of: String?) = when (p.what) {
         Change.What.Drop -> "not doing «${short(text)}»" + (p.day?.let { " on " + near(it, today) } ?: "") + "?"
-        Change.What.Done -> "done: «${short(text)}»?"
+        Change.What.Done -> "done: «${short(text)}»" + (of?.let { " in «${short(it)}»" } ?: "") + "?"
         else -> "move «${short(text)}» to " + (if (p.later) "later" else listOfNotNull(p.day?.let { near(it, today) }, p.time).joinToString(" ")) + "?"
     }
     override val doneWord = "done"
@@ -977,6 +983,9 @@ object WordsEn : Words {
     override val fileRemoved = "file removed from the line"
     override fun stepsInNote(n: Int) = "$n to-do" + (if (n == 1) "" else "s") + " in the note — make them steps?"
     override fun stepsAdded(n: Int) = "$n step" + (if (n == 1) "" else "s") + " under the note"
+    override fun gathered(n: Int, thread: String) = "into «$thread» — $n more line" + if (n == 1) "" else "s"
+    override val dueDay = "due"
+    override fun moreSteps(n: Int) = "$n more ›"
     override val whole = "read in full ›"
     override val longNote = "one note"
     override val asWritten = "as written ›"

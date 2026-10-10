@@ -182,8 +182,8 @@ fun Book.marks(date: LocalDate, today: LocalDate = LocalDate.now()): DayMarks {
     val p = page(date, today)
     val mine = p.timed + p.rest
     return DayMarks(
-        open = if (date.isBefore(today)) 0 else p.open.size,
-        events = mine.count { it.kind == Kind.Event },
+        open = if (date.isBefore(today)) 0 else p.open.size + mine.count { it.kind == Kind.Note && pending(it) },
+        events = mine.count { it.kind == Kind.Event && it.state == State.Open },
         tail = date.isBefore(today) && mine.any { it.isTodo && it.open },
         closed = date.isBefore(today) && mine.none { it.isTodo && it.open } && (mine.isNotEmpty() || p.traces.isNotEmpty()),
     )
@@ -212,7 +212,8 @@ fun Book.threadStats(threadId: String, today: LocalDate = LocalDate.now()): Thre
     val last = mine.flatMap { l -> listOfNotNull(l.written.toLocalDate(), l.doneAt?.let { d -> runCatching { java.time.LocalDateTime.parse(d).toLocalDate() }.getOrNull() }) }
         .filter { !it.isAfter(today) }.maxOrNull() ?: since
     return ThreadStats(
-        open = mine.count { it.isTodo && it.open && it.from() == null },
+        // What the page of the thread shows: its lines; steps are counted under their line («сделано 1 из 3»).
+        open = mine.count { it.parentId == null && it.isTodo && it.open && it.from() == null },
         waiting = mine.count { it.open && it.from() != null },
         notes = mine.count { it.kind == Kind.Note },
         files = mine.sumOf { it.files.size },
@@ -226,7 +227,7 @@ data class PersonLines(val promised: List<Line>, val waited: List<Line>, val oth
 fun Book.personLines(name: String): PersonLines {
     val p = person(name)
     fun mine(w: Who) = p?.matches(w.name) ?: w.name.equals(name, true)
-    val all = lines.filter { l -> l.parentId == null && l.who.any(::mine) }
+    val all = lines.filter { l -> l.who.any(::mine) }
     val promised = all.filter { l -> l.open && l.who.any { mine(it) && it.dir == Dir.To } }
     val waited = all.filter { l -> l.open && l.who.any { mine(it) && it.dir == Dir.From } }
     return PersonLines(promised, waited, (all - promised.toSet() - waited.toSet()).sortedByDescending { it.writtenAt })

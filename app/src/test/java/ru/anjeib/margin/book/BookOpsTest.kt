@@ -106,4 +106,21 @@ class BookOpsTest {
         assertTrue(done.children("n").all { it.state == State.Done })
         assertTrue(done.page(today, today).tails.none { it.id == "n" })
     }
+
+    @Test fun aMeetingSeriesGoesOnWhenOneIsLetGo() {
+        val thu = LocalDate.of(2026, 10, 15)
+        val b = book.add(listOf(Line(id = "pad", text = "Падел", kind = Kind.Event, day = thu.toString(), time = "20:00", repeat = Repeat("weekly", 1, listOf(2, 4)))))
+        val d = b.dropOccurrence("pad", thu)
+        assertEquals(State.Dropped, d.line("pad")!!.state)
+        assertTrue(d.lines.any { it.text == "Падел" && it.state == State.Open && it.day == "2026-10-20" })
+    }
+
+    @Test fun aNewThreadGathersLinesThatNameIt() {
+        val b = book.add(listOf(Line(id = "call", text = "Созвон с самокатом по лендингу", kind = Kind.Event, day = today.toString())))
+            .setThread("ex-lamp", "самокат")
+        val t = b.threads.single { it.title == "самокат" }
+        val (g, n) = b.gatherInto(t.id)
+        assertEquals(1, n)
+        assertEquals(t.id, g.line("call")!!.threadId)
+    }
 }

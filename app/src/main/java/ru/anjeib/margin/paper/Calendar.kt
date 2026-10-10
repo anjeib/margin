@@ -44,10 +44,10 @@ import java.time.YearMonth
  */
 @Composable
 fun CalendarPage(book: Book, today: LocalDate, focus: BookVm.Flight?, onDay: (LocalDate) -> Unit, onMark: (String) -> Unit,
-                 onOpen: (String) -> Unit, onLater: () -> Unit, bottom: Dp) {
+                 onOpen: (String) -> Unit, onLater: () -> Unit, bottom: Dp, from: LocalDate? = null, onWeek: (LocalDate) -> Unit = {}) {
     val c = P.c
     val w = P.w
-    var ym by rememberSaveable { mutableStateOf(YearMonth.from(focus?.day ?: today).toString()) }
+    var ym by rememberSaveable { mutableStateOf(YearMonth.from(focus?.day ?: from ?: today).toString()) }
     // Six weeks ahead, only the days that hold something. A line with a window («до пн») is on its pages from the first
     // day to the last; here it stands once — on the first of them.
     val days = remember(book, today) {
@@ -56,8 +56,13 @@ fun CalendarPage(book: Book, today: LocalDate, focus: BookVm.Flight?, onDay: (Lo
             d to book.page(d, today).let { p -> (if (d == today) p.tails else emptyList()) + p.timed + p.rest }.filter { seen.add(it.id) }
         }.filter { it.second.isNotEmpty() }
     }
-    // The week ahead in numbers (a repeat counts on each of its days — they are each a thing to do).
-    val ahead = days.filter { it.first.isAfter(today) && !it.first.isAfter(today.plusDays(7)) }.flatMap { it.second }
+    // This week in numbers — counted as the week's spread counts them, so the two never disagree.
+    val monday = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+    val week = remember(book, today) {
+        val seen = HashSet<String>()
+        (0L..6L).map { monday.plusDays(it) }.flatMap { d -> book.page(d, today).let { p -> (if (d == today) p.tails else emptyList()) + p.timed + p.rest }
+            .filter { (it.isTodo || it.kind == Kind.Event || it.kind == Kind.Note) && seen.add(it.id) } }
+    }
     val later = remember(book) { book.later().size }
     val state = rememberLazyListState()
     // A line just sent here: its day scrolled into view (head, month, then each day's head and lines).
@@ -71,13 +76,16 @@ fun CalendarPage(book: Book, today: LocalDate, focus: BookVm.Flight?, onDay: (Lo
     LazyColumn(state = state, modifier = Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = bottom)) {
         item("head") {
             PageHead(marginTop = "", marginBottom = null, title = w.calendarTitle,
-                line = w.calendarLine(ahead.count { it.isTodo && it.open }, ahead.count { it.kind == Kind.Event }))
+                line = w.weekLine(week.count { it.isTodo && it.open }, week.count { it.isTodo && !it.open }, week.count { it.kind == Kind.Event && it.state == ru.anjeib.margin.book.State.Open }))
         }
         item("month") {
             val shown = YearMonth.parse(ym)
             Column(Modifier.fillMaxWidth().padding(start = Grid.text - 10.dp, end = 10.dp, bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(w.monthName(shown), style = Voice.section.copy(color = c.ink), modifier = Modifier.padding(start = 10.dp))
+                    // The week's spread, from the same page.
+                    Text(w.weekLink, style = Voice.reply.copy(color = c.link), modifier = Modifier.padding(start = 12.dp)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).clickable { onWeek(from ?: today) }.padding(horizontal = 4.dp, vertical = 10.dp))
                     Spacer(Modifier.weight(1f))
                     listOf("‹" to -1L, "›" to 1L).forEach { (sign, step) ->
                         Text(sign, style = Voice.section.copy(color = c.graphite), modifier = Modifier.clip(CircleShape)

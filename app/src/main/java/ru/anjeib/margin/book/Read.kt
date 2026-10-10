@@ -71,6 +71,7 @@ object Read {
               noDay: Boolean = false, lists: Boolean = true): Draft {
         var t = text.trim()
         if (t.isEmpty()) return Draft(emptyList(), true, false, null)
+        if (findCue.containsMatchIn(t) && !t.contains('\n') && t.length < 80) return Draft(emptyList(), true, true, null)
         val tag = threadTag.find(t)?.groupValues?.get(1)
         if (tag != null) t = t.replace(threadTag, " ").trim()
         val later = someday.containsMatchIn(t)
@@ -87,7 +88,8 @@ object Read {
         }
         // A long note stays whole: one line with its paragraphs; no day or name is taken out of its words.
         if (isLongNote(t)) {
-            val people = book.persons.filter { p -> (listOf(p.name) + p.aliases).any { AiRead.mentions(t, it) } }.map { Who(it.name, Dir.With) }
+            // People by their own word forms: «маме» is Мама, «маминой сестре» is not.
+            val people = book.persons.filter { p -> (listOf(p.name) + p.aliases).any { formOf(t, it) } }.map { Who(it.name, Dir.With) }
             val body = t.lines().joinToString("\n") { it.trim() }.replace(Regex("\n{3,}"), "\n\n").trim().replaceFirstChar { it.uppercaseChar() }
             val day = if (later || noDay || (threadId != null && tag == null)) null else page.toString()
             val named = if (tag == null && threadId == null) threadNamed(t, book) else null
@@ -143,7 +145,11 @@ object Read {
      * An open thread the words name: its name in quotes («Зерно» in «Кофейня «Зерно»»), or every word of a short name
      * («самокат» in «созвон с самокатом», any ending). Names shorter than five letters are too much like ordinary words.
      */
-    fun threadNamed(text: String, book: Book): String? {
+    fun threadNamed(text: String, book: Book): String? =
+        book.threads.filter { it.closedAt == null }.firstOrNull { names(text, it.title) }?.id
+
+    /** The words name a thread by its title (see [threadNamed]). */
+    fun names(text: String, title: String): Boolean {
         val words = Regex("\\p{L}+").findAll(text.lowercase().replace('ё', 'е')).map { it.value }.toList()
         fun has(w: String): Boolean {
             val n = w.lowercase().replace('ё', 'е')
@@ -151,12 +157,13 @@ object Read {
             val stem = n.take(maxOf(4, n.length - 2))
             return words.any { it.startsWith(stem) }
         }
-        return book.threads.filter { it.closedAt == null }.firstOrNull { th ->
-            val quoted = Regex("«([^»]+)»").find(th.title)?.groupValues?.get(1)
-            if (quoted != null) Regex("\\p{L}+").findAll(quoted).map { it.value }.toList().let { q -> q.isNotEmpty() && q.all(::has) }
-            else Regex("\\p{L}+").findAll(th.title).map { it.value }.toList().let { t -> t.size in 1..2 && t.all(::has) }
-        }?.id
+        val quoted = Regex("«([^»]+)»").find(title)?.groupValues?.get(1)
+        return if (quoted != null) Regex("\\p{L}+").findAll(quoted).map { it.value }.toList().let { q -> q.isNotEmpty() && q.all(::has) }
+        else Regex("\\p{L}+").findAll(title).map { it.value }.toList().let { t -> t.size in 1..2 && t.all(::has) }
     }
+
+    // «найди лендинг», «где бриф», «покажи файлы Олега» — asking Margin to look; «найти репетитора» is a thing to do.
+    private val findCue = Regex("(?iu)^\\s*(?:найди|поищи|покажи|где|find|search|show me|where(?:'s| is)?)(?!\\p{L})")
 
     private val patronymicName = Regex("([А-ЯЁ][а-яё]+)\\s+([А-ЯЁ][а-яё]+(?:ович|евич|ович[ау]|евич[ау]|овн[аеы]|евн[аеы]|ичн[аеы]|ич))(?!\\p{L})")
 
@@ -177,6 +184,14 @@ object Read {
             out = out.filter { it !== a && it !== b }.toMutableList().also { it.add(out.indexOf(a).coerceAtMost(it.size), full) }
         }
         return out.distinctBy { it.name }
+    }
+
+    /** A form of the name itself (any case), not a word made from it: «маме», «мамой» — yes; «маминой» — no. */
+    private fun formOf(text: String, name: String): Boolean {
+        val n = name.split(' ').first().lowercase().replace('ё', 'е')
+        if (n.length < 3) return false
+        val stem = n.take(maxOf(3, n.length - 1))
+        return Regex("\\p{L}+").findAll(text.lowercase().replace('ё', 'е')).any { w -> w.value.startsWith(stem) && w.value.length <= n.length + 2 }
     }
 
     /** The words hold this form of a word (case and «ё» aside). */
@@ -202,8 +217,10 @@ object Read {
 
     // A verb of doing anywhere in a clause: an infinitive («позвонить», «забрать»; not «часть», «радость», «может быть») or a request.
     private val doingWord = Regex("(?iu)(?<!\\p{L})(?!быть(?!\\p{L}))(?:\\p{L}{2,}(?<!с)(?:ть|ти|чь|ться|тись)|купи|сходи|сделай|отправь|забери|заплати|оплати|закажи|запишись|проверь|найди|уточни|спроси|скинь|пришли|подготовь|договорись|позвони|напиши)(?!\\p{L})")
-    private val clauseBreak = Regex("[.!?;…\\n]+|,\\s+|\\s+(?:и|а|а ещё|а также|потом|затем)\\s+")
-    private val clauseLead = Regex("(?iu)^(?:(?:и|а|но|ещё|еще|потом|затем|также|не забыть|надо|нужно|не забудь)\\s+)+")
+    // Dictation has no stops: a thought also breaks before «надо», «может», «хорошо бы», «но» («…в лагерь надо посчитать
+    // бюджет и узнать у Лизы… может совместить…»).
+    private val clauseBreak = Regex("(?iu)[.!?;…\\n]+|,\\s+|\\s+(?:и|а|а ещё|а также|потом|затем)\\s+|\\s+(?=(?:надо|нужно|не забыть|может быть|может|можно|хорошо бы|но|зато)\\s)")
+    private val clauseLead = Regex("(?iu)^(?:(?:и|а|но|ещё|еще|потом|затем|также|не забыть|надо|нужно|не забудь|хорошо бы|думала про \\p{L}+|думал про \\p{L}+)\\s+)+")
     private fun clauses(t: String) = t.split(clauseBreak).map { it.trim() }.filter { it.length >= 3 }
 
     /**

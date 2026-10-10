@@ -209,4 +209,20 @@ class ReadTest {
         assertEquals("Напомнить классным руководителям про родительские собрания", read("напомнить классным руководителям про родительские собрания").lines.single().text)
         assertEquals("Купить хлеб", read("напомни купить хлеб").lines.single().text)
     }
+
+    @Test fun lookingForSomethingIsAQuestion() {
+        assertTrue(read("найди лендинг").question)
+        assertTrue(read("где бриф от Маши").question)
+        assertEquals("Найти нового репетитора по английскому", read("найти нового репетитора по английскому").lines.single().text)
+    }
+
+    @Test fun aDictatedThoughtGivesItsStepsApart() {
+        val t = "думала про каникулы хорошо бы съездить к маминой сестре в Тверь но Даня хочет в лагерь надо посчитать бюджет и узнать у Лизы про кружок по рисованию может совместить поездку с выходными в ноябре"
+        val steps = Read.stepsIn(t)
+        assertTrue(steps.toString(), steps.contains("Посчитать бюджет"))
+        assertTrue(steps.toString(), steps.contains("Узнать у Лизы про кружок по рисованию"))
+        assertTrue(steps.toString(), steps.none { it.contains("может совместить") })
+        val b = book.copy(persons = book.persons + Person(name = "Мама"))
+        assertTrue("«маминой сестре» is not Мама", Read.draft(t, b, today, today, now = null).lines.single().who.none { it.name == "Мама" })
+    }
 }

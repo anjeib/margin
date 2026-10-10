@@ -116,7 +116,8 @@ fun IndexPage(book: Book, today: LocalDate, onThread: (String) -> Unit, onPerson
         if (files > 0) item { IndexRow(listOf(Note(files.toString(), Tone.Quiet)), w.filesTitle, w.filesSub, onFiles) }
         item {
             androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(top = 30.dp, start = Grid.text - 6.dp, end = Grid.right)) {
-                listOf(w.search to onSearch, w.settings to onSettings, w.help to onHelp, w.feedback to onFeedback).forEachIndexed { i, (t, f) ->
+                // The search has its sign at the top; here — the rest, on one line.
+                listOf(w.settings to onSettings, w.help to onHelp, w.feedback to onFeedback).forEachIndexed { i, (t, f) ->
                     if (i > 0) Text(" · ", style = Voice.reply.copy(color = c.pencil), modifier = Modifier.padding(vertical = 12.dp))
                     Text(t, style = Voice.reply.copy(color = c.link), modifier = Modifier.combinedClickableTap(f).padding(vertical = 12.dp, horizontal = 4.dp))
                 }
@@ -298,7 +299,11 @@ fun PersonPage(book: Book, name: String, today: LocalDate, onMark: (String) -> U
         }
         if (pl.promised.isEmpty() && pl.waited.isEmpty() && pl.other.isEmpty()) item { MarginSays(w.emptyPerson) }
         // A company or a person — how the address book files them.
-        if (p != null) item { MarginLink(if (p.org) w.markPerson else w.markOrg, Modifier.padding(top = 16.dp)) { onOrg(!p.org) } }
+        // «Мама», «Лиза», «Николай Иванович» are people: the offer to file one as a company stands only where a name could be one
+        // («Самокат», «Тёплый сезон», a Latin name).
+        val couldBeOrg = p != null && (p.org || (Regex("[«\"A-Za-z0-9]").containsMatchIn(p.name) || p.name.contains(' ')) &&
+            !Regex("(?:ович|евич|овна|евна|ична|инична)$").containsMatchIn(p.name))
+        if (p != null && couldBeOrg) item { MarginLink(if (p.org) w.markPerson else w.markOrg, Modifier.padding(top = 16.dp)) { onOrg(!p.org) } }
     }
 }
 

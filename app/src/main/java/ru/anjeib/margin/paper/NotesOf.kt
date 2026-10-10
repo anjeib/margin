@@ -33,7 +33,7 @@ fun notesOf(l: Line, page: LocalDate?, today: LocalDate, book: Book, w: Words, s
     // When — the day (only if it is not the page's own) and the hour on lines of their own: the margin is narrow.
     val dayText = listOfNotNull(
         l.date?.takeIf { it != page && l.until == null && seen != Seen.Tail && seen != Seen.Trace }?.let { w.near(it, today) },
-        l.untilDate?.takeIf { seen != Seen.Trace }?.let { w.until(it, today) },
+        l.untilDate?.takeIf { seen != Seen.Trace }?.let { u -> if (page != null && u == page && page != today) w.dueDay else w.until(u, today) },
     ).joinToString(" ").ifBlank { null }
     val hourText = l.time ?: l.part?.let { w.part(it) }
     if (dayText != null || hourText != null) {

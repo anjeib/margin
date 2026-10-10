@@ -60,7 +60,7 @@ fun WeekPage(book: Book, today: LocalDate, start: LocalDate, onMark: (String) ->
                 val sun = mon.plusDays(6)
                 PageHead(marginTop = "${mon.dayOfMonth}", marginBottom = (if (sun.monthValue != mon.monthValue) w.mon(mon.monthValue) + " – " else "– ") +
                     "${sun.dayOfMonth} " + w.mon(sun.monthValue),
-                    title = w.weekTitle, line = w.weekLine(all.count { it.isTodo && it.open }, all.count { it.isTodo && !it.open }, all.count { it.kind == Kind.Event }))
+                    title = w.weekTitle, line = w.weekLine(all.count { it.isTodo && it.open }, all.count { it.isTodo && !it.open }, all.count { it.kind == Kind.Event && it.state == ru.anjeib.margin.book.State.Open }))
                 // ‹ › turn the spread.
                 Row(Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = 8.dp)) {
                     listOf("‹" to -1L, "›" to 1L).forEach { (sign, step) ->

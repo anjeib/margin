@@ -52,7 +52,8 @@ object Change {
             return find(what, book, today)?.let { Plan(What.Drop, it.first, day, sure = it.second) }
         }
         (doneCue.find(t)?.groupValues?.get(1) ?: doneTail.find(t)?.groupValues?.get(1))?.let { w ->
-            return find(w, book, today)?.let { Plan(What.Done, it.first, sure = it.second) }
+            // «готово: кабель» on «Купить кабель usb-c и коврик»: the words name only part of what the line holds — asked.
+            return find(w, book, today)?.let { (id, sure) -> Plan(What.Done, id, sure = sure && !partOf(w, book.line(id)?.text.orEmpty())) }
         }
         return null
     }
@@ -71,6 +72,14 @@ object Change {
     private val small = setOf("для", "что", "это", "как", "или", "все", "всё", "надо", "нужно", "with", "that", "this", "from")
     private fun roots(t: String): List<String> = Regex("\\p{L}{4,}").findAll(t.lowercase().replace('ё', 'е')).map { it.value }
         .filter { it !in small }.map { w -> w.take(if (w.length <= 5) 3 else minOf(5, w.length - 2)) }.toList()
+    /** The line holds several things («…, хлеб, молоко и корм», «кабель и коврик») and the words name only some of them. */
+    private fun partOf(words: String, line: String): Boolean {
+        val parts = line.split(Regex(",\\s*|\\s+и\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
+        if (parts.size < 2) return false
+        val want = roots(words)
+        return parts.any { p -> roots(p).none { r -> want.any { w -> same(r, w) } } }
+    }
+
     private fun same(a: String, b: String) = a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))
 
     /**
@@ -94,7 +103,10 @@ object Change {
             .sortedWith(compareByDescending<Fit> { it.score }.thenByDescending { it.cover }
                 .thenBy { if (it.l.lastDay()?.isAfter(today) == false) 0 else 1 }
                 .thenBy { if (it.l.kind == Kind.Todo) 0 else 1 }
-                .thenBy { f -> f.l.lastDay()?.let { kotlin.math.abs(java.time.temporal.ChronoUnit.DAYS.between(today, it)) } ?: Long.MAX_VALUE })
+                .thenBy { f -> f.l.lastDay()?.let { kotlin.math.abs(java.time.temporal.ChronoUnit.DAYS.between(today, it)) } ?: Long.MAX_VALUE }
+                // Two lists with «молоко»: the one written last is the one in hand.
+                .thenByDescending { f -> f.l.parentId?.let { book.line(it)?.writtenAt } ?: f.l.writtenAt }
+                .thenByDescending { f -> (f.l.parentId ?: f.l.id).let { id -> book.lines.indexOfFirst { it.id == id } } })
             .toList()
         val first = fits.firstOrNull() ?: return null
         val second = fits.getOrNull(1)

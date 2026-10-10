@@ -90,4 +90,11 @@ class AskTest {
         val a = ask("О чём мы договорились с Олегом по логотипу?")
         assertTrue(a.about == Ask.About.Unknown || (a.about == Ask.About.Found && a.weak))
     }
+
+    @Test fun aPromiseInAStepIsOwedToo() {
+        val b = book.add(listOf(Line(id = "n", text = "Совещание", kind = Kind.Note, day = today.toString())))
+            .let { it.add(listOf(Line(id = "k", text = "Отдать ключи от зала", parentId = "n", who = listOf(Who("Николай Иванович", Dir.From)), day = today.toString(), until = today.plusDays(2).toString()))) }
+        assertTrue(Ask.answer("что мне должны?", b, today).lines.any { it.id == "k" })
+        assertTrue(b.personLines("Николай Иванович").waited.any { it.id == "k" })
+    }
 }

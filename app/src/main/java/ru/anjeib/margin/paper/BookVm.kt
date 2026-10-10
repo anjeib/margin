@@ -16,6 +16,7 @@ import ru.anjeib.margin.book.add
 import ru.anjeib.margin.book.addChild
 import ru.anjeib.margin.book.delete
 import ru.anjeib.margin.book.drop
+import ru.anjeib.margin.book.gatherInto
 import ru.anjeib.margin.book.notebookDay
 import ru.anjeib.margin.book.dropOccurrence
 import ru.anjeib.margin.book.beginToday
@@ -179,11 +180,19 @@ class BookVm(app: Application) : AndroidViewModel(app) {
             // its day (a step with a day stands on that day's page too); the note's own day is not given to the others.
             val note = before.line(s.stepsOf) ?: return
             val page = note.date ?: today.value
+            // «Сможешь до понедельника?» — a deadline asked of you: steps without a day of their own get it as a window.
+            val asked = Regex("[^.!?\n]*\\?").findAll(note.text).map { it.value }.firstNotNullOfOrNull { q ->
+                Regex("(?iu)(?:^|\\s)(?:до|к)\\s+\\p{L}*\\s*[\\p{L}\\d.]+").find(q)?.value?.let { m ->
+                    Read.draft("сделать " + m.trim(), before, page, today.value, now = null, lists = false).lines.firstOrNull()
+                        ?.let { it.until ?: it.day }?.takeIf { it > page.toString() }
+                }
+            }
             val kids = s.steps.map { t ->
                 val l = Read.draft(t, before, page, today.value, now = null, lists = false).lines.firstOrNull()
                 val day = l?.day?.takeIf { it != page.toString() || l.time != null || l.until != null }
                 Line(text = l?.text ?: t, kind = ru.anjeib.margin.book.Kind.Todo, parentId = note.id, threadId = note.threadId,
-                    who = l?.who.orEmpty(), day = day, time = l?.time?.takeIf { day != null }, until = l?.until?.takeIf { day != null })
+                    who = l?.who.orEmpty(), day = day ?: asked?.let { page.toString() }, time = l?.time?.takeIf { day != null },
+                    until = if (day != null) l?.until else asked)
             }
             store.update { it.add(kids) }
             say(words.stepsAdded(s.steps.size), before)
@@ -233,9 +242,15 @@ class BookVm(app: Application) : AndroidViewModel(app) {
             // A repeat written on one of its days before its hour starts today.
             .map { if (page == today.value) it.beginToday(today.value, java.time.LocalTime.now()) else it }
         val before = book.value
+        // A thread started by these words («#самокат») gathers the lines written before that name it.
+        val newThread = d.threadTitle?.takeIf { tt -> before.threads.none { it.title.equals(tt, true) } }
+        var gathered = 0
         store.update { b ->
             var x = b.add(lines + d.under)
             d.threadTitle?.let { tt -> lines.forEach { l -> x = x.setThread(l.id, tt) } }
+            if (newThread != null) x.threads.firstOrNull { it.title.equals(newThread, true) }?.let { th ->
+                val (y, n) = x.gatherInto(th.id); x = y; gathered = n
+            }
             x
         }
         _fresh.value = lines.map { it.id }.toSet()
@@ -249,6 +264,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         away.firstOrNull()?.date?.let { d -> _flight.value = Flight(d, away.filter { it.date == d }.map { it.id }) }
         when {
             steps.isNotEmpty() -> say(words.stepsInNote(steps.size), before, steps = steps, stepsOf = lines.single().id)
+            gathered > 0 && newThread != null -> say(words.gathered(gathered, newThread), before)
             lines.size > 1 -> say(words.writtenN(lines.size), before)
             away.isNotEmpty() -> say(words.writtenOn(away.first().date, today.value), before, day = away.first().date)
         }
@@ -270,7 +286,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         // Another line fits the words as well: ask about the likelier one instead of changing the wrong one.
         if (!p.sure && p.id != null) {
             val l = book.value.line(p.id) ?: return false
-            say(words.changeAsk(l.text, p, td), change = p)
+            say(words.changeAsk(l.text, p, td, of = l.parentId?.let { book.value.line(it)?.text }), change = p)
             return true
         }
         return apply(p)
@@ -306,7 +322,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         say(when (p.what) {
             What.Move -> words.changedTo(l.text, if (p.later) null else now?.date, now?.time.takeIf { p.time != null }, td)
             What.Drop -> words.changedDropped(l.text, p.day?.takeIf { l.repeat != null }, td)
-            else -> words.changedDone(l.text)
+            else -> words.changedDone(l.parentId?.let { pid -> before.line(pid)?.let { "${l.text}» в «${words.short(it.text)}" } } ?: l.text)
         }, before, day = now?.date?.takeIf { p.what == What.Move })
         _fresh.value = setOf(id)
         viewModelScope.launch { delay(1200); _fresh.value = emptySet() }

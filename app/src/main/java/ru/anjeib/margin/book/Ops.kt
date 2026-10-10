@@ -71,7 +71,8 @@ fun Book.drop(id: String): Book {
     })
     val r = l.repeat
     val anchor = l.date
-    if (r == null || anchor == null || !l.isTodo || l.state != State.Open) return dropped
+    // Any repeat goes on — a meeting as much as a to-do («отмени падел в чт» is only Thursday).
+    if (r == null || anchor == null || l.state != State.Open) return dropped
     var next = r.nextKept(anchor)
     while (next.isBefore(LocalDate.now())) next = r.nextKept(next)
     return dropped.copy(lines = dropped.lines + l.copy(id = newId(), day = next.toString(), state = State.Open, doneAt = null,
@@ -165,6 +166,17 @@ fun Book.addChild(parentId: String, text: String, kind: Kind): Book {
     return copy(lines = lines + Line(text = if (link) t else t.replaceFirstChar { it.uppercase() }, kind = kind, parentId = p.id, threadId = p.threadId))
 }
 
+/**
+ * A thread just made gathers the open lines written before it that name it («созвон с самокатом» when «#самокат» starts
+ * the thread). Returns the book and how many came.
+ */
+fun Book.gatherInto(threadId: String): Pair<Book, Int> {
+    val t = thread(threadId) ?: return this to 0
+    val ids = lines.filter { l -> l.threadId == null && l.parentId == null && l.state == State.Open && Read.names(l.text, t.title) }.map { it.id }.toSet()
+    if (ids.isEmpty()) return this to 0
+    return copy(lines = lines.map { if (it.id in ids || it.parentId in ids) it.copy(threadId = threadId) else it }) to ids.size
+}
+
 /** «Сделать нитью»: the line names a new thread and goes into it with everything written under it. */
 fun Book.makeThread(id: String, title: String? = null): Book {
     val l = line(id) ?: return this
@@ -200,8 +212,9 @@ fun Book.closeDay(date: java.time.LocalDate, at: java.time.LocalTime = java.time
     val day = date.toString()
     fun on(s: String?) = s?.take(10) == day
     // What came of the day: what was done on it, and what the evening decided about the lines it asked for.
-    val done = lines.count { it.isTodo && it.state == State.Done && (on(it.doneAt) || it.id in decided) }
-    val dropped = lines.count { it.state == State.Dropped && (on(it.doneAt) || it.id in decided) }
+    // Lines of the pages, not the items of a list or the steps under a note — those are counted on their line.
+    val done = lines.count { it.parentId == null && it.isTodo && it.state == State.Done && (on(it.doneAt) || it.id in decided) }
+    val dropped = lines.count { it.parentId == null && it.state == State.Dropped && (on(it.doneAt) || it.id in decided) }
     // Moved on: what left this page today (its traces) and what the evening sent elsewhere.
     val moved = lines.count { l -> l.state == State.Open && (l.id in decided || (l.trail.any { it.from == day } && l.day != day)) }
     return copy(closed = closed + (day to DayClose("%02d:%02d".format(at.hour, at.minute), done, moved, dropped)))

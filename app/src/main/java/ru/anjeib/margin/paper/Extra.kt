@@ -58,11 +58,14 @@ fun SearchPage(book: Book, today: LocalDate, onMark: (String) -> Unit, onOpen: (
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     val key = q.trim().lowercase().replace('ё', 'е')
     fun has(s: String?) = s != null && key.isNotEmpty() && s.lowercase().replace('ё', 'е').contains(key)
+    // «Протокол» finds «Protokol_pedsoveta.pdf»: a file's name is often written in Latin letters.
+    val latin = translit(key)
+    fun hasName(s: String?) = has(s) || (s != null && latin.length >= 3 && latin != key && s.lowercase().contains(latin))
     // A line is found by its words, place, people, the phrase it came from — and by what its files say:
     // a name, a caption, words recognised on a photo, a voice note's transcript.
     val lines = if (key.length < 2) emptyList() else book.lines.filter { l ->
         has(l.text) || has(l.place) || l.who.any { has(it.name) } || has(l.source) ||
-            l.files.any { f -> has(f.name) || has(f.caption) || has(f.ocr) || has(f.transcript) }
+            l.files.any { f -> hasName(f.name) || has(f.caption) || has(f.ocr) || has(f.transcript) }
     }
     val threads = if (key.length < 2) emptyList() else book.threads.filter { has(it.title) }
     // Only people the notebook has something about: a name met once in a phrase and gone is not a person to find.
@@ -290,4 +293,12 @@ fun sendFeedback(ctx: android.content.Context, w: Words) {
     val mail = android.content.Intent(i).apply { selector = android.content.Intent(android.content.Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:")) }
     runCatching { ctx.startActivity(mail) }
         .recoverCatching { ctx.startActivity(android.content.Intent.createChooser(i, w.feedback).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+/** Russian letters as they are usually written in file names: «протокол» → «protokol», «смета» → «smeta». */
+fun translit(s: String): String {
+    val m = mapOf('а' to "a", 'б' to "b", 'в' to "v", 'г' to "g", 'д' to "d", 'е' to "e", 'ё' to "e", 'ж' to "zh", 'з' to "z", 'и' to "i",
+        'й' to "y", 'к' to "k", 'л' to "l", 'м' to "m", 'н' to "n", 'о' to "o", 'п' to "p", 'р' to "r", 'с' to "s", 'т' to "t", 'у' to "u",
+        'ф' to "f", 'х' to "h", 'ц' to "ts", 'ч' to "ch", 'ш' to "sh", 'щ' to "sch", 'ъ' to "", 'ы' to "y", 'ь' to "", 'э' to "e", 'ю' to "yu", 'я' to "ya")
+    return s.lowercase().map { m[it] ?: it.toString() }.joinToString("")
 }

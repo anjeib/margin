@@ -11,6 +11,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -78,13 +81,22 @@ fun DayPage(
     val folded = doneRest.size > 5 && !showDone
     val rest = if (folded) page.rest - doneRest.toSet() else page.rest
 
-    // The hour now, refreshed every minute — for the tick among the hours.
+    // The hour now, refreshed every half minute and at once when the notebook is opened again — for the tick among the
+    // hours and the evening's way to close the day.
     var clock by remember { mutableStateOf(LocalTime.now().let { "%02d:%02d".format(it.hour, it.minute) }) }
     LaunchedEffect(date) {
         while (date == today) {
             kotlinx.coroutines.delay(30_000)
             clock = LocalTime.now().let { "%02d:%02d".format(it.hour, it.minute) }
         }
+    }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val o = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) clock = LocalTime.now().let { "%02d:%02d".format(it.hour, it.minute) }
+        }
+        owner.lifecycle.addObserver(o)
+        onDispose { owner.lifecycle.removeObserver(o) }
     }
     // Words just written land on this page: it scrolls to them if they would be out of sight.
     val list = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -121,7 +133,8 @@ fun DayPage(
             }
         }
         // The evening: the way to close the day stands on top, where it is seen — every open line gets a decision.
-        val undecided = if (date == today && LocalTime.now().hour.let { it >= eveningHour - 3 || it < 4 }) book.toDecide(ritualDay()).size else 0
+        val hour = clock.take(2).toIntOrNull() ?: LocalTime.now().hour
+        val undecided = if (date == today && hour.let { it >= eveningHour - 3 || it < 4 }) book.toDecide(ritualDay()).size else 0
         if (undecided > 0) item("turn") { MarginLink(w.turnDayCount(undecided), Modifier.padding(bottom = 6.dp), onTurn) }
         items(page.tails, key = { "t" + it.id }) { l -> LineOnPage(l, date, today, book, Seen.Tail, l.id in fresh, onMark, onOpen) }
         // Today, among the hours: a red tick on the rule where «now» is — the page shows where the day stands.
@@ -187,6 +200,27 @@ fun LineOnPage(l: Line, page: LocalDate?, today: LocalDate, book: Book, seen: Se
     ) {
         PenText(l.text, Voice.words.copy(color = ink), struck = !trace && l.state != State.Open && l.kind == Kind.Todo, lineColor = c.graphite,
             maxLines = 5, onCut = { if (it != cut) cut = it }, rich = if (hasLink(l.text)) linked(l.text, c.link) else null)
+    }
+    // What is to be done under the line — a list's items, a note's steps — stands under it on the page, as written in a
+    // notebook: open ones, a few at most (the rest in the sheet). Steps with a day of their own stand on that day instead.
+    if (!trace && l.parentId == null && l.state == State.Open) {
+        val open = remember(book, l.id) { book.children(l.id).filter { it.isTodo && it.open && it.day == null }.sortedBy { it.writtenAt } }
+        open.take(4).forEach { k -> StepRow(k, ink, onMark = { onMark(k.id) }, onOpen = { onOpen(l.id) }) }
+        if (open.size > 4) MarginLink(w.moreSteps(open.size - 4), Modifier.padding(start = 22.dp)) { onOpen(l.id) }
+    }
+}
+
+/** An item under a line, written a little in from the rule and closer together than lines: its own dot to tick. */
+@Composable
+private fun StepRow(k: Line, ink: androidx.compose.ui.graphics.Color, onMark: () -> Unit, onOpen: () -> Unit) {
+    val w = P.w
+    androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().heightIn(min = 38.dp).clickable(onClick = onOpen).padding(end = Grid.right),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        androidx.compose.foundation.layout.Spacer(Modifier.width(Grid.text - 4.dp))
+        androidx.compose.foundation.layout.Box(Modifier.size(34.dp).clickable(onClick = onMark).semantics { contentDescription = w.a11yMark(false) },
+            contentAlignment = androidx.compose.ui.Alignment.Center) { Mark(markOf(k), size = Grid.node * 0.8f) }
+        Text(k.text, style = Voice.words.copy(color = ink, fontSize = Voice.words.fontSize * 0.94f), maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 2.dp))
     }
 }
 

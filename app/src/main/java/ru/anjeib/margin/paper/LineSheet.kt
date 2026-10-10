@@ -17,8 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -118,11 +117,12 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
         containerColor = c.lifted, scrimColor = c.scrim,
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) }) {
         androidx.compose.runtime.CompositionLocalProvider(LocalGround provides c.lifted) {
-        // With the keyboard up the sheet reaches the top of the screen: it stops under the status bar, not behind the clock.
-        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-        val keyboard = androidx.compose.foundation.layout.WindowInsets.isImeVisible
-        Column(Modifier.fillMaxWidth().then(if (keyboard) Modifier.statusBarsPadding() else Modifier).imePadding().navigationBarsPadding()
-            .verticalScroll(rememberScrollState()).heightIn(min = tall).rule(c.rule)
+        // However much is written and with the keyboard up, the sheet stops below the status bar: its content scrolls.
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val top = with(density) { androidx.compose.foundation.layout.WindowInsets.Companion.statusBars.getTop(this).toDp() }
+        val most = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp - top - 28.dp
+        Column(Modifier.fillMaxWidth().heightIn(max = most).imePadding().navigationBarsPadding()
+            .verticalScroll(rememberScrollState()).heightIn(min = minOf(tall, most)).rule(c.rule)
             // A sheet of paper, taller than what is written: a tap on its empty part goes to the next line.
             .pointerInput(id) { detectTapGestures { runCatching { focus.requestFocus() } } }
             .padding(bottom = 16.dp)) {
@@ -235,8 +235,10 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                 androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 8.dp))
                 var said: String? = null
                 kids.sortedBy { it.writtenAt }.forEach { k ->
-                    // The time once for what was written at one go — a list does not repeat «00:03» on every item.
-                    val stamp = w.stamp(k.written, today).let { if (it == said) null else { said = it; it } }
+                    // A step shows its own «when» if it has one; a comment — the time it was written, once for what was
+                    // written at one go (a list does not repeat «00:03» on every item; a step's writing time is noise).
+                    val stamp = if (k.kind == Kind.Todo) whenOf(k, today, w)?.lineSequence()?.firstOrNull()
+                        else w.stamp(k.written, today).let { if (it == said) null else { said = it; it } }
                     val look = Voice.words.copy(color = if (k.state == State.Open) c.ink else c.graphite,
                         textDecoration = if (k.state != State.Open && k.kind == Kind.Todo) TextDecoration.LineThrough else null)
                     MarginRow(notes = listOfNotNull(stamp?.let { Note(it, Tone.Quiet) }), mark = markOf(k),

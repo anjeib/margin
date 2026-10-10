@@ -94,4 +94,12 @@ class ChangeTest {
         ))
         assertTrue(!Change.read("перенеси йогу на пятницу", b, today)!!.sure)
     }
+
+    @Test fun doneOnPartOfALineIsAsked() {
+        val b = book.add(listOf(Line(id = "cab", text = "Купить кабель usb-c и коврик", day = today.toString())))
+        val p = Change.read("готово: кабель", b, today)!!
+        assertEquals("cab", p.id)
+        assertTrue(!p.sure)
+        assertTrue(Change.read("готово: лампа", book, today)!!.sure)
+    }
 }
