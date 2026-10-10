@@ -112,7 +112,7 @@ fun MenuGlyph(color: Color = M.c.ink) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, onToggle: () -> Unit) {
+fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, interactive: Boolean = true, onToggle: () -> Unit) {
     val c = M.c
     // A bullet the size of the other glyphs — a small «bagel» (owner's call, 10 окт): a thick ring;
     // done — the hole closes into a sage disc and a white tick comes up on it.
@@ -123,7 +123,8 @@ fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, o
             .size(size + 16.dp)
             .clip(CircleShape)
             // In a card the long press holds what the corner menu used to: tomorrow, a week, not doing it, delete.
-            .then(if (onLong == null) Modifier.toggleable(value = done, role = androidx.compose.ui.semantics.Role.Checkbox, onValueChange = { onToggle() })
+            // A picture of the bagel (legends, the tour) is not a control: nothing to focus or tap.
+            .then(if (!interactive) Modifier else if (onLong == null) Modifier.toggleable(value = done, role = androidx.compose.ui.semantics.Role.Checkbox, onValueChange = { onToggle() })
                 else Modifier.combinedClickable(role = androidx.compose.ui.semantics.Role.Checkbox, onLongClick = onLong, onClick = onToggle)),
         contentAlignment = Alignment.Center,
     ) {
@@ -308,19 +309,6 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         inlineContent = inline, modifier = Modifier.padding(top = 3.dp))
 }
 
-/** «Обещание · Виктору от вас» / «Обещание · вам от Марины»: who owes whom, in one badge. */
-@Composable
-fun PromiseBadge(t: Task, big: Boolean = false, onClick: (() -> Unit)? = null) {
-    val c = M.c
-    val s = M.s
-    val text = t.waitingFor?.let { s.promiseToYou(it) } ?: t.promisedTo?.let { s.promiseFromYou(it) } ?: return
-    Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-        .padding(horizontal = if (big) 12.dp else 9.dp, vertical = if (big) 6.dp else 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(s.promiseWord, style = Type.small.copy(color = c.link, fontSize = if (big) 14.sp else 12.5.sp))
-        Text("  " + text, style = Type.small.copy(color = c.ink, fontSize = if (big) 14.sp else 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
 /** A person as a badge with the whole name — «Марина Петрова», not «М». */
 @Composable
 fun PersonBadge(name: String, big: Boolean = false, onClick: (() -> Unit)? = null) {
@@ -381,7 +369,7 @@ fun TaskCard(
                 )
                 // The last thing written about it, faint — no need to open the card to remember.
                 if (!t.done) t.entries.lastOrNull { it.text.isNotBlank() }?.let { e ->
-                    Text(e.text, style = Type.small.copy(color = c.faint, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(e.text, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (!t.done) {
                     Spacer(Modifier.height(5.dp))
@@ -424,7 +412,7 @@ fun SubtaskRow(s: Subtask, depth: Int, onToggle: () -> Unit, onLong: (() -> Unit
     ) {
         CheckCircle(s.done, size = 18.dp, onToggle = onToggle)
         // The number lets one say «подзадача 2» to the field below.
-        number?.let { Text("$it.", style = Type.small.copy(color = c.faint, fontSize = 13.sp), modifier = Modifier.width(22.dp)) }
+        number?.let { Text("$it.", style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.width(22.dp)) }
         Text(
             s.title + (s.assignee?.let { " — $it" } ?: ""),
             style = Type.body.copy(

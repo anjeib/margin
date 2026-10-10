@@ -57,7 +57,7 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
         DisposableEffect(Unit) { onDispose { commit() } }
         Margined(Modifier.padding(top = 6.dp), margin = { started?.let { st -> Stamp(st, sameDay = (items.lastOrNull()?.at ?: after)?.take(10) == st.take(10)) } }) {
             Box(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                if (draft.isEmpty() && !focused) Text(hint, style = text.copy(color = c.faint))
+                if (draft.isEmpty() && !focused) Text(hint, style = text.copy(color = c.graphite))
                 BasicTextField(draft, { v -> draft = v; if (started == null && v.isNotBlank()) started = nowStamp() },
                     textStyle = text, cursorBrush = SolidColor(c.link),
                     modifier = Modifier.fillMaxWidth().onFocusChanged { f -> if (focused && !f.isFocused) commit(); focused = f.isFocused })

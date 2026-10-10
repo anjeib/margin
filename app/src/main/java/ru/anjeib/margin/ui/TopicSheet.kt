@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.animation.animateContentSize
+import ru.anjeib.margin.data.dayMonthYear
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.onFocusChanged
@@ -259,7 +261,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             }
             Spacer(Modifier.weight(1f))
             Box(Modifier.padding(end = 8.dp)) {
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) { Icon(Icons.Outlined.MoreHoriz, null, tint = c.graphite) }
+                Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) { Icon(Icons.Outlined.MoreHoriz, s.moreActions, tint = c.graphite) }
                 // An open topic goes to the archive (it keeps everything); deleting is for one already there.
                 SoftMenu(menu, { menu = false }) {
                     SoftMenuItem(s.edit) { menu = false; dialog = "rename" }
@@ -274,14 +276,17 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             }
         }
         val open = task.subtasks.count { !it.done }
-        val files = task.materials().size
+        // Scrolled into the feed, the header folds to one line — the title — and gives the feed the screen; back at the start it opens again.
+        val folded by remember { androidx.compose.runtime.derivedStateOf { feedState.firstVisibleItemIndex > 0 || feedState.firstVisibleItemScrollOffset > 60 } }
         Margined {
-            Column {
-                Text(task.title, style = Type.display.copy(color = c.ink, fontSize = 32.sp, lineHeight = 38.sp),
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { dialog = "rename" })
-                // The label and age on the left; materials and «в архив» as two quiet icons on the right of the same line.
+            Column(Modifier.animateContentSize(tween(220))) {
+                Text(task.title, style = if (folded) Type.cardTitle.copy(color = c.ink, fontSize = 19.sp, lineHeight = 24.sp) else Type.display.copy(color = c.ink, fontSize = 32.sp, lineHeight = 38.sp),
+                    maxLines = if (folded) 1 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(bottom = if (folded) 8.dp else 0.dp).clip(RoundedCornerShape(8.dp)).clickable { dialog = "rename" })
+                if (!folded) {
+                // The sphere and age; the materials are a part of the summary below (not a second switch up here).
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val since = runCatching { LocalDate.parse(task.createdAt) }.getOrNull()?.dayMonthShort()
+                    val since = runCatching { LocalDate.parse(task.createdAt) }.getOrNull()?.dayMonthYear()
                     SphereBadge(task.sphere, Modifier.padding(end = 8.dp)) { vm.setSphere(task.id, nextSphere(task.sphere)) }
                     val sinceText = since?.let { if (task.thought && task.subtasks.isEmpty()) s.thoughtSince(it) else s.topicSince(it) } ?: ""
                     val dateSp = dateSpan()
@@ -291,9 +296,6 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                         if (at >= 0) { append(sinceText.substring(0, at)); withStyle(dateSp) { append(since!!) }; append(sinceText.substring(at + since!!.length)) } else append(sinceText)
                     }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f))
-                    HeaderIcon(Icons.Outlined.AttachFile, s.materialsTab, count = files, on = materialsMode) {
-                        materialsMode = !materialsMode; dealsOnly = false; saidOnly = false
-                    }
                 }
                 // The same soft card as the summary on «Сегодня»: how far, how much, who owes what. A tap — the matters only.
                 TopicSummary(task, dealsOnly, saidOnly, materialsMode,
@@ -303,6 +305,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 if (task.done) Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 14.dp, vertical = 10.dp)) {
                     Text(s.inArchiveSince(task.doneAt?.let { runCatching { LocalDate.parse(it).dayMonthShort() }.getOrNull() } ?: ""), style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
                     Text(s.bringBack, style = Type.small.copy(color = c.link), modifier = Modifier.clickable { vm.reviveTopic(task.id) })
+                }
                 }
             }
         }
@@ -321,6 +324,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                     ), onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
                 }
             }
+            // The feed fades in under the header instead of being cut through a line of words.
+            Box(Modifier.fillMaxWidth().height(18.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.bg, c.bg.copy(alpha = 0f)))))
             androidx.compose.animation.AnimatedVisibility(awayFromStart && !materialsMode, modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 12.dp),
                 enter = androidx.compose.animation.fadeIn(tween(180)), exit = androidx.compose.animation.fadeOut(tween(180))) {
                 Text(s.toStart, style = Type.small.copy(color = c.link, fontSize = 13.sp),
@@ -456,7 +461,7 @@ private fun MaterialsFeed(task: Task, onView: (Attachment) -> Unit) {
                         Icon(Icons.Outlined.Search, null, tint = c.graphite, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(10.dp))
                         Box(Modifier.weight(1f)) {
-                            if (q.isEmpty()) Text(s.searchMaterials, style = Type.body.copy(color = c.faint, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (q.isEmpty()) Text(s.searchMaterials, style = Type.body.copy(color = c.graphite, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp), cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
                         }
                     }
@@ -717,12 +722,14 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
             Row(Modifier.fillMaxWidth().padding(start = indent).clip(RoundedCornerShape(10.dp)).background(sel)
                 .combinedClickable(onClick = { if (removed) menu = true else act.openDeal(q) }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
                 if (depth == 0) KindMark(if (q.done || removed) null else task.questionRow(q))
-                Box(Modifier.size(if (depth == 0) 26.dp else 22.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(q.done, size = if (depth == 0) 18.dp else 15.dp, onToggle = ::tick) }
+                // A removed matter has no bagel at all — three states read by shape: ring open, disc done, nothing removed.
+                Box(Modifier.size(if (depth == 0) 26.dp else 22.dp, 24.dp), contentAlignment = Alignment.CenterStart) { if (!removed) CheckCircle(q.done, size = if (depth == 0) 18.dp else 15.dp, onToggle = ::tick) }
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     val hour = hourColor(due, q.time, today)
                     val title = buildAnnotatedString {
-                        if (q.time != null && !q.done && !removed) {
+                        // Several days carry their hours in the line of days below — not again before the words.
+                        if (q.time != null && !q.done && !removed && q.slots.isEmpty()) {
                             withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("time", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = hour, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"))) { act.timeDeal(q) }) { append(q.time!!) }
                             append("   ")
                         }
@@ -839,7 +846,7 @@ private fun QuestionsPage(task: Task, hl: String?, vm: MainVm, onFeed: (String) 
             Margined {
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { showDone = !showDone }, verticalAlignment = Alignment.CenterVertically) {
                     QHeadText(s.solvedCaps, done.size)
-                    Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.faint, modifier = Modifier.padding(top = 14.dp).size(18.dp).rotate(if (showDone) 0f else -90f))
+                    Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.graphite, modifier = Modifier.padding(top = 14.dp).size(18.dp).rotate(if (showDone) 0f else -90f))
                 }
             }
         }
@@ -854,7 +861,7 @@ private fun QHead(label: String, n: Int) = Margined { QHeadText(label, n) }
 private fun QHeadText(label: String, n: Int) {
     Row(Modifier.padding(top = 20.dp, bottom = 6.dp)) {
         SectionLabel(label)
-        Text("  $n", style = Type.label.copy(color = M.c.faint))
+        Text("  $n", style = Type.label.copy(color = M.c.graphite))
     }
 }
 
@@ -915,7 +922,7 @@ private fun QuestionRow(task: Task, q: Subtask, lit: Boolean, vm: MainVm, onFeed
                             val parts = listOfNotNull(if (q.done) (if (q.isWait) s.gotIt else s.solvedWord).lowercase() else if (q.due == null) s.noDateQ else null, q.assignee)
                             if (parts.isNotEmpty()) Text(parts.joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp))
                             made?.let { ev ->
-                                if (parts.isNotEmpty()) Text("  ·  ", style = Type.small.copy(color = c.faint))
+                                if (parts.isNotEmpty()) Text("  ·  ", style = Type.small.copy(color = c.graphite))
                                 Text(s.inFeed(dateOfStamp(ev.at)?.dayMonthShort() ?: ""), style = Type.small.copy(color = c.link, fontSize = 13.5.sp),
                                     modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { onFeed("d:" + q.id) })
                             }
@@ -998,7 +1005,7 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(14.dp))
                                 .padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.weight(1f)) {
-                                    if (q.isEmpty()) Text(s.searchMaterials, style = Type.body.copy(color = c.faint, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    if (q.isEmpty()) Text(s.searchMaterials, style = Type.body.copy(color = c.graphite, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp), cursorBrush = SolidColor(c.link),
                                         modifier = Modifier.fillMaxWidth().focusRequester(focus))
                                 }
@@ -1029,24 +1036,43 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                                         verticalAlignment = Alignment.CenterVertically) {
                                         Text("↳", style = Type.small.copy(color = c.link, fontSize = 13.sp))
                                         Spacer(Modifier.width(5.dp))
-                                        if (t.topic && !(t.thought && t.subtasks.isEmpty())) TopicGlyph(c.link, 12.dp) else if (t.thought) ThoughtGlyph(c.link, 12.dp) else CheckCircle(t.done, size = 11.dp) {}
+                                        if (t.topic && !(t.thought && t.subtasks.isEmpty())) TopicGlyph(c.link, 12.dp) else if (t.thought) ThoughtGlyph(c.link, 12.dp) else if (t.done) TickGlyph(c.ok, 12.dp) else ArrowGlyph(c.link, 12.dp)
                                         Spacer(Modifier.width(5.dp))
                                         Text(t.title, style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
-                                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        g.forEach { (_, e, a) ->
-                                            Column(Modifier.width(120.dp).clip(RoundedCornerShape(10.dp)).clickable { onView(a) }) {
-                                                if (a.kind == "photo" || a.kind == "video") Thumb(a, 120.dp)
-                                                else Box(Modifier.size(120.dp).clip(RoundedCornerShape(12.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                                                    Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.size(26.dp))
+                                    // Pictures in a grid of three (no empty two thirds of a line); documents and voice as rows with their name whole.
+                                    val pics = g.filter { (_, _, a) -> a.kind == "photo" || a.kind == "video" }
+                                    val docs = g - pics.toSet()
+                                    @Composable fun matched(a: Attachment) {
+                                        // Found by the words inside, not the name: say what matched.
+                                        if (needle.isNotEmpty() && !a.name.lowercase().replace(" ", "").contains(needle)) (a.ocr ?: a.transcript)?.let {
+                                            Text("«" + it.take(60) + "»", style = Type.small.copy(color = c.graphite, fontSize = 11.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        }
+                                    }
+                                    if (pics.isNotEmpty()) androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+                                        val side = (maxWidth - 16.dp) / 3
+                                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 3) {
+                                            pics.forEach { (_, e, a) ->
+                                                Column(Modifier.width(side).clip(RoundedCornerShape(10.dp)).clickable { onView(a) }) {
+                                                    Thumb(a, side)
+                                                    (a.caption ?: timeOfStamp(e.at).takeIf { it.isNotBlank() && it != "00:00" })?.let {
+                                                        Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+                                                    }
+                                                    matched(a)
                                                 }
-                                                Text(a.caption ?: attachmentLabel(a).ifBlank { a.name }, style = Type.small.copy(color = c.ink, fontSize = 13.sp), maxLines = if (a.caption != null) 2 else 1, overflow = TextOverflow.Ellipsis,
-                                                    modifier = Modifier.padding(top = 5.dp))
-                                                timeOfStamp(e.at).takeIf { it.isNotBlank() && it != "00:00" }?.let { Text(it, style = dateStyle(12.sp)) }
-                                                // Found by the words inside, not the name: say what matched.
-                                                if (needle.isNotEmpty() && !a.name.lowercase().replace(" ", "").contains(needle)) (a.ocr ?: a.transcript)?.let {
-                                                    Text("«" + it.take(60) + "»", style = Type.small.copy(color = c.faint, fontSize = 11.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                                }
+                                            }
+                                        }
+                                    }
+                                    docs.forEach { (_, e, a) ->
+                                        Row(Modifier.fillMaxWidth().padding(top = if (pics.isNotEmpty()) 8.dp else 0.dp).clip(RoundedCornerShape(10.dp)).background(c.card)
+                                            .border(1.dp, c.hairline, RoundedCornerShape(10.dp)).clickable { onView(a) }.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.Top) {
+                                            Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.padding(top = 1.dp).size(20.dp))
+                                            Spacer(Modifier.width(10.dp))
+                                            Column(Modifier.weight(1f)) {
+                                                Text(a.caption ?: a.name.ifBlank { attachmentLabel(a) }, style = Type.small.copy(color = c.ink, fontSize = 14.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                                Text(listOfNotNull(attachmentLabel(a).takeIf { it.isNotBlank() && it != a.name }, timeOfStamp(e.at).takeIf { it.isNotBlank() && it != "00:00" }).joinToString("  ·  "),
+                                                    style = Type.small.copy(color = c.graphite, fontSize = 12.sp))
+                                                matched(a)
                                             }
                                         }
                                     }

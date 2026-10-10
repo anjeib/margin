@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -233,7 +235,7 @@ fun SmartComposer(
             androidx.compose.material3.Surface(Modifier.padding(start = 6.dp, bottom = 8.dp).widthIn(min = 196.dp, max = 300.dp), shape = RoundedCornerShape(16.dp), color = c.card,
                 shadowElevation = 8.dp, border = androidx.compose.foundation.BorderStroke(1.dp, c.hairline)) {
                 Column(Modifier.padding(vertical = 6.dp)) {
-                    Text(when (sign) { "#" -> s.hashWhat; "@" -> s.atWhat; else -> s.slashWhat }, style = Type.small.copy(color = c.faint, fontSize = 12.sp),
+                    Text(when (sign) { "#" -> s.hashWhat; "@" -> s.atWhat; else -> s.slashWhat }, style = Type.small.copy(color = c.graphite, fontSize = 12.sp),
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 2.dp))
                     offer.forEachIndexed { i, p ->
                         if (i > 0 && p.group != offer[i - 1].group) Hairline(Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
@@ -300,7 +302,8 @@ fun SmartComposer(
         fun send() { onSend(tagged(text), files.toList()); text = ""; files.clear() }
         val attach: @Composable () -> Unit = {
             Box {
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.a11yAttach) { menu = true }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.a11yAttach, role = androidx.compose.ui.semantics.Role.Button) { menu = true }
+                    .semantics { contentDescription = s.a11yAttach }, contentAlignment = Alignment.Center) {
                     PlusGlyph(c.graphite, 18.dp)
                 }
                 SoftMenu(menu, { menu = false }) {
@@ -377,7 +380,9 @@ private val FieldInset = 4.dp
 /** A sign at the end of the field; [filled] — the small terracotta circle of «send», pale while there is nothing to send. */
 @Composable
 private fun FieldButton(filled: Boolean = false, enabled: Boolean = true, busy: Boolean = false, label: String? = null, onClick: () -> Unit, content: @Composable () -> Unit) {
-    Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable(enabled = enabled, onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
+    // A drawn glyph says nothing to TalkBack: the button carries its name and role itself.
+    Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable(enabled = enabled, onClickLabel = label, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+        .then(if (label != null) Modifier.semantics { contentDescription = label } else Modifier), contentAlignment = Alignment.Center) {
         if (filled) Box(Modifier.size(30.dp).clip(CircleShape).background(if (enabled || busy) M.c.accent else M.c.accent.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) { content() }
         else content()
     }
@@ -425,7 +430,7 @@ fun AttachmentChip(a: Attachment, onRemove: (() -> Unit)? = null) {
         if (onRemove != null) Box(
             Modifier.align(Alignment.TopEnd).padding(2.dp).size(20.dp).clip(CircleShape).background(c.ink.copy(alpha = 0.65f)).clickable(onClick = onRemove),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.Close, null, tint = c.bg, modifier = Modifier.size(12.dp)) }
+        ) { Icon(Icons.Rounded.Close, M.s.removeWord, tint = c.bg, modifier = Modifier.size(12.dp)) }
     }
 }
 

@@ -199,7 +199,7 @@ private fun Block(owner: String, e: Entry, vm: MainVm, onFill: (Fill) -> Unit, a
     val at = runCatching { LocalDateTime.parse(e.at) }.getOrNull()
     Column {
         if (showDate) Text(at?.let { it.toLocalDate().dayMonth() + " · " + it.toLocalTime().toString().take(5) }?.uppercase() ?: "",
-            style = Type.label.copy(color = c.faint, fontSize = 10.5.sp))
+            style = Type.label.copy(color = c.graphite, fontSize = 10.5.sp))
         if (e.text.isNotBlank()) {
             Spacer(Modifier.height(3.dp))
             ListAwareText(e.text, Type.body.copy(color = c.ink, fontSize = 15.5.sp))
@@ -219,7 +219,7 @@ private fun Block(owner: String, e: Entry, vm: MainVm, onFill: (Fill) -> Unit, a
             Spacer(Modifier.height(8.dp))
             // A quiet word over media says what it is, the thing itself is a thumbnail that opens on a tap.
             when (a.kind) { "photo" -> s.photoWord; "video" -> s.video; "file" -> s.attachFile; else -> null }?.let {
-                Text(it.uppercase(), style = Type.label.copy(color = c.faint, fontSize = 10.sp), modifier = Modifier.padding(bottom = 4.dp))
+                Text(it.uppercase(), style = Type.label.copy(color = c.graphite, fontSize = 10.sp), modifier = Modifier.padding(bottom = 4.dp))
             }
             when (a.kind) {
                 "photo" -> PhotoBlock(a, vm, active, onView = { onView(a) }, onCaption = { onFill(Fill("caption", e.id, a.id, a.caption)) }, onText = { act -> vm.photoText(owner, e.id, a, act) })
@@ -352,7 +352,7 @@ private fun PhotoBlock(a: Attachment, vm: MainVm, active: Boolean, onView: () ->
         var menu by remember { mutableStateOf(false) }
         if ("ocr:${a.id}" in working) Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(8.dp))
-            Text(s.readingPhoto, style = Type.small.copy(color = c.faint, fontSize = 12.5.sp))
+            Text(s.readingPhoto, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
         } else if (active) Box(Modifier.padding(top = 6.dp)) {
             Row(Modifier.clip(RoundedCornerShape(50)).background(c.linkSoft).clickable { menu = true }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.DocumentScanner, null, tint = c.link, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
@@ -390,7 +390,7 @@ private fun Caption(text: String?, onEdit: () -> Unit) {
     val c = M.c
     val s = M.s
     if (text != null) Text(text, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.padding(top = 6.dp).clickable(onClick = onEdit))
-    else Text("+ " + s.captionWord.lowercase(), style = Type.small.copy(color = c.faint, fontSize = 13.sp), modifier = Modifier.padding(top = 4.dp).clickable(onClick = onEdit))
+    else Text("+ " + s.captionWord.lowercase(), style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 4.dp).clickable(onClick = onEdit))
 }
 
 /** A voice note that plays in place, with what was said written under it. */
@@ -431,7 +431,7 @@ private fun VoiceBlock(a: Attachment, vm: MainVm) {
         }
         when {
             !a.transcript.isNullOrBlank() -> Text(a.transcript, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.padding(top = 6.dp, start = 4.dp))
-            "voice" in working -> Text(s.transcribing, style = Type.small.copy(color = c.faint, fontSize = 12.5.sp), modifier = Modifier.padding(top = 4.dp, start = 4.dp))
+            "voice" in working -> Text(s.transcribing, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(top = 4.dp, start = 4.dp))
         }
     }
 }
@@ -453,16 +453,16 @@ private fun ContactBlock(a: Attachment) {
             }
         }
         ci?.phone?.let { ph ->
-            RoundAction(Icons.Outlined.Call) { runCatching { ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$ph"))) } }
-            RoundAction(Icons.AutoMirrored.Outlined.Message) { runCatching { ctx.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + ph.filter { it.isDigit() || it == '+' }))) } }
+            RoundAction(Icons.Outlined.Call, M.s.callWord) { runCatching { ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$ph"))) } }
+            RoundAction(Icons.AutoMirrored.Outlined.Message, M.s.smsWord) { runCatching { ctx.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + ph.filter { it.isDigit() || it == '+' }))) } }
         }
     }
 }
 
 @Composable
-private fun RoundAction(icon: ImageVector, onClick: () -> Unit) {
+private fun RoundAction(icon: ImageVector, label: String, onClick: () -> Unit) {
     Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = M.c.graphite, modifier = Modifier.size(20.dp))
+        Icon(icon, label, tint = M.c.graphite, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -477,7 +477,7 @@ private fun LinkBlock(a: Attachment) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(a.name, style = Type.body.copy(color = c.ink, fontSize = 14.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-            a.url?.let { Uri.parse(it).host }?.let { Text(it.removePrefix("www."), style = Type.small.copy(color = c.faint, fontSize = 12.sp)) }
+            a.url?.let { Uri.parse(it).host }?.let { Text(it.removePrefix("www."), style = Type.small.copy(color = c.graphite, fontSize = 12.sp)) }
         }
     }
 }

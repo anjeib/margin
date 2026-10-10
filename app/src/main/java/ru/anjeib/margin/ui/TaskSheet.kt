@@ -173,9 +173,11 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 Margined(Modifier.padding(top = 8.dp)) {
                     Column {
                         if (task.slots.isNotEmpty()) DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) })
-                        val dates = task.whenLabel()?.substringBefore(" · ${task.time}")?.takeIf { (task.dueDate != null || task.startDate != null) && task.slots.isEmpty() }
+                        // A late date reads the same as in the lists: «просрочено с 8 окт», not «Вчера».
+                        val dates = (task.dueDate?.takeIf { it.isBefore(LocalDate.now()) && !task.done }?.let { s.lateSince(it.dayMonthShort()) }
+                            ?: task.whenLabel()?.substringBefore(" · ${task.time}"))?.takeIf { (task.dueDate != null || task.startDate != null) && task.slots.isEmpty() }
                         val others = task.people.filter { p -> p != task.waitingFor && p != task.promisedTo }
-                        val late = task.isOverdue()
+                        val late = task.dueDate?.isBefore(LocalDate.now()) == true && !task.done
                         MetaLine(buildList {
                             dates?.let { add(MetaItem(Meta.plain(it), Meta.date(late)) { dialog = "dates" }) }
                             task.time?.takeIf { task.slots.isEmpty() }?.let { add(MetaItem(Meta.plain(it), Meta.date(late)) { dialog = "time" }) }
@@ -309,7 +311,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                                     Text(l.title, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     if (l.meta.isNotBlank()) Text(l.meta, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                                if (l.noteId != null || l.taskId != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.faint)
+                                if (l.noteId != null || l.taskId != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.graphite)
                             }
                         }
                         Hairline(Modifier.padding(start = MarginW + MarginGap))
@@ -365,7 +367,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             verticalAlignment = Alignment.CenterVertically) {
                             SectionLabel(s.historyWord.uppercase() + "  " + task.history.size)
                             Spacer(Modifier.width(4.dp))
-                            Icon(androidx.compose.material.icons.Icons.Rounded.KeyboardArrowDown, null, tint = c.faint,
+                            Icon(androidx.compose.material.icons.Icons.Rounded.KeyboardArrowDown, null, tint = c.graphite,
                                 modifier = Modifier.size(18.dp).rotate(if (showHistory) 0f else -90f))
                         }
                     }
@@ -585,7 +587,7 @@ fun EntryView(e: Entry, onLong: () -> Unit, trailing: (@Composable () -> Unit)? 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
     Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).combinedClickable(onClick = {}, onLongClick = onLong).padding(vertical = 2.dp)) {
         Text(at?.let { it.toLocalDate().dayMonth() + " · " + it.toLocalTime().toString().take(5) }?.uppercase() ?: "",
-            style = Type.label.copy(color = c.faint, fontSize = 10.5.sp))
+            style = Type.label.copy(color = c.graphite, fontSize = 10.5.sp))
         if (e.text.isNotBlank()) {
             Spacer(Modifier.height(3.dp))
             Text(e.text, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp))

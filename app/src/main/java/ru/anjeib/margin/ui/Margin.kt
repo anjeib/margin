@@ -480,12 +480,12 @@ fun SoonBadge(day: java.time.LocalDate?, modifier: Modifier = Modifier) {
     val c = M.c
     val today = java.time.LocalDate.now()
     val (text, fg, bg) = when (day) {
-        today -> Triple(M.s.quickToday, c.accent, c.accentSoft)
+        today -> Triple(M.s.quickToday, c.accentText, c.accentSoft)
         today.plusDays(1) -> Triple(M.s.quickTomorrow, c.link, c.linkSoft)
         else -> return
     }
     Row(modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
-        Text(text.uppercase(), style = Type.label.copy(color = fg, fontSize = 9.5.sp, letterSpacing = 1.sp),
+        Text(text.uppercase(), style = Type.label.copy(color = fg, fontSize = 10.5.sp, letterSpacing = 1.sp),
             modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(bg).padding(horizontal = 8.dp, vertical = 2.dp))
     }
 }

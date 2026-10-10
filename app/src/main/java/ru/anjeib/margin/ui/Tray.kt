@@ -148,7 +148,7 @@ private fun UserBubble(m: ChatMsg, working: Boolean) {
             Text(m.text, style = Type.body.copy(color = c.onBubble))
             Box(Modifier.align(Alignment.End)) {
                 if (working) Dots(c.onBubble)
-                else Text(m.at, style = Type.small.copy(color = c.onBubble.copy(alpha = 0.5f), fontSize = 11.sp))
+                else Text(m.at, style = Type.small.copy(color = c.onBubble.copy(alpha = 0.72f), fontSize = 11.5.sp))
             }
         }
     }
@@ -189,6 +189,8 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
             // A change says what it changed: «ср 7 окт 09:00 · было вт 6 окт», a done task says done (and when it comes back).
             val meta = when {
                 // v2: news landed in a topic — say what it settled or started there.
+                // A matter that grew into a topic says so — otherwise it just seems to vanish from the day.
+                old != null && t.topic && !old.topic -> { topics++; listOf(s.becameTopic) }
                 old != null && old.topic -> { topics++; buildList {
                     t.subtasks.filter { q -> q.done && old.subtasks.find { it.id == q.id }?.done == false }.forEach { q -> add((q.from?.let { s.gotPrefix(it) } ?: s.solvedPrefix) + " " + q.title) }
                     t.subtasks.filter { q -> old.subtasks.none { it.id == q.id } }.forEach { q -> add((q.from?.let { s.waitPrefix(it) } ?: s.questionPrefix) + " " + q.title) }
@@ -252,7 +254,7 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
                 lines.forEachIndexed { i, (title, meta) ->
                     if (i > 0) Spacer(Modifier.height(8.dp))
                     Text(title, style = Type.cardTitle.copy(fontSize = 17.sp, color = c.onBubble), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (meta.isNotBlank()) Text(meta, style = Type.small.copy(color = c.onBubble.copy(alpha = 0.6f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (meta.isNotBlank()) Text(meta, style = Type.small.copy(color = c.onBubble.copy(alpha = 0.75f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 if (p.smart) p.plan.reply?.takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.height(8.dp))
@@ -263,7 +265,7 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
                     Text(s.addContact + ": " + pr.name, style = Type.small.copy(color = c.linkOnBubble, fontSize = 14.sp),
                         modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).clickable { onKeepContact(pr.name) }.padding(vertical = 2.dp))
                 }
-                if (kind.isNotBlank()) Text(kind, style = Type.label.copy(color = c.onBubble.copy(alpha = 0.55f), fontSize = 10.5.sp),
+                if (kind.isNotBlank()) Text(kind, style = Type.label.copy(color = c.onBubble.copy(alpha = 0.72f), fontSize = 10.5.sp),
                     modifier = Modifier.align(Alignment.End).padding(top = 6.dp))
             }
             if (p.auto) Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)) { BubbleCountdown(p.id) }

@@ -13,8 +13,18 @@ fun String.sentence(): String {
  * Names of the people involved get their capital back inside the text: «заказать муку у тимура» → «… у Тимура».
  * Only words that look like a form of that very name (same stem, a couple of letters of ending) — so «Вера» never turns «вёрстку» into «Вёрстку».
  */
+/**
+ * Contacts named by a word, not a name — «Мама», «Начальник», «Врач»: written small inside a phrase
+ * («позвонить маме», «обещали маме»), with a capital only where any word gets one.
+ */
+private val commonNames = setOf("мама", "папа", "мать", "отец", "бабушка", "дедушка", "баба", "деда", "бабуля", "дедуля", "брат", "сестра", "сестрёнка", "братишка",
+    "жена", "муж", "сын", "дочь", "дочка", "сынок", "тётя", "тетя", "дядя", "свекровь", "тёща", "теща", "тесть", "свёкор", "свекор", "племянник", "племянница",
+    "начальник", "начальница", "шеф", "босс", "врач", "доктор", "стоматолог", "юрист", "бухгалтер", "няня", "мастер", "сосед", "соседка", "репетитор", "тренер",
+    "mom", "dad", "mum", "boss", "doctor", "wife", "husband", "son", "daughter", "brother", "sister", "grandma", "grandpa")
+fun isCommonName(n: String) = n.trim().lowercase() in commonNames
+
 fun String.withNames(names: Collection<String>): String {
-    val stems = names.map { it.trim() }.filter { it.length >= 3 && it.first().isLetter() && !it.contains(' ') }
+    val stems = names.map { it.trim() }.filter { it.length >= 3 && it.first().isLetter() && !it.contains(' ') && !isCommonName(it) }
         .map { n -> n.lowercase().let { it.take((it.length - 1).coerceAtLeast(3)) } to n.length }
     if (stems.isEmpty()) return this
     return Regex("\\p{L}+").replace(this) { m ->
@@ -72,6 +82,8 @@ private fun word(w: String, dative: Boolean, female: Boolean, surname: Boolean):
 /** A person's name in a case. Companies («ООО ПакетПро», «Дента+»), handles and English names are left alone. */
 private fun inCase(name: String, dative: Boolean): String {
     val n = name.trim()
+    mapOf("мать" to "матери", "дочь" to "дочери")[n.lowercase()]?.let { return it }
+    if (isCommonName(n)) return word(n.lowercase(), dative, female = n.lowercase().let { (it.endsWith("а") || it.endsWith("я") || it in setOf("мать", "дочь", "свекровь")) && it !in maleOnA && it !in setOf("папа", "дядя", "деда", "дедушка", "дедуля") }, surname = false)
     if (n.isEmpty() || n.any { it in "«»\"+@&0123456789" } || n.split(' ').size > 3 || !n.first().let { it in 'А'..'Я' || it == 'Ё' } ||
         Regex("(?i)^(ооо|оао|зао|ао|ип|пао)\\b").containsMatchIn(n)) return n
     val parts = n.split(' ')

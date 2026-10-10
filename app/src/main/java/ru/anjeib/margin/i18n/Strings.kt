@@ -662,6 +662,17 @@ interface Strings {
     val kindThought: String
     fun lateSince(d: String): String
     fun startedOn(d: String): String
+    val themeWord: String
+    val callWord: String
+    val smsWord: String
+    val moreActions: String
+    val prevMonth: String
+    val nextMonth: String
+    fun srcTopic(t: String): String
+    fun srcMatter(t: String): String
+    val samplesHere: String
+    val removeSamplesShort: String
+    val swipeHintLine: String
     val clearWord: String
     fun dealOnHint(d: String): String
     fun lateLeft(n: Int): String
@@ -804,24 +815,24 @@ object Ru : Strings {
             "Архив" to "завершённые темы",
         )),
         HelpSection("Сегодня", "Что делать сейчас. Слева на полях — сегодняшнее число.", image = "today", pairs = listOf(
-            "сводка" to "сколько сегодня дел и тем, а в синей карточке «Обещания» — кто кому что должен: просроченное, на ближайшие 3 дня и без даты",
-            "дела дня" to "по времени; просроченное переносится сюда с пометкой «с 6 окт»",
-            "≡ Тема ›" to "дела одной темы — блоком под её названием; нажатие на название — тема, на дело — его карточка. Под блоком мелко «17 авг ’26 · 5 записей · ещё 3 дела ▾» — раскрывает остальные дела темы",
+            "сводка" to "сколько сегодня дел и тем, а в синей карточке «Обещания» — кто кому что должен («от Димы · макет», даты столбиком): просроченное, на ближайшие 3 дня и без даты; с дня срока — «напомнить»",
+            "дела дня" to "по времени (прошедший час — серым); с прошлых дней — сюда с пометкой «просрочено с 6 окт», а если их несколько — «всё на сегодня»",
+            "≡ Тема ›" to "дела одной темы — блоком под её названием; нажатие на название — тема, на дело — его карточка. Под блоком мелко «тема с 17 авг · 5 записей · ещё 3 дела ▾» — раскрывает остальные дела темы",
             "Без даты" to "дела без даты с пометкой, с какого числа они ждут («с 3 окт»); старше недели — бледнее. Нажмите на заголовок, чтобы свернуть",
-            "Завтра — N дел ›" to "внизу; открывает «Календарь»",
+            "Завтра — 3 дела · 1 встреча ›" to "внизу; открывает «Календарь»",
         )),
-        HelpSection("Календарь", "Что когда. Месяц сеткой: число под днём — сколько в нём дел; сегодня обведено рамкой, выбранный день закрашен. Под сеткой — дела выбранного дня, как на «Сегодня». Стрелками листаются месяцы.", image = "calendar"),
+        HelpSection("Календарь", "Что когда. Месяц сеткой: число под днём — сколько дел в его списке (сегодня — вместе с просроченным, терракотой, если оно есть; прошедший день — «✓2» сделанных), точка — встреча из календаря телефона. Сегодня обведено рамкой, выбранный день закрашен. Под сеткой — дела выбранного дня, как на «Сегодня»; выбрали другой день — новое дело без своей даты встанет на него. Стрелками листаются месяцы.", image = "calendar"),
         HelpSection("Обзор", "Что у вас есть. Три вкладки и фильтр «Личное / Работа» нажатие оставляет одну сферу, повторное возвращает обе.", image = "overview", pairs = listOf(
-            "Темы" to "на полях — день начала; «N записей ▾» раскрывает записи; «N дел»; у решённых — «всё сделано · В архив»",
-            "Дела" to "все открытые дела по дням и «Без даты»",
-            "Идеи" to "на полях — день начала; «N записей ▾» раскрывает; ↳ — что из идеи выросло",
+            "Темы" to "на полях — день последней записи, «начата 4 сен» под названием; «N записей ▾» раскрывает записи; «N дел»; у решённых — «всё сделано · В архив»",
+            "Дела" to "все открытые дела по дням и «Без даты»; «← ждём» и «→ обещали» — только кто кому должен",
+            "Идеи" to "как темы: на полях — день последней записи; «N записей ▾» раскрывает; ↳ — что из идеи выросло",
         )),
         HelpSection("Тема", "Всё, что было в теме, по дням. Дни — на полях, между ними тонкая линия.", image = "topic", pairs = listOf(
             "шапка" to "название (нажатие — переименовать), сфера (нажатие — переключить), «тема с 17 авг», скрепка с числом файлов",
             "сводка" to "«2 из 9 сделано · 5 записей · 3 материала» и полоска; нажатие — только дела, ещё раз — вся лента",
             "ЗАПИСЬ · 19:40" to "ваши слова; под ними — фото и файлы",
             "ДЕЛО / ДЕЛА · N" to "блок дел этого дня; вложенные — с отступом и тонкой линией от родительского",
-            "скрепка" to "только материалы, с поиском и чипами",
+            "«3 материала» в сводке" to "только материалы, с поиском и чипами; при прокрутке шапка темы сворачивается в одну строку",
             "⋯" to "Изменить, В архив; у архивной — Вернуть, Удалить",
         )),
         HelpSection("Действия в теме", "Долгое нажатие на запись или дело открывает маленькое меню. Удалённое остаётся в ленте зачёркнутым, с пометкой «удалено»; нажмите на него, чтобы вернуть или удалить насовсем.", image = "bubble", pairs = listOf(
@@ -878,13 +889,15 @@ object Ru : Strings {
             "Дима пришлёт макет в среду" to "← ждём от Димы",
             "обещал Анне показать калькулятор" to "→ обещали Анне",
             "@человек" to "если нужно наверняка",
+            "+ ждём от… · + обещали…" to "в карточке дела — вручную; нажатие на «ждём от Димы» — сменить или убрать",
+            "в день срока" to "утром уведомление «Сегодня ждём от Димы: макет» — «Получено» или «Завтра»",
         )),
         HelpSection("Списки", "Начните строку с «1.», «1)», «-» или «•» — Enter продолжит список, Enter на пустом пункте закончит. Список, отправленный с главного экрана, станет несколькими делами; в записи темы останется просто списком."),
         HelpSection("Жесты", "", pairs = listOf(
             "смахнуть дело вправо" to "сделано",
-            "смахнуть дело влево" to "отложить: завтра, неделя, месяц, своя дата",
+            "смахнуть дело влево" to "на завтра (другая дата — в меню)",
             "нажатие на дело" to "его карточка (в любом месте строки)",
-            "долгое нажатие на дело" to "меню: Готово, Дата, Время",
+            "долгое нажатие на дело" to "меню: Готово, Завтра, Дата…, Время",
             "долгое нажатие в теме" to "меню строки",
             "во «Входящих»: влево / вправо" to "Убрать / В тему…",
             "телефон, почта, ссылка в тексте" to "звонок, письмо или приложение по адресу (Telegram, MAX, Instagram…); «@ник» — Telegram",
@@ -922,7 +935,7 @@ object Ru : Strings {
     override val tourGesturesTitle = "Нажмите на дело"
     override val tourGesturesText = "Откроется его карточка."
     override val tourSwipeDone = "→ вправо — сделано"
-    override val tourSwipeLater = "← влево — отложить"
+    override val tourSwipeLater = "← влево — на завтра"
     override val tourHold = "удержать — меню"
     override val tourOpened = "В приложении откроется карточка этого дела"
     override fun pageOf(n: Int, of: Int) = "$n из $of"
@@ -1282,7 +1295,7 @@ object Ru : Strings {
     override val saved = "Сохранено"
     override val savedToInbox = "Сохранено во «Входящие»"
     override val inboxNote = "Входящие"
-    override val inboxHint = "что ещё не разложено по делам и темам"
+    override val inboxHint = "что ещё не разложено по делам и темам · вправо — в тему, влево — убрать"
     override val setupBriefQ = "Присылать утром короткую сводку дня? Выберите время — или «Не нужно»."
     override val setupBriefOptions = listOf("8:00", "9:00", "10:00", "Не нужно")
     override val obBrief = "Утром — короткая сводка дня:"
@@ -1551,6 +1564,17 @@ object Ru : Strings {
     override val kindThought = "идея"
     override fun lateSince(d: String) = "просрочено с $d"
     override fun startedOn(d: String) = "начата $d"
+    override val themeWord = "Светлая или тёмная"
+    override val callWord = "Позвонить"
+    override val smsWord = "Написать"
+    override val moreActions = "Ещё действия"
+    override val prevMonth = "Предыдущий месяц"
+    override val nextMonth = "Следующий месяц"
+    override fun srcTopic(t: String) = "тема «$t»"
+    override fun srcMatter(t: String) = "дело «$t»"
+    override val samplesHere = "Рядом — примеры, чтобы осмотреться"
+    override val removeSamplesShort = "убрать"
+    override val swipeHintLine = "Дело вправо — готово, влево — на завтра; удержать — меню"
     override val clearWord = "Очистить"
     override fun dealOnHint(d: String) = "Дело на $d…"
     override fun lateLeft(n: Int) = "с прошлых дней: $n"
@@ -1685,16 +1709,16 @@ object En : Strings {
             "Today" to "the day's summary (how much, who owes what), to-dos by the hour (a topic's to-dos as one block under its name), «No date» with their age, «Tomorrow — N»",
             "tap a to-do" to "its card, anywhere on the line; a long press — Done · Date · Time",
             "the card" to "as tall as it needs; the title and a comment are edited in place, the field below takes changes in words; a to-do with a comment shows 💬",
-            "Calendar" to "the month as a grid and the chosen day",
-            "Overview" to "everything: Topics, To-dos, Ideas; filter Personal / Work",
+            "Calendar" to "the month as a grid — the number under a day is what its list holds, a dot is a meeting — and the chosen day; a new to-do without a date goes to the chosen day",
+            "Overview" to "everything: Topics, To-dos (filters «waiting on» / «promised»), Ideas; filter Personal / Work",
         )),
         HelpSection("Marks in the field", "Marks tell the app exactly what you meant. Type the sign — a small window offers choices; the chosen one sits over the field. Combine them in any order.", pairs = listOf(
             "/todo  /topic  /idea" to "what it is",
             "/work  /personal" to "the sphere",
             "#topic" to "which topic: words go to its feed, to-dos to its to-dos",
             "@person" to "who: a contact or a company",
-            "/wait @Masha" to "we wait from Masha: ←",
-            "/promised @Lesha" to "you promised Lesha: →",
+            "/wait @Masha" to "waiting on Masha: ←",
+            "/promised @Lesha" to "promised to Lesha: →",
             "/done words" to "mark done the to-do with these words; after «:» — a record in its topic",
             "/note" to "only into the feed, no to-dos",
         )),
@@ -1704,7 +1728,7 @@ object En : Strings {
             "the circle" to "done",
             "long press a line" to "a to-do under it, edit, due date, delete",
             "tap the summary" to "to-dos only",
-            "paperclip" to "materials only",
+            "«3 materials» in the summary" to "materials only",
         )),
         HelpSection("Icons", "The narrow column left of the circle says what kind of to-do it is.", legend = "icons"),
         HelpSection("Badges and colours", "", legend = "badges"),
@@ -1730,7 +1754,7 @@ object En : Strings {
     override val tourGesturesTitle = "Tap to open"
     override val tourGesturesText = "A tap on a to-do opens its card."
     override val tourSwipeDone = "→ right — done"
-    override val tourSwipeLater = "← left — put off"
+    override val tourSwipeLater = "← left — tomorrow"
     override val tourHold = "hold — menu"
     override val tourOpened = "In the app, this to-do's card opens"
     override fun pageOf(n: Int, of: Int) = "$n of $of"
@@ -2090,7 +2114,7 @@ object En : Strings {
     override val saved = "Saved"
     override val savedToInbox = "Saved to Inbox"
     override val inboxNote = "Inbox"
-    override val inboxHint = "what isn’t sorted into matters and topics yet"
+    override val inboxHint = "what isn’t sorted into matters and topics yet · right — into a topic, left — remove"
     override val setupBriefQ = "Send a short summary of the day in the morning? Pick a time — or “No need”."
     override val setupBriefOptions = listOf("8:00", "9:00", "10:00", "No need")
     override val obBrief = "In the morning, a short summary of the day:"
@@ -2359,6 +2383,17 @@ object En : Strings {
     override val kindThought = "idea"
     override fun lateSince(d: String) = "overdue since $d"
     override fun startedOn(d: String) = "started $d"
+    override val themeWord = "Light or dark"
+    override val callWord = "Call"
+    override val smsWord = "Message"
+    override val moreActions = "More actions"
+    override val prevMonth = "Previous month"
+    override val nextMonth = "Next month"
+    override fun srcTopic(t: String) = "topic “$t”"
+    override fun srcMatter(t: String) = "to-do “$t”"
+    override val samplesHere = "The matters around are examples"
+    override val removeSamplesShort = "clear them"
+    override val swipeHintLine = "Swipe right — done, left — tomorrow; hold — menu"
     override val clearWord = "Clear"
     override fun dealOnHint(d: String) = "A to-do for $d…"
     override fun lateLeft(n: Int) = "left from past days: $n"

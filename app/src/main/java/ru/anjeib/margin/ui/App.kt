@@ -274,7 +274,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         Row(Modifier.fillMaxWidth().padding(start = FieldLead, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Pill(s.pasteCopied, accent = true, onClick = { copiedText = readCopied(); if (copiedText == null) onCopiedSeen() })
                             Box(Modifier.size(32.dp).clip(CircleShape).clickable { onCopiedSeen() }, contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.Close, s.dismiss, tint = c.faint, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Rounded.Close, s.dismiss, tint = c.graphite, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
@@ -469,7 +469,7 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
             // Which build this is — so a screenshot or a complaint says what it is about. The only place the version is shown;
             // a long press opens the developer section.
             Text(s.buildLabel(ru.anjeib.margin.BuildConfig.VERSION_NAME, ru.anjeib.margin.BuildConfig.VERSION_CODE, ru.anjeib.margin.BuildConfig.DEBUG),
-                style = Type.small.copy(color = c.faint, fontSize = 12.sp, fontFeatureSettings = "tnum"),
+                style = Type.small.copy(color = c.graphite, fontSize = 12.sp, fontFeatureSettings = "tnum"),
                 modifier = Modifier.padding(start = 26.dp, top = 10.dp)
                     .combinedClickable(onClick = {}, onLongClick = onBuildLongPress))
         }
@@ -488,7 +488,8 @@ private fun NavRow(icon: ImageVector?, label: String, count: String, active: Boo
         if (icon != null) Icon(icon, null, tint = if (active) c.link else c.graphite, modifier = Modifier.size(if (small) 18.dp else 21.dp))
         else Box(Modifier.padding(horizontal = 6.dp).size(7.dp).clip(CircleShape).background(c.link.copy(alpha = 0.7f)))
         Spacer(Modifier.width(16.dp))
-        Text(label, style = (if (small) Type.body.copy(fontSize = 15.sp) else Type.cardTitle).copy(color = c.ink), modifier = Modifier.weight(1f))
+        // Playfair is for page and card titles; every list — the menu too — is set in Inter.
+        Text(label, style = (if (small) Type.body.copy(fontSize = 15.sp) else Type.body.copy(fontSize = 16.5.sp, fontWeight = FontWeight.Medium)).copy(color = c.ink), modifier = Modifier.weight(1f))
         Text(count, style = Type.small.copy(color = c.graphite))
     }
 }

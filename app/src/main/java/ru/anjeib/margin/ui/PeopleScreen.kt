@@ -1,5 +1,8 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.widthIn
+import ru.anjeib.margin.data.shortLabel
+import ru.anjeib.margin.data.questionRow
 import androidx.compose.material.icons.outlined.Public
 
 
@@ -115,17 +118,21 @@ fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddi
         listOf(frequent, rest).forEachIndexed { gi, group ->
         if (gi == 1 && frequent.isNotEmpty() && group.isNotEmpty()) item("rh") { Margined(Modifier.padding(top = 14.dp, bottom = 2.dp)) { GroupBadge(s.allBadge) } }
         items(group, key = { "g$gi" + it.id }) { p ->
-            val open = data.tasks.count { !it.done && it.involves(p) }
+            // Matters, not topics: a topic with them is counted by its matters that involve them.
+            val open = data.tasks.count { !it.done && !it.topic && it.involves(p) } + data.tasks.filter { it.topic && !it.done }.sumOf { t ->
+                t.subtasks.count { q -> !q.done && (q.from?.let { w -> p.matches(w) } == true || q.assignee?.let { w -> p.matches(w) } == true) } }
             SwipeActions(left = s.toArchive to { vm.archivePerson(p.id) }, right = s.delete to { vm.removePerson(p.id) }, modifier = Modifier.animateItem()) {
             Column(Modifier.fillMaxWidth().background(c.bg).clickable { onOpen(p.id) }) {
             // «Поля»: the face on the margin, who they are and what's open with them right of the rule.
             Margined(Modifier.padding(top = 12.dp, bottom = 12.dp), margin = { Monogram(p.name, 34.dp) }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // What's open with them right now beats a static description.
+                // Waits from their topics' matters count too, not only simple matters.
                 val wait = data.tasks.firstOrNull { !it.done && it.waitingFor?.let { w -> p.matches(w) } == true }
+                    ?: data.tasks.filter { it.topic && !it.done }.firstNotNullOfOrNull { t -> t.subtasks.firstOrNull { q -> !q.done && q.from?.let { w -> p.matches(w) } == true }?.let { t.questionRow(it) } }
                 val promise = data.tasks.firstOrNull { !it.done && it.promisedTo?.let { w -> p.matches(w) } == true }
                 Column(Modifier.weight(1f)) {
-                    Text(p.name, style = Type.cardTitle.copy(color = c.ink))
+                    Text(p.name, style = Type.body.copy(color = c.ink, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
                     // Nothing known yet → no line at all, not a dash.
                     // Mid-sentence the title starts small, but a name stays a name: «ждём: Маша вернёт 3 000 ₽».
                     fun mid(t: Task) = t.title.replaceFirstChar { c -> c.lowercase() }
@@ -158,20 +165,23 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
     BackHandler(onBack = onBack)
     // A fresh summary when there's none for today and the person shows up in things.
     val tasks = data.tasks.filter { it.involves(person) }
-    // One list: the hourglass and «вы обещали» on the row already say which way it goes.
-    val open = tasks.filter { !it.done }.sortedWith(compareBy({ !it.isOverdue() }, { it.dueDate ?: LocalDate.MAX }))
+    // Their topics apart from matters: a topic is not ticked off like one. The matters — simple ones and, from the
+    // topics, the ones that involve them (waited from them, given to them) — in the same rows as on «Сегодня».
+    val openTopics = tasks.filter { !it.done && it.topic && !(it.thought && it.subtasks.isEmpty()) }
+    val topicMatters = openTopics.flatMap { t -> t.subtasks.filter { q -> !q.done && (q.from?.let { person.matches(it) } == true || q.assignee?.let { person.matches(it) } == true) }.map { t.questionRow(it) } }
+    val open = (tasks.filter { !it.done && !it.topic } + topicMatters).sortedWith(compareBy({ it.dueDate?.isBefore(LocalDate.now()) != true }, { it.dueDate ?: LocalDate.MAX }))
     val done = tasks.filter { it.done }.sortedByDescending { it.doneAt }.take(5)
     val notes = data.notes.filter { n -> listOf(person.name).plus(person.aliases).any { n.title.contains(it, true) || n.text.contains(it, true) } }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().screenRule()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = c.ink)
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, s.backWord, tint = c.ink)
             }
             Spacer(Modifier.weight(1f))
             Box {
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.MoreHoriz, null, tint = c.graphite)
+                    Icon(Icons.Outlined.MoreHoriz, s.moreActions, tint = c.graphite)
                 }
                 SoftMenu(menu, { menu = false }) {
                     SoftMenuItem(s.rename, onClick = { menu = false; dialog = "rename" })
@@ -233,7 +243,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             )
             if (missing.isNotEmpty()) FlowRow(Modifier.padding(top = 10.dp)) {
                 missing.forEachIndexed { i, (label, d) ->
-                    if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.faint))
+                    if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.graphite))
                     // Service names keep their own spelling (MAX, Telegram); field names go small.
                     Text("+ " + (if (d in setOf("max", "telegram")) label else label.lowercase()),
                         style = Type.small.copy(color = c.graphite), modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { dialog = d }.padding(2.dp))
@@ -250,7 +260,24 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             val today = LocalDate.now()
             if (open.isNotEmpty()) {
                 GroupBadge(s.dealsBadge, Modifier.padding(top = 24.dp, bottom = 4.dp))
-                open.forEach { t -> TaskRow(t, today, true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }) }
+                open.forEach { t ->
+                    DealRow(t, today, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }, onTime = { onOpenTask(t.id) },
+                        whenText = t.dueDate?.let { d -> if (d.isBefore(today)) s.lateSince(d.dayMonthShort()) else d.shortLabel(today).lowercase() }, hidePerson = person.name)
+                }
+            }
+            if (openTopics.isNotEmpty()) {
+                GroupBadge(s.topicsBadge, Modifier.padding(top = 24.dp, bottom = 4.dp))
+                openTopics.forEach { t ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpenTask(t.id) }.padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                        Box(Modifier.size(20.dp, 22.dp), contentAlignment = Alignment.Center) { TopicGlyph(c.graphite, 15.dp) }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(t.title, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp))
+                            Text(listOfNotNull(t.subtasks.count { !it.done }.takeIf { it > 0 }?.let { s.summaryDeals(it) }, t.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) }).joinToString("  ·  "),
+                                style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
+                        }
+                    }
+                }
             }
             // A dated history, each line saying where it came from.
             val history = personHistory(person, data)
@@ -260,7 +287,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 4.dp)) {
                         Text(d.dayMonthShort(), style = dateStyle(13.sp), modifier = Modifier.width(56.dp))
                         Text(text, style = Type.small.copy(color = c.ink, fontSize = 14.sp), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text("  ($src)", style = Type.small.copy(color = c.faint, fontSize = 12.sp), maxLines = 1)
+                        Text("  · $src", style = Type.small.copy(color = c.graphite, fontSize = 12.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp))
                     }
                 }
             }

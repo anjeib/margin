@@ -126,16 +126,15 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         // How to share into Margin is a matter for «Помощь»; here only the developer's own bot and mail, which need setup.
         if (settings.devMode && ru.anjeib.margin.BuildConfig.FORWARD_CHANNELS) Group(s.forwardSection) { ForwardSettings(vm) }
 
+        // Both choices labelled the same way: a small word, then the segments right under it.
         Group(s.appearance) {
+            Text(s.themeWord, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp))
             Segmented(
                 listOf(s.themeLight, s.themeDark, s.themeAuto),
                 listOf(ThemeMode.Light, ThemeMode.Dark, ThemeMode.Auto).indexOf(settings.theme),
             ) { i -> vm.updateSettings { it.copy(theme = listOf(ThemeMode.Light, ThemeMode.Dark, ThemeMode.Auto)[i]) } }
             Divider()
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                Text(s.language, style = Type.body.copy(color = c.ink))
-                Spacer(Modifier.height(10.dp))
-            }
+            Text(s.language, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp))
             Segmented(
                 listOf("Русский", "English", s.langAuto),
                 listOf(LangMode.Ru, LangMode.En, LangMode.Auto).indexOf(settings.lang),
@@ -165,7 +164,8 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         }
 
         // «Примеры»: take the examples away, or bring them back to look again (Russian only, like the demo).
-        if (vm.samplesHere()) Group(s.samplesTitle) {
+        // Not in the demo copy: there the whole planner is an example, and these would mix into it.
+        if (vm.samplesHere() && !ru.anjeib.margin.BuildConfig.DEMO) Group(s.samplesTitle) {
             val data by vm.data.collectAsState()
             val has = data.tasks.any { it.sample } || data.persons.any { it.sample }
             ValueRow(if (has) s.samplesRemove else s.samplesBack, null, "", onClick = { if (has) vm.removeSamples() else vm.bringSamples() })
@@ -335,14 +335,17 @@ private fun ValueRow(label: String, hint: String?, value: String, chevron: Boole
     val c = M.c
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically) {
+        // The value sits on the label's line; the hint runs under both on the whole width (it used to be squeezed beside the value).
         Column(Modifier.weight(1f)) {
-            Text(label, style = Type.body.copy(color = c.ink))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label, style = Type.body.copy(color = c.ink), modifier = Modifier.weight(1f, fill = false))
+                Spacer(Modifier.weight(1f))
+                if (value.isNotBlank()) Text(value, style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 12.dp).widthIn(max = 180.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+            }
             hint?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp)) }
         }
-        // A value takes only its own width (up to a cap), so a row with none keeps the whole line for its label.
-        if (value.isNotBlank()) Text(value, style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 12.dp).widthIn(max = 180.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
-        if (chevron) Icon(Icons.Rounded.KeyboardArrowRight, null, tint = c.faint, modifier = Modifier.size(20.dp))
+        if (chevron) Icon(Icons.Rounded.KeyboardArrowRight, null, tint = c.graphite, modifier = Modifier.size(20.dp))
     }
 }
 

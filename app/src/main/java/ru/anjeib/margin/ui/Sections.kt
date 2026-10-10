@@ -162,10 +162,10 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
                     .replaceFirstChar { it.uppercase() } + if (ym.year != today.year) " ${ym.year}" else "",
                     style = Type.display.copy(color = c.ink), modifier = Modifier.weight(1f))
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { month = ym.minusMonths(1).toString() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, null, tint = c.graphite)
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, s.prevMonth, tint = c.graphite)
                 }
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { month = ym.plusMonths(1).toString() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.graphite)
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, s.nextMonth, tint = c.graphite)
                 }
             }
             }
@@ -257,7 +257,7 @@ fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpe
         items(people, key = { "p" + it.id }) { p ->
             Margined(Modifier.animateItem().padding(vertical = 10.dp).clickable { onOpenPerson(p.id) }, margin = { Monogram(p.name, 30.dp) }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(p.name, style = Type.cardTitle.copy(color = c.ink), modifier = Modifier.weight(1f))
+                    Text(p.name, style = Type.body.copy(color = c.ink, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), modifier = Modifier.weight(1f))
                     PaperLink(s.restoreWord) { vm.archivePerson(p.id, false) }
                 }
             }

@@ -624,7 +624,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         else _notice.value = Notice(key(scope), L.s.offlineSaved, null)
     }
 
-    fun dropQueued(id: String) = store.update { it.dropQueued(id) }
+    /** Taken out of the queue — with the same few seconds to take it back as everything else removed by a swipe. */
+    fun dropQueued(id: String) {
+        val before = data.value
+        store.update { it.dropQueued(id) }
+        offerUndo(before, L.s.deletedOne)
+    }
 
     /** Reads the phone calendar into the AI context (only when the user turned it on and allowed it). */
     fun refreshCalendar() {

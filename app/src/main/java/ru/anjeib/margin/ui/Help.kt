@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.dayMonthShort
 import androidx.compose.runtime.setValue
 
 import androidx.compose.runtime.getValue
@@ -176,16 +177,16 @@ private fun IconLegend() {
     val ru = ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.Ru
     fun t(r: String, e: String) = if (ru) r else e
     Column(Modifier.padding(top = 6.dp)) {
-        HelpPair("", t("дело — нажатие отмечает сделанным", "a to-do — a tap marks it done")) { CheckCircle(false, size = 16.dp) {} }
-        HelpPair("", t("сделано", "done")) { CheckCircle(true, size = 16.dp) {} }
-        HelpPair("", t("у дела есть время; само время — петрольная ссылка, нажатие открывает часы", "it has an hour; the hour is a link to the clock")) { ClockGlyph(c.graphite, 15.dp) }
-        HelpPair("", t("ждём от кого-то — нам должны", "we wait from someone")) { ArrowGlyph(c.graphite, 15.dp, incoming = true) }
-        HelpPair("", t("вы обещали кому-то", "you promised someone")) { ArrowGlyph(c.graphite, 15.dp) }
+        HelpPair("", t("дело — нажатие на «бублик» отмечает сделанным", "a to-do — a tap on the ring marks it done")) { CheckCircle(false, size = 16.dp, interactive = false) {} }
+        HelpPair("", t("сделано", "done")) { CheckCircle(true, size = 16.dp, interactive = false) {} }
+        HelpPair("", t("у дела есть час — он стоит перед словами", "it has an hour — written before the words")) { ClockGlyph(c.graphite, 15.dp) }
+        HelpPair("", t("ждём от кого-то — нам должны", "waiting on someone")) { ArrowGlyph(c.graphite, 15.dp, incoming = true) }
+        HelpPair("", t("обещали кому-то", "promised to someone")) { ArrowGlyph(c.graphite, 15.dp) }
         HelpPair("", t("повторяется", "repeats")) { RepeatGlyph(c.graphite, 15.dp) }
         HelpPair("", t("встреча из календаря телефона", "a meeting from the phone's calendar")) { CalendarGlyph(c.graphite, 15.dp) }
-        HelpPair("", t("тема — в ссылках «↳ Тема» и списках", "a topic — in «↳ Topic» links and lists")) { TopicGlyph(c.graphite, 15.dp) }
-        HelpPair("", t("идея", "an idea")) { ThoughtGlyph(c.graphite, 15.dp) }
-        HelpPair("", t("сделано в ленте темы", "done, in a topic's feed")) { TickGlyph(c.ok, 15.dp) }
+        HelpPair("", t("тема — над её делами и в списках", "a topic — above its to-dos and in lists")) { TopicGlyph(c.graphite, 15.dp) }
+        HelpPair("", t("идея", "an idea")) { IdeaMark(22.dp) }
+        HelpPair("", t("сделано в прошедший день", "done on a past day")) { TickGlyph(c.ok, 15.dp) }
     }
 }
 
@@ -209,14 +210,17 @@ private fun BadgeLegend() {
                 modifier = Modifier.clip(RoundedCornerShape(50)).background(c.chip).padding(horizontal = 8.dp, vertical = 2.dp))
         }
         row(t("срок сегодня или завтра — над строкой", "due today or tomorrow")) { Row { SoonBadge(java.time.LocalDate.now(), Modifier.width(80.dp)) } }
-        row(t("ссылка на тему под делом; нажатие — открыть", "a link to the topic")) { Text("↳ " + t("Ремонт ванной", "Bathroom"), style = Type.small.copy(color = c.link, fontSize = 13.5.sp)) }
-        row(t("дата и время — чёрным; просрочено — терракотой", "dates in ink; late — terracotta")) {
+        row(t("тема над её делами; нажатие — открыть", "the topic above its to-dos")) {
+            Row(verticalAlignment = Alignment.CenterVertically) { TopicGlyph(c.link, 13.dp); Spacer(Modifier.width(6.dp)); Text(t("Ремонт ванной", "Bathroom") + "  ›", style = Type.small.copy(color = c.link, fontSize = 13.5.sp)) }
+        }
+        val today = java.time.LocalDate.now()
+        row(t("дата и время — чёрным; с прошлых дней — терракотой", "dates in ink; left from past days — terracotta")) {
             Text(androidx.compose.ui.text.buildAnnotatedString {
-                pushStyle(dateSpan()); append("10 окт"); pop(); append("   ")
-                pushStyle(dateSpan().copy(color = c.accentText)); append("с 6 окт"); pop()
+                pushStyle(dateSpan()); append(today.plusDays(2).dayMonthShort()); pop(); append("   ")
+                pushStyle(dateSpan().copy(color = c.accentText)); append(s.lateSince(today.minusDays(3).dayMonthShort())); pop()
             }, style = Type.small.copy(fontSize = 13.sp))
         }
-        row(t("петроль — ссылки и выбранное: люди, адреса, время", "petrol — links and what is chosen")) { Text(t("Вам от Димы", "From Dima"), style = Type.small.copy(color = c.link, fontSize = 13.5.sp)) }
+        row(t("петроль — ссылки и выбранное: люди, адреса", "petrol — links and what is chosen")) { Text(s.promiseToYou(t("Дима", "Dima")), style = Type.small.copy(color = c.link, fontSize = 13.5.sp)) }
         row(t("удалено — зачёркнуто; нажатие — вернуть", "removed — struck through")) {
             Text(t("Придумать маскота", "A mascot"), style = Type.small.copy(color = c.faint, fontSize = 13.5.sp, textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough))
         }

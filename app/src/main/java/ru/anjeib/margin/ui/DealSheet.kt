@@ -118,7 +118,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                         fun person(n: String) { data.contact(n)?.let { pp -> onOpenPerson?.invoke(pp.id) } ?: vm.offerContact(n) }
                         MetaLine(buildList {
                             if (q.slots.isEmpty()) {
-                                due?.let { add(MetaItem(Meta.plain(row.whenLabel()?.substringBefore(" · ${q.time}") ?: it.dayMonthShort()), Meta.date(late)) { dialog = "date" }) }
+                                due?.let { add(MetaItem(Meta.plain(if (late) s.lateSince(it.dayMonthShort()) else row.whenLabel()?.substringBefore(" · ${q.time}") ?: it.dayMonthShort()), Meta.date(late)) { dialog = "date" }) }
                                 q.time?.let { add(MetaItem(Meta.plain(it), Meta.date(late)) { dialog = "time" }) }
                             }
                             q.repeat?.let { add(MetaItem(Meta.plain(it.label()), Meta.quiet()) { dialog = "repeat" }) }

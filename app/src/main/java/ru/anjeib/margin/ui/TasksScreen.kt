@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.text.buildAnnotatedString
 
 import ru.anjeib.margin.data.slotRef
@@ -205,6 +206,8 @@ fun TaskList(
     // «Месяц»: which list, and «личное» / «работа» or both.
     var monthTab by rememberSaveable { mutableStateOf("topics") }
     var monthSphere by rememberSaveable { mutableStateOf<String?>(null) }
+    // «Обзор · Дела»: only what we wait for, or only what we promised — the whole list of who owes whom, past three days too.
+    var monthOwe by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     var weekDay by rememberSaveable { mutableStateOf<String?>(null) }
     // Swipe left asks «на когда?» instead of quietly moving a day.
     var postponing by remember { mutableStateOf<String?>(null) }
@@ -291,12 +294,12 @@ fun TaskList(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SectionLabel(label)
-                    if (count != null) Text("  $count", style = Type.label.copy(color = c.faint))
+                    if (count != null) Text("  $count", style = Type.label.copy(color = c.graphite))
                     Spacer(Modifier.weight(1f))
                     // «Просрочено · Перенести»: the action sits with what it acts on, not over the list.
                     action?.let { (text, act) -> Text(text, style = Type.small.copy(color = c.link, fontSize = 13.5.sp),
                         modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = act).padding(horizontal = 8.dp, vertical = 2.dp)) }
-                    if (collapsible) Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.faint, modifier = Modifier.size(18.dp).rotate(rot))
+                    if (collapsible) Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.graphite, modifier = Modifier.size(18.dp).rotate(rot))
                 }
                 }
             }
@@ -323,7 +326,10 @@ fun TaskList(
                         DayBlock(p, today, open = true, heading = true, onToggle = {}, topicOf = { id -> data.tasks.find { it.id == id } },
                             onOpen = onOpen, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = landed,
                             undated = if (p.date == today) undatedAll else emptyList(),
-                            top = if (p.date == today) ({ TodaySummary(p, promises, today, onOpen, data, onMoveOverdue = { vm.moveOverdue() }) }) else null)
+                            top = if (p.date == today) ({
+                                TodaySummary(p, promises, today, onOpen, data, onMoveOverdue = { vm.moveOverdue() })
+                                TodayHints(p, data, ui, onRemoveSamples = { vm.removeSamples() })
+                            }) else null)
                     }
                 }
                 // Sunday: the week in one quiet card — gathered by code, gone with «×» until next Sunday.
@@ -354,7 +360,7 @@ fun TaskList(
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Inbox, null, tint = c.link, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(10.dp))
-                        Text(s.inboxLine(unplaced) + " →", style = Type.small.copy(color = c.link, fontSize = 14.sp))
+                        Text(s.inboxLine(unplaced) + "  ›", style = Type.small.copy(color = c.link, fontSize = 14.sp))
                     }
                 }
                 // Written without internet: one quiet line here, the items themselves live in «Входящие».
@@ -363,7 +369,7 @@ fun TaskList(
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.CloudOff, null, tint = c.graphite, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(10.dp))
-                        Text(s.queuedLine(data.queue.size) + " →", style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+                        Text(s.queuedLine(data.queue.size) + "  ›", style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
                     }
                 }
                 // «Без следующего шага» lives in «Обзор · Темы» now: «Сегодня» is about today.
@@ -433,6 +439,15 @@ fun TaskList(
                                 Text(if (k == "work") s.sphereWork else s.spherePersonal, style = Type.small.copy(color = if (on) c.ink else c.graphite, fontSize = 14.sp), modifier = Modifier.padding(start = 6.dp))
                             }
                         }
+                        if (monthTab == "deals") listOf("wait" to true, "promise" to false).forEach { (k, incoming) ->
+                            val on = monthOwe == k
+                            Row(Modifier.clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else Color.Transparent)
+                                .border(1.dp, if (on) Color.Transparent else c.hairline, RoundedCornerShape(50))
+                                .clickable { monthOwe = if (on) null else k }.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                ArrowGlyph(if (on) c.link else c.graphite, 13.dp, incoming = incoming)
+                                Text(if (incoming) s.a11yWaiting else s.a11yPromised, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 14.sp), modifier = Modifier.padding(start = 5.dp))
+                            }
+                        }
                     }
                   }
                 }
@@ -446,6 +461,7 @@ fun TaskList(
                     "deals" -> {
                         val all = (data2.listTasks().filter { !it.done && !it.topic || it.topicId != null } + data2.undatedTopicMatters())
                             .filter { !it.done }.distinctBy { it.id }
+                            .filter { when (monthOwe) { "wait" -> it.waitingFor != null; "promise" -> it.promisedTo != null; else -> true } }
                         val dated = all.filter { (it.dueDate ?: it.startDate) != null }.groupBy { maxOf(it.dueDate ?: it.startDate!!, today) }.toSortedMap()
                         val undated = all.filter { (it.dueDate ?: it.startDate) == null }.sortedByDescending { it.createdAt }
                         if (all.isEmpty()) plain("m-none") { Empty(s.emptyAll, s.emptyHint) }
@@ -453,7 +469,7 @@ fun TaskList(
                         if (undated.isNotEmpty()) item("md-none") {
                             Margined(Modifier.padding(top = 8.dp, bottom = 8.dp)) {
                                 Column {
-                                    Text(s.noDates.uppercase() + " · " + undated.size, style = Type.label.copy(color = c.graphite), modifier = Modifier.padding(bottom = 4.dp))
+                                    GroupBadge(s.noDates + " · " + undated.size, Modifier.padding(bottom = 4.dp))
                                     GroupedDeals(undated, today, landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                                         age = { t -> runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() } },
                                         topicOf = { id -> data.tasks.find { it.id == id } })
@@ -589,11 +605,11 @@ private fun WeekStrip(today: LocalDate, picked: LocalDate?, tasks: List<Task>, o
             val on = d == picked
             val busy = tasks.any { onDay(it, d, today) }
             Column(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).clickable { onPick(d) }.padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(d.dowShort().lowercase(), style = Type.small.copy(color = if (d.isBefore(today)) c.faint else c.graphite, fontSize = 12.5.sp))
+                Text(d.dowShort().lowercase(), style = Type.small.copy(color = if (d.isBefore(today)) c.graphite else c.graphite, fontSize = 12.5.sp))
                 Spacer(Modifier.height(4.dp))
                 Box(Modifier.size(34.dp).clip(CircleShape).background(if (on) c.link else Color.Transparent)
                     .then(if (d == today && !on) Modifier.border(1.dp, c.link, CircleShape) else Modifier), contentAlignment = Alignment.Center) {
-                    Text(d.dayOfMonth.toString(), style = Type.body.copy(color = when { on -> c.bg; d == today -> c.link; d.isBefore(today) -> c.faint; else -> c.ink }, fontSize = 16.sp))
+                    Text(d.dayOfMonth.toString(), style = Type.body.copy(color = when { on -> c.bg; d == today -> c.link; d.isBefore(today) -> c.graphite; else -> c.ink }, fontSize = 16.sp))
                 }
                 Spacer(Modifier.height(4.dp))
                 Box(Modifier.size(4.dp).clip(CircleShape).background(if (busy) (if (d.isBefore(today)) c.faint else c.link) else Color.Transparent))
@@ -661,7 +677,7 @@ fun QueuedRow(text: String, files: Int, onDrop: () -> Unit) {
         Spacer(Modifier.width(10.dp))
         Text(text.ifBlank { "📎 $files" }, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onDrop), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Close, M.s.delete, tint = c.faint, modifier = Modifier.size(16.dp))
+            Icon(Icons.Rounded.Close, M.s.delete, tint = c.graphite, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -698,7 +714,7 @@ fun TaskRow(t: Task, today: LocalDate, showProject: Boolean, onToggle: () -> Uni
                 )
                 // The last thing written about it, faint — no need to open the card to remember.
                 if (!t.done) t.entries.lastOrNull { it.text.isNotBlank() }?.let { e ->
-                    Text(e.text, style = Type.small.copy(color = c.faint, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(e.text, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (!t.done) {
                     // Under «Сегодня» the day goes without saying: only the hour (or «утром»), and late ones keep their date.
@@ -764,45 +780,13 @@ private fun MarginTaskRow(t: Task, today: LocalDate, showProject: Boolean, onTog
                         Type.body.copy(fontSize = 15.5.sp, color = if (t.done || ticking) c.graphite else c.ink), strike.value, c.faint,
                         maxLines = 3, modifier = Modifier.padding(top = 1.dp))
                     if (!t.done) {
-                        t.entries.lastOrNull { it.text.isNotBlank() }?.let { e -> Text(e.text, style = Type.small.copy(color = c.faint, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        t.entries.lastOrNull { it.text.isNotBlank() }?.let { e -> Text(e.text, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         TaskLine(t, null, showProject && t.topicTitle == null, today = today)
                         t.topicTitle?.let { Text("↳ $it", style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
                     }
                 }
             }
             Hairline(Modifier.padding(start = 36.dp))
-        }
-    }
-}
-
-/** «Обещания» on the margin: who owes what, the day on the margin, closed right here. */
-@Composable
-private fun MarginPromises(list: List<Task>, today: LocalDate, onOpen: (String) -> Unit, onToggle: (String) -> Unit) {
-    val c = M.c
-    val s = M.s
-    val view = androidx.compose.ui.platform.LocalView.current
-    Column(Modifier.padding(bottom = 6.dp)) {
-        list.take(5).forEachIndexed { i, t ->
-            val first = i == 0; val last = i == list.take(5).lastIndex
-            val shape = RoundedCornerShape(topStart = if (first) 16.dp else 0.dp, topEnd = if (first) 16.dp else 0.dp, bottomStart = if (last) 16.dp else 0.dp, bottomEnd = if (last) 16.dp else 0.dp)
-            Margined(margin = { marginWhen(t, today, false)?.let { MarginText(it, late = t.isOverdue(today)) } }) {
-                Column(Modifier.fillMaxWidth().clip(shape).background(c.linkSoft).clickable { onOpen(t.id) }
-                    .padding(start = 14.dp, end = 12.dp, top = if (first) 12.dp else 6.dp, bottom = if (last) 12.dp else 6.dp)) {
-                    if (first) Text(s.promisesTitle.uppercase(), style = Type.label.copy(color = c.link), modifier = Modifier.padding(bottom = 6.dp))
-                    Row(verticalAlignment = Alignment.Top) {
-                        Box(Modifier.size(24.dp).clip(CircleShape).clickable { view.confirmTick(); onToggle(t.id) }, contentAlignment = Alignment.Center) {
-                            if (t.waitingFor != null) ArrowGlyph(c.link, 17.dp, incoming = true) else CheckCircle(false, size = 17.dp, onToggle = { view.confirmTick(); onToggle(t.id) })
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(t.title, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text(t.waitingFor?.let { s.promiseToYou(it) } ?: t.promisedTo?.let { s.promiseFromYou(it) } ?: "",
-                                style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1)
-                            t.topicTitle?.let { Text("↳ $it", style = Type.small.copy(color = c.link, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -879,44 +863,6 @@ private fun SwipeTask(t: Task, onDone: () -> Unit, onLater: () -> Unit, modifier
             }
         },
     ) { content() }
-}
-
-/**
- * «Обещания» on the main screen: what others promised you and what you promised them, due within three days or late.
- * Folds to one line while the user types.
- */
-@Composable
-private fun PromisesCard(list: List<Task>, today: LocalDate, quiet: Boolean, onOpen: (String) -> Unit, onToggle: (String) -> Unit) {
-    val c = M.c
-    val s = M.s
-    var all by rememberSaveable { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(18.dp)).background(c.linkSoft)
-        .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = if (quiet) 12.dp else 6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Spark(); Spacer(Modifier.width(8.dp))
-            Text(s.promisesTitle, style = Type.small.copy(color = c.link, fontSize = 14.sp))
-            Text("  " + list.size, style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
-        }
-        if (quiet) return@Column
-        Spacer(Modifier.height(4.dp))
-        val shown = if (all) list else list.take(5)
-        shown.forEach { t ->
-            val late = t.isOverdue(today)
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onOpen(t.id) }.padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
-              // Closed right here: the hourglass — «получено», the circle — «сделано».
-              Box(Modifier.size(32.dp, 24.dp).clip(CircleShape).clickable { onToggle(t.id) }, contentAlignment = Alignment.CenterStart) {
-                  if (t.waitingFor != null) ArrowGlyph(c.graphite, 17.dp, incoming = true)
-                  else CheckCircle(false, size = 18.dp, onToggle = { onToggle(t.id) })
-              }
-              Column(Modifier.weight(1f)) {
-                Text(t.title, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                TaskLine(t, t.rowLabel(today), showProject = false, today = today)
-              }
-            }
-        }
-        if (list.size > 5 && !all) Text(s.more(list.size - 5), style = Type.small.copy(color = c.link, fontSize = 13.5.sp),
-            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { all = true }.padding(vertical = 6.dp))
-    }
 }
 
 // ---------------- the day timeline: dates on the margin, one block per day ----------------
@@ -1012,7 +958,9 @@ private fun androidx.compose.ui.text.AnnotatedString.Builder.timeLink(time: Stri
 @Composable
 internal fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: () -> Unit, onTime: () -> Unit, age: String? = null, faded: Boolean = false, onLater: (() -> Unit)? = null,
                      /** Off the day lists (the tour) the day is not around the row — it is said in it. */
-                     whenText: String? = null) {
+                     whenText: String? = null,
+                     /** On a person's page their own name is not repeated in each row. */
+                     hidePerson: String? = null) {
     val c = M.c
     val s = M.s
     val view = androidx.compose.ui.platform.LocalView.current
@@ -1036,7 +984,17 @@ internal fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: ()
         if (onLater != null) SoftMenuItem(s.dateWord + "…") { quick = false; onLater() }
         SoftMenuItem(s.fieldTime) { quick = false; onTime() }
     }
-    Row(Modifier.fillMaxWidth().background(LocalRowGround.current ?: c.bg).combinedClickable(onClick = onOpen, onLongClick = { view.confirmTick(); quick = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+    // TalkBack gets the swipes and the long press as named actions — gestures alone are invisible to it.
+    val tomorrowAct = LocalTomorrow.current
+    Row(Modifier.fillMaxWidth().background(LocalRowGround.current ?: c.bg).combinedClickable(onClick = onOpen, onLongClick = { view.confirmTick(); quick = true })
+        .semantics {
+            customActions = listOfNotNull(
+                androidx.compose.ui.semantics.CustomAccessibilityAction(s.markDone) { onToggle(); true },
+                tomorrowAct?.let { f -> androidx.compose.ui.semantics.CustomAccessibilityAction(s.swipeTomorrow) { f(t.id); true } },
+                onLater?.let { f -> androidx.compose.ui.semantics.CustomAccessibilityAction(s.dateWord) { f(); true } },
+                androidx.compose.ui.semantics.CustomAccessibilityAction(s.fieldTime) { onTime(); true },
+            )
+        }.padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
         KindMark(t)
         Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(ticking, size = 18.dp, onToggle = ::tick) }
         Spacer(Modifier.width(8.dp))
@@ -1050,7 +1008,7 @@ internal fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: ()
                 modifier = Modifier.padding(top = 1.dp).drawStrike(strike.value, c.faint))
             if (late && t.dueDate?.isBefore(today) == true) Text(s.lateSince(t.dueDate!!.dayMonthShort()), style = Type.small.copy(color = c.accentText, fontSize = 12.5.sp))
             t.dayOf()?.let { (i, n) -> Text(s.dayOfDays(i, n), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp)) }
-            TaskLine(t, whenText, true, today = today, tappable = false)
+            TaskLine(t, whenText, true, today = today, tappable = false, hidePerson = hidePerson)
         }
         age?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 8.dp, top = 3.dp)) }
     }
@@ -1188,7 +1146,7 @@ private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, 
                         textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(58.dp).padding(start = 8.dp, top = 5.dp))
                 }
             }
-            if (promises.size > 3) Text(if (allPromises) s.collapse else s.more(promises.size - 3) + " ›", style = Type.small.copy(color = c.link, fontSize = 13.sp),
+            if (promises.size > 3) Text(if (allPromises) s.collapse + " ▴" else s.more(promises.size - 3) + " ▾", style = Type.small.copy(color = c.link, fontSize = 13.sp),
                 modifier = Modifier.padding(start = 34.dp, top = 2.dp).clip(RoundedCornerShape(6.dp)).clickable { allPromises = !allPromises }.padding(vertical = 4.dp, horizontal = 2.dp))
         }
     }
@@ -1223,7 +1181,7 @@ private fun MonthTopicRow(t: Task, onOpen: (String) -> Unit, onArchive: () -> Un
                 // Nothing left to do or wait for: say so, and offer the archive — quietly, here and not on «Сегодня».
                 if (t.noNextStep) Row(Modifier.padding(start = 26.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(s.allDoneShort, style = Type.small.copy(color = c.ok, fontSize = 13.sp))
-                    Text("  ·  ", style = Type.small.copy(color = c.faint))
+                    Text("  ·  ", style = Type.small.copy(color = c.graphite))
                     PaperLink(s.toArchive, onClick = onArchive)
                 }
                 if (open) Column(Modifier.padding(start = 26.dp, top = 6.dp)) {
@@ -1257,7 +1215,8 @@ private fun MonthIdeaRow(t: Task, grown: List<Task>, onOpen: (String) -> Unit) {
         Margined(Modifier.padding(top = 4.dp), margin = { (last ?: born)?.let { DayMargin(it, LocalDate.now(), false, strong = true) } }) {
             Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.id) }, verticalAlignment = Alignment.Top) {
-                    Box(Modifier.padding(top = 3.dp)) { ThoughtGlyph(c.graphite, 16.dp) }
+                    // An idea is the same mark everywhere: the bulb on its soft sage round.
+                    Box(Modifier.offset(x = (-4).dp)) { IdeaMark(22.dp) }
                     Spacer(Modifier.width(10.dp))
                     Text(t.title, style = Type.body.copy(fontSize = 16.sp, color = c.ink, fontWeight = FontWeight.Medium), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
@@ -1410,7 +1369,7 @@ fun DayBlock(
                                 else -> { lines.take(4).forEach { it() }; if (lines.size > 4) CompactLine(null, s.more(lines.size - 4), faint = true) }
                             }
                         }
-                        if (!plan.empty) Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.faint, modifier = Modifier.padding(top = 4.dp).size(18.dp))
+                        if (!plan.empty) Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.graphite, modifier = Modifier.padding(top = 4.dp).size(18.dp))
                     }
                 } else {
                     val dealsAll = plan.events.isNotEmpty() || plan.deals.isNotEmpty()
@@ -1470,9 +1429,9 @@ fun DayBlock(
                     if (undatedShown.isNotEmpty()) {
                         Row(Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(8.dp)).clickable { undatedOpen = !undatedOpen; uiPrefs.edit().putBoolean("undatedOpen", undatedOpen).apply() }.padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Text(s.noDates.uppercase() + " · " + undatedShown.size, style = Type.label.copy(color = c.graphite), modifier = Modifier.weight(1f))
+                            Box(Modifier.weight(1f)) { GroupBadge(s.noDates + " · " + undatedShown.size) }
                             val rot by androidx.compose.animation.core.animateFloatAsState(if (undatedOpen) 0f else -90f, label = "ud")
-                            Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.faint, modifier = Modifier.size(18.dp).rotate(rot))
+                            Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.graphite, modifier = Modifier.size(18.dp).rotate(rot))
                         }
                         androidx.compose.animation.AnimatedVisibility(undatedOpen, enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(240)) + androidx.compose.animation.fadeIn(),
                             exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.fadeOut()) {
@@ -1480,7 +1439,8 @@ fun DayBlock(
                                 fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
                                 GroupedDeals(undatedShown, today, landed, onOpen, onDone, onLater, onTime, topicOf = topicOf,
                                     age = { t -> born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() } },
-                                    faded = { t -> born(t)?.isBefore(today.minusDays(7)) == true }, foldTopics = true)
+                                    // Each undated matter is its own row (under its topic's link) — the number in the heading is the rows you see.
+                                    faded = { t -> born(t)?.isBefore(today.minusDays(7)) == true })
                             }
                         }
                     }
@@ -1531,7 +1491,7 @@ private fun WeekCard(w: ru.anjeib.margin.data.WeekReview, inbox: Int, onOpen: (S
     Column(Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(16.dp)).background(c.card).padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(s.weekTitle.uppercase(), style = Type.label.copy(color = c.link), modifier = Modifier.weight(1f))
-            Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) { Text("×", style = Type.body.copy(color = c.graphite)) }
+            Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, M.s.dismiss, tint = c.graphite, modifier = Modifier.size(18.dp)) }
         }
         Text(s.weekLine(w.done, w.owedToYou, w.youOwe), style = Type.small.copy(color = c.ink, fontSize = 14.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = 10.dp))
         if (w.still.isNotEmpty()) {
@@ -1540,5 +1500,30 @@ private fun WeekCard(w: ru.anjeib.margin.data.WeekReview, inbox: Int, onOpen: (S
         }
         // The week is a good moment to put away what came in unsorted.
         if (inbox > 0) PaperLink(s.inboxLine(inbox) + " ›", onClick = onInbox)
+    }
+}
+
+
+/**
+ * Two quiet lines over the day, each until it is not needed: the swipes (seen in the tour once — said here for the
+ * first few days), and that the matters around are examples, with a way to clear them right here.
+ */
+@Composable
+private fun TodayHints(plan: DayPlan, data: AppData, ui: android.content.SharedPreferences, onRemoveSamples: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    var swipeSeen by remember { mutableStateOf(ui.getInt("swipeHint", 0)) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { if (swipeSeen < 3) ui.edit().putInt("swipeHint", swipeSeen + 1).apply() }
+    val samples = data.tasks.any { it.sample }
+    if (samples) Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(s.samplesHere, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.weight(1f, fill = false))
+        Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp))
+        PaperLink(s.removeSamplesShort, onClick = onRemoveSamples)
+    }
+    if (swipeSeen < 3 && plan.deals.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(s.swipeHintLine, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.weight(1f))
+        Box(Modifier.size(40.dp).clip(CircleShape).clickable { swipeSeen = 3; ui.edit().putInt("swipeHint", 3).apply() }, contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Close, s.dismiss, tint = c.graphite, modifier = Modifier.size(16.dp))
+        }
     }
 }

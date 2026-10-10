@@ -137,7 +137,7 @@ fun NoteCard(n: Note, data: AppData, onClick: () -> Unit, modifier: Modifier = M
                 val records = n.entries.map { it.session ?: it.id }.distinct().size
                 Text(listOfNotNull(records.takeIf { it > 0 }?.let { s.entriesCount(it) }, date, attachmentsSummary(files)).joinToString(" · "),
                     style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
-                why?.let { Text(it, style = Type.small.copy(color = c.faint, fontSize = 12.5.sp), modifier = Modifier.padding(top = 2.dp)) }
+                why?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(top = 2.dp)) }
             }
         }
     }
@@ -170,12 +170,12 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().imePadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = close), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = c.ink)
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, s.backWord, tint = c.ink)
             }
             Spacer(Modifier.weight(1f))
             Box {
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.MoreHoriz, null, tint = c.graphite)
+                    Icon(Icons.Outlined.MoreHoriz, s.moreActions, tint = c.graphite)
                 }
                 SoftMenu(menu, { menu = false }) {
                     DropdownMenuItem(text = { Text(s.listBlock, style = Type.body) }, onClick = { menu = false; vm.addNoteList(note.id); fill("item") })
@@ -187,7 +187,7 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp)) {
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Top) {
                 Box(Modifier.weight(1f)) {
-                    if (title.isEmpty()) Text(s.noteTitleHint, style = Type.title.copy(color = c.faint, fontSize = 32.sp))
+                    if (title.isEmpty()) Text(s.noteTitleHint, style = Type.title.copy(color = c.graphite, fontSize = 32.sp))
                     BasicTextField(title, { title = it }, textStyle = Type.title.copy(color = c.ink, fontSize = 32.sp, lineHeight = 38.sp),
                         cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
                 }
@@ -224,7 +224,7 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
             )
             if (missing.isNotEmpty()) FlowRow(Modifier.padding(top = 6.dp)) {
                 missing.forEachIndexed { i, (label, d) ->
-                    if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.faint))
+                    if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.graphite))
                     Text("+ " + label.lowercase(), style = Type.small.copy(color = c.graphite),
                         modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { if (d == "remind") remindDialog = true else fill(d) }.padding(2.dp))
                 }
@@ -236,7 +236,7 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                     IdeaTaskButton(tasksOfEntry(note, e, data), "idea:${e.id}" in working, onOpenTask = onOpenTask, onMake = { vm.ideaToTask(note.id, e.id) })
                 })
             })
-            if (note.entries.isEmpty()) Text(s.noteBodyHint, style = Type.body.copy(color = c.faint, fontSize = 17.sp))
+            if (note.entries.isEmpty()) Text(s.noteBodyHint, style = Type.body.copy(color = c.graphite, fontSize = 17.sp))
             Spacer(Modifier.height(24.dp))
         }
         val modeLabel = fill?.label() ?: when (mode) { "item" -> s.listItem; "people" -> s.fieldPeople; "place" -> s.fieldPlace; "project" -> s.project; else -> null }

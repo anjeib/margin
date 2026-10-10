@@ -21,7 +21,7 @@ fun stemsOf(text: String): Set<String> =
 fun dateOf(stamp: String?): LocalDate? = stamp?.let { runCatching { LocalDateTime.parse(it.take(16)).toLocalDate() }.getOrNull() ?: runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
 
 fun Person.involvedIn(t: Task) = t.people.any { matches(it) } || t.waitingFor?.let { matches(it) } == true ||
-    t.promisedTo?.let { matches(it) } == true || t.subtasks.any { s -> s.assignee?.let { matches(it) } == true }
+    t.promisedTo?.let { matches(it) } == true || t.subtasks.any { s -> s.assignee?.let { matches(it) } == true || s.from?.let { matches(it) } == true }
 
 /** «↳ из заметки «vuzburo · идеи» · 5 окт» or «↳ из разговора · 5 окт». Null when the idea row in «Связи» already says it. */
 fun originLine(t: Task, d: AppData): String? {
@@ -71,7 +71,11 @@ fun personHistory(p: Person, d: AppData): List<Triple<LocalDate, String, String>
     fun mentions(text: String) = names.any { n -> n.length >= 3 && text.lowercase().contains(n.lowercase().take(n.length - 1)) }
     val out = mutableListOf<Triple<LocalDate, String, String>>()
     d.tasks.filter { p.involvedIn(it) }.forEach { t ->
-        t.entries.filter { mentions(it.text) || p.involvedIn(t) }.takeLast(2).forEach { e -> dateOf(e.at)?.let { out += Triple(it, e.text.take(80), L.s.srcTaskEntry) } }
+        // A record of only a photo or a file says what it holds; the source names the topic or the matter it is in.
+        t.entries.filter { mentions(it.text) || p.involvedIn(t) }.takeLast(2).forEach { e ->
+            val text = e.text.ifBlank { e.attachments.joinToString(", ") { a -> a.caption ?: a.name } }.take(80)
+            if (text.isNotBlank()) dateOf(e.at)?.let { out += Triple(it, text, if (t.topic) L.s.srcTopic(t.title) else L.s.srcMatter(t.title)) }
+        }
     }
     d.notes.forEach { n -> n.entries.filter { mentions(it.text) }.forEach { e -> dateOf(e.at)?.let { out += Triple(it, e.text.take(80), L.s.srcNote + " «${n.title}»") } } }
     return out.distinctBy { it.second }.sortedByDescending { it.first }.take(8)
