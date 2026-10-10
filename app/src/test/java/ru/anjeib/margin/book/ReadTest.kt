@@ -76,6 +76,26 @@ class ReadTest {
         assertEquals(Dir.With, read("встреча с Олегом в пятницу в 12").lines.single().who.single().dir)
     }
 
+    @Test fun surnamesArePeopleAndDebtsAreWaits() {
+        val debt = read("Иванов должен 50 тыс за кухню до конца месяца").lines.single()
+        assertEquals(Who("Иванов", Dir.From), debt.who.single())
+        assertEquals(today.toString(), debt.day)
+        assertEquals("2026-10-31", debt.until)
+        assertEquals("Петров", read("завтра в 10 приедет Петров за образцами").lines.single().who.single().name)
+        assertEquals("Петров", read("созвониться с Петровым").lines.single().who.single().name)
+        // A street is not a person.
+        assertTrue(read("забрать заказ на Ленина 5").lines.single().who.isEmpty())
+    }
+
+    @Test fun aVisitIsAMeetingAndAStreetIsAPlace() {
+        val l = read("Саня в чт в 9 на замер, Ленина 5").lines.single()
+        assertEquals(Kind.Event, l.kind)
+        assertEquals("09:00", l.time)
+        assertEquals("Ленина 5", l.place)
+        assertTrue(l.who.any { it.name == "Саня" })
+        assertEquals(Kind.Event, read("завтра в 10 приедет Петров за образцами").lines.single().kind)
+    }
+
     @Test fun kinshipWordsKeepTheirSmallLetter() {
         assertEquals("Позвонить маме", read("позвонить маме вечером").lines.single().text)
     }

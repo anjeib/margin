@@ -130,7 +130,7 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
     val sendNow = remember { ru.anjeib.margin.data.Prefs.get(ctx) }.settings.collectAsState().value.voiceSendNow
     fun gotWords(t: String?) {
         hearing = false
-        if (t.isNullOrBlank()) return
+        if (t.isNullOrBlank()) { vm.tell(w.heardNothing); return }
         text = (text.trimEnd() + " " + t).trim()
         if (sendNow) send()
     }
@@ -210,7 +210,14 @@ fun Composer(vm: BookVm, target: BookVm.Target, book: Book, today: LocalDate, mo
                     Text(s.text + if (go != null) " ›" else "", style = Voice.reply.copy(color = if (go != null) c.link else c.graphite), maxLines = 2,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
                             .then(if (go != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = go).padding(vertical = 12.dp) else Modifier))
-                    if (s.undo != null) Text("  ·  " + w.undo, style = Voice.reply.copy(color = c.link),
+                    if (s.ask.isNotEmpty()) {
+                        // A question: «да» closes, «нет» leaves everything as it is.
+                        Text("  " + w.yes, style = Voice.reply.copy(color = c.link),
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.confirm() }.padding(vertical = 12.dp, horizontal = 8.dp))
+                        Text("·", style = Voice.reply.copy(color = c.pencil))
+                        Text(w.no, style = Voice.reply.copy(color = c.graphite),
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.hush() }.padding(vertical = 12.dp, horizontal = 8.dp))
+                    } else if (s.undo != null) Text("  ·  " + w.undo, style = Voice.reply.copy(color = c.link),
                         modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.undo() }.padding(vertical = 12.dp, horizontal = 4.dp))
                 }
             }
@@ -370,7 +377,9 @@ private fun AnswerPanel(a: BookVm.Asked, book: Book, today: LocalDate, onClose: 
         val shown = ans?.lines.orEmpty().map { l -> book.line(l.id) ?: l }
         // An answer about one day shows its lines as on that page: the day is in the sentence, not on every margin.
         val pageOf = ans?.takeIf { it.about == Ask.About.Day && it.from == it.to }?.from ?: today
-        shown.take(5).forEach { l -> LineOnPage(l, pageOf, today, book, Seen.Page, false, onMark, onOpen) }
-        if (shown.size > 5) MarginLink(w.more(shown.size - 5)) { (go ?: onSearch)() }
+        var all by remember(a) { mutableStateOf(false) }
+        shown.take(if (all) shown.size else 5).forEach { l -> LineOnPage(l, pageOf, today, book, Seen.Page, false, onMark, onOpen) }
+        // The rest unfolds right here; a page of its own only where there is one (a person, a thread, a day).
+        if (shown.size > 5 && !all) MarginLink(w.more(shown.size - 5)) { all = true }
     }
 }

@@ -114,7 +114,7 @@ private fun Notebook(vm: BookVm) {
                 onSearch = if (route != "search") ({ push("search") }) else null,
             )
             Box(Modifier.weight(1f)) {
-                AnimatedContent(targetState = route to ritual, transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) }, label = "page") { (r, rit) ->
+                AnimatedContent(targetState = route to ritual, transitionSpec = { fadeIn(tween(180, delayMillis = 100)) togetherWith fadeOut(tween(100)) }, label = "page") { (r, rit) ->
                     val onOpen: (String) -> Unit = { id ->
                         if (id.startsWith("cal:")) cal.values.flatten().find { it.id == id }?.let { l -> openCalendar(ctx, l) } else open = id
                     }
@@ -132,7 +132,7 @@ private fun Notebook(vm: BookVm) {
                         r == null -> HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { it }) { i ->
                             DayPage(dateOf(i), book, today, fresh, bottom = 24.dp, onMark = vm::toggle, onOpen = onOpen,
                                 onMonth = { month = true }, onTurn = { ritual = true }, eveningHour = vm.eveningHour(), stamping = stamping,
-                                calendar = cal[dateOf(i)].orEmpty(), onNext = { go(dateOf(i).plusDays(1)) })
+                                calendar = cal[dateOf(i)].orEmpty(), onNext = { go(dateOf(i).plusDays(1)) }, onExplain = vm::explain)
                         }
                         r == "index" -> IndexPage(book, today, onThread = { push("thread:$it") }, onPerson = { push("person:$it") }, onLater = { push("later") },
                             onSettings = { push("settings") }, onHelp = { push("help") }, onSearch = { push("search") },

@@ -158,7 +158,8 @@ fun Book.closeDay(date: java.time.LocalDate, at: java.time.LocalTime = java.time
     // What came of the day: what was done on it, and what the evening decided about the lines it asked for.
     val done = lines.count { it.isTodo && it.state == State.Done && (on(it.doneAt) || it.id in decided) }
     val dropped = lines.count { it.state == State.Dropped && (on(it.doneAt) || it.id in decided) }
-    val moved = lines.count { it.id in decided && it.state == State.Open }
+    // Moved on: what left this page today (its traces) and what the evening sent elsewhere.
+    val moved = lines.count { l -> l.state == State.Open && (l.id in decided || (l.trail.any { it.from == day } && l.day != day)) }
     return copy(closed = closed + (day to DayClose("%02d:%02d".format(at.hour, at.minute), done, moved, dropped)))
 }
 

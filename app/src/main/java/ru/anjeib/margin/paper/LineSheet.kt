@@ -55,6 +55,7 @@ import ru.anjeib.margin.book.Line
 import ru.anjeib.margin.book.Repeat
 import ru.anjeib.margin.book.State
 import ru.anjeib.margin.book.retext
+import ru.anjeib.margin.book.lastDay
 import ru.anjeib.margin.book.addFiles
 import ru.anjeib.margin.book.removeFile
 import kotlinx.coroutines.launch
@@ -152,13 +153,15 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                 val from = l.from()
                 if (from != null && l.state == State.Open) Offer(w.remind) {
                     val i = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                        .putExtra(android.content.Intent.EXTRA_TEXT, w.remindText(from, l.text))
+                        .putExtra(android.content.Intent.EXTRA_TEXT, w.remindText(from, l.text) .let { t ->
+                            // With the day it was promised for, if there is one: «… — к ср.»
+                            l.lastDay()?.let { d -> t.removeSuffix(".") + " — " + (if (w.ru) "к " else "by ") + w.near(d, today) + "." } ?: t })
                     runCatching { ctx.startActivity(android.content.Intent.createChooser(i, w.remind).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 }
                 if (l.kind == Kind.Todo && l.state == State.Open) {
                     if (l.date != today) Offer(w.offerToday) { vm.move(id, today); onClose() }
                     if (l.date != today.plusDays(1)) Offer(w.offerTomorrow) { vm.move(id, today.plusDays(1)); onClose() }
-                    Offer(w.offerLater) { vm.move(id, null); onClose() }
+                    if (l.day != null || l.until != null) Offer(w.offerLater) { vm.move(id, null); onClose() }
                     Offer(w.dropped) { vm.drop(id); onClose() }
                 }
                 Offer(w.offerDelete, danger = true) { vm.delete(id); onClose() }

@@ -71,6 +71,19 @@ class AskTest {
         assertEquals(listOf("Сдать макеты лендинга"), texts(a))
     }
 
+    @Test fun aStrangerIsNotEveryone() {
+        val a = ask("Что мне должен Иванов?")
+        assertEquals(Ask.About.Waited, a.about)
+        assertEquals("Иванов", a.name)
+        assertTrue(a.lines.isEmpty())
+    }
+
+    @Test fun theWeek() {
+        val a = ask("Что на неделе?")
+        assertEquals(Ask.About.Day, a.about)
+        assertTrue(a.to!!.isAfter(a.from))
+    }
+
     @Test fun whatThePhoneCannotReadGoesToTheAi() {
         assertEquals(Ask.About.Unknown, ask("Сколько я потратил на кофе в сентябре?").about)
         // A name with more words is not «что с Олегом?».

@@ -10,7 +10,7 @@ import java.time.LocalDateTime
  * and the lines it is about; what the phone cannot read ([About.Unknown]) goes to the AI.
  */
 object Ask {
-    enum class About { Promised, Waited, Person, Day, Tails, Thread, Done, Found, Unknown }
+    enum class About { Promised, Waited, Person, Day, Tails, Thread, Done, Found, Unknown, Margin }
 
     data class Answer(
         val about: About,
@@ -44,6 +44,7 @@ object Ask {
     private val yesterdayCue = Regex("${W}(?:вчера|yesterday)$E")
     private val stop = setOf("что", "чем", "чего", "кому", "кого", "у", "меня", "мне", "мои", "мой", "моя", "я", "мы", "нас", "нам", "по", "с", "со", "на", "в", "во", "про", "о", "об",
         "открыто", "открытые", "осталось", "сейчас", "вообще", "нибудь", "такое", "там", "тут", "ними", "ним", "ней", "him", "her", "them", "now", "left",
+        "неделе", "неделю", "неделя", "недели", "следующей", "этой", "месяце", "выходные", "выходных", "week", "next", "this", "weekend",
         "ли", "есть", "там", "как", "какие", "какой", "какая", "где", "когда", "кто", "это", "был", "была", "было", "были", "сегодня", "завтра", "вчера",
         "дела", "дело", "делах", "надо", "нужно", "ещё", "еще", "всё", "все", "the", "a", "an", "what", "when", "is", "are", "do", "did", "i", "my", "me",
         "on", "in", "about", "with", "for", "have", "has", "to", "of", "at", "any", "there")
@@ -68,7 +69,12 @@ object Ask {
         val item = read?.items?.firstOrNull()
         val names = (listOfNotNull(item?.promisedTo, item?.waitingFor) + (item?.people ?: emptyList()))
             .map { n -> book.person(n)?.name ?: n }.distinct()
-        val name = names.firstOrNull()
+        // A name the notebook does not know yet still counts: «что мне должен Иванов?» is about Иванов, not about everyone.
+        val proper = Regex("(?<=\\s)[А-ЯЁA-Z][а-яёa-z]{2,}").findAll(q0).map { it.value }.toList()
+        val stranger = if (names.isEmpty()) proper.firstOrNull { p -> book.persons.none { it.matches(p) } } else null
+        val name = names.firstOrNull() ?: proper.firstNotNullOfOrNull { p ->
+            book.persons.firstOrNull { per -> (listOf(per.name) + per.aliases).any { norm(p).startsWith(norm(it).take(maxOf(3, it.length - 2))) } }?.name
+        }
         fun mine(w: Who) = name != null && (book.person(name)?.matches(w.name) ?: w.name.equals(name, true))
         val top = book.lines.filter { it.parentId == null }
         // What the question says beyond a name, a thread and a day: «о чём договорились с Олегом по логотипу» is not «что с Олегом».
@@ -84,8 +90,11 @@ object Ask {
         // What is burning: tails, today's open lines and soft windows closing within two days.
         if (tailsCue.containsMatchIn(q)) {
             val p = book.page(today, today)
-            val soon = top.filter { it.isTodo && it.open && it.until != null && it.lastDay()?.let { d -> !d.isAfter(today.plusDays(2)) && !d.isBefore(today) } == true }
-            return Answer(About.Tails, (p.tails + p.open.filter { it !in p.tails } + soon).distinctBy { it.id })
+            val clock = java.time.LocalTime.now().let { "%02d:%02d".format(it.hour, it.minute) }
+            // On fire: what is overdue, today's hours already gone, and soft windows that close today or tomorrow.
+            val late = p.timed.filter { it.isTodo && it.open && (it.time ?: "99") <= clock }
+            val soon = top.filter { it.isTodo && it.open && it.until != null && it.lastDay()?.let { d -> !d.isAfter(today.plusDays(1)) && !d.isBefore(today) } == true }
+            return Answer(About.Tails, (p.tails + late + soon).distinctBy { it.id })
         }
 
         // What was done: today by default, yesterday, the week, the month.
@@ -107,6 +116,7 @@ object Ask {
         val from = fromCue.containsMatchIn(q) || (!to && name != null && promiseWord.containsMatchIn(q))
         if (to || from) {
             val dir = if (to) Dir.To else Dir.From
+            if (name == null && stranger != null) return Answer(if (to) About.Promised else About.Waited, emptyList(), name = stranger)
             val lines = top.filter { l -> l.open && l.who.any { it.dir == dir && (name == null || mine(it)) } }.sortedBy(::byWhen)
             return Answer(if (to) About.Promised else About.Waited, lines, name = name)
         }
@@ -153,5 +163,12 @@ object Ask {
                 found.filter { it.second == best }.map { it.first }.sortedWith(compareBy({ !it.open }, ::byWhen)).take(6), weak = true)
         }
         return Answer(About.Unknown)
+    }
+
+    /** «на полях: 2 обещания · 1 с прошлых дней» opened: those very lines of the page. */
+    fun margin(book: Book, date: LocalDate, today: LocalDate): Answer {
+        val p = book.page(date, today)
+        val lines = (p.tails + p.all.filter { l -> l.open && (l.who.any { it.dir != Dir.With } || l.ask.isNotEmpty()) }).distinctBy { it.id }
+        return Answer(About.Margin, lines, from = date)
     }
 }

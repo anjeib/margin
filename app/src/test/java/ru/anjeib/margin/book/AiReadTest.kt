@@ -20,11 +20,12 @@ class AiReadTest {
     }
 
     @Test fun aCorrectedDayIsAnEditByMarginAndNoTrace() {
-        val (b, phone) = written("созвонились с Олегом, он пришлёт смету в чт")
+        val said = "созвонились с Олегом, он пришлёт смету в чт"
+        val (b, phone) = written(said)
         val reply = """```json
             {"lines":[{"text":"Смета","kind":"todo","day":"2026-10-16","time":null,"who":[{"name":"Олег","dir":"from"}]}],"done":[]}
             ```"""
-        val r = AiRead.parseRead(reply, b, today, "…", null)
+        val r = AiRead.parseRead(reply, b, today, said, null)
         assertNotNull(r)
         val after = AiRead.merge(b, phone, r!!, today)
         val l = after.line(phone.single().id)!!
@@ -41,7 +42,9 @@ class AiReadTest {
         val reply = """{"lines":[],"done":["ex-c3"]}"""
         val r = AiRead.parseRead(reply, b, today, said, null)!!
         val after = AiRead.merge(b, phone, r, today)
-        assertEquals(State.Done, after.line("ex-c3")!!.state)
+        // Margin asks before closing a line: nothing is closed by the merge itself.
+        assertEquals(State.Open, after.line("ex-c3")!!.state)
+        assertEquals(listOf("ex-c3" to State.Done), AiRead.proposals(after, phone, r))
         assertEquals("the report stays as a record", Kind.Note, after.line(phone.single().id)!!.kind)
     }
 
@@ -54,6 +57,20 @@ class AiReadTest {
             phone.forEach { assertNull(after.line(it.id)) }
             assertEquals(2, after.lines.count { it.day == friday.toString() && it.text in setOf("Отвезти маме лекарства", "Забрать посылку") })
         }
+    }
+
+    @Test fun theAiBringsNoPersonTheWordsDoNotName() {
+        val said = "созвонились с Петровым, он пришлёт чертежи в среду, а нам до пятницы посчитать смету"
+        val (b, _) = written(said)
+        val r = AiRead.parseRead("""{"lines":[{"text":"Посчитать смету","day":"$today","until":"$friday","who":[{"name":"Сергей","dir":"to"}]},
+            {"text":"Чертежи","day":"2026-10-14","who":[{"name":"Петров","dir":"from"}]}]}""", b, today, said, null)!!
+        assertTrue(r.lines[0].who.isEmpty())
+        assertEquals(Who("Петров", Dir.From), r.lines[1].who.single())
+    }
+
+    @Test fun aSurnameIsNotACommonWord() {
+        val visit = Line(id = "v", text = "Приедет Петров за образцами", day = today.plusDays(1).toString())
+        assertTrue(!AiRead.plausiblyDone(visit, "созвонились с Петровым, он пришлёт чертежи в среду", book.add(listOf(visit))))
     }
 
     @Test fun thePersonsHandWins() {

@@ -63,6 +63,8 @@ fun DayPage(
     calendar: List<Line> = emptyList(),
     /** To the next page (after the stamp). */
     onNext: () -> Unit = {},
+    /** «на полях: …» tapped: those lines over the field. */
+    onExplain: (LocalDate) -> Unit = {},
 ) {
     val c = P.c
     val w = P.w
@@ -106,7 +108,7 @@ fun DayPage(
                     title = w.weekday(date),
                     line = if (closing) w.nextPage(next) else listOfNotNull(near, w.summary(sum).ifBlank { null }).joinToString(" · ").ifBlank { null },
                     onMargin = onMonth,
-                    onLine = if (closing) onNext else null,
+                    onLine = if (closing) onNext else if (!sum.empty) ({ onExplain(date) }) else null,
                     lineColor = if (closing) c.link else c.graphite,
                 )
                 // A day closed in the evening keeps its stamp in the corner: the hour, what was done, what moved on.

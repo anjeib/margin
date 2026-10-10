@@ -205,7 +205,9 @@ fun LaterPage(book: Book, today: LocalDate, onMark: (String) -> Unit, onOpen: (S
     LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = bottom)) {
         item { PageHead(marginTop = "", marginBottom = null, title = w.laterTitle, line = w.laterLine) }
         items(ls, key = { it.id }) { l ->
-            LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, lead = Note(w.since(l.written.toLocalDate()), Tone.Quiet))
+            // Since when it waits here: the day it was put off (or written, if it was born here).
+            val since = l.trail.lastOrNull { it.to == null }?.at?.let { runCatching { java.time.LocalDateTime.parse(it).toLocalDate() }.getOrNull() } ?: l.written.toLocalDate()
+            LineOnPage(l, null, today, book, Seen.Page, false, onMark, onOpen, lead = Note(w.since(since), Tone.Quiet))
         }
         if (ls.isEmpty()) item { MarginSays(w.emptyLater) }
     }

@@ -18,12 +18,36 @@ object Read {
 
     private val someday = Regex("^\\s*(?:когда[- ]нибудь|потом|при случае|как[- ]нибудь|later|someday|some day|eventually)\\s*[:,—-]?\\s*", RegexOption.IGNORE_CASE)
     private val eventCue = Regex("^\\s*(?:встреча|созвон|при[её]м|собеседование|звонок с|концерт|спектакль|день рождения|свадьба|вебинар|лекция|урок|тренировка|" +
+        "приедет|приедут|придёт|придет|заедет|зайдёт|зайдет|визит|замер|" +
         "meeting|call with|appointment|interview|lunch with|dinner with|concert|webinar|lecture|lesson|class|training|birthday|wedding)(?!\\p{L})", RegexOption.IGNORE_CASE)
     private val noteCue = Regex("^\\s*(?:запись|заметка|мысль|идея|на заметку|note|idea|thought)\\s*[:—–-]\\s*", RegexOption.IGNORE_CASE)
     private val threadTag = Regex("(?:^|\\s)#([\\p{L}\\d][\\p{L}\\d_-]*)")
+    /** Someone comes at an hour: a meeting, wherever the words put it («в 10 приедет Петров», «Саня в чт на замер»). */
+    private val visit = Regex("(?<!\\p{L})(?:приедет|приедут|придёт|придет|заедет|зайдёт|зайдет|на замер|на встречу|созвон)(?!\\p{L})", RegexOption.IGNORE_CASE)
+    /** «…, Ленина 5» at the end: a place, not words of the line. */
+    private val street = Regex(",\\s*((?:ул\\.?\\s*)?[А-ЯЁ][а-яё]+(?:\\s+[А-ЯЁ]?[а-яё]+)?\\s*,?\\s*\\d+[а-яё]?(?:\\s*/\\s*\\d+)?)\\s*$")
+
     /** «до пятницы», «к среде», «до 12-го»: a deadline — the line stands on the page from now until that day. */
     private val deadline = Regex("(?<!\\p{L})(?:до|к|ко)\\s+(?:понедельник\\p{L}*|вторник\\p{L}*|сред\\p{L}*|четверг\\p{L}*|пятниц\\p{L}*|суббот\\p{L}*|воскресень\\p{L}*|" +
-        "пн|вт|ср|чт|пт|сб|вс|послезавтр\\p{L}*|\\d{1,2}(?:-?го|-?е)?(?:\\s+\\p{L}+)?)(?!\\p{L})", RegexOption.IGNORE_CASE)
+        "пн|вт|ср|чт|пт|сб|вс|послезавтр\\p{L}*|конц\\p{L}*\\s+(?:месяца|недели|года)|\\d{1,2}(?:-?го|-?е)?(?:\\s+\\p{L}+)?)(?!\\p{L})", RegexOption.IGNORE_CASE)
+
+    /**
+     * A surname inside the words («приедет Петров», «созвонились с Петровым», «Иванов должен…»): a person, even one the
+     * notebook has not met yet. Not after «на / в / по / ул.» and not before a house number — that is a street.
+     */
+    private val surname = Regex("(?<![\\p{L}.])(?<!(?:на|в|во|по|ул|улица|проспект|пр)\\s)([А-ЯЁ][а-яё]{2,}(?:ов|ев|ёв|ин|ын|ский|ская|цкий|цкая|ич|енко|ко|ук|юк|ян)" +
+        "(?:а|у|ым|ом|е|ой|ую|ого|ому|им)?)(?!\\p{L})(?!\\s*,?\\s*\\d)")
+    /** «Иванов должен…», «Петров пришлёт…»: the one who owes. */
+    private val owes = Regex("^\\s*(?:должен|должна|должны|обещал\\p{L}*|пришл[её]т|пришлют|верн[её]т|отдаст|заплатит|переведёт|переведет|привез[её]т|принес[её]т|сделает|подготовит|скинет|отправит)(?!\\p{L})",
+        RegexOption.IGNORE_CASE)
+
+    /** «Петровым» → «Петров», «Ивановой» → «Иванова»: the name as it stands in the index. */
+    private fun nominative(w: String): String {
+        Regex("^(.+(?:ов|ев|ёв|ин|ын))(ой|ую)$").find(w)?.let { return it.groupValues[1] + "а" }
+        Regex("^(.+(?:ов|ев|ёв|ин|ын))(ым|ом|у|а|е)$").find(w)?.let { return it.groupValues[1] }
+        Regex("^(.+)(ского|скому|ским)$").find(w)?.let { return it.groupValues[1] + "ский" }
+        return w
+    }
     /** Giving something to someone: «прислать бриф Диме», «вернуть книгу Маше» — what you owe them (→). */
     private val giving = Regex("(?<!\\p{L})(?:присл|пришл|отправ|скин|показ|покаж|перед|верн|отда|подар|принес|принёс|привез|привёз|занес|занёс|заплат|переве)\\p{L}*" +
         "(?:ть|ти|ю|у|ешь|ет|ем|ете|ут|ют|ит|им|ите|ат|ят|л|ла|ли|ло|й|йте)(?!\\p{L})", RegexOption.IGNORE_CASE)
@@ -54,16 +78,26 @@ object Read {
         val lines = r.items.flatMap { i ->
             val kind = when {
                 note || i.kind == "idea" -> Kind.Note
-                eventCue.containsMatchIn(i.title) && (i.time != null || i.due != null) -> Kind.Event
+                (eventCue.containsMatchIn(i.title) || visit.containsMatchIn(i.title)) && (i.time != null || i.due != null) -> Kind.Event
                 else -> Kind.Todo
             }
             // A name in the dative after a verb of giving is someone you owe: «прислать бриф Диме» → «→ Диме», not «с Димой».
             val owed = if (giving.containsMatchIn(i.title)) i.people.filter { n -> said(text, n.dative()) && !together(text, n) } else emptyList()
-            val who = listOfNotNull(i.promisedTo?.let { Who(it, Dir.To) }, i.waitingFor?.let { Who(it, Dir.From) }) +
+            val who0 = listOfNotNull(i.promisedTo?.let { Who(it, Dir.To) }, i.waitingFor?.let { Who(it, Dir.From) }) +
                 owed.filter { it != i.promisedTo }.map { Who(it, Dir.To) } + (i.people - owed.toSet()).map { Who(it, Dir.With) }
+            // Surnames the parser does not know: a person; «Иванов должен…» — the one you wait for.
+            val known0 = who0.map { it.name.lowercase().take(4) }
+            val found = surname.findAll(i.title).filter { m -> m.range.first > 0 || owes.containsMatchIn(i.title.substring(m.range.last + 1)) }.mapNotNull { m ->
+                val n = book.person(nominative(m.value))?.name ?: nominative(m.value)
+                if (n.lowercase().take(4) in known0) null
+                else Who(n, if (owes.containsMatchIn(i.title.substring(m.range.last + 1))) Dir.From else Dir.With)
+            }.distinctBy { it.name }.toList()
+            val who = who0 + found
             val repeat = i.repeat?.let { (f, n, d) -> Repeat(f, n, d) }
-            val words = calm(i.title, text)
-            val base = Line(text = words, kind = kind, who = who, place = i.place, repeat = repeat, part = i.part,
+            // «…, Ленина 5» at the end is where: it goes to the margin.
+            val at = if (i.place == null) street.find(i.title) else null
+            val words = calm(at?.let { i.title.removeRange(it.range).trim() } ?: i.title, text)
+            val base = Line(text = words, kind = kind, who = who, place = i.place ?: at?.groupValues?.get(1)?.trim(), repeat = repeat, part = i.part,
                 time = i.time, source = text.trim(), threadId = threadId)
             when {
                 // «в пн и чт» without «каждый» — one line on each of those pages.

@@ -148,11 +148,18 @@ interface Words {
     val rereading: String
     val reread: String
     fun markedDone(n: Int): String
+    /** Margin asks before closing lines your words seem to report: (text, not doing). */
+    fun closeAsk(lines: List<Pair<String, Boolean>>): String
+    fun closed(n: Int): String
+    val yes: String
+    val no: String
     val attachPhoto: String
     val attachCamera: String
     val attachFile: String
     val attachContact: String
     val listening: String
+    val heardNothing: String
+    val doneReply: String
     val transcribing: String
     val voiceOff: String
     val micDenied: String
@@ -283,9 +290,9 @@ object WordsRu : Words {
         }
     }
     override fun part(p: String) = mapOf("morning" to "утром", "day" to "днём", "afternoon" to "после обеда", "evening" to "вечером", "night" to "ночью")[p] ?: p
-    override fun to(name: String) = "→ " + name.dative()
-    override fun from(name: String) = "← $name"
-    override fun with(name: String) = "с " + name.instrumental()
+    override fun to(name: String) = "→\u00A0" + name.dative()
+    override fun from(name: String) = "←\u00A0$name"
+    override fun with(name: String) = "с\u00A0" + name.instrumental()
     override fun moveNo(n: Int) = "$n " + plural(n, "перенос", "переноса", "переносов")
     override fun ask(what: String) = when (what) { "when" -> "когда?"; "who" -> "кто это?"; "thread" -> "в нить?"; else -> "?" }
     override fun summary(s: Summary) = listOfNotNull(
@@ -441,6 +448,7 @@ object WordsRu : Words {
             }
             Ask.About.Found -> Triple(if (n > 0) "Нашлось: $t" else "Не нашлось", null, "")
             Ask.About.Unknown -> Triple(a.said ?: needNet, null, "")
+            Ask.About.Margin -> Triple(if (n > 0) "Обещания и дела с прошлых дней — $t" else "На полях пусто", null, "")
         }
     }
     private fun things(lines: List<Line>): String = listOfNotNull(
@@ -462,12 +470,22 @@ object WordsRu : Words {
     override val rereading = "перечитываю…"
     override val reread = "перечитано"
     override fun markedDone(n: Int) = "перечитано, закрыто: $n"
+    override fun closeAsk(lines: List<Pair<String, Boolean>>) = when {
+        lines.size == 1 && lines[0].second -> "больше не нужно «${lines[0].first}»?"
+        lines.size == 1 -> "сделано «${lines[0].first}»?"
+        else -> "закрыть " + lines.joinToString(", ") { "«${it.first}»" } + "?"
+    }
+    override fun closed(n: Int) = "закрыто: $n"
+    override val yes = "да"
+    override val no = "нет"
     override val attachPhoto = "Фото"
     override val attachCamera = "Камера"
     override val attachFile = "Файл"
     override val attachContact = "Контакт"
     override val listening = "слушаю…"
-    override val transcribing = "расшифровываю…"
+    override val heardNothing = "ничего не слышно — ещё раз?"
+    override val doneReply = "× сделано"
+    override val transcribing = "разбираю…"
     override val voiceOff = "Голос сейчас недоступен — нужна сеть."
     override val micDenied = "Без микрофона диктовать нельзя."
     override val stop = "Остановить"
@@ -483,6 +501,7 @@ object WordsRu : Words {
         Triple("Margin", "none", "Слева пишет Margin: когда, кто, к чему относится."),
         Triple(null, "note", "Справа — ваши слова. Пишите как думаете, в одно поле внизу."),
         Triple("завтра", "open", "Точка на линии — дело. Нажмите на неё."),
+        Triple("→\u00A0Лёше", "none", "Стрелка — обещание: → вы обещали, ← обещали вам."),
         Triple("17:00", "event", "Кружок — встреча, тире — запись."),
         Triple("→ пн", "moved", "Вечером перелистните день: у каждой открытой строки — своё решение."),
         Triple("?", "none", "Спросите «что я обещал Лёше?» — ответ появится над полем."),
@@ -532,7 +551,7 @@ object WordsRu : Words {
     override val closeThread = "закрыть нить ›"
     override val reopenThread = "открыть нить снова ›"
     override val remind = "напомнить"
-    override fun remindText(name: String, what: String) = "$name, привет! Напоминаю: ${what.replaceFirstChar { it.lowercase() }}."
+    override fun remindText(name: String, what: String) = "Добрый день! Напоминаю: ${what.replaceFirstChar { it.lowercase() }}."
     override val calendarSetting = "Календарь телефона"
     override val calendarOn = "на страницах"
     override val calendarOff = "не показывать"
@@ -585,9 +604,9 @@ object WordsEn : Words {
         }
     }
     override fun part(p: String) = mapOf("morning" to "morning", "day" to "daytime", "afternoon" to "afternoon", "evening" to "evening", "night" to "night")[p] ?: p
-    override fun to(name: String) = "→ $name"
-    override fun from(name: String) = "← $name"
-    override fun with(name: String) = "with $name"
+    override fun to(name: String) = "→\u00A0$name"
+    override fun from(name: String) = "←\u00A0$name"
+    override fun with(name: String) = "with\u00A0$name"
     override fun moveNo(n: Int) = "moved ${n}×"
     override fun ask(what: String) = when (what) { "when" -> "when?"; "who" -> "who?"; "thread" -> "a thread?"; else -> "?" }
     override fun summary(s: Summary) = listOfNotNull(
@@ -742,6 +761,7 @@ object WordsEn : Words {
             }
             Ask.About.Found -> Triple(if (n > 0) "Found: $t" else "Nothing found", null, "")
             Ask.About.Unknown -> Triple(a.said ?: needNet, null, "")
+            Ask.About.Margin -> Triple(if (n > 0) "Promises and lines left over — $t" else "Nothing on the margin", null, "")
         }
     }
     private fun things(lines: List<Line>): String = listOfNotNull(
@@ -763,12 +783,22 @@ object WordsEn : Words {
     override val rereading = "re-reading…"
     override val reread = "re-read"
     override fun markedDone(n: Int) = "re-read, closed: $n"
+    override fun closeAsk(lines: List<Pair<String, Boolean>>) = when {
+        lines.size == 1 && lines[0].second -> "no longer needed: «${lines[0].first}»?"
+        lines.size == 1 -> "done: «${lines[0].first}»?"
+        else -> "close " + lines.joinToString(", ") { "«${it.first}»" } + "?"
+    }
+    override fun closed(n: Int) = "closed: $n"
+    override val yes = "yes"
+    override val no = "no"
     override val attachPhoto = "Photo"
     override val attachCamera = "Camera"
     override val attachFile = "File"
     override val attachContact = "Contact"
     override val listening = "listening…"
-    override val transcribing = "transcribing…"
+    override val heardNothing = "nothing heard — try again?"
+    override val doneReply = "× done"
+    override val transcribing = "reading…"
     override val voiceOff = "Voice needs a network right now."
     override val micDenied = "Dictation needs the microphone."
     override val stop = "Stop"
@@ -784,6 +814,7 @@ object WordsEn : Words {
         Triple("Margin", "none", "On the left Margin writes: when, who, what it belongs to."),
         Triple(null, "note", "On the right — your words. Write as you think, in one field below."),
         Triple("tomorrow", "open", "A dot on the rule is a to-do. Tap it."),
+        Triple("→\u00A0Alex", "none", "An arrow is a promise: → you promised, ← promised to you."),
         Triple("17:00", "event", "A ring is a meeting, a dash is a note."),
         Triple("→ Mon", "moved", "In the evening turn the page: every open line gets its decision."),
         Triple("?", "none", "Ask «what did I promise Alex?» — the answer appears over the field."),
@@ -833,7 +864,7 @@ object WordsEn : Words {
     override val closeThread = "close the thread ›"
     override val reopenThread = "open the thread again ›"
     override val remind = "remind"
-    override fun remindText(name: String, what: String) = "Hi $name, a reminder: ${what.replaceFirstChar { it.lowercase() }}."
+    override fun remindText(name: String, what: String) = "Hello! A reminder: ${what.replaceFirstChar { it.lowercase() }}."
     override val calendarSetting = "Phone calendar"
     override val calendarOn = "on the pages"
     override val calendarOff = "hidden"

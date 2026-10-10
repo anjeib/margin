@@ -59,6 +59,7 @@ fun RitualPage(book: Book, today: LocalDate, vm: BookVm, bottom: Dp, onDone: (Lo
                 val tail = l.lastDay()?.isBefore(day) == true
                 LineOnPage(l, day, today, book, if (tail) Seen.Tail else Seen.Page, false, onMark = vm::toggle, onOpen = {})
                 FlowRow(Modifier.fillMaxWidth().offset(y = (-14).dp).padding(start = Grid.text - 6.dp, end = Grid.right)) {
+                    Reply(w.doneReply) { vm.toggle(l.id) }
                     Reply(w.offerTomorrow) { vm.move(l.id, next, quiet = true) }
                     Reply(w.pickDayShort) { picking = l.id }
                     Reply(w.offerLater) { vm.move(l.id, null, quiet = true) }

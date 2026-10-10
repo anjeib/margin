@@ -68,7 +68,12 @@ fun Book.on(date: LocalDate, today: LocalDate): List<Line> {
     for (l in lines) {
         if (l.parentId != null) continue
         val s = l.span()
-        if (s != null && !date.isBefore(s.first) && !date.isAfter(s.second)) { out += l; continue }
+        if (s != null && !date.isBefore(s.first) && !date.isAfter(s.second)) {
+            // A soft window («до пт») stands where it was written, on its last day, and on today while it is open — not on
+            // every day between: a week of «до пт» lines would be a wall of the same words.
+            if (l.until == null || date == s.first || date == s.second || date == today) out += l
+            continue
+        }
         // A repeat shows on its future pages; past ones are its tail.
         val r = l.repeat
         val anchor = l.date

@@ -84,9 +84,10 @@ ${context(book, words, today)}
     }
 
     fun askPrompt(book: Book, question: String, today: LocalDate, ru: Boolean): String = """
-You answer a question about a person's notebook. Today is ${today(today)}.
+You answer a question about a person's notebook. Today is ${today(today)}, the time now is ${java.time.LocalTime.now().let { "%02d:%02d".format(it.hour, it.minute) }}: what was earlier today is past.
 Reply with JSON only: {"say":"...","ids":["id",...]} — "say" is the answer in ${if (ru) "Russian" else "English"}: one or two short calm sentences, no exclamation marks, no emoji, never about yourself; "ids" are the lines the answer is about (at most 6), in the order that helps.
-If the notebook does not hold the answer, say so plainly and give no ids. Do not invent anything.
+If the notebook does not hold the answer, say so plainly and give no ids. Do not invent anything. A repeating line repeats on its days — say so.
+When asked what is coming, name what the person waits for from others too ("expected from").
 Lines (id | kind or done | day | text | people | thread):
 ${context(book, question, today, max = 70)}
 """.trimIndent()
@@ -128,7 +129,7 @@ ${context(book, question, today, max = 70)}
                 val wo = runCatching { w.jsonObject }.getOrNull() ?: return@mapNotNull null
                 val n = wo.str("name") ?: return@mapNotNull null
                 Who(book.person(n)?.name ?: n, when (wo.str("dir")) { "to" -> Dir.To; "from" -> Dir.From; else -> Dir.With })
-            } ?: emptyList()
+            }?.filter { mentions(source, it.name) } ?: emptyList()
             val thread = x.str("thread")?.let { t -> book.threads.find { it.closedAt == null && it.title.equals(t, true) }?.id }
             val hm = time(x.str("time"))
             Line(text = text, kind = kind,
@@ -158,8 +159,18 @@ ${context(book, question, today, max = 70)}
 
     private fun stems(text: String, names: List<String>): Set<String> {
         val nameStems = names.map { norm(it).take(4) }
+        // A Russian word with a capital inside the words is a name or a surname («Петров», «Олегу»): it says who, not what.
+        val proper = Regex("(?<=\\s)[А-ЯЁ][а-яё]{2,}").findAll(text).map { norm(it.value).take(4) }.toSet()
         return Regex("\\p{L}{4,}").findAll(norm(text)).map { m -> m.value.map { ch -> latin[ch] ?: ch.toString() }.joinToString("").take(4) }
-            .filter { st -> st !in verbs && nameStems.none { st.startsWith(it.take(3)) } }.toSet()
+            .filter { st -> st !in verbs && st !in proper && nameStems.none { st.startsWith(it.take(3)) } }.toSet()
+    }
+
+    /** The words name this person (any case, any alphabet): the AI may not bring a person the phrase does not mention. */
+    fun mentions(words: String, name: String): Boolean {
+        val n = norm(name).map { ch -> latin[ch] ?: ch.toString() }.joinToString("")
+        val stem = n.take(maxOf(3, minOf(5, n.length - 1)))
+        val w = norm(words).map { ch -> latin[ch] ?: ch.toString() }.joinToString("")
+        return stem.length >= 3 && Regex("(?<!\\p{L})" + Regex.escape(stem)).containsMatchIn(w)
     }
 
     /** The words back the AI's «done»: a word of the line itself, or the one we waited for gave it. */
@@ -197,16 +208,20 @@ ${context(book, question, today, max = 70)}
             b = b.copy(lines = b.lines.filterNot { it.id in ids } + r.lines.map { it.copy(edits = listOf(Edit("read", null, null, "margin"))) })
             b = r.lines.fold(b) { x, l -> x.setPeople(l) }
         }
-        val closed = r.done.filter { id -> phone.none { it.id == id } }
-        closed.forEach { id -> if (b.line(id)?.open == true) b = b.toggle(id, today) }
-        val gone = r.dropped.filter { id -> phone.none { it.id == id } }
-        gone.forEach { id -> if (b.line(id)?.open == true) b = b.drop(id) }
+        // Lines the words seem to close are not closed here: the person is asked (see [proposals]).
+        val closing = proposals(b, phone, r)
         // Only a report («Олег прислал фидбек»): the words stay on the page as a record of what happened, not as a to-do.
-        if (r.lines.isEmpty() && (closed + gone).isNotEmpty()) phone.forEach { p ->
+        if (r.lines.isEmpty() && closing.isNotEmpty()) phone.forEach { p ->
             b = b.copy(lines = b.lines.map { if (it.id == p.id && it.kind == Kind.Todo) it.copy(kind = Kind.Note, edits = it.edits + Edit("kind", "Todo", "Note", "margin")) else it })
         }
         return b
     }
+
+    /** What the words seem to close among the lines already written (done, or not needed): still open, not the phone's own. */
+    fun proposals(book: Book, phone: List<Line>, r: Reading): List<Pair<String, State>> =
+        (r.done.map { it to State.Done } + r.dropped.map { it to State.Dropped })
+            .filter { (id, _) -> phone.none { it.id == id } && book.line(id)?.open == true }
+            .distinctBy { it.first }
 
     private fun Book.setPeople(l: Line): Book {
         val names = l.who.map { it.name }.filter { n -> persons.none { it.matches(n) } }

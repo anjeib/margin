@@ -45,7 +45,7 @@ fun WelcomePage(withExamples: Boolean, onExamples: () -> Unit, onClean: () -> Un
                 val k = when (mark) { "open" -> MarkKind.Open; "done" -> MarkKind.Done; "event" -> MarkKind.Event; "moved" -> MarkKind.Moved; "note" -> MarkKind.Note; else -> MarkKind.None }
                 var m by remember { mutableStateOf(k) }
                 Appear(i) {
-                    MarginRow(notes = listOfNotNull(note?.let { Note(it, if (i == 0) Tone.Link else Tone.Quiet) }), mark = m,
+                    MarginRow(notes = listOfNotNull(note?.let { Note(it, if (i == 0 || it.startsWith("→")) Tone.Link else Tone.Quiet) }), mark = m,
                         onMark = if (k == MarkKind.Open || k == MarkKind.Done) ({ m = if (m == MarkKind.Done) MarkKind.Open else MarkKind.Done; tried = true }) else null,
                         markLabel = w.a11yMark(m == MarkKind.Done)) {
                         PenText(text, Voice.words.copy(color = c.ink), struck = m == MarkKind.Done && k == MarkKind.Open, lineColor = c.graphite)

@@ -48,7 +48,9 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     val today: StateFlow<LocalDate> = _today
 
     /** Margin's sentence over the field; [undo] puts the notebook back as it was before the change. */
-    data class Said(val text: String, val undo: Book? = null, val id: Long = System.nanoTime(), val day: LocalDate? = null)
+    data class Said(val text: String, val undo: Book? = null, val id: Long = System.nanoTime(), val day: LocalDate? = null,
+                    /** Lines the words seem to close, waiting for «да» — Margin never closes your lines by itself. */
+                    val ask: List<Pair<String, ru.anjeib.margin.book.State>> = emptyList())
     private val _said = MutableStateFlow<Said?>(null)
     val said: StateFlow<Said?> = _said
     private var sayJob: Job? = null
@@ -135,11 +137,21 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         refreshCalendar()
     }
 
-    private fun say(text: String, undo: Book? = null, day: LocalDate? = null) {
-        val s = Said(text, undo, day = day)
+    private fun say(text: String, undo: Book? = null, day: LocalDate? = null, ask: List<Pair<String, ru.anjeib.margin.book.State>> = emptyList()) {
+        val s = Said(text, undo, day = day, ask = ask)
         _said.value = s
         sayJob?.cancel()
-        sayJob = viewModelScope.launch { delay(6000); if (_said.value?.id == s.id) _said.value = null }
+        // Long enough to read and reach «вернуть»; a question waits for its answer a good while longer.
+        sayJob = viewModelScope.launch { delay(if (ask.isEmpty()) 10_000 else 45_000); if (_said.value?.id == s.id) _said.value = null }
+    }
+
+    /** «да» to Margin's question: the lines it named are closed now (with a way back). */
+    fun confirm() {
+        val s = _said.value ?: return
+        if (s.ask.isEmpty()) return
+        val before = book.value
+        store.update { b -> s.ask.fold(b) { x, (id, st) -> if (x.line(id)?.open != true) x else if (st == ru.anjeib.margin.book.State.Dropped) x.drop(id) else x.toggle(id, today.value) } }
+        say(words.closed(s.ask.size), before)
     }
 
     fun hush() { _said.value = null }
@@ -223,13 +235,19 @@ class BookVm(app: Application) : AndroidViewModel(app) {
             val before = book.value
             store.update { b -> AiRead.merge(b, phone, reading, today.value) }
             val after = book.value
+            // What the words seem to close is asked, never done silently: «сделано: «Приедет Петров»? · да · нет».
+            val asking = AiRead.proposals(after, phone, reading)
             if (after != before) {
-                val done = (reading.done + reading.dropped).count { id -> before.line(id)?.open == true && after.line(id)?.open == false }
                 _fresh.value = after.lines.filter { l -> before.line(l.id) == null }.map { it.id }.toSet()
                 if (_fresh.value.isNotEmpty()) _written.value = _fresh.value.toList()
                 viewModelScope.launch { delay(1200); _fresh.value = emptySet() }
-                say(if (done > 0) words.markedDone(done) else words.reread, before)
-            } else if (_said.value?.text == words.rereading) hush()
+            }
+            when {
+                asking.isNotEmpty() -> say(words.closeAsk(asking.mapNotNull { (id, st) -> after.line(id)?.let { it.text to (st == ru.anjeib.margin.book.State.Dropped) } }),
+                    if (after != before) before else null, ask = asking)
+                after != before -> say(words.reread, before)
+                _said.value?.text == words.rereading -> hush()
+            }
         }
     }
 
@@ -256,6 +274,12 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     private val _asked = MutableStateFlow<Asked?>(null)
     val asked: StateFlow<Asked?> = _asked
     fun closeAnswer() { _asked.value = null }
+
+    /** The page's «на полях: …» opened over the field: its promises and what is left from before. */
+    fun explain(date: LocalDate) {
+        val b = book.value
+        _asked.value = Asked(words.weekday(date), Ask.margin(b, date, today.value))
+    }
 
     fun ask(q: String) {
         val a = Ask.answer(q, book.value, today.value)
