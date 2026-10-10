@@ -298,9 +298,14 @@ fun daySummary(plan: DayPlan, today: LocalDate): androidx.compose.ui.text.Annota
     val c = M.c
     val s = M.s
     val late = plan.deals.count { it.dueDate?.isBefore(today) == true }
+    // Owner, 10 окт: «с прошлых дней: 1» read as a riddle — say it in words, right after the count it belongs to:
+    // «7 дел, 2 просрочены · 1 встреча».
     return buildAnnotatedString {
-        val parts = listOfNotNull(plan.deals.size.takeIf { it > 0 }?.let { s.summaryDeals(it) }, plan.events.size.takeIf { it > 0 }?.let { s.summaryMeetings(it) })
-        append(if (parts.isEmpty()) s.freeDay else parts.joinToString("  ·  "))
-        if (late > 0) { append("  ·  "); withStyle(SpanStyle(color = c.accentText)) { append(s.lateLeft(late)) } }
+        if (plan.deals.isEmpty() && plan.events.isEmpty()) { append(s.freeDay); return@buildAnnotatedString }
+        if (plan.deals.isNotEmpty()) {
+            append(s.summaryDeals(plan.deals.size))
+            if (late > 0) { append(", "); withStyle(SpanStyle(color = c.accentText)) { append(s.lateOfDay(late)) } }
+        }
+        if (plan.events.isNotEmpty()) { if (plan.deals.isNotEmpty()) append("  ·  "); append(s.summaryMeetings(plan.events.size)) }
     }
 }

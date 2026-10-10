@@ -687,7 +687,6 @@ interface Strings {
     val swipeHintLine: String
     val clearWord: String
     fun dealOnHint(d: String): String
-    fun lateLeft(n: Int): String
     val allToToday: String
     val fieldWait: String
     val fieldPromised: String
@@ -794,6 +793,7 @@ interface Strings {
     val filesWord: String
     val allTab: String
     val laneHint: String
+    fun lateOfDay(n: Int): String
 }
 
 object Ru : Strings {
@@ -837,7 +837,7 @@ object Ru : Strings {
             "Контакты" to "люди и компании",
             "Архив" to "завершённые темы",
         )),
-        HelpSection("Сегодня", "Что делать сейчас. Слева на полях — сегодняшнее число, под названием дня — сводка: сколько дел и встреч, сколько осталось с прошлых дней. Ниже — разделы, каждый на своей панели; «когда» у строк — на полях слева от линии.", image = "today", pairs = listOf(
+        HelpSection("Сегодня", "Что делать сейчас. Слева на полях — сегодняшнее число, под названием дня — сводка: сколько дел, сколько из них просрочено, сколько встреч («7 дел, 2 просрочены · 1 встреча»). Ниже — разделы, каждый на своей панели; «когда» у строк — на полях слева от линии.", image = "today", pairs = listOf(
             "Обещания" to "кто кому что должен: ← ждём от человека, → обещали ему; на полях — срок. Просроченное, на ближайшие 3 дня и без даты; с дня срока — «напомнить». Нажатие на стрелку закрывает обещание",
             "Сегодня" to "дела и встречи по времени; на полях — час, у оставшихся с прошлых дней — «с 6 окт» терракотой; если их несколько — «всё на сегодня» у заголовка. Сделанное остаётся зачёркнутым; больше трёх — сворачивается в одну строку",
             "≡ Тема" to "под делом мелко — тема, к которой оно относится",
@@ -1611,7 +1611,6 @@ object Ru : Strings {
     override val swipeHintLine = "Дело вправо — готово, влево — отложить; удержать — меню"
     override val clearWord = "Очистить"
     override fun dealOnHint(d: String) = "Дело на $d…"
-    override fun lateLeft(n: Int) = "с прошлых дней: $n"
     override val allToToday = "всё на сегодня"
     override val fieldWait = "Ждём от…"
     override val fieldPromised = "Обещали…"
@@ -1718,6 +1717,7 @@ object Ru : Strings {
     override val filesWord = "Файлы"
     override val allTab = "Всё"
     override val laneHint = "Пишите прямо здесь — дата и время встанут на полях"
+    override fun lateOfDay(n: Int) = "$n " + pluralRu(n, "просрочено", "просрочены", "просрочено")
 }
 
 object En : Strings {
@@ -2452,7 +2452,6 @@ object En : Strings {
     override val swipeHintLine = "Swipe right — done, left — put off; hold — menu"
     override val clearWord = "Clear"
     override fun dealOnHint(d: String) = "A to-do for $d…"
-    override fun lateLeft(n: Int) = "left from past days: $n"
     override val allToToday = "all to today"
     override val fieldWait = "Waiting on…"
     override val fieldPromised = "Promised to…"
@@ -2559,6 +2558,7 @@ object En : Strings {
     override val filesWord = "Files"
     override val allTab = "All"
     override val laneHint = "Write right here — the date and time go on the margin"
+    override fun lateOfDay(n: Int) = "$n overdue"
 }
 
 /** Current language for code outside composition (dates, notifications, prompts). */

@@ -27,8 +27,8 @@ android {
         applicationId = "ru.margin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 35
-        versionName = "0.35"
+        versionCode = 36
+        versionName = "0.36"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild { cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_static") } }
@@ -122,6 +122,9 @@ dependencies {
     implementation("androidx.glance:glance-appwidget:1.1.1")
     // Optional fingerprint lock.
     implementation("androidx.biometric:biometric:1.1.0")
+    // biometric 1.1.0 pulls fragment 1.2.5, which rejects the request codes ≥ 65536 that activity 1.10 hands out:
+    // every permission request (microphone, calendar, notifications) crashed the release (Fable, 0.35). A current fragment fixes it.
+    implementation("androidx.fragment:fragment-ktx:1.8.6")
     // IMAP for letters forwarded to the user’s own address.
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
