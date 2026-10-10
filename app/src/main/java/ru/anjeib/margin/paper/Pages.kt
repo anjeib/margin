@@ -108,7 +108,8 @@ fun IndexPage(book: Book, today: LocalDate, onThread: (String) -> Unit, onPerson
         items(livePeople, key = { "p" + it.first.id }) { (p, pl, n) -> PersonRow(p, pl, n, w) { onPerson(p.name) } }
         if (people.size > livePeople.size) item { MarginLink(w.allPeople(people.size), onClick = onAllPeople) }
         item { Spacer(Modifier.padding(top = 14.dp)) }
-        item { IndexRow(emptyList(), w.weekTitle, w.weekSub, onWeek) }
+        // The calendar: the month and the days ahead (the week spread stays a tap away from the month).
+        item { IndexRow(emptyList(), w.calendarTitle, w.calendarSub, onWeek) }
         item { IndexRow(listOf(Note(later.size.toString(), Tone.Quiet)), w.laterTitle, w.laterLine, onLater) }
         // Everything attached, in one place — only once there is something to show.
         val files = book.lines.sumOf { it.files.size }

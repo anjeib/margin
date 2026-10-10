@@ -83,6 +83,9 @@ fun MarginRow(
     indent: Dp = 0.dp,
     /** The next empty line: its mark in pencil until something is written. */
     pale: Boolean = false,
+    /** In place of the notes, when they are to be touched (a line's sheet): what stands on the side margin and under the words. */
+    side: (@Composable () -> Unit)? = null,
+    below: (@Composable () -> Unit)? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
     val c = P.c
@@ -90,16 +93,16 @@ fun MarginRow(
         .then(if (onOpen != null || onLong != null) Modifier.combinedClickable(onClick = { onOpen?.invoke() }, onLongClick = onLong) else Modifier)) {
         // The side margin keeps «when»; who, where, the thread and the rest are written under the words —
         // the margin stays light and the line reads as one thing.
-        val side = notes.filter { !it.under }
-        val under = notes.filter { it.under }
+        val sideNotes = notes.filter { !it.under }
+        val underNotes = notes.filter { it.under }
         Row(Modifier.fillMaxWidth().padding(end = Grid.right)) {
             Column(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp, top = 15.dp, bottom = 8.dp), horizontalAlignment = Alignment.End) {
-                side.forEach { NoteText(it) }
+                if (side != null) side() else sideNotes.forEach { NoteText(it) }
             }
             Spacer(Modifier.width(Grid.text - Grid.margin + Grid.noteGap + indent))
             Column(Modifier.weight(1f).padding(top = 12.dp, bottom = 12.dp)) {
                 Row(Modifier.fillMaxWidth(), content = content)
-                if (under.isNotEmpty()) UnderNotes(under, Modifier.padding(top = 2.dp))
+                if (below != null) below() else if (underNotes.isNotEmpty()) UnderNotes(underNotes, Modifier.padding(top = 2.dp))
             }
         }
         // The mark sits on the rule; its touch is the rule's strip across the whole line.
@@ -236,7 +239,8 @@ fun Mark(kind: MarkKind, modifier: Modifier = Modifier, size: Dp = Grid.node, pa
 fun PageHead(marginTop: String, marginBottom: String?, title: String, line: String?, onMargin: (() -> Unit)? = null, onLine: (() -> Unit)? = null,
              lineColor: Color = P.c.graphite) {
     val c = P.c
-    Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 10.dp, end = Grid.right)) {
+    // Right under the top line: the title is the page's first line, not a poster with air above it.
+    Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 8.dp, end = Grid.right)) {
         Box(Modifier.width(Grid.margin - Grid.noteGap).then(if (onMargin != null) Modifier.combinedClickableCompat(onMargin) else Modifier),
             contentAlignment = Alignment.TopEnd) {
             Column(horizontalAlignment = Alignment.End) {

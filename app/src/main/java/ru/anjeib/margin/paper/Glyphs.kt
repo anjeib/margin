@@ -86,6 +86,18 @@ fun ClockGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
     drawPath(Path().apply { moveTo(w * 0.5f, h * 0.28f); lineTo(w * 0.5f, h * 0.5f); lineTo(w * 0.66f, h * 0.6f) }, color, style = stroke(1.5.dp))
 }
 
+/** The calendar: a page with two rings on top and a dot where a day is. */
+@Composable
+fun CalendarGlyph(color: Color, size: Dp = 22.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawRoundRect(color, topLeft = Offset(w * 0.16f, h * 0.22f), size = Size(w * 0.68f, h * 0.62f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.08f), style = stroke(1.5.dp))
+    drawLine(color, Offset(w * 0.16f, h * 0.4f), Offset(w * 0.84f, h * 0.4f), 1.5.dp.toPx())
+    drawLine(color, Offset(w * 0.36f, h * 0.12f), Offset(w * 0.36f, h * 0.3f), 1.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+    drawLine(color, Offset(w * 0.64f, h * 0.12f), Offset(w * 0.64f, h * 0.3f), 1.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+    drawCircle(color, radius = w * 0.06f, center = Offset(w * 0.64f, h * 0.64f))
+}
+
 /** Repeat: the margin's ↻ — an arc that comes back with its arrow. */
 @Composable
 fun RepeatGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {

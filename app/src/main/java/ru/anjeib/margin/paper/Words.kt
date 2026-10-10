@@ -38,7 +38,7 @@ interface Words {
     fun moveNo(n: Int): String
     fun ask(what: String): String
     fun summary(s: Summary): String
-    /** Promises in words, not arrows: «вы обещали 2 · ждёте 1». */
+    /** Promises in words, not arrows: «вы обещали 2 · вам обещали 1». */
     fun owes(promised: Int, waited: Int): String?
     val composerHint: String
     fun writtenOn(d: LocalDate?, today: LocalDate): String
@@ -61,6 +61,7 @@ interface Words {
     val turnDay: String
     val a11yIndex: String
     val a11ySearch: String
+    val a11yCalendar: String
     val a11yAttach: String
     val a11yMic: String
     val a11ySend: String
@@ -194,6 +195,12 @@ interface Words {
     fun stepsAdded(n: Int): String
     val whole: String
     val longNote: String
+    val calendarTitle: String
+    val calendarSub: String
+    fun calendarLine(open: Int, events: Int): String
+    val calendarEmpty: String
+    fun dayAhead(d: LocalDate, today: LocalDate): String
+    fun laterLink(n: Int): String
     val welcomeLine: String
     /** The title page's rows: the note on the margin, the mark, the words. */
     fun welcomeRows(): List<Triple<String?, String, String>>
@@ -335,13 +342,19 @@ object WordsRu : Words {
     override fun moveNo(n: Int) = "$n " + plural(n, "перенос", "переноса", "переносов")
     override fun ask(what: String) = when (what) { "when" -> "когда?"; "who" -> "кто это?"; "thread" -> "в нить?"; else -> "?" }
     override fun owes(promised: Int, waited: Int) = listOfNotNull(
-        promised.takeIf { it > 0 }?.let { "вы обещали $it" }, waited.takeIf { it > 0 }?.let { "ждёте $it" },
+        promised.takeIf { it > 0 }?.let { "вы обещали $it" }, waited.takeIf { it > 0 }?.let { "вам обещали $it" },
     ).joinToString(" · ").ifEmpty { null }
+    // The page in a sentence, with names: «2 с прошлых дней · вы обещали Лёше · вам обещали Маша и Олег».
     override fun summary(s: Summary) = listOfNotNull(
-        owes(s.promised, s.waited),
-        s.questions.takeIf { it > 0 }?.let { "$it " + plural(it, "вопрос", "вопроса", "вопросов") },
         s.tails.takeIf { it > 0 }?.let { "$it с прошлых дней" },
-    ).joinToString(" · ").let { if (it.isEmpty()) "" else "на полях: $it" }
+        s.to.takeIf { it.isNotEmpty() }?.let { "вы обещали " + names(it.map { n -> n.dative() }) },
+        s.from.takeIf { it.isNotEmpty() }?.let { "вам обещали " + names(it) },
+        s.questions.takeIf { it > 0 }?.let { "$it " + plural(it, "вопрос", "вопроса", "вопросов") + " от Margin" },
+    ).joinToString(" · ")
+    private fun names(n: List<String>) = when (n.size) {
+        1 -> n[0]; 2 -> n[0] + " и " + n[1]
+        else -> n.take(2).joinToString(", ") + " и ещё " + (n.size - 2)
+    }
     override val composerHint = "Пишите как думаете…"
     override fun writtenOn(d: LocalDate?, today: LocalDate) = "записано " + (d?.let { "на " + near(it, today) } ?: "на потом")
     override fun writtenN(n: Int) = "записано $n " + plural(n, "строка", "строки", "строк")
@@ -363,6 +376,7 @@ object WordsRu : Words {
     override val turnDay = "перелистнуть день ›"
     override val a11yIndex = "Оглавление"
     override val a11ySearch = "Поиск"
+    override val a11yCalendar = "Календарь"
     override val a11yAttach = "Прикрепить"
     override val a11yMic = "Надиктовать"
     override val a11ySend = "Записать"
@@ -397,7 +411,7 @@ object WordsRu : Words {
     override val cancel = "Отмена"
     override val noRepeat = "не повторять"
     override val whoHint = "Имя"
-    override val dirFrom = "← ждёте от"
+    override val dirFrom = "← обещали вам"
     override val dirTo = "→ вы обещали"
     override val dirWith = "вместе"
     override val newThread = "Новая нить…"
@@ -408,7 +422,7 @@ object WordsRu : Words {
     override val noThreads = "Нить появится, когда напишете «#Название» или сделаете нитью строку."
     override fun threadLine(st: ru.anjeib.margin.book.ThreadStats) = listOfNotNull(
         st.open.takeIf { it > 0 }?.let { "$it " + plural(it, "дело", "дела", "дел") + " открыто" },
-        st.waiting.takeIf { it > 0 }?.let { "ждёте $it" },
+        st.waiting.takeIf { it > 0 }?.let { "вам обещали $it" },
         st.notes.takeIf { it > 0 }?.let { "$it " + plural(it, "запись", "записи", "записей") },
         st.files.takeIf { it > 0 }?.let { "$it " + plural(it, "файл", "файла", "файлов") },
     ).joinToString(" · ")
@@ -558,6 +572,17 @@ object WordsRu : Words {
     override fun stepsAdded(n: Int) = "$n " + plural(n, "шаг", "шага", "шагов") + " под записью"
     override val whole = "целиком ›"
     override val longNote = "одной записью"
+    override val calendarTitle = "Календарь"
+    override val calendarSub = "месяц и дни вперёд — что на какой день"
+    override fun calendarLine(open: Int, events: Int) = listOfNotNull(
+        open.takeIf { it > 0 }?.let { "$it " + plural(it, "дело", "дела", "дел") }, events.takeIf { it > 0 }?.let { "$it " + plural(it, "встреча", "встречи", "встреч") },
+    ).joinToString(" · ").let { if (it.isEmpty()) "на неделе пока свободно" else "на неделе: $it" }
+    override val calendarEmpty = "Впереди пока пусто. Напишите «в пятницу …» — строка встанет на свой день и будет здесь."
+    override fun dayAhead(d: LocalDate, today: LocalDate) = when (d) {
+        today -> "сегодня"; today.plusDays(1) -> "завтра"; today.plusDays(2) -> "послезавтра"
+        else -> if (d.monthValue != today.monthValue && d.dayOfMonth <= 7) months[d.monthValue - 1].lowercase() else ""
+    }
+    override fun laterLink(n: Int) = "потом · $n ›"
     override val welcomeLine = "ежедневник, который пишет на полях"
     override fun welcomeRows() = listOf(
         Triple("Margin", "none", "На полях Margin пишет когда, а под вашими словами — кто и к чему относится."),
@@ -627,7 +652,7 @@ object WordsRu : Words {
     override val weekSub = "семь дней на одной странице"
     override val weekLink = "неделя ›"
     override val propWhoTo = "вы обещали"
-    override val propWhoFrom = "ждёте"
+    override val propWhoFrom = "обещали вам"
     override val offerToday = "› сегодня"
     override val threadClosed = "нить закрыта"
     override val threadOpened = "нить открыта снова"
@@ -693,13 +718,18 @@ object WordsEn : Words {
     override fun moveNo(n: Int) = "moved ${n}×"
     override fun ask(what: String) = when (what) { "when" -> "when?"; "who" -> "who?"; "thread" -> "a thread?"; else -> "?" }
     override fun owes(promised: Int, waited: Int) = listOfNotNull(
-        promised.takeIf { it > 0 }?.let { "you promised $it" }, waited.takeIf { it > 0 }?.let { "waiting for $it" },
+        promised.takeIf { it > 0 }?.let { "you promised $it" }, waited.takeIf { it > 0 }?.let { "promised you $it" },
     ).joinToString(" · ").ifEmpty { null }
     override fun summary(s: Summary) = listOfNotNull(
-        owes(s.promised, s.waited),
-        s.questions.takeIf { it > 0 }?.let { "$it question" + if (it == 1) "" else "s" },
         s.tails.takeIf { it > 0 }?.let { "$it left over" },
-    ).joinToString(" · ").let { if (it.isEmpty()) "" else "on the margin: $it" }
+        s.to.takeIf { it.isNotEmpty() }?.let { "you promised " + names(it) },
+        s.from.takeIf { it.isNotEmpty() }?.let { names(it) + " promised you" },
+        s.questions.takeIf { it > 0 }?.let { "$it question" + (if (it == 1) "" else "s") + " from Margin" },
+    ).joinToString(" · ")
+    private fun names(n: List<String>) = when (n.size) {
+        1 -> n[0]; 2 -> n[0] + " and " + n[1]
+        else -> n.take(2).joinToString(", ") + " and ${n.size - 2} more"
+    }
     override val composerHint = "Write as you think…"
     override fun writtenOn(d: LocalDate?, today: LocalDate) = "written for " + (d?.let { near(it, today) } ?: "later")
     override fun writtenN(n: Int) = "$n line" + if (n == 1) " written" else "s written"
@@ -721,6 +751,7 @@ object WordsEn : Words {
     override val turnDay = "turn the page ›"
     override val a11yIndex = "Contents"
     override val a11ySearch = "Search"
+    override val a11yCalendar = "Calendar"
     override val a11yAttach = "Attach"
     override val a11yMic = "Dictate"
     override val a11ySend = "Write"
@@ -766,7 +797,7 @@ object WordsEn : Words {
     override val noThreads = "A thread appears when you write «#Name» or turn a line into one."
     override fun threadLine(st: ru.anjeib.margin.book.ThreadStats) = listOfNotNull(
         st.open.takeIf { it > 0 }?.let { "$it open" },
-        st.waiting.takeIf { it > 0 }?.let { "waiting $it" },
+        st.waiting.takeIf { it > 0 }?.let { "promised you $it" },
         st.notes.takeIf { it > 0 }?.let { "$it note" + if (it == 1) "" else "s" },
         st.files.takeIf { it > 0 }?.let { "$it file" + if (it == 1) "" else "s" },
     ).joinToString(" · ")
@@ -914,6 +945,17 @@ object WordsEn : Words {
     override fun stepsAdded(n: Int) = "$n step" + (if (n == 1) "" else "s") + " under the note"
     override val whole = "read in full ›"
     override val longNote = "one note"
+    override val calendarTitle = "Calendar"
+    override val calendarSub = "the month and the days ahead — what is on which day"
+    override fun calendarLine(open: Int, events: Int) = listOfNotNull(
+        open.takeIf { it > 0 }?.let { "$it to-do" + if (it == 1) "" else "s" }, events.takeIf { it > 0 }?.let { "$it meeting" + if (it == 1) "" else "s" },
+    ).joinToString(" · ").let { if (it.isEmpty()) "the week ahead is free" else "the week ahead: $it" }
+    override val calendarEmpty = "Nothing ahead yet. Write «on Friday …» — the line goes to its day and shows here."
+    override fun dayAhead(d: LocalDate, today: LocalDate) = when (d) {
+        today -> "today"; today.plusDays(1) -> "tomorrow"
+        else -> if (d.monthValue != today.monthValue && d.dayOfMonth <= 7) d.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH) else ""
+    }
+    override fun laterLink(n: Int) = "later · $n ›"
     override val welcomeLine = "a planner that writes in the margin"
     override fun welcomeRows() = listOf(
         Triple("Margin", "none", "On the margin Margin writes when; under your words — who and what it belongs to."),
@@ -983,7 +1025,7 @@ object WordsEn : Words {
     override val weekSub = "seven days on one page"
     override val weekLink = "week ›"
     override val propWhoTo = "you promised"
-    override val propWhoFrom = "waiting for"
+    override val propWhoFrom = "promised you"
     override val offerToday = "› today"
     override val threadClosed = "thread closed"
     override val threadOpened = "thread open again"

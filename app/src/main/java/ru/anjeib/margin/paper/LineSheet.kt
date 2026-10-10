@@ -120,12 +120,15 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
             // A sheet of paper, taller than what is written: a tap on its empty part goes to the next line.
             .pointerInput(id) { detectTapGestures { runCatching { focus.requestFocus() } } }
             .padding(bottom = 16.dp)) {
-            // What Margin knows, on the margin, whole: the values only, no names for them.
-            // A day, an hour, a repeat, a place: a tap changes it. A person, a thread: a link to their page; someone you
-            // wait for also gets a reminder, ready to send.
+            // What Margin knows about the line, written as on its page: «when» on the margin, the rest under the words —
+            // only here every value is touched: a day, an hour, a repeat, a place change; a person, a thread lead to
+            // their page; someone you wait for also gets a reminder, ready to send.
             var whoMenu by remember { mutableStateOf<String?>(null) }
-            val values = buildList<Pair<Note, () -> Unit>> {
+            val side = buildList<Pair<Note, () -> Unit>> {
                 whenOf(l, today, w)?.split("\n")?.forEach { add(Note(it, Tone.Quiet) to { ask = "when" }) }
+                notesOf(l, null, today, book, w, Seen.Sheet).filter { it.tone == Tone.Attention && !it.under }.forEach { add(it to { ask = "when" }) }
+            }
+            val under = buildList<Pair<Note, () -> Unit>> {
                 l.repeat?.let { add(Note(w.repeat(it), Tone.Quiet) to { ask = "repeat" }) }
                 l.who.sortedBy { it.dir.ordinal }.forEach { who ->
                     add(Note(when (who.dir) { Dir.To -> w.to(who.name); Dir.From -> w.from(who.name); Dir.With -> w.with(who.name) }, Tone.Link) to {
@@ -134,58 +137,62 @@ fun LineSheet(id: String, page: LocalDate, vm: BookVm, book: Book, today: LocalD
                 }
                 l.place?.let { add(Note(it, Tone.Link) to { ask = "place" }) }
                 book.thread(l.threadId)?.let { t -> add(Note(w.threadPrefix + t.title, Tone.Link) to { commit(); onThread(t.id) }) }
-                notesOf(l, null, today, book, w, Seen.Sheet).filter { it.tone == Tone.Attention }.forEach { add(it to {}) }
+                notesOf(l, null, today, book, w, Seen.Sheet).filter { it.tone == Tone.Attention && it.under }.forEach { n ->
+                    add(n to { ask = if (n.text == w.ask("who")) "who" else if (n.text == w.ask("thread")) "thread" else null })
+                }
             }
-            // On top, one band like a menu: on the margin every value Margin knows; on the right the signs a line can have.
+            // On top — only the signs a line can have, like a menu: the ones it has in petrol, the bin at the end.
             // Where it goes next is under the signs themselves: the day under the clock, «не делаем» under the bin.
-            Row(Modifier.fillMaxWidth()) {
-                Column(Modifier.width(Grid.margin - Grid.noteGap).padding(start = 4.dp), horizontalAlignment = Alignment.End) {
-                    values.forEach { (n, go) ->
-                        Box(Modifier.fillMaxWidth().heightIn(min = 32.dp).clip(RoundedCornerShape(6.dp)).clickable(onClick = go),
-                            contentAlignment = Alignment.CenterEnd) {
-                            NoteText(n)
-                            val name = l.who.firstOrNull { it.dir == Dir.From && n.text == w.from(it.name) }?.name
-                            if (name != null) DropdownMenu(whoMenu == name, { whoMenu = null }, containerColor = c.sheet) {
-                                SheetItem(w.remindWho(name)) {
-                                    whoMenu = null
-                                    val i = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                                        .putExtra(android.content.Intent.EXTRA_TEXT, w.remindText(name, l.text).let { t ->
-                                            // With the day it was promised for, if there is one: «… — к ср.»
-                                            l.lastDay()?.let { d -> t.removeSuffix(".") + " — " + (if (w.ru) "к " else "by ") + w.near(d, today) + "." } ?: t })
-                                    runCatching { ctx.startActivity(android.content.Intent.createChooser(i, w.remind).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            Row(Modifier.fillMaxWidth().padding(start = Grid.text - 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (l.kind != Kind.Note || l.day != null) SheetSign(w.propWhen, l.day != null || l.time != null, { ask = "when" }) { ClockGlyph(it) }
+                SheetSign(w.propRepeat, l.repeat != null, { ask = "repeat" }) { RepeatGlyph(it) }
+                SheetSign(w.propWho, l.who.isNotEmpty(), { ask = "who" }) { PersonGlyph(it) }
+                SheetSign(w.propPlace, l.place != null, { ask = "place" }) { PinGlyph(it) }
+                SheetSign(w.propThread, l.threadId != null, { ask = "thread" }) { ThreadGlyph(it) }
+                SheetSign(w.propFile, l.files.isNotEmpty(), { pickFile.launch(arrayOf("*/*")) }) { ClipGlyph(it) }
+                Spacer(Modifier.weight(1f))
+                // The bin is a choice, not a deed: a matter can be let go and stay in the notebook, or go for good.
+                var bin by remember { mutableStateOf(false) }
+                Box {
+                    SheetSign(w.offerDelete, false, { if (l.kind == Kind.Todo) bin = true else { vm.delete(id); onClose() } }, tint = c.red) { BinGlyph(it) }
+                    DropdownMenu(bin, { bin = false }, containerColor = c.sheet) {
+                        if (l.state == State.Dropped) SheetItem(w.backToWork) { bin = false; vm.edit { it.reopen(id) } }
+                        else if (l.state == State.Open) SheetItem(w.dropped) { bin = false; vm.drop(id); onClose() }
+                        SheetItem(w.deleteForGood, danger = true) { bin = false; vm.delete(id); onClose() }
+                    }
+                }
+            }
+            // A hairline from the rule: above — what can be done; below — the line and what follows it, one stream, as on a page.
+            Box(Modifier.padding(start = Grid.margin, top = 2.dp).fillMaxWidth().height(1.dp).background(c.hairline))
+            MarginRow(notes = emptyList(), mark = markOf(l), markLabel = w.a11yMark(l.state == State.Done),
+                onMark = if (l.kind == Kind.Todo) ({ vm.toggle(id) }) else null,
+                side = {
+                    side.forEach { (n, go) ->
+                        Box(Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = go).padding(start = 6.dp, bottom = 4.dp), contentAlignment = Alignment.CenterEnd) { NoteText(n) }
+                    }
+                },
+                below = if (under.isEmpty()) null else ({
+                    FlowRow(Modifier.fillMaxWidth().padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                        under.forEachIndexed { i, (n, go) ->
+                            if (i > 0) Text("  ·  ", style = Voice.note.copy(color = c.pencil), modifier = Modifier.padding(vertical = 6.dp))
+                            Box {
+                                UnderNotes(listOf(n), Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = go).padding(vertical = 6.dp))
+                                val name = l.who.firstOrNull { it.dir == Dir.From && n.text == w.from(it.name) }?.name
+                                if (name != null) DropdownMenu(whoMenu == name, { whoMenu = null }, containerColor = c.sheet) {
+                                    SheetItem(w.remindWho(name)) {
+                                        whoMenu = null
+                                        val i2 = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                                            .putExtra(android.content.Intent.EXTRA_TEXT, w.remindText(name, l.text).let { t ->
+                                                // With the day it was promised for, if there is one: «… — к ср.»
+                                                l.lastDay()?.let { d -> t.removeSuffix(".") + " — " + (if (w.ru) "к " else "by ") + w.near(d, today) + "." } ?: t })
+                                        runCatching { ctx.startActivity(android.content.Intent.createChooser(i2, w.remind).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                    }
+                                    SheetItem("$name ›") { whoMenu = null; commit(); onPerson(name) }
                                 }
-                                SheetItem("$name ›") { whoMenu = null; commit(); onPerson(name) }
                             }
                         }
                     }
-                }
-                Spacer(Modifier.width(Grid.text - Grid.margin + Grid.noteGap - 14.dp))
-                // What a line can have, as the signs it gets on the margin: the ones it has in petrol. The bin at the end.
-                Row(Modifier.weight(1f).padding(end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (l.kind != Kind.Note || l.day != null) SheetSign(w.propWhen, l.day != null || l.time != null, { ask = "when" }) { ClockGlyph(it) }
-                    SheetSign(w.propRepeat, l.repeat != null, { ask = "repeat" }) { RepeatGlyph(it) }
-                    SheetSign(w.propWho, l.who.isNotEmpty(), { ask = "who" }) { PersonGlyph(it) }
-                    SheetSign(w.propPlace, l.place != null, { ask = "place" }) { PinGlyph(it) }
-                    SheetSign(w.propThread, l.threadId != null, { ask = "thread" }) { ThreadGlyph(it) }
-                    SheetSign(w.propFile, l.files.isNotEmpty(), { pickFile.launch(arrayOf("*/*")) }) { ClipGlyph(it) }
-                    Spacer(Modifier.weight(1f))
-                    // The bin is a choice, not a deed: a matter can be let go and stay in the notebook, or go for good.
-                    var bin by remember { mutableStateOf(false) }
-                    Box {
-                        SheetSign(w.offerDelete, false, { if (l.kind == Kind.Todo) bin = true else { vm.delete(id); onClose() } }, tint = c.red) { BinGlyph(it) }
-                        DropdownMenu(bin, { bin = false }, containerColor = c.sheet) {
-                            if (l.state == State.Dropped) SheetItem(w.backToWork) { bin = false; vm.edit { it.reopen(id) } }
-                            else if (l.state == State.Open) SheetItem(w.dropped) { bin = false; vm.drop(id); onClose() }
-                            SheetItem(w.deleteForGood, danger = true) { bin = false; vm.delete(id); onClose() }
-                        }
-                    }
-                }
-            }
-            // A hairline from the rule: above — what Margin knows and what can be done; below — the line and what follows it,
-            // one stream, as on a page.
-            Box(Modifier.padding(start = Grid.margin, top = 6.dp, bottom = 2.dp).fillMaxWidth().height(1.dp).background(c.hairline))
-            MarginRow(notes = emptyList(), mark = markOf(l), markLabel = w.a11yMark(l.state == State.Done),
-                onMark = if (l.kind == Kind.Todo) ({ vm.toggle(id) }) else null) {
+                })) {
                 BasicTextField(text, { text = it }, textStyle = Voice.words.copy(color = if (l.state == State.Open) c.ink else c.graphite,
                     textDecoration = if (l.state != State.Open && l.kind == Kind.Todo) TextDecoration.LineThrough else null),
                     cursorBrush = SolidColor(c.link), modifier = Modifier.weight(1f))

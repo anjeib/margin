@@ -31,6 +31,8 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -79,6 +81,11 @@ private fun Notebook(vm: BookVm) {
     val fresh by vm.fresh.collectAsState()
     val stamping by vm.stamping.collectAsState()
     val cal by vm.calendar.collectAsState()
+    // Lines just sent to another day: the calendar sign pulses; opened, it shows them written in on their day.
+    val flight by vm.flight.collectAsState()
+    var flown by remember { mutableStateOf<BookVm.Flight?>(null) }
+    var calendarFocus by remember { mutableStateOf<BookVm.Flight?>(null) }
+    LaunchedEffect(flight?.id) { flight?.let { flown = it; vm.landed(it) } }
     val pager = rememberPagerState(initialPage = MIDDLE) { MIDDLE * 2 }
     val scope = rememberCoroutineScope()
     fun dateOf(i: Int): LocalDate = today.plusDays((i - MIDDLE).toLong())
@@ -113,6 +120,8 @@ private fun Notebook(vm: BookVm) {
                 awayFromToday = route == null && !ritual && current != today,
                 onToday = { go(today) },
                 onSearch = if (route != "search") ({ push("search") }) else null,
+                onCalendar = if (route?.startsWith("calendar") != true) ({ calendarFocus = flown; flown = null; push("calendar") }) else null,
+                pulse = flown?.id,
             )
             Box(Modifier.weight(1f)) {
                 AnimatedContent(targetState = route to ritual, transitionSpec = { fadeIn(tween(180, delayMillis = 100)) togetherWith fadeOut(tween(100)) }, label = "page") { (r, rit) ->
@@ -137,10 +146,12 @@ private fun Notebook(vm: BookVm) {
                         }
                         r == "index" -> IndexPage(book, today, onThread = { push("thread:$it") }, onPerson = { push("person:$it") }, onLater = { push("later") },
                             onSettings = { push("settings") }, onHelp = { push("help") }, onSearch = { push("search") },
-                            onFeedback = { sendFeedback(ctx, w) }, onWeek = { push("week:$current") },
+                            onFeedback = { sendFeedback(ctx, w) }, onWeek = { calendarFocus = null; push("calendar") },
                             onAllThreads = { push("threads") }, onAllPeople = { push("people") }, onFiles = { push("files") })
                         r == "threads" -> AllThreadsPage(book, today, onThread = { push("thread:$it") })
                         r == "people" -> AddressBookPage(book, onPerson = { push("person:$it") })
+                        r == "calendar" -> CalendarPage(book, today, calendarFocus, onDay = { d -> stack = emptyList(); go(d) }, onMark = vm::toggle,
+                            onOpen = onOpen, onLater = { push("later") }, bottom = 24.dp)
                         r == "files" -> FilesPage(book, today, onOpen = onOpen, onRemove = vm::removeFile)
                         r.startsWith("week:") -> WeekPage(book, today, LocalDate.parse(r.removePrefix("week:")), vm::toggle, onOpen,
                             onDay = { d -> stack = emptyList(); go(d) }, bottom = 24.dp)
@@ -209,10 +220,11 @@ private fun openCalendar(ctx: android.content.Context, l: ru.anjeib.margin.book.
 
 /** The line above every page: the index (or back) on the margin, the way to today, search at the right. */
 @Composable
-private fun TopLine(back: Boolean, onBack: () -> Unit, onIndex: () -> Unit, awayFromToday: Boolean, onToday: () -> Unit, onSearch: (() -> Unit)?) {
+private fun TopLine(back: Boolean, onBack: () -> Unit, onIndex: () -> Unit, awayFromToday: Boolean, onToday: () -> Unit, onSearch: (() -> Unit)?,
+                    onCalendar: (() -> Unit)? = null, pulse: Long? = null) {
     val c = P.c
     val w = P.w
-    Row(Modifier.fillMaxWidth().height(52.dp).rule(c.rule).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(46.dp).rule(c.rule).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(Grid.margin - Grid.noteGap), contentAlignment = Alignment.Center) {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable { if (back) onBack() else onIndex() }
                 .semantics { contentDescription = if (back) w.back else w.a11yIndex }, contentAlignment = Alignment.Center) {
@@ -223,6 +235,23 @@ private fun TopLine(back: Boolean, onBack: () -> Unit, onIndex: () -> Unit, away
         Box(Modifier.weight(1f)) {
             if (awayFromToday) Text(w.toToday, style = Voice.reply.copy(color = c.link),
                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onToday).padding(vertical = 12.dp))
+        }
+        // The calendar: where lines written for other days are. A line just sent there makes it pulse twice in petrol.
+        if (onCalendar != null) {
+            val beat = remember { androidx.compose.animation.core.Animatable(0f) }
+            LaunchedEffect(pulse) {
+                // Opened (or nothing new): the sign is plain ink again, even if it was mid-beat.
+                if (pulse == null) { beat.snapTo(0f); return@LaunchedEffect }
+                repeat(2) {
+                    beat.animateTo(1f, androidx.compose.animation.core.tween(220))
+                    beat.animateTo(0.35f, androidx.compose.animation.core.tween(260))
+                }
+                kotlinx.coroutines.delay(1400)
+                beat.animateTo(0f, androidx.compose.animation.core.tween(500))
+            }
+            val tint = androidx.compose.ui.graphics.lerp(c.ink, c.link, (beat.value * 2.5f).coerceAtMost(1f))
+            Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onCalendar).semantics { contentDescription = w.a11yCalendar }
+                .graphicsLayer { val k = 1f + 0.18f * beat.value; scaleX = k; scaleY = k }, contentAlignment = Alignment.Center) { CalendarGlyph(tint, 22.dp) }
         }
         if (onSearch != null) Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onSearch).semantics { contentDescription = w.a11ySearch },
             contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Search, null, tint = c.ink) }

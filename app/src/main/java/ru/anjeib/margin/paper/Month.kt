@@ -67,22 +67,32 @@ fun MonthSheet(book: Book, today: LocalDate, shown: LocalDate, onPick: (LocalDat
                 Text("›", style = Voice.section.copy(color = c.graphite), modifier = Modifier.clip(CircleShape).clickable { ym = ym.plusMonths(1) }
                     .semantics { contentDescription = "›" }.padding(horizontal = 16.dp, vertical = 8.dp))
             }
-            Row(Modifier.fillMaxWidth().padding(top = 10.dp)) {
-                (1..7).forEach { d ->
-                    Text(w.dow(LocalDate.of(2024, 1, d)), style = Voice.small.copy(color = if (d >= 6) c.pencil else c.graphite, textAlign = TextAlign.Center),
-                        modifier = Modifier.weight(1f))
-                }
+            MonthGrid(book, today, ym, shown, onPick)
+        }
+    }
+}
+
+/** The days of a month under their weekday letters; each day with its dots. A tap picks the day. */
+@Composable
+fun MonthGrid(book: Book, today: LocalDate, ym: YearMonth, selected: LocalDate?, onPick: (LocalDate) -> Unit, modifier: Modifier = Modifier) {
+    val c = P.c
+    val w = P.w
+    Column(modifier) {
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+            (1..7).forEach { d ->
+                Text(w.dow(LocalDate.of(2024, 1, d)), style = Voice.small.copy(color = if (d >= 6) c.pencil else c.graphite, textAlign = TextAlign.Center),
+                    modifier = Modifier.weight(1f))
             }
-            val first = ym.atDay(1)
-            val lead = first.dayOfWeek.value - 1
-            val days = ym.lengthOfMonth()
-            val cells = (0 until ((lead + days + 6) / 7) * 7).map { i -> (i - lead + 1).takeIf { it in 1..days }?.let { ym.atDay(it) } }
-            cells.chunked(7).forEach { week ->
-                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    week.forEach { d ->
-                        Box(Modifier.weight(1f).aspectRatio(0.9f), contentAlignment = Alignment.TopCenter) {
-                            if (d != null) DayCell(book, d, today, d == shown) { onPick(d) }
-                        }
+        }
+        val first = ym.atDay(1)
+        val lead = first.dayOfWeek.value - 1
+        val days = ym.lengthOfMonth()
+        val cells = (0 until ((lead + days + 6) / 7) * 7).map { i -> (i - lead + 1).takeIf { it in 1..days }?.let { ym.atDay(it) } }
+        cells.chunked(7).forEach { week ->
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                week.forEach { d ->
+                    Box(Modifier.weight(1f).aspectRatio(0.9f), contentAlignment = Alignment.TopCenter) {
+                        if (d != null) DayCell(book, d, today, d == selected) { onPick(d) }
                     }
                 }
             }

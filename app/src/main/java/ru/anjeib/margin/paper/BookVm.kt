@@ -52,6 +52,12 @@ class BookVm(app: Application) : AndroidViewModel(app) {
     val today: StateFlow<LocalDate> = _today
 
     /** Margin's sentence over the field; [undo] puts the notebook back as it was before the change. */
+    /** Lines that just left the page for another day: the calendar sign at the top pulses, and shows them when opened. */
+    data class Flight(val day: LocalDate, val ids: List<String>, val id: Long = System.nanoTime())
+    private val _flight = MutableStateFlow<Flight?>(null)
+    val flight: StateFlow<Flight?> = _flight
+    fun landed(f: Flight) { if (_flight.value?.id == f.id) _flight.value = null }
+
     data class Said(val text: String, val undo: Book? = null, val id: Long = System.nanoTime(), val day: LocalDate? = null,
                     /** Lines the words seem to close, waiting for «да» — Margin never closes your lines by itself. */
                     val ask: List<Pair<String, ru.anjeib.margin.book.State>> = emptyList(),
@@ -219,6 +225,7 @@ class BookVm(app: Application) : AndroidViewModel(app) {
         val away = if (here) emptyList() else lines.filter { if (t.later) it.date != null else it.date != page }
         // A long note with things to do in it: Margin offers to make them its steps — it does not take them out by itself.
         val steps = lines.singleOrNull()?.takeIf { it.kind == ru.anjeib.margin.book.Kind.Note && Read.isLongNote(it.text) }?.let { Read.stepsIn(it.text) }.orEmpty()
+        away.firstOrNull()?.date?.let { d -> _flight.value = Flight(d, away.filter { it.date == d }.map { it.id }) }
         when {
             steps.isNotEmpty() -> say(words.stepsInNote(steps.size), before, steps = steps, stepsOf = lines.single().id)
             lines.size > 1 -> say(words.writtenN(lines.size), before)
@@ -262,6 +269,8 @@ class BookVm(app: Application) : AndroidViewModel(app) {
             }
         }
         val now = book.value.line(id)
+        // Moved to another day: it flies to the calendar like a new line would.
+        if (p.what == What.Move && now?.date != null && now.date != l.date) _flight.value = Flight(now.date!!, listOf(id))
         say(when (p.what) {
             What.Move -> words.changedTo(l.text, if (p.later) null else now?.date, now?.time.takeIf { p.time != null }, td)
             What.Drop -> words.changedDropped(l.text)

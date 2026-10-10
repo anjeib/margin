@@ -115,8 +115,10 @@ fun ritualDay(now: java.time.LocalDateTime = java.time.LocalDateTime.now()): Loc
 /** How many open to-dos the day holds (with tails on today) — the one number for every screen. */
 fun Book.openCount(date: LocalDate, today: LocalDate = LocalDate.now()): Int = page(date, today).open.size
 
-/** What the margin says on a page: promises either way, questions, tails. */
-data class Summary(val promised: Int, val waited: Int, val questions: Int, val tails: Int) {
+/** What the margin says on a page: promises either way (and whose), questions, tails. */
+data class Summary(val promised: Int, val waited: Int, val questions: Int, val tails: Int,
+                   /** Whom you promised, who promised you — names in the page's order. */
+                   val to: List<String> = emptyList(), val from: List<String> = emptyList()) {
     val empty get() = promised == 0 && waited == 0 && questions == 0 && tails == 0
 }
 
@@ -126,6 +128,8 @@ fun Book.summary(date: LocalDate, today: LocalDate = LocalDate.now()): Summary {
     return Summary(
         promised = open.count { l -> l.who.any { it.dir == Dir.To } },
         waited = open.count { l -> l.who.any { it.dir == Dir.From } },
+        to = open.flatMap { l -> l.who.filter { it.dir == Dir.To }.map { it.name } }.distinct(),
+        from = open.flatMap { l -> l.who.filter { it.dir == Dir.From }.map { it.name } }.distinct(),
         questions = open.count { it.ask.isNotEmpty() },
         tails = p.tails.size,
     )

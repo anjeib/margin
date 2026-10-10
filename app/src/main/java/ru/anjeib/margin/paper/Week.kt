@@ -47,7 +47,10 @@ fun WeekPage(book: Book, today: LocalDate, start: LocalDate, onMark: (String) ->
     val mon = LocalDate.parse(monday)
     val days = (0L..6L).map { mon.plusDays(it) }
     val pages = remember(book, mon, today) {
-        days.map { d -> d to book.page(d, today).let { p -> (if (d == today) p.tails else emptyList()) + p.timed + p.rest }.filter { it.isTodo || it.kind == Kind.Event || it.kind == Kind.Note } }
+        // A line with a window stands once in the week — on its first day here, not on each of its days.
+        val seen = HashSet<String>()
+        days.map { d -> d to book.page(d, today).let { p -> (if (d == today) p.tails else emptyList()) + p.timed + p.rest }
+            .filter { (it.isTodo || it.kind == Kind.Event || it.kind == Kind.Note) && seen.add(it.id) } }
     }
     val all = pages.flatMap { it.second }
     LazyColumn(Modifier.fillMaxSize().rule(c.rule), contentPadding = PaddingValues(bottom = bottom)) {
