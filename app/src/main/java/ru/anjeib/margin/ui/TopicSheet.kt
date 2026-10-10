@@ -1056,7 +1056,7 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                                                 Column(Modifier.width(side).clip(RoundedCornerShape(10.dp)).clickable { onView(a) }) {
                                                     Thumb(a, side)
                                                     (a.caption ?: timeOfStamp(e.at).takeIf { it.isNotBlank() && it != "00:00" })?.let {
-                                                        Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+                                                        Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
                                                     }
                                                     matched(a)
                                                 }

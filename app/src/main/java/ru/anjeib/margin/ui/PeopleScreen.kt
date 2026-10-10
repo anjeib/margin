@@ -241,13 +241,10 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 (s.fieldAddress to "address").takeIf { person.address == null }, ("MAX" to "max").takeIf { person.max == null },
                 ("Telegram" to "telegram").takeIf { person.telegram == null }, s.fieldSocial to "social",
             )
-            if (missing.isNotEmpty()) FlowRow(Modifier.padding(top = 10.dp)) {
-                missing.forEachIndexed { i, (label, d) ->
-                    if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.graphite))
-                    // Service names keep their own spelling (MAX, Telegram); field names go small.
-                    Text("+ " + (if (d in setOf("max", "telegram")) label else label.lowercase()),
-                        style = Type.small.copy(color = c.graphite), modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { dialog = d }.padding(2.dp))
-                }
+            if (missing.isNotEmpty()) DotFlow(missing.size, Modifier.padding(top = 4.dp), separator = { Text("  ·  ", style = Type.small.copy(color = c.graphite)) }) { i ->
+                val (label, d) = missing[i]
+                // Service names keep their own spelling (MAX, Telegram); field names go small.
+                PaperLink("+ " + (if (d in setOf("max", "telegram")) label else label.lowercase()), quiet = true) { dialog = d }
             }
             // «Личная информация»: what the user told about them as a person — birthday, family, what they like.
             Column(Modifier.padding(top = 22.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { dialog = "personal" }.padding(vertical = 4.dp)) {
@@ -284,10 +281,13 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             if (history.isNotEmpty()) {
                 GroupBadge(s.historyTitle, Modifier.padding(top = 24.dp, bottom = 6.dp))
                 history.forEach { (d, text, src) ->
+                    // The words get the width; where they came from — a quiet line under them.
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 4.dp)) {
                         Text(d.dayMonthShort(), style = dateStyle(13.sp), modifier = Modifier.width(56.dp))
-                        Text(text, style = Type.small.copy(color = c.ink, fontSize = 14.sp), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text("  · $src", style = Type.small.copy(color = c.graphite, fontSize = 12.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(text, style = Type.small.copy(color = c.ink, fontSize = 14.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(src, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }
