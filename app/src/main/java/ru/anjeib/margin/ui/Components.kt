@@ -238,9 +238,9 @@ fun DatePill(text: String, late: Boolean, timed: Boolean) {
     val c = M.c
     Row(Modifier.clip(RoundedCornerShape(50)).background(if (late) c.accentSoft else c.chip).padding(start = 8.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (timed) Icons.Outlined.Schedule else Icons.Outlined.CalendarToday, null, tint = if (late) c.accent else c.graphite, modifier = Modifier.size(13.dp))
+        Icon(if (timed) Icons.Outlined.Schedule else Icons.Outlined.CalendarToday, null, tint = if (late) c.accentText else c.graphite, modifier = Modifier.size(13.dp))
         Spacer(Modifier.width(5.dp))
-        Text(text, style = Type.small.copy(color = if (late) c.accent else c.ink, fontSize = 13.5.sp), maxLines = 1)
+        Text(text, style = Type.small.copy(color = if (late) c.accentText else c.ink, fontSize = 13.5.sp), maxLines = 1)
     }
 }
 
@@ -256,7 +256,9 @@ val LocalPeopleLinks = androidx.compose.runtime.compositionLocalOf { PeopleLinks
 @Composable
 fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: Boolean = false, today: java.time.LocalDate = java.time.LocalDate.now(),
              /** false in the day lists: names and places are coloured words, the whole row is the one target. */
-             tappable: Boolean = true) {
+             tappable: Boolean = true,
+             /** On a person's page their own name is not repeated in each row. */
+             hidePerson: String? = null) {
     val c = M.c
     val s = M.s
     val links = LocalPeopleLinks.current
@@ -272,22 +274,24 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         }
         fun name(n0: String, shown: String = n0) = link("p:$n0", shown, if (links.isContact(n0)) c.link else c.graphite) { links.onName(n0) }
         // When first, darker than the rest — the eye finds it without looking; late in accent.
-        whenText?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = if (t.isOverdue(today)) c.accent else c.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)) { append(it) } }
+        whenText?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = if (t.dueDate?.isBefore(today) == true) c.accentText else c.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)) { append(it) } }
+        // A name already said in the title («Скинуть Лёше исходники») is not repeated under it.
         if (!t.done) {
             val parts = t.waitingFor?.let { s.promiseToYouParts(it) to it } ?: t.promisedTo?.let { s.promiseFromYouParts(it) to it }
-            parts?.let { (p, who) -> next(); append(p.first); name(who, p.second); append(p.third) }
+            parts?.let { (p, who) -> next(); if (namedIn(t.title, who)) append(p.first.trim()) else { append(p.first); name(who, p.second); append(p.third) } }
         }
-        t.people.filter { p -> p != t.waitingFor && p != t.promisedTo && p != s.me }.take(2).forEach { next(); name(it) }
+        t.people.filter { p -> p != t.waitingFor && p != t.promisedTo && p != s.me && !namedIn(t.title, p) && p != hidePerson }.take(2).forEach { next(); name(it) }
         t.place?.let { pl ->
             next()
             link("place", pl, c.link) {
                 runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
             }
         }
-        if (n > 0) { next(); append("$d/$n") }
-        t.repeat?.let { next(); append("↻ " + it.label()) }
+        if (n > 0) { next(); append(s.progressOf(d, n)) }
+        // The loop itself is in the column on the left; here only the words.
+        t.repeat?.let { next(); append(it.label()) }
         val files = t.entries.sumOf { it.attachments.size }
-        if (files > 0) { next(); append("📎 $files") }
+        if (files > 0) { next(); appendInlineContent("clip", "📎"); append(" $files") }
         if (showIdea && t.noteId != null) { next(); append("✎ " + s.ideaMark) }
         if (showProject) t.project?.let { next(); append("#" + projectLabel(it)) }
         // The user left a comment: a small mark says it is there (the words are in the card).
@@ -296,6 +300,9 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
     val inline = mapOf("note" to androidx.compose.foundation.text.InlineTextContent(
         androidx.compose.ui.text.Placeholder(14.sp, 14.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {
         Icon(Icons.Outlined.ChatBubbleOutline, s.commentHint, tint = c.graphite, modifier = Modifier.fillMaxSize())
+    }, "clip" to androidx.compose.foundation.text.InlineTextContent(
+        androidx.compose.ui.text.Placeholder(13.sp, 13.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {
+        ClipGlyph(c.graphite, 13.dp)
     })
     if (text.isNotEmpty()) Text(text, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
         inlineContent = inline, modifier = Modifier.padding(top = 3.dp))
@@ -491,4 +498,59 @@ fun SwipeActions(
             }
         },
     ) { content() }
+}
+
+
+/** Is [name] already said in [title], in any case form («Лёша» in «Скинуть Лёше исходники»)? Compares the stem. */
+fun namedIn(title: String, name: String): Boolean {
+    // Names are written with a capital in titles (data/Writing.kt), so the match is case-sensitive: «Маша» ≠ «машина».
+    val stem = name.trim().split(' ').first().let { if (it.length > 4) it.dropLast(2) else it.take(3) }
+    if (stem.length < 3) return false
+    return Regex("(?<!\\p{L})" + Regex.escape(stem)).containsMatchIn(title)
+}
+
+/**
+ * «a · b · c» that wraps like words: a separator stands only between two things on the same line — never hanging
+ * at a line's end or starting the next one — and every part sits on one centre line.
+ */
+@Composable
+fun DotFlow(count: Int, modifier: Modifier = Modifier, gap: androidx.compose.ui.unit.Dp = 0.dp, separator: @Composable () -> Unit, item: @Composable (Int) -> Unit) {
+    androidx.compose.ui.layout.Layout(content = {
+        for (i in 0 until count) {
+            if (i > 0) separator()
+            item(i)
+        }
+    }, modifier = modifier) { measurables, constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val placeables = measurables.map { it.measure(loose) }
+        if (placeables.isEmpty()) return@Layout layout(constraints.minWidth, constraints.minHeight) {}
+        val maxW = constraints.maxWidth
+        val gapPx = gap.roundToPx()
+        // Lines of (placeable, x); separators kept only between neighbours on one line.
+        val lines = mutableListOf<MutableList<Pair<androidx.compose.ui.layout.Placeable, Int>>>(mutableListOf())
+        var x = 0
+        var i = 0
+        while (i < placeables.size) {
+            val itemP = placeables[i]
+            if (i == 0) { lines.last().add(itemP to 0); x = itemP.width; i++; continue }
+            val sep = placeables[i]; val next = placeables[i + 1]
+            if (x + sep.width + next.width <= maxW || lines.last().isEmpty()) {
+                lines.last().add(sep to x); x += sep.width
+                lines.last().add(next to x); x += next.width
+            } else {
+                lines.add(mutableListOf(next to 0)); x = next.width
+            }
+            i += 2
+        }
+        val heights = lines.map { l -> l.maxOf { it.first.height } }
+        val width = if (constraints.hasBoundedWidth) lines.maxOf { l -> l.maxOf { it.second + it.first.width } }.coerceAtMost(maxW) else lines.maxOf { l -> l.maxOf { it.second + it.first.width } }
+        val height = heights.sum() + gapPx * (lines.size - 1).coerceAtLeast(0)
+        layout(width.coerceAtLeast(constraints.minWidth), height.coerceAtLeast(constraints.minHeight)) {
+            var y = 0
+            lines.forEachIndexed { li, l ->
+                l.forEach { (p, px) -> p.placeRelative(px, y + (heights[li] - p.height) / 2) }
+                y += heights[li] + gapPx
+            }
+        }
+    }
 }

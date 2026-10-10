@@ -153,7 +153,9 @@ object LocalParser {
         val names = Names(d)
         var sure = true
         var why: String? = null
-        if (aiCue.containsMatchIn(text)) { sure = false; why = "report-or-edit" }
+        // The phone reads Russian only: «Call mom tomorrow at 5pm» would become a matter without its day — the AI's, when there is one.
+        if (!Regex("[А-Яа-яЁё]").containsMatchIn(text) && Regex("[A-Za-z]").containsMatchIn(text)) { sure = false; why = "lang" }
+        if (aiCue.containsMatchIn(text)) { sure = false; why = why ?: "report-or-edit" }
         // A question to the assistant («что горит на этой неделе?») is not a matter: only the AI answers it.
         if (asked.containsMatchIn(text.trim())) return Result(emptyList(), false, "question")
         if (sure && reported(text, names)) { sure = false; why = "report" }

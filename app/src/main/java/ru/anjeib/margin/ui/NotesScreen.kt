@@ -180,7 +180,7 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 SoftMenu(menu, { menu = false }) {
                     DropdownMenuItem(text = { Text(s.listBlock, style = Type.body) }, onClick = { menu = false; vm.addNoteList(note.id); fill("item") })
                     DropdownMenuItem(text = { Text(s.project, style = Type.body) }, onClick = { menu = false; projectDialog = true })
-                    DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menu = false; vm.deleteNote(note.id); onBack() })
+                    DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accentText)) }, onClick = { menu = false; vm.deleteNote(note.id); onBack() })
                 }
             }
         }

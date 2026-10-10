@@ -43,6 +43,10 @@ data class Palette(
     val ok: Color,
     /** Amber: what we wait for from someone, in the topic feed. */
     val wait: Color = Color(0xFFA8701A),
+    /** A link on the dark/light bubble (undo bar, «+ контакт»): the other theme's petrol, so it reads at ≥4.5:1. */
+    val linkOnBubble: Color = Color(0xFF7FBFD6),
+    /** Terracotta for small text (late dates): the line colour is too light for words (3.5:1). */
+    val accentText: Color = Color(0xFFA84E2A),
     /** On the terracotta button and over photos — the same in both themes. */
     val onAccent: Color = Color.White,
     /** Behind a photo or video in the viewer, under a sheet. */
@@ -86,6 +90,8 @@ val DarkPalette = Palette(
     scrim = Color(0x99000000),
     ok = Color(0xFF9AA886),
     wait = Color(0xFFD9A24A),
+    linkOnBubble = Color(0xFF1C6480),
+    accentText = Color(0xFFE08A63),
 )
 
 @OptIn(ExperimentalTextApi::class)

@@ -29,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -87,7 +88,7 @@ fun ProjectsScreen(data: AppData, onOpen: (String) -> Unit, contentPadding: Padd
                 Spacer(Modifier.height(3.dp))
                 Text(listOfNotNull(s.projectStats(open.size, notes), late.takeIf { it > 0 }?.let { s.overdue.lowercase() + " " + it },
                     next?.let { s.nextDue(it.shortLabel().lowercase()) }).joinToString(" · "),
-                    style = Type.small.copy(color = if (late > 0) c.accent else c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    style = Type.small.copy(color = if (late > 0) c.accentText else c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -103,11 +104,22 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
     var picked by rememberSaveable { mutableStateOf(today.toString()) }
     val ym = YearMonth.parse(month)
     val day = LocalDate.parse(picked)
-    val open = data.tasks.filter { !it.done }
-    fun on(t: Task, d: LocalDate): Boolean {
-        val due = t.dueDate; val st = t.startDate
-        // A task counts on its deadline (or its start when it has none) — a week-long window doesn't fill seven days.
-        return if (due != null) d == due else st == d
+    // A picked day other than today is where the next written matter goes (the field says so).
+    androidx.compose.runtime.LaunchedEffect(picked) { vm.pickCalendarDay(day.takeIf { it != today }) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.pickCalendarDay(null) } }
+    // The phone calendar for the whole visible grid (the AI context only needs a week ahead).
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val calOn = vm.settings.collectAsState().value.calendar
+    val monthEvents by androidx.compose.runtime.produceState(events, month, calOn) {
+        value = if (!calOn) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val from = ym.atDay(1).minusDays(ym.atDay(1).dayOfWeek.value - 1L)
+            ru.anjeib.margin.data.PhoneCalendar.events(ctx, from, 42)
+        }
+    }
+    // Each cell counts exactly the rows its day lists below: today with what is late, a past day with what got done.
+    val plans = remember(data, month, today, monthEvents) {
+        val from = ym.atDay(1).minusDays(ym.atDay(1).dayOfWeek.value - 1L)
+        (0L until 42L).associate { val d = from.plusDays(it); d to dayPlan(data, d, today, monthEvents) }
     }
     var postponing by remember { mutableStateOf<String?>(null) }
     postponing?.let { id -> PostponeDialog(onDismiss = { postponing = null }) { d -> vm.postponeTo(id, d); postponing = null } }
@@ -119,18 +131,26 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     // Once the month has scrolled away, the picked day's week stays pinned on top — the month folds into a week.
     val folded by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex >= 2 } }
-    // One day of the grid: the number, how many matters; weekends quieter; the picked day in petrol, today outlined.
+    // One day of the grid: the number, how many matters; a dot for meetings; the picked day in petrol, today outlined.
     @Composable fun cell(d: LocalDate, mod: Modifier) {
-        val count = open.count { on(it, d) }
+        val plan = plans[d] ?: dayPlan(data, d, today, monthEvents)
+        val past = d.isBefore(today)
+        val count = if (past) plan.done.size else plan.deals.size
+        val late = d == today && plan.deals.any { it.isOverdue(today) }
+        val meets = plan.events.isNotEmpty()
         val sel = d == day
-        val weekend = d.dayOfWeek.value >= 6
         Column(mod.clip(RoundedCornerShape(12.dp))
             .background(if (sel) c.link else Color.Transparent)
             .then(if (d == today && !sel) Modifier.border(1.dp, c.link, RoundedCornerShape(12.dp)) else Modifier)
             .clickable { picked = d.toString(); if (YearMonth.from(d) != ym) month = YearMonth.from(d).toString() }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text("${d.dayOfMonth}", style = Type.body.copy(color = when { sel -> c.bg; d.isBefore(today) || weekend -> c.graphite; else -> c.ink }, fontSize = 15.sp, fontWeight = if (sel || d == today) FontWeight.SemiBold else FontWeight.Normal))
-            // How busy the day is — a number, quiet, never a colour per project.
-            Text(if (count > 0) "$count" else " ", style = Type.small.copy(color = if (sel) c.bg else if (d.isBefore(today)) c.faint else c.link, fontSize = 11.sp))
+            Text("${d.dayOfMonth}", style = Type.body.copy(color = when { sel -> c.bg; past -> c.graphite; else -> c.ink }, fontSize = 15.sp, fontWeight = if (sel || d == today) FontWeight.SemiBold else FontWeight.Normal))
+            // How busy the day is — a number, never a colour per project: open matters ahead (terracotta when today has late ones),
+            // done ones on a past day with a tick; a meeting from the phone calendar — a small dot beside it.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(when { count == 0 -> " "; past -> "✓$count"; else -> "$count" },
+                    style = Type.small.copy(color = when { sel -> c.bg; past -> c.graphite; late -> c.accentText; else -> c.link }, fontSize = 11.sp, fontFeatureSettings = "tnum"))
+                if (meets) Box(Modifier.padding(start = 3.dp).size(4.dp).clip(CircleShape).background(if (sel) c.bg else c.graphite))
+            }
         }
     }
     Box(Modifier.fillMaxSize().screenRule()) {
@@ -156,7 +176,7 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
                 Row(Modifier.fillMaxWidth()) {
                     (1..7).forEach { d ->
                         Text(java.time.DayOfWeek.of(d).getDisplayName(TextStyle.SHORT, if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) java.util.Locale.forLanguageTag("ru") else java.util.Locale.ENGLISH).lowercase(),
-                            style = Type.small.copy(color = if (d >= 6) c.faint else c.graphite, fontSize = 12.sp, fontWeight = FontWeight.Medium), modifier = Modifier.weight(1f).padding(bottom = 6.dp),
+                            style = Type.small.copy(color = c.graphite, fontSize = 12.sp, fontWeight = FontWeight.Medium), modifier = Modifier.weight(1f).padding(bottom = 6.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     }
                 }
@@ -178,7 +198,7 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
         }
         // The picked day, the same block as on «Сегодня» and «Неделя»: its date on the margin, «Дела» and «Темы».
         item("day") {
-            DayBlock(dayPlan(data, day, today, events), today, open = true, heading = false, onToggle = {},
+            DayBlock(plans[day] ?: dayPlan(data, day, today, monthEvents), today, open = true, heading = false, onToggle = {},
                 onOpen = onOpenTask, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = emptySet())
         }
     }

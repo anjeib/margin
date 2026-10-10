@@ -121,8 +121,8 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                                 due?.let { add(MetaItem(Meta.plain(row.whenLabel()?.substringBefore(" · ${q.time}") ?: it.dayMonthShort()), Meta.date(late)) { dialog = "date" }) }
                                 q.time?.let { add(MetaItem(Meta.plain(it), Meta.date(late)) { dialog = "time" }) }
                             }
-                            q.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
-                            q.from?.let { w -> add(MetaItem(Meta.promise(s.promiseToYouParts(w)), Meta.quiet()) { person(w) }) }
+                            q.repeat?.let { add(MetaItem(Meta.plain(it.label()), Meta.quiet()) { dialog = "repeat" }) }
+                            q.from?.let { w -> add(MetaItem(Meta.promise(s.promiseToYouParts(w)), Meta.quiet(), onLong = { person(w) }) { dialog = "waiting" }) }
                             people.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { person(p) }) }
                             q.place?.let { pl -> add(MetaItem(Meta.plain(pl), Meta.link(), onLong = { fill("place") }) {
                                 runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
@@ -135,15 +135,14 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                             // Another day for the same matter («и в четверг»).
                             if ((due != null || q.slots.isNotEmpty()) && q.repeat == null && !q.done) add(s.addDay to "day")
                             if (q.repeat == null) add(s.fieldRepeat to "repeat")
-                            if (people.isEmpty()) add(s.fieldPeople to "people")
+                            if (q.from == null && !q.done) add(s.fieldWait to "waiting")
+                            if (people.isEmpty() && q.from == null) add(s.fieldPeople to "people")
                             if (q.place == null) add(s.fieldPlace to "place")
                             if (!q.done) add(s.stepOne to "step")
                         }
-                        if (missing.isNotEmpty()) FlowRow(Modifier.padding(top = 2.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-                            missing.forEachIndexed { i, (label, d) ->
-                                if (i > 0) Text(" · ", style = Type.small.copy(color = c.faint))
-                                PaperLink("+ " + label.lowercase(), quiet = true) { if (d in setOf("step", "place", "people")) fill(d) else dialog = d }
-                            }
+                        if (missing.isNotEmpty()) DotFlow(missing.size, Modifier.padding(top = 2.dp), separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
+                            val (label, d) = missing[i]
+                            PaperLink("+ " + label.lowercase(), quiet = true) { if (d in setOf("step", "place", "people")) fill(d) else dialog = d }
                         }
                     }
                 }
@@ -172,6 +171,30 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 }
                 WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = born,
                     onEdit = { id, t -> vm.editComment(ref, id, t) }, onAdd = { t, at -> vm.addComment(ref, t, at) })
+                // The same visible actions as on a simple matter's card (the long press of the bagel still has them).
+                Margined(Modifier.padding(top = 10.dp)) {
+                    val today = LocalDate.now()
+                    val acts = buildList<Triple<String, Boolean, () -> Unit>> {
+                        if (!q.done) {
+                            add(Triple(s.swipeTomorrow, false) { vm.postponeTo(ref, today.plusDays(1)) })
+                            add(Triple(s.plusWeek, false) { vm.postponeTo(ref, (due?.takeIf { !it.isBefore(today) } ?: today).plusDays(7)) })
+                        }
+                        if (onOpenTopic != null) add(Triple(s.openTopic, false) { commit(); onOpenTopic() })
+                        add(Triple(s.delete, true) { vm.removeDeal(topic.id, q.id); onClose() })
+                    }
+                    DotFlow(acts.size, separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
+                        val (label, danger, act) = acts[i]
+                        PaperLink(label.lowercase(), quiet = !danger, danger = danger, onClick = act)
+                    }
+                }
+                // Their day has come: «напомнить» here too, the same as on a simple matter (one behaviour for every wait).
+                if (q.from != null && !q.done && due?.isAfter(LocalDate.now()) == false) Margined(Modifier.padding(top = 14.dp)) {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.linkSoft).padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(s.overdueWaiting, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.weight(1f))
+                        Pill(s.remindPerson(q.from), filled = true, onClick = { remindAbout(ctxOpen, data, row) })
+                    }
+                }
             }
             // Changes in words go to the topic, said about this matter; «+ дело» puts a matter under it.
             val scopeKey = MainVm.key(Scope.InTask(topic.id))
@@ -196,5 +219,6 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
         "time" -> TimeDialog(q.time, onDismiss = { dialog = null }) { tm -> vm.setTime(ref, tm); dialog = null }
         "day" -> OneDayDialog(onDismiss = { dialog = null }) { d -> vm.addSlot(ref, d.toString()); dialog = null }
         "repeat" -> RepeatDialog(topic.questionRow(q), onDismiss = { dialog = null }) { r -> vm.setDealRepeat(topic.id, q.id, r); dialog = null }
+        "waiting" -> TextDialog(s.waiting, q.from.orEmpty(), s.sideHint, onDismiss = { dialog = null }) { v -> vm.setDealFrom(topic.id, q.id, v); dialog = null }
     }
 }

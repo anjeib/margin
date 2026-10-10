@@ -182,7 +182,7 @@ fun BlockStream(
                     DropdownMenuItem(text = { Text(s.insertBelow, style = Type.body) }, onClick = { menuFor = null; active = e.id; inserting = e.id })
                     if (i > 0) DropdownMenuItem(text = { Text(s.moveUp, style = Type.body) }, onClick = { menuFor = null; vm.moveEntry(owner, e.id, -1) })
                     if (i < entries.lastIndex) DropdownMenuItem(text = { Text(s.moveDown, style = Type.body) }, onClick = { menuFor = null; vm.moveEntry(owner, e.id, 1) })
-                    DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menuFor = null; active = null; vm.removeEntry(owner, e.id) })
+                    DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accentText)) }, onClick = { menuFor = null; active = null; vm.removeEntry(owner, e.id) })
                 }
             }
             }

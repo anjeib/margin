@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.dayMonth
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -72,6 +73,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -276,9 +278,10 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             }
                         }
                     }
+                    val calDay by vm.calendarDay.collectAsState()
                     SmartComposer(
                         vm,
-                        hint = if (screen == NOTES) s.notesHint else s.composerHint,
+                        hint = if (screen == NOTES) s.notesHint else calDay?.takeIf { screen == TASKS }?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
                         busy = busy == (if (screen == NOTES) "notes" else "main"),
                         onSend = { t, f -> vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f) },
                         prefill = prefill, onPrefillUsed = { prefill = null },
@@ -319,7 +322,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 if (n != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.bubble)
                     .padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(s.notAContact(n), style = Type.small.copy(color = c.onBubble, fontSize = 14.sp), modifier = Modifier.weight(1f))
-                    Text(s.addContact, style = Type.small.copy(color = c.link, fontSize = 14.sp),
+                    Text(s.addContact, style = Type.small.copy(color = c.linkOnBubble, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
                         modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.keepContact(n) }.padding(12.dp))
                 }
             }
@@ -329,7 +332,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 if (ub != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.bubble)
                     .padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(ub.text, style = Type.small.copy(color = c.onBubble, fontSize = 14.sp), modifier = Modifier.weight(1f))
-                    Text(s.undo, style = Type.small.copy(color = c.link, fontSize = 14.sp),
+                    Text(s.undo, style = Type.small.copy(color = c.linkOnBubble, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
                         modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.undoBar() }.padding(12.dp))
                 }
             }
@@ -377,7 +380,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
 
     viewing?.let { a -> Viewer(a, vm, onClose = { viewing = null }) }
 
-    if (!settings.onboarded) Onboarding(vm, onDone = { vm.updateSettings { it.copy(onboarded = true) }; vm.addIntroOnce(); vm.startSetup() })
+    if (!settings.onboarded) Onboarding(vm, onDone = { vm.updateSettings { it.copy(onboarded = true) }; vm.addIntroOnce(); vm.finishSetup() })
     // Once per install: offer the sample data (the user's own is kept aside and comes back from Settings).
     // Only where the designer's months are the point (the demo build loads them by itself); others get «Знакомство с Margin».
     var demoOffer by remember { mutableStateOf(ru.anjeib.margin.BuildConfig.DEMO && !vm.demoAsked()) }

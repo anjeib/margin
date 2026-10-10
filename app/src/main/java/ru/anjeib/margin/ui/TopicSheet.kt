@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.drawBehind
 
@@ -355,7 +357,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         "delete" -> AlertDialog(
             onDismissRequest = { dialog = null }, containerColor = c.card,
             title = { Text(s.deleteTaskQ, style = Type.cardTitle.copy(color = c.ink)) },
-            confirmButton = { TextButton({ dialog = null; onClose(); vm.deleteTask(task.id) }) { Text(s.delete, color = c.accent) } },
+            confirmButton = { TextButton({ dialog = null; onClose(); vm.deleteTask(task.id) }) { Text(s.delete, color = c.accentText) } },
             dismissButton = { TextButton({ dialog = null }) { Text(s.cancel, color = c.graphite) } },
         )
         "source" -> AlertDialog(
@@ -386,22 +388,20 @@ private fun TopicSummary(task: Task, dealsOnly: Boolean, saidOnly: Boolean, mate
     // Each part of the summary is its own filter: the matters, the records, the materials; the chosen one in petrol with «✕».
     @Composable fun part(text: String, on: Boolean, onClick: () -> Unit) = Text(if (on) "$text  ✕" else text,
         style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 14.sp, fontFeatureSettings = "tnum"),
-        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(vertical = 4.dp, horizontal = 2.dp))
+        modifier = Modifier.clip(RoundedCornerShape(6.dp)).semantics { selected = on }.clickable(onClick = onClick).padding(vertical = 9.dp, horizontal = 2.dp))
     Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 12.dp).clip(RoundedCornerShape(16.dp)).background(c.linkSoft.copy(alpha = if (c.dark) 0.5f else 0.6f))
         .padding(horizontal = 12.dp, vertical = 8.dp)) {
         // The parts wrap whole onto a second line, never a word of one.
-        androidx.compose.foundation.layout.FlowRow(itemVerticalAlignment = Alignment.CenterVertically) {
-            val parts = listOfNotNull(
-                (if (total > 0) Triple(s.progressSolved(done, total), dealsOnly, onDeals) else null),
-                task.entries.size.takeIf { it > 0 }?.let { Triple(s.nEntries(it), saidOnly, onSaid) },
-                files.takeIf { it > 0 }?.let { Triple(s.nMaterials(it), materials, onMaterials) },
-            )
-            parts.forEachIndexed { i, (t, on, f) ->
-                if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
-                part(t, on, f)
-            }
+        val parts = listOfNotNull(
+            (if (total > 0) Triple(s.progressSolved(done, total), dealsOnly, onDeals) else null),
+            task.entries.size.takeIf { it > 0 }?.let { Triple(s.nEntries(it), saidOnly, onSaid) },
+            files.takeIf { it > 0 }?.let { Triple(s.nMaterials(it), materials, onMaterials) },
+        )
+        DotFlow(parts.size, separator = { Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 14.sp)) }) { i -> val (t, on, f) = parts[i]; part(t, on, f) }
+        // The bar is 3 dp to look at, but the finger gets the whole strip around it.
+        if (total > 0) Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = s.progressSolved(done, total), onClick = onDeals).padding(vertical = 8.dp)) {
+            TopicProgress(done, total)
         }
-        if (total > 0) TopicProgress(done, total, Modifier.padding(top = 4.dp, bottom = 4.dp).clickable(onClick = onDeals))
     }
 }
 
@@ -580,9 +580,9 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
 private fun ToolItem(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, danger: Boolean = false, onClick: () -> Unit) {
     val c = M.c
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = if (danger) c.accent else c.graphite, modifier = Modifier.size(18.dp))
+        Icon(icon, null, tint = if (danger) c.accentText else c.graphite, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(12.dp))
-        Text(text, style = Type.body.copy(color = if (danger) c.accent else c.ink, fontSize = 15.sp))
+        Text(text, style = Type.body.copy(color = if (danger) c.accentText else c.ink, fontSize = 15.sp))
     }
 }
 
@@ -720,9 +720,10 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
                 Box(Modifier.size(if (depth == 0) 26.dp else 22.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(q.done, size = if (depth == 0) 18.dp else 15.dp, onToggle = ::tick) }
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
+                    val hour = hourColor(due, q.time, today)
                     val title = buildAnnotatedString {
                         if (q.time != null && !q.done && !removed) {
-                            withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("time", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = if (late) c.accent else c.link, fontWeight = FontWeight.Medium))) { act.timeDeal(q) }) { append(q.time!!) }
+                            withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("time", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = hour, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"))) { act.timeDeal(q) }) { append(q.time!!) }
                             append("   ")
                         }
                         append(q.title)
@@ -749,7 +750,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
                             if (q.done) q.doneAt?.let { d -> LocalDate.parse(d).dayMonthShort().let { if (q.isWait) s.gotOn(it) else s.solvedOn(it) } } else null)
                         val dateSp = dateSpan()
                         if (whenText != null || rest.isNotEmpty()) Text(buildAnnotatedString {
-                            whenText?.let { withStyle(if (late) dateSp.copy(color = c.accent) else dateSp) { append(it) } }
+                            whenText?.let { withStyle(if (late) dateSp.copy(color = c.accentText) else dateSp) { append(it) } }
                             if (whenText != null && rest.isNotEmpty()) append("  ·  ")
                             append(rest.joinToString("  ·  "))
                         }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
@@ -927,7 +928,7 @@ private fun QuestionRow(task: Task, q: Subtask, lit: Boolean, vm: MainVm, onFeed
         SoftMenu(menu, { menu = false }) {
             DropdownMenuItem(text = { Text(s.edit, style = Type.body) }, onClick = { menu = false; onEdit(q) })
             DropdownMenuItem(text = { Text(s.questionDateQ, style = Type.body) }, onClick = { menu = false; onDate(q) })
-            DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accent)) }, onClick = { menu = false; vm.deleteSubtask(task.id, q.id) })
+            DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accentText)) }, onClick = { menu = false; vm.deleteSubtask(task.id, q.id) })
         }
     }
 }

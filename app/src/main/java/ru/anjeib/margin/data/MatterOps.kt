@@ -20,6 +20,89 @@ fun Task.autoReminded(): Task {
     return copy(remindAt = "${day}T$time")
 }
 
+/** The moment the matter's own day and hour name («yyyy-MM-ddTHH:mm»), or null without an hour. */
+fun Task.ownReminder(): String? {
+    val tm = time ?: return null
+    val day = dueDate ?: startDate ?: return null
+    return "${day}T$tm"
+}
+
+/**
+ * The reminder follows the matter: whoever moves its day or hour — a repeat's next time, a ticked day of several,
+ * «на завтра», the AI — moves the reminder with it. Only a reminder set in this very change («напомни в 9»,
+ * «через час») stays as set; cleared — it is the day and hour again. Topics keep theirs (a thought's, from a note).
+ * Called for every change from [Topics.track], so no path can leave a stale reminder behind.
+ */
+fun Task.reminderAfter(old: Task?): Task {
+    if (topic) return this
+    val follow = when {
+        old == null -> remindAt == null
+        remindAt != old.remindAt -> remindAt == null
+        else -> due != old.due || start != old.start || time != old.time
+    }
+    if (!follow) return this
+    val own = ownReminder()
+    return if (own == remindAt) this else copy(remindAt = own)
+}
+
+/** «Готово» on a reminder: one of several days ticks just that day (or the first open one); a repeat leaves its next time. */
+fun AppData.doneFromReminder(key: String, today: LocalDate = LocalDate.now()): AppData {
+    slotRef(key)?.let { (base, sid) -> return if (slotOpen(base, sid)) toggleSlot(base, sid) else this }
+    questionRef(key)?.let { (tid, qid) ->
+        val q = tasks.find { it.id == tid }?.subtasks?.findSub(qid)?.takeIf { !it.done } ?: return this
+        q.slots.firstOrNull { !it.done }?.let { return toggleSlot(key, it.id) }
+        return editDeal(tid, qid) { it.withDone(true).copy(doneAt = today.toString()) }
+    }
+    val t = tasks.find { it.id == key && !it.done } ?: return this
+    t.slots.firstOrNull { !it.done }?.let { return toggleSlot(key, it.id) }
+    return toggleTask(key, today)
+}
+
+private fun AppData.slotOpen(base: String, sid: String): Boolean {
+    val slots = questionRef(base)?.let { (tid, qid) -> tasks.find { it.id == tid }?.subtasks?.findSub(qid)?.slots } ?: tasks.find { it.id == base }?.slots
+    return slots?.any { it.id == sid && !it.done } == true
+}
+
+/** «Через час» on a reminder: a matter gets its own reminder then; a topic's matter (no reminder of its own) — its hour, or its day's hour. */
+fun AppData.snoozeFromReminder(key: String, at: java.time.LocalDateTime): AppData {
+    val day = at.toLocalDate().toString()
+    val hour = at.toLocalTime().toString().take(5)
+    val (base, sid) = slotRef(key) ?: (key to null)
+    questionRef(base)?.let { (tid, qid) ->
+        return if (sid != null) moveSlot(base, sid, day, hour, true) else editDeal(tid, qid) { it.copy(due = day, time = hour) }
+    }
+    return editTask(base) { it.copy(remindAt = "${day}T$hour") }
+}
+
+/**
+ * «Перенести на завтра» from the evening: only today's own open matters move — not older overdue ones, not repeats or
+ * matters of several days (they keep their rhythm), and not what someone else owes or what was promised to someone:
+ * that date was agreed with another person, and moving it would hide the delay and the «напомнить».
+ */
+fun AppData.todayToTomorrow(today: LocalDate = LocalDate.now()): AppData {
+    val next = today.plusDays(1)
+    val t0 = today.toString()
+    var d = this
+    tasks.forEach { t ->
+        when {
+            t.done -> {}
+            t.topic -> t.subtasks.filter { q -> !q.done && q.due == t0 && q.slots.isEmpty() && q.repeat == null && q.from == null }
+                .forEach { q -> d = d.postponeTo("q:${t.id}:${q.id}", next, today) }
+            t.due == t0 && t.repeat == null && t.slots.isEmpty() && t.waitingFor == null && t.promisedTo == null -> d = d.postponeTo(t.id, next, today)
+        }
+    }
+    return d
+}
+
+/** The evening's numbers, by the same rows as the morning's: done today (topics' matters too), and open ones left for today or earlier. */
+fun AppData.eveningCounts(today: LocalDate = LocalDate.now()): Pair<Int, Int> {
+    val t0 = today.toString()
+    val done = tasks.count { !it.topic && it.done && !it.dropped && it.doneAt == t0 } +
+        tasks.filter { it.topic }.sumOf { t -> t.subtasks.count { it.done && it.doneAt == t0 } }
+    val left = listTasks().count { !it.done && it.dueDate?.let { d -> !d.isAfter(today) } == true }
+    return done to left
+}
+
 /** Done or open again — a task, or a topic's matter «q:<topic>:<matter>». A repeating task leaves its next occurrence behind. */
 fun AppData.toggleTask(id: String, today: LocalDate = LocalDate.now()): AppData {
     questionRef(id)?.let { (tid, qid) ->
@@ -177,13 +260,22 @@ fun AppData.postponeTo(id: String, day: LocalDate, today: LocalDate = LocalDate.
     return editTask(id) { moved }
 }
 
-fun AppData.overdueCount(today: LocalDate = LocalDate.now()) = tasks.count { !it.done && it.dueDate?.isBefore(today) == true }
+/** Own matters left from past days — simple ones and topics' (someone else's promise keeps its date: its lateness is the point). */
+fun AppData.overdueCount(today: LocalDate = LocalDate.now()) =
+    tasks.count { !it.done && !it.topic && it.dueDate?.isBefore(today) == true && it.waitingFor == null && it.promisedTo == null } +
+        tasks.filter { it.topic && !it.done }.sumOf { t -> t.subtasks.count { q -> !q.done && q.from == null && q.slots.isEmpty() && q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.isBefore(today) == true } }
 
-/** «Перенести на сегодня»: everything overdue moves to today. */
+/** «Всё на сегодня»: every own overdue matter moves to today; waits and promises stay where they were said to be. */
 fun AppData.moveOverdue(today: LocalDate = LocalDate.now()) = copy(tasks = tasks.map { t ->
-    if (!t.done && t.dueDate?.isBefore(today) == true)
-        t.copy(due = today.toString(), start = null, remindAt = null, postponed = t.postponed + 1).autoReminded().logged(t, "you")
-    else t
+    when {
+        t.done -> t
+        t.topic -> t.copy(subtasks = t.subtasks.map { q ->
+            if (!q.done && q.from == null && q.slots.isEmpty() && q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.isBefore(today) == true) q.copy(due = today.toString()) else q
+        })
+        t.dueDate?.isBefore(today) == true && t.waitingFor == null && t.promisedTo == null ->
+            t.copy(due = today.toString(), start = null, remindAt = null, postponed = t.postponed + 1).autoReminded().logged(t, "you")
+        else -> t
+    }
 })
 
 /** «Входящие» → «В тему…»: the block leaves the inbox note [inboxId] and lands in the topic's feed, at its own time. */

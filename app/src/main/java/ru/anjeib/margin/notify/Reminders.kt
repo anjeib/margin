@@ -21,9 +21,11 @@ import ru.anjeib.margin.R
 import ru.anjeib.margin.data.Prefs
 import ru.anjeib.margin.data.Store
 import ru.anjeib.margin.data.Task
-import ru.anjeib.margin.data.logged
-import ru.anjeib.margin.data.nextOccurrence
-import ru.anjeib.margin.data.whenLabel
+import ru.anjeib.margin.data.doneFromReminder
+import ru.anjeib.margin.data.eveningCounts
+import ru.anjeib.margin.data.postponeTo
+import ru.anjeib.margin.data.snoozeFromReminder
+import ru.anjeib.margin.data.todayToTomorrow
 import ru.anjeib.margin.i18n.L
 import ru.anjeib.margin.i18n.resolveLang
 import kotlinx.coroutines.CoroutineScope
@@ -36,7 +38,12 @@ import java.time.LocalTime
 import java.time.ZoneId
 
 object Reminders {
-    private const val CHANNEL = "reminders"
+    /** Reminders, high importance (pop up). */
+    private const val CHANNEL = "remind"
+    /** Morning, evening, «Разобрано N»: low importance. */
+    private const val DIGEST = "digest"
+    /** Before 0.29: one channel for everything, default importance. */
+    private const val OLD_CHANNEL = "reminders"
     private const val KIND = "kind"
     private const val TASK = "taskId"
     private const val REQ_MORNING = 1_000_001
@@ -62,16 +69,14 @@ object Reminders {
 
     private fun LocalDateTime.millis() = atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-    /** Schedules a reminder for every open task (and note) with a future remindAt; cancels the rest. Notes go as «note:<id>». */
+    /**
+     * Sets an alarm for everything that should ring ([alarmPlan]: tasks, their days, topics' matters, notes as «note:<id>»);
+     * cancels the rest. Synchronized: the screen and the start of the process may both call it.
+     */
+    @Synchronized
     fun syncTasks(ctx: Context, tasks: List<Task>, notes: List<ru.anjeib.margin.data.Note> = Store.get(ctx).data.value.notes) {
-        val now = LocalDateTime.now()
-        val wanted = (tasks.mapNotNull { t ->
-            val at = t.remindAt?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } ?: return@mapNotNull null
-            if (t.done || at.isBefore(now)) null else t.id to at
-        } + notes.mapNotNull { n ->
-            val at = n.remindAt?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } ?: return@mapNotNull null
-            if (at.isBefore(now)) null else "note:${n.id}" to at
-        } + questionAlarms(ctx, tasks, now)).toMap()
+        val morning = runCatching { LocalTime.parse(Prefs.get(ctx).settings.value.morningTime) }.getOrDefault(LocalTime.of(9, 0))
+        val wanted = alarmPlan(tasks, notes, LocalDateTime.now(), morning)
         val sp = scheduledPrefs(ctx)
         val before = sp.all.mapValues { it.value as? String }
         // cancel removed / changed
@@ -87,22 +92,6 @@ object Reminders {
         sp.edit { clear(); wanted.forEach { (id, t) -> putString(id, t.toString()) } }
     }
 
-    /**
-     * v2: a topic's question with an hour reminds at that hour; something we wait for reminds on its day in the morning
-     * («~22 окт» — time to ask). Keyed like the list rows: «q:<topic>:<question>».
-     */
-    private fun questionAlarms(ctx: Context, tasks: List<Task>, now: LocalDateTime): List<Pair<String, LocalDateTime>> {
-        val morning = runCatching { LocalTime.parse(Prefs.get(ctx).settings.value.morningTime) }.getOrDefault(LocalTime.of(9, 0))
-        return tasks.filter { it.topic && !it.done }.flatMap { t ->
-            t.subtasks.filter { !it.done && it.due != null }.mapNotNull { q ->
-                val day = runCatching { LocalDate.parse(q.due) }.getOrNull() ?: return@mapNotNull null
-                val time = q.time?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: if (q.from != null) morning else return@mapNotNull null
-                val at = day.atTime(time)
-                if (at.isBefore(now)) null else "q:${t.id}:${q.id}" to at
-            }
-        }
-    }
-
     fun scheduleDaily(ctx: Context) {
         val s = Prefs.get(ctx).settings.value
         fun next(time: String): LocalDateTime {
@@ -116,36 +105,52 @@ object Reminders {
         if (s.eveningReview) at(ctx, next(s.eveningTime).millis(), e) else am(ctx).cancel(e)
     }
 
+    /** Everything set again from the data: after a reboot, a new time zone or clock, an update, a force-stop (every process start). */
+    @Synchronized
     fun rescheduleAll(ctx: Context) {
         scheduledPrefs(ctx).edit { clear() }
         syncTasks(ctx, Store.get(ctx).data.value.tasks)
         scheduleDaily(ctx)
     }
 
+    /**
+     * Two channels: reminders pop up over the screen; the summaries (morning, evening, «Разобрано N») stay quiet and can be
+     * turned off on their own. A channel's importance can't be raised once made, hence the new ids; the old one goes.
+     */
     fun ensureChannel(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, L.s.notifChannel, NotificationManager.IMPORTANCE_DEFAULT))
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, L.s.notifChannel, NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(DIGEST, L.s.notifDigestChannel, NotificationManager.IMPORTANCE_LOW))
+        if (nm.getNotificationChannel(OLD_CHANNEL) != null) nm.deleteNotificationChannel(OLD_CHANNEL)
     }
 
-    fun show(ctx: Context, id: Int, title: String, text: String?, taskId: String? = null, evening: Boolean = false) {
+    /**
+     * [taskId] — the key of what reminds (its buttons answer for it); [open] — what a tap opens (the matter itself);
+     * [digest] — a summary, on the quiet channel.
+     */
+    fun show(ctx: Context, id: Int, title: String, text: String?, taskId: String? = null, evening: Boolean = false,
+             digest: Boolean = false, open: String? = taskId, buttons: Buttons = Buttons.Hour) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         ensureChannel(ctx)
-        val open = PendingIntent.getActivity(
-            ctx, 0, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-        val n = NotificationCompat.Builder(ctx, CHANNEL)
+        val channel = if (digest) DIGEST else CHANNEL
+        // A tap opens the matter it is about (MainActivity → App.openId); each its own request code, or they'd replace each other.
+        val launch = Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .apply { if (open != null) setAction(MainActivity.ACTION_OPEN).putExtra(MainActivity.EXTRA_ID, open) }
+        val openPi = PendingIntent.getActivity(ctx, open?.hashCode() ?: 0, launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = NotificationCompat.Builder(ctx, channel)
             .setSmallIcon(R.drawable.ic_notify)
             .setColor(0xFFC8643B.toInt())
             .setContentTitle(title)
             .apply { if (!text.isNullOrBlank()) setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text)) }
-            .setContentIntent(open)
+            .setContentIntent(openPi)
             .setAutoCancel(true)
+            .setPriority(if (digest) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
+            .apply { if (!digest) setCategory(NotificationCompat.CATEGORY_REMINDER) }
             // On the lock screen only «Напоминание»: what the user wrote stays behind the unlock.
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(
-                NotificationCompat.Builder(ctx, CHANNEL)
+                NotificationCompat.Builder(ctx, channel)
                     .setSmallIcon(R.drawable.ic_notify)
                     .setColor(0xFFC8643B.toInt())
                     .setContentTitle(L.s.notifReminder)
@@ -155,8 +160,10 @@ object Reminders {
                 if (taskId != null) {
                     fun act(kind: String, req: Int) = PendingIntent.getBroadcast(ctx, taskId.hashCode() + req,
                         intent(ctx, kind, taskId), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-                    addAction(0, L.s.markDone, act("done", 1))
-                    addAction(0, L.s.snoozeHour, act("snooze", 2))
+                    // Something awaited is «Получено», not «Готово»; «через час» means nothing for it — «завтра» does.
+                    addAction(0, if (buttons == Buttons.Wait) L.s.gotIt else L.s.markDone, act("done", 1))
+                    if (buttons == Buttons.Hour) addAction(0, L.s.snoozeHour, act("snooze", 2))
+                    else addAction(0, L.s.tomorrow, act("later", 3))
                 }
                 // The end of the day: what's left of today moves to tomorrow in one tap.
                 if (evening) addAction(0, L.s.toTomorrow, PendingIntent.getBroadcast(ctx, REQ_EVENING + 7,
@@ -164,6 +171,13 @@ object Reminders {
             }
             .build()
         NotificationManagerCompat.from(ctx).notify(id, n)
+    }
+
+    /** A change from a notification's button: through Store.update (so the reminder follows), then the alarms anew. */
+    private fun answer(ctx: Context, key: String, f: (ru.anjeib.margin.data.AppData) -> ru.anjeib.margin.data.AppData) {
+        Store.get(ctx).update(f)
+        NotificationManagerCompat.from(ctx).cancel(key.hashCode())
+        syncTasks(ctx, Store.get(ctx).data.value.tasks)
     }
 
     internal fun fire(ctx: Context, i: Intent) {
@@ -176,69 +190,36 @@ object Reminders {
                 // A note's reminder: its title and the last thing written in it.
                 if (key.startsWith("note:")) {
                     val n = data.notes.find { it.id == key.removePrefix("note:") } ?: return
-                    show(ctx, key.hashCode(), n.title.ifBlank { L.s.untitled }, n.entries.lastOrNull { it.text.isNotBlank() }?.text?.take(120).orEmpty())
+                    show(ctx, key.hashCode(), n.title.ifBlank { L.s.untitled }, n.entries.lastOrNull { it.text.isNotBlank() }?.text?.take(120).orEmpty(), open = n.id)
                     return
                 }
-                ru.anjeib.margin.data.questionRef(key)?.let { (tid, qid) ->
-                    val t = data.tasks.find { it.id == tid && !it.done } ?: return
-                    val q = t.subtasks.find { it.id == qid && !it.done } ?: return
-                    show(ctx, key.hashCode(), q.from?.let { L.s.waitPrefix(it) + " " + q.title } ?: q.title, "↳ " + t.title, key)
-                    return
-                }
-                val t = data.tasks.find { it.id == key } ?: return
-                if (t.done) return
-                show(ctx, t.id.hashCode(), t.title, listOfNotNull(t.whenLabel(), t.waitingFor?.let { L.s.waitingFor(it) }).joinToString(" · "), t.id)
+                ringOf(data.tasks, key, today)?.let { r -> show(ctx, key.hashCode(), r.title, r.text, key, open = r.open, buttons = r.buttons) }
+                // What rings next for it (its own hour after an earlier «напомни…», the next of its days) is set now, not at the next change.
+                syncTasks(ctx, data.tasks)
             }
-            "done" -> {
-                val id = i.getStringExtra(TASK) ?: return
-                // A topic's question: settled (or received) from the notification.
-                ru.anjeib.margin.data.questionRef(id)?.let { (tid, qid) ->
-                    Store.get(ctx).update { d -> d.copy(tasks = d.tasks.map { t -> if (t.id != tid) t else t.copy(subtasks = t.subtasks.map { if (it.id == qid) it.copy(done = true, doneAt = today.toString()) else it }) }) }
-                    NotificationManagerCompat.from(ctx).cancel(id.hashCode())
-                    syncTasks(ctx, Store.get(ctx).data.value.tasks)
-                    return
-                }
-                Store.get(ctx).update { d ->
-                    val t = d.tasks.find { it.id == id && !it.done } ?: return@update d
-                    d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(done = true, doneAt = today.toString()).logged(it, "you") else it } + listOfNotNull(t.nextOccurrence()))
-                }
-                NotificationManagerCompat.from(ctx).cancel(id.hashCode())
-                syncTasks(ctx, Store.get(ctx).data.value.tasks)
-            }
+            // «Готово» / «Получено»: just the day it reminded of when the matter has several.
+            "done" -> { val key = i.getStringExtra(TASK) ?: return; answer(ctx, key) { it.doneFromReminder(key, today) } }
             "snooze" -> {
-                val id = i.getStringExtra(TASK) ?: return
+                val key = i.getStringExtra(TASK) ?: return
                 val at = LocalDateTime.now().plusHours(1).withSecond(0).withNano(0)
-                val q = ru.anjeib.margin.data.questionRef(id)
-                // A question has no reminder of its own: «через час» moves its hour.
-                if (q != null) Store.get(ctx).update { d -> d.copy(tasks = d.tasks.map { t -> if (t.id != q.first) t else t.copy(subtasks = t.subtasks.map { if (it.id == q.second) it.copy(due = at.toLocalDate().toString(), time = at.toLocalTime().toString().take(5)) else it }) }) }
-                else Store.get(ctx).update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(remindAt = at.toString().take(16)).logged(it, "you") else it }) }
-                NotificationManagerCompat.from(ctx).cancel(id.hashCode())
-                syncTasks(ctx, Store.get(ctx).data.value.tasks)
+                answer(ctx, key) { it.snoozeFromReminder(key, at) }
             }
+            "later" -> { val key = i.getStringExtra(TASK) ?: return; answer(ctx, key) { it.postponeTo(key, today.plusDays(1), today) } }
             "morning" -> {
                 val todays = data.listTasks().filter { !it.done && (it.dueDate == today || (it.startDate?.let { s -> !s.isAfter(today) } == true && it.dueDate?.let { d -> !d.isBefore(today) } == true)) }
                 val overdue = data.listTasks().count { !it.done && it.dueDate?.isBefore(today) == true }
-                show(ctx, REQ_MORNING, L.s.notifMorningTitle, L.s.notifMorningText(todays.size, overdue))
+                show(ctx, REQ_MORNING, L.s.notifMorningTitle, L.s.notifMorningText(todays.size, overdue), digest = true)
                 scheduleDaily(ctx)
             }
             "evening" -> {
-                val done = data.tasks.count { it.doneAt == today.toString() }
-                val left = data.tasks.count { !it.done && it.dueDate?.let { d -> !d.isAfter(today) } == true }
-                show(ctx, REQ_EVENING, L.s.notifEveningTitle, L.s.notifEveningText(done, left), evening = left > 0)
+                val (done, left) = data.eveningCounts(today)
+                // «На завтра» only when there is something it would move.
+                val movable = data.todayToTomorrow(today) != data
+                show(ctx, REQ_EVENING, L.s.notifEveningTitle, L.s.notifEveningText(done, left), evening = movable, digest = true)
                 scheduleDaily(ctx)
             }
             "tomorrow" -> {
-                // Only today's open matters, not older overdue ones and not repeats or several-day matters — they keep their own rhythm.
-                val next = today.plusDays(1).toString()
-                val t0 = today.toString()
-                Store.get(ctx).update { d -> d.copy(tasks = d.tasks.map { t ->
-                    when {
-                        t.done -> t
-                        t.topic -> t.copy(subtasks = t.subtasks.map { q -> if (!q.done && q.due == t0 && q.slots.isEmpty()) q.copy(due = next) else q })
-                        t.due == t0 && t.repeat == null && t.slots.isEmpty() -> t.copy(due = next).logged(t, "you")
-                        else -> t
-                    }
-                }) }
+                Store.get(ctx).update { it.todayToTomorrow(today) }
                 NotificationManagerCompat.from(ctx).cancel(REQ_EVENING)
                 syncTasks(ctx, Store.get(ctx).data.value.tasks)
             }
@@ -258,8 +239,17 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 }
 
+/**
+ * Alarms are set in the phone's clock (RTC millis): after a reboot, a new time zone or a changed clock, and after an
+ * update, they are set again from the data — «в 10:00» stays 10:00 where the user is now.
+ */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) Reminders.rescheduleAll(context)
+        if (intent.action !in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_TIME_CHANGED, Intent.ACTION_MY_PACKAGE_REPLACED)) return
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { Reminders.rescheduleAll(context) }
+            pending.finish()
+        }
     }
 }

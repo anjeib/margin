@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -81,7 +82,7 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
         }
         androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth()) { p ->
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-                Text("Margin", style = Type.label.copy(color = c.accent, fontSize = 13.sp))
+                Text("Margin", style = Type.label.copy(color = c.accentText, fontSize = 13.sp))
                 Spacer(Modifier.height(12.dp))
                 Text(pages[p].first, style = Type.display.copy(color = c.ink, fontSize = 36.sp, lineHeight = 42.sp))
                 Spacer(Modifier.height(12.dp))
@@ -119,11 +120,28 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                         Spacer(Modifier.height(8.dp))
                         Text(s.tourMore, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
                     }
-                    else -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (Build.VERSION.SDK_INT >= 33) Pill(if (notifOk) "✓ " + s.notifications + " · " + s.granted else s.notifications, accent = !notifOk,
-                            onClick = if (notifOk) null else ({ notif.launch(Manifest.permission.POST_NOTIFICATIONS) }))
-                        Pill(if (calOk) "✓ " + s.calendar + " · " + s.granted else s.calendar, accent = !calOk,
-                            onClick = if (calOk) null else ({ cal.launch(Manifest.permission.READ_CALENDAR) }))
+                    else -> Column {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            if (Build.VERSION.SDK_INT >= 33) Pill(if (notifOk) "✓ " + s.notifications + " · " + s.granted else s.notifications, accent = !notifOk,
+                                onClick = if (notifOk) null else ({ notif.launch(Manifest.permission.POST_NOTIFICATIONS) }))
+                            Pill(if (calOk) "✓ " + s.calendar + " · " + s.granted else s.calendar, accent = !calOk,
+                                onClick = if (calOk) null else ({ cal.launch(Manifest.permission.READ_CALENDAR) }))
+                        }
+                        // The morning summary is chosen here, with the notifications it needs — not asked later in the chat over «Сегодня».
+                        Spacer(Modifier.height(22.dp))
+                        Text(s.obBrief, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+                        Spacer(Modifier.height(8.dp))
+                        val st by vm.settings.collectAsState()
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            s.setupBriefOptions.forEachIndexed { i, o ->
+                                val off = i == s.setupBriefOptions.lastIndex
+                                val time = if (off) null else "%02d:00".format(o.substringBefore(':').toInt())
+                                val on = if (off) !st.morningBrief else st.morningBrief && st.morningTime == time
+                                Pill(if (on) "✓ $o" else o, accent = on, onClick = {
+                                    vm.updateSettings { it.copy(morningBrief = !off, morningTime = time ?: it.morningTime) }
+                                })
+                            }
+                        }
                     }
                 }
             }

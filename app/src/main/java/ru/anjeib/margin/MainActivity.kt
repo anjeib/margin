@@ -78,7 +78,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val d by vm.data.collectAsState()
                 androidx.compose.runtime.CompositionLocalProvider(ru.anjeib.margin.ui.LocalPeopleLinks provides ru.anjeib.margin.ui.PeopleLinks(
                     isContact = { n -> d.persons.any { it.isContact && it.matches(n) } }, onName = vm::nameTapped,
-                )) {
+                ), ru.anjeib.margin.ui.LocalTomorrow provides { id -> vm.postponeTo(id, java.time.LocalDate.now().plusDays(1)) }) {
                 if (locked.value) LockScreen(strings.lockOpen) { unlock() } else
                 App(vm, shared.value, onSharedConsumed = { shared.value = null },
                     launch = launch.value, onLaunchUsed = { launch.value = null },

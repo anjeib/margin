@@ -37,6 +37,9 @@ fun LocalDate.dayMonth(): String =
 fun LocalDate.dayMonthShort(): String =
     if (ru) "$dayOfMonth ${monthsShortRu[monthValue - 1]}" else "${monthsEn[monthValue - 1].take(3)} $dayOfMonth"
 
+/** «8 окт» — and the year only when it is not this one: «8 окт 2025». One form for dates inside lines. */
+fun LocalDate.dayMonthYear(today: LocalDate = LocalDate.now()): String = dayMonthShort() + if (year != today.year) " $year" else ""
+
 /** «Чт 8 окт» / «Thu Oct 8», or Today / Tomorrow / Yesterday near today. */
 fun LocalDate.shortLabel(today: LocalDate = LocalDate.now()): String = when (this) {
     today -> L.s.today

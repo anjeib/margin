@@ -3,7 +3,7 @@ package ru.anjeib.margin.ai
 /**
  * «Добавь подзадачу купить полис», «место: Ленина 5», «новая заметка — посмотреть Одиссею».
  * Said in so many words, so recognised in code: instant, free, exact. Everything else still goes to the AI.
- * [what] — subtask, task, note, place, time, date, phone, email, telegram, people, project, repeat, remind, entry.
+ * [what] — subtask, task, note, place, time, date, phone, email, telegram, people, project, repeat, remind, entry, settings.
  */
 data class Command(val what: String, val value: String)
 
@@ -59,8 +59,37 @@ object Commands {
     /** «Подзадача», «Место», «Исправить» before a colon are commands, not the name of a matter. */
     fun isCommandWord(word: String): Boolean = parse("$word: x") != null
 
+    // «итог дня в 21», «вечерний итог не нужен», «утреннюю сводку в 9»: the app's own summaries, set without the AI (works offline).
+    private const val EVENING = "(?:итог(?:и)?\\s+дня|вечерн\\p{L}*\\s+(?:итог\\p{L}*|обзор\\p{L}*|сводк\\p{L}*)|итог\\p{L}*\\s+вечером|вечером\\s+итог\\p{L}*|evening\\s+(?:summary|review)|daily\\s+review)"
+    private const val MORNING = "(?:утренн\\p{L}*\\s+сводк\\p{L}*|сводк[уа]|morning\\s+(?:summary|brief))"
+    private const val ASK = "(?:присылай\\s+|присылать\\s+|пришли\\s+|ставь\\s+|поставь\\s+|давай\\s+|хочу\\s+|включи\\s+|send\\s+(?:the\\s+|me\\s+)?|set\\s+(?:the\\s+)?)?"
+    private const val OFF = "(?:не\\s+нуж\\p{L}*|не\\s+надо|не\\s+присылай|выключи\\p{L}*|отключи\\p{L}*|off)"
+    private const val STOP = "(?:выключи\\p{L}*|отключи\\p{L}*|не\\s+присылай|убери|turn\\s+off|no)"
+    private val dailyOn = listOf("evening" to EVENING, "morning" to MORNING).map { (k, w) ->
+        k to Regex("^$ASK$w\\s+(?:в|к|at)\\s+(\\d{1,2}(?:[:.]\\d{2})?(?:\\s*(?:утра|дня|вечера|am|pm))?)[.!]?$", RegexOption.IGNORE_CASE)
+    }
+    private val dailyOff = listOf("evening" to EVENING, "morning" to MORNING).map { (k, w) ->
+        k to Regex("^(?:$w\\s+$OFF|$STOP\\s+$w)[.!]?$", RegexOption.IGNORE_CASE)
+    }
+
+    /** [what] "settings", [value] "evening=21:00" / "evening=off" / "morning=09:00" / "morning=off". */
+    fun daily(text: String): Command? {
+        val t = text.trim()
+        dailyOff.forEach { (k, r) -> if (r.matches(t)) return Command("settings", "$k=off") }
+        dailyOn.forEach { (k, r) ->
+            val v = r.find(t)?.groupValues?.get(1) ?: return@forEach
+            var hm = time(v) ?: return@forEach
+            // «итог дня в 9» is nine in the evening; «в 9 утра» says otherwise.
+            val h = hm.take(2).toInt()
+            if (k == "evening" && h in 1..11 && !Regex("утра|am", RegexOption.IGNORE_CASE).containsMatchIn(v)) hm = "%02d".format(h + 12) + hm.drop(2)
+            return Command("settings", "$k=$hm")
+        }
+        return null
+    }
+
     fun parse(text: String): Command? {
         val t = text.trim()
+        daily(t)?.let { return it }
         fix.find(t)?.let { return Command("fix", it.groupValues[1].trim()) }
         for ((what, r) in withVerb + withColon) {
             val m = r.find(t) ?: continue

@@ -260,7 +260,7 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
                 }
                 // Someone met for the first time: «+ контакт» once, here; not pressed — they stay just a name.
                 after.persons.filter { pr -> pr.draft && current.persons.none { it.matches(pr.name) } }.take(2).forEach { pr ->
-                    Text(s.addContact + ": " + pr.name, style = Type.small.copy(color = c.link, fontSize = 14.sp),
+                    Text(s.addContact + ": " + pr.name, style = Type.small.copy(color = c.linkOnBubble, fontSize = 14.sp),
                         modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).clickable { onKeepContact(pr.name) }.padding(vertical = 2.dp))
                 }
                 if (kind.isNotBlank()) Text(kind, style = Type.label.copy(color = c.onBubble.copy(alpha = 0.55f), fontSize = 10.5.sp),
@@ -335,7 +335,7 @@ private fun AssistantMsg(
             var overflow by remember(m.id) { mutableStateOf(false) }
             Column {
                 Text(
-                    m.text, style = Type.body.copy(color = if (m.error) c.accent else c.ink),
+                    m.text, style = Type.body.copy(color = if (m.error) c.accentText else c.ink),
                     maxLines = if (full) Int.MAX_VALUE else 6, overflow = TextOverflow.Ellipsis,
                     onTextLayout = { if (!full) overflow = it.hasVisualOverflow },
                     modifier = Modifier.clickable(enabled = overflow || full) { full = !full },

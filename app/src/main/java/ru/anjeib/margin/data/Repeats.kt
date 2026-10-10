@@ -39,7 +39,7 @@ fun Task.nextOccurrence(today: LocalDate = LocalDate.now()): Task? {
         subtasks = subtasks.map { it.withDone(false) },
         entries = emptyList(),
         createdAt = today.toString(),
-    )
+    ).autoReminded() // «каждый пн в 10» reminds every Monday, not only the first
 }
 
 /** A topic's repeating matter, done: the next one, on its next day, with nothing of the old one's notes. */

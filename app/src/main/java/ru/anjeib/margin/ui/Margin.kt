@@ -96,7 +96,7 @@ fun Modifier.marginRule(color: Color, fraction: Float = 1f, top: Dp = 0.dp, over
 fun MarginText(text: String, late: Boolean = false, petrol: Boolean = false, faint: Boolean = false) {
     val c = M.c
     // Dates and hours read first: ink and medium; only something closed (faint) steps back to graphite.
-    Text(text, style = Type.small.copy(color = when { late -> c.accent; petrol -> c.link; faint -> c.graphite; else -> c.ink }, fontSize = 12.5.sp,
+    Text(text, style = Type.small.copy(color = when { late -> c.accentText; petrol -> c.link; faint -> c.graphite; else -> c.ink }, fontSize = 12.5.sp,
         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End, lineHeight = 15.sp), modifier = Modifier.padding(top = 3.dp))
 }
 
@@ -107,7 +107,7 @@ fun dateSpan(): androidx.compose.ui.text.SpanStyle = androidx.compose.ui.text.Sp
 /** A date or an hour on its own: the same look as [dateSpan]. */
 @Composable
 fun dateStyle(size: androidx.compose.ui.unit.TextUnit = 13.sp, late: Boolean = false) =
-    Type.small.copy(color = if (late) M.c.accent else M.c.ink, fontSize = size, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum")
+    Type.small.copy(color = if (late) M.c.accentText else M.c.ink, fontSize = size, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum")
 
 /** The day on the margin: a big serif number and the month under it. */
 @Composable
@@ -314,7 +314,7 @@ fun SoftMenu(expanded: Boolean, onDismissRequest: () -> Unit, content: @Composab
 fun SoftMenuItem(text: String, danger: Boolean = false, selected: Boolean = false, onClick: () -> Unit) {
     val c = M.c
     Row(Modifier.fillMaxWidth().clickableSoft(onClick).padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(text, style = Type.body.copy(color = when { danger -> c.accent; selected -> c.link; else -> c.ink }, fontSize = 15.5.sp), modifier = Modifier.weight(1f, fill = false))
+        Text(text, style = Type.body.copy(color = when { danger -> c.accentText; selected -> c.link; else -> c.ink }, fontSize = 15.5.sp), modifier = Modifier.weight(1f, fill = false))
         if (selected) { androidx.compose.foundation.layout.Spacer(Modifier.width(16.dp)); TickGlyph(c.link, 16.dp) }
     }
 }
@@ -339,6 +339,19 @@ fun RepeatGlyph(color: Color, size: Dp = 14.dp) = Canvas(Modifier.size(size)) {
     val w = this.size.width; val h = this.size.height
     drawArc(color, startAngle = 200f, sweepAngle = 280f, useCenter = false, topLeft = Offset(w * 0.16f, h * 0.16f), size = Size(w * 0.68f, h * 0.68f), style = stroke(1.4.dp))
     drawPath(Path().apply { moveTo(w * 0.12f, h * 0.3f); lineTo(w * 0.2f, h * 0.48f); lineTo(w * 0.38f, h * 0.4f) }, color, style = stroke(1.4.dp))
+}
+
+/** Files: a paperclip in the same thin line — instead of the coloured 📎 among the drawn marks. */
+@Composable
+fun ClipGlyph(color: Color, size: Dp = 14.dp, modifier: Modifier = Modifier) = Canvas(modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply {
+        moveTo(w * 0.62f, h * 0.3f); lineTo(w * 0.62f, h * 0.7f)
+        arcTo(androidx.compose.ui.geometry.Rect(w * 0.38f, h * 0.58f, w * 0.62f, h * 0.82f), 0f, 180f, false)
+        lineTo(w * 0.38f, h * 0.22f)
+        arcTo(androidx.compose.ui.geometry.Rect(w * 0.38f, h * 0.1f, w * 0.74f, h * 0.34f), 180f, 180f, false)
+        lineTo(w * 0.74f, h * 0.74f)
+    }, color, style = stroke(1.3.dp))
 }
 
 /** A thing with its own hour. */
@@ -421,11 +434,12 @@ val FieldLead = MarginW - 14.dp + 4.dp
 
 /** A petrol word, medium — a link as everywhere in the app (no underline); [quiet] — graphite. */
 @Composable
-fun PaperLink(text: String, quiet: Boolean = false, onClick: () -> Unit) {
+fun PaperLink(text: String, quiet: Boolean = false, danger: Boolean = false, onClick: () -> Unit) {
     val c = M.c
-    Text(text, style = Type.small.copy(color = if (quiet) c.graphite else c.link, fontSize = 14.sp,
+    // A finger's height (≈40 dp) for a few words: the padding is the target, the words stay small.
+    Text(text, style = Type.small.copy(color = when { danger -> c.accentText; quiet -> c.graphite; else -> c.link }, fontSize = 14.sp,
         fontWeight = if (quiet) null else androidx.compose.ui.text.font.FontWeight.Medium),
-        modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(vertical = 6.dp, horizontal = 2.dp))
+        modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(vertical = 10.dp, horizontal = 2.dp))
 }
 
 /** «Личное» / «Работа» — a quiet outlined pill with a dot of its own colour; null with [onClick] — an offer to choose. */
@@ -559,4 +573,19 @@ private fun Modifier.bleedStart(d: Dp): Modifier = this.layout { m, c ->
     if (!c.hasBoundedWidth) { val p = m.measure(c); return@layout layout(p.width, p.height) { p.place(0, 0) } }
     val p = m.measure(c.copy(minWidth = (c.minWidth + px).coerceAtMost(c.maxWidth + px), maxWidth = c.maxWidth + px))
     layout((p.width - px).coerceAtLeast(0), p.height) { p.place(-px, 0) }
+}
+
+
+/**
+ * The colour of a matter's hour: ink, digits of one width. A passed hour today is quiet graphite — it is not an alarm,
+ * the evening must not turn into a red wall; only a past day is late, in terracotta text.
+ */
+@Composable
+fun hourColor(due: java.time.LocalDate?, time: String?, today: java.time.LocalDate = java.time.LocalDate.now()): androidx.compose.ui.graphics.Color {
+    val c = M.c
+    return when {
+        due != null && due.isBefore(today) -> c.accentText
+        due == today && time != null && today == java.time.LocalDate.now() && time < java.time.LocalTime.now().toString().take(5) -> c.graphite
+        else -> c.ink
+    }
 }

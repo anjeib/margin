@@ -127,7 +127,8 @@ object Topics {
             val n = n0.syncSlots().let { t -> if (t.subtasks.any { it.slots.isNotEmpty() }) t.copy(subtasks = t.subtasks.map { it.syncSlots() }) else t }
             if (n != n0) changed = true
             val o = old.tasks.find { it.id == n.id }
-            val t = if (o == null) born(n) else grown(o, n)
+            // …and its reminder follows its day and hour, whoever moved them (MatterOps.reminderAfter).
+            val t = (if (o == null) born(n) else grown(o, n)).reminderAfter(o)
             if (t !== n) changed = true
             t
         }

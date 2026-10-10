@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.rounded.Close
 import ru.anjeib.margin.data.dayMonthShort
 
 import androidx.compose.foundation.layout.PaddingValues
@@ -81,9 +83,11 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     BackHandler { if (viewing != null) viewing = null else onBack() }
-    val words = q.lowercase().split(' ').filter { it.isNotBlank() }
+    // «ё» is «е», and a longer word is matched by its stem: «Маше» finds «Маша», «макеты» — «макет».
+    fun norm(x: String) = x.lowercase().replace('ё', 'е')
+    val words = norm(q).split(' ').filter { it.isNotBlank() }.map { if (it.length >= 5) it.dropLast(if (it.length >= 7) 2 else 1) else it }
     val browsing = words.isEmpty() && kind != null
-    fun hit(hay: String) = browsing || (words.isNotEmpty() && words.all { it in hay.lowercase() })
+    fun hit(hay: String) = browsing || (words.isNotEmpty() && norm(hay).let { h -> words.all { it in h } })
     fun wants(k: String) = kind == null || kind == k
     fun subs(l: List<Subtask>): String = l.joinToString(" ") { it.title + " " + (it.assignee ?: "") + " " + subs(it.children) }
     fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it) + flat(it.children) }
@@ -105,7 +109,10 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
             Box(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(c.chip).padding(horizontal = 16.dp, vertical = 12.dp)) {
                 if (q.isEmpty()) Text(s.searchHint, style = Type.body.copy(color = c.graphite))
                 BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link),
-                    modifier = Modifier.fillMaxWidth().focusRequester(focus))
+                    modifier = Modifier.fillMaxWidth().padding(end = if (q.isNotEmpty()) 28.dp else 0.dp).focusRequester(focus))
+                // Cleared in one tap.
+                if (q.isNotEmpty()) Box(Modifier.align(Alignment.CenterEnd).offset(x = 10.dp).size(40.dp).clip(CircleShape).clickable { q = ""; runCatching { focus.requestFocus() } },
+                    contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, s.clearWord, tint = c.graphite, modifier = Modifier.size(18.dp)) }
             }
             Spacer(Modifier.width(8.dp))
         }
@@ -143,8 +150,8 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
                     Column {
                         TopicRow(t, onOpen = { keep(); onTask(t.id) })
                         // Found in one of its matters: that matter, which opens lit in the topic's feed.
-                        if (words.isNotEmpty() && !words.all { it in t.title.lowercase() })
-                            flat(t.subtasks).firstOrNull { q -> words.all { it in (q.title + " " + q.assignee.orEmpty()).lowercase() } }?.let { sub ->
+                        if (words.isNotEmpty() && !words.all { it in norm(t.title) })
+                            flat(t.subtasks).firstOrNull { q -> words.all { it in norm(q.title + " " + q.assignee.orEmpty()) } }?.let { sub ->
                                 Margined(Modifier.padding(bottom = 6.dp)) { PaperLink("↳ " + sub.title) { keep(); onTask("q:${t.id}:${sub.id}") } }
                             }
                     }

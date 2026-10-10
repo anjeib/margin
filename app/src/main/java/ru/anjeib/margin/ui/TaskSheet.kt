@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.properName
 import ru.anjeib.margin.data.shortLabel
 
 import androidx.compose.foundation.layout.offset
@@ -178,10 +179,10 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         MetaLine(buildList {
                             dates?.let { add(MetaItem(Meta.plain(it), Meta.date(late)) { dialog = "dates" }) }
                             task.time?.takeIf { task.slots.isEmpty() }?.let { add(MetaItem(Meta.plain(it), Meta.date(late)) { dialog = "time" }) }
-                            task.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
+                            task.repeat?.let { add(MetaItem(Meta.plain(it.label()), Meta.quiet()) { dialog = "repeat" }) }
                             add(MetaItem(Meta.sphere(task.sphere == "work"), Meta.quiet()) { vm.setSphere(task.id, nextSphere(task.sphere)) })
                             task.waitingFor?.let { w -> add(MetaItem(Meta.promise(s.promiseToYouParts(w)), Meta.quiet()) { dialog = "waiting" }) }
-                                ?: task.promisedTo?.let { w -> add(MetaItem(Meta.promise(s.promiseFromYouParts(w)), Meta.quiet()) { data.contact(w)?.let { p -> onOpenPerson(p.id) } ?: vm.offerContact(w) }) }
+                                ?: task.promisedTo?.let { w -> add(MetaItem(Meta.promise(s.promiseFromYouParts(w)), Meta.quiet(), onLong = { data.contact(w)?.let { p -> onOpenPerson(p.id) } }) { dialog = "promised" }) }
                             others.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { data.contact(p)?.let { onOpenPerson(it.id) } ?: vm.offerContact(p) }) }
                             task.place?.let { pl -> add(MetaItem(Meta.plain(pl), Meta.link(), onLong = { fill("place") }) {
                                 runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
@@ -195,15 +196,15 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             // Another day for the same matter («и в четверг»).
                             if ((task.dueDate != null || task.slots.isNotEmpty()) && task.repeat == null && !task.done) add(s.addDay to "day")
                             if (task.repeat == null) add(s.fieldRepeat to "repeat")
-                            if (task.people.isEmpty()) add(s.fieldPeople to "people")
+                            // Who owes whom can be set by hand too, not only by the words (one side at a time).
+                            if (task.waitingFor == null && task.promisedTo == null && !task.done) { add(s.fieldWait to "waiting"); add(s.fieldPromised to "promised") }
+                            if (task.people.isEmpty() && task.waitingFor == null && task.promisedTo == null) add(s.fieldPeople to "people")
                             if (task.place == null) add(s.fieldPlace to "place")
                             if (!task.done) add(s.stepOne to "step")
                         }
-                        if (missing.isNotEmpty()) FlowRow(Modifier.padding(top = 2.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-                            missing.forEachIndexed { i, (label, d) ->
-                                if (i > 0) Text(" · ", style = Type.small.copy(color = c.faint))
-                                PaperLink("+ " + label.lowercase(), quiet = true) { if (d in typed) fill(d) else dialog = d }
-                            }
+                        if (missing.isNotEmpty()) DotFlow(missing.size, Modifier.padding(top = 2.dp), separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
+                            val (label, d) = missing[i]
+                            PaperLink("+ " + label.lowercase(), quiet = true) { if (d in typed) fill(d) else dialog = d }
                         }
                     }
                 }
@@ -258,8 +259,25 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     }
                 }
 
-                // Follow-up is late: offer to nudge the person (SMS if we know the number, else share).
-                if (task.waitingFor != null && task.isOverdue()) {
+                // What can be done with the matter, in sight (it used to hide behind a long press of the bagel — still there too).
+                Margined(Modifier.padding(top = 10.dp)) {
+                    val acts = buildList<Triple<String, Boolean, () -> Unit>> {
+                        if (!task.done) {
+                            add(Triple(s.swipeTomorrow, false) { vm.postpone(task.id, 1) })
+                            add(Triple(s.plusWeek, false) { vm.postpone(task.id, 7) })
+                            add(Triple(s.wontDo, false) { commitTitle(); vm.dropTask(task.id); onClose() })
+                        }
+                        add(Triple(s.toNote, false) { commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) })
+                        add(Triple(s.delete, true) { dialog = "delete" })
+                    }
+                    DotFlow(acts.size, separator = { Text(" · ", style = Type.small.copy(color = c.graphite)) }) { i ->
+                        val (label, danger, act) = acts[i]
+                        PaperLink(label.lowercase(), quiet = !danger, danger = danger, onClick = act)
+                    }
+                }
+
+                // Their day has come (or passed): offer to nudge the person (SMS if we know the number, else share).
+                if (task.waitingFor != null && !task.done && task.dueDate?.isAfter(LocalDate.now()) == false) {
                     val ctx = androidx.compose.ui.platform.LocalContext.current
                     val who = task.waitingFor
                     val phone = data.person(who)?.phone
@@ -409,8 +427,14 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
         "project" -> TextDialog(s.project, task.project.orEmpty(), "vuzburo", onDismiss = { dialog = null }) { v ->
             save(task.copy(project = v.trim().removePrefix("#").lowercase().ifBlank { null })); dialog = null
         }
-        "waiting" -> TextDialog(s.waiting, task.waitingFor.orEmpty(), "", onDismiss = { dialog = null }) { v ->
-            save(task.copy(waitingFor = v.trim().ifBlank { null })); dialog = null
+        // Empty words take the side off; a name sets it (and the other side goes — one matter, one direction).
+        "waiting" -> TextDialog(s.waiting, task.waitingFor.orEmpty(), s.sideHint, onDismiss = { dialog = null }) { v ->
+            val who = v.trim().ifBlank { null }?.properName()
+            save(task.copy(waitingFor = who, promisedTo = if (who != null) null else task.promisedTo)); dialog = null
+        }
+        "promised" -> TextDialog(s.promisedQ, task.promisedTo.orEmpty(), s.sideHint, onDismiss = { dialog = null }) { v ->
+            val who = v.trim().ifBlank { null }?.properName()
+            save(task.copy(promisedTo = who, waitingFor = if (who != null) null else task.waitingFor)); dialog = null
         }
         "source" -> AlertDialog(
             onDismissRequest = { dialog = null }, containerColor = c.card,
@@ -428,7 +452,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
             onDismissRequest = { dialog = null },
             containerColor = c.card,
             title = { Text(s.deleteTaskQ, style = Type.cardTitle.copy(color = c.ink)) },
-            confirmButton = { TextButton({ dialog = null; onClose(); vm.deleteTask(task.id) }) { Text(s.delete, color = c.accent) } },
+            confirmButton = { TextButton({ dialog = null; onClose(); vm.deleteTask(task.id) }) { Text(s.delete, color = c.accentText) } },
             dismissButton = { TextButton({ dialog = null }) { Text(s.cancel, color = c.graphite) } },
         )
     }
@@ -483,7 +507,7 @@ internal fun DaysProp(slots: List<ru.anjeib.margin.data.Slot>, onToggle: (String
             slots.forEach { sl ->
                 val d = runCatching { LocalDate.parse(sl.date) }.getOrNull()
                 val late = !sl.done && d != null && d.isBefore(today)
-                val fg = when { sl.done -> c.ok; late -> c.accent; else -> c.link }
+                val fg = when { sl.done -> c.ok; late -> c.accentText; else -> c.link }
                 Row(Modifier.clip(RoundedCornerShape(50)).border(1.dp, if (sl.done) c.ok.copy(alpha = 0.4f) else c.hairline, RoundedCornerShape(50))
                     .combinedClickable(onClick = { onToggle(sl.id) }, onLongClick = { onRemove(sl.id) }).padding(horizontal = 10.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically) {
@@ -518,7 +542,7 @@ internal fun Prop(glyph: @Composable () -> Unit, text: String, late: Boolean = f
     val c = M.c
     Row(Modifier.clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = onClick, onLongClick = onLong).padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(22.dp), contentAlignment = Alignment.CenterStart) { glyph() }
-        Text(text, style = Type.body.copy(color = if (late) c.accent else c.link, fontSize = 16.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(text, style = Type.body.copy(color = if (late) c.accentText else c.link, fontSize = 16.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -528,9 +552,9 @@ private fun MetaChip(icon: ImageVector, text: String?, alert: Boolean = false, o
     if (text == null) return
     Row(Modifier.clip(RoundedCornerShape(50)).background(if (alert) c.accentSoft else c.chip).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = if (alert) c.accent else c.graphite, modifier = Modifier.size(15.dp))
+        Icon(icon, null, tint = if (alert) c.accentText else c.graphite, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
-        Text(text, style = Type.small.copy(color = if (alert) c.accent else c.ink, fontSize = 14.sp))
+        Text(text, style = Type.small.copy(color = if (alert) c.accentText else c.ink, fontSize = 14.sp))
     }
 }
 
@@ -540,9 +564,9 @@ private fun BigChip(icon: ImageVector, text: String, alert: Boolean = false, onC
     val c = M.c
     Row(Modifier.clip(RoundedCornerShape(12.dp)).background(if (alert) c.accentSoft else c.chip).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = if (alert) c.accent else c.graphite, modifier = Modifier.size(18.dp))
+        Icon(icon, null, tint = if (alert) c.accentText else c.graphite, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text(text, style = Type.body.copy(color = if (alert) c.accent else c.ink, fontSize = 17.sp))
+        Text(text, style = Type.body.copy(color = if (alert) c.accentText else c.ink, fontSize = 17.sp))
     }
 }
 

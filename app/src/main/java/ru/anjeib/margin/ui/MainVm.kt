@@ -1,5 +1,8 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.dayMonth
+import ru.anjeib.margin.data.properName
+import ru.anjeib.margin.data.editDeal
 import ru.anjeib.margin.data.withSamples
 import ru.anjeib.margin.data.hasSamples
 import ru.anjeib.margin.data.withoutSamples
@@ -184,57 +187,31 @@ class MainVm(app: Application) : AndroidViewModel(app) {
      * Sends what the user wrote (plus attachments) to the assistant.
      * Main scope goes through the preview card; inside a task or in notes changes apply at once with an Undo line.
      */
-    // ---------------- first run: two questions in the chat instead of a settings page ----------------
+    // ---------------- first run ----------------
 
-    fun startSetup() {
-        if (settings.value.setupStep != 0) return
-        prefs.update { it.copy(setupStep = 1) }
-        ask(L.s.setupBriefQ, L.s.setupBriefOptions)
+    /**
+     * The morning summary is chosen on the last tour page; the name is never asked — it can be said any time
+     * («называй меня Аня»). Asking in the chat used to swallow the first short matter («Купить хлеб») as a name.
+     */
+    /** The day picked in «Календарь» (not today): what is written then goes to that day unless the words name another. */
+    val calendarDay = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)
+    fun pickCalendarDay(d: LocalDate?) { calendarDay.value = d }
+
+    /** Adds the picked calendar day in words when the phrase has no date of its own — the parser and the AI then read it as said. */
+    private fun onPickedDay(t: String): String {
+        val day = calendarDay.value ?: return t
+        // Ideas, topics, records and «#тема» have no day of their own.
+        if (Regex("(?<!\\p{L})/(иде|тем|запис|idea|topic|note)|#", RegexOption.IGNORE_CASE).containsMatchIn(t)) return t
+        val items = runCatching { ru.anjeib.margin.ai.LocalParser.parse(t, data.value).items }.getOrDefault(emptyList())
+        val dated = items.any { it.due != null || it.start != null || it.days.isNotEmpty() || it.repeat != null }
+        return if (dated) t else "$t ${day.dayMonth()}"
     }
 
-    private fun ask(text: String, options: List<String>) {
-        val m = ChatMsg(fromUser = false, text = text, options = options)
-        addAssistant(m)
-        _trayFrom.value = _trayFrom.value ?: m.id
-    }
-
-    /** Answers to the first-run questions are handled here; anything else ends the setup and goes to the AI as usual. */
-    private fun setupAnswer(t: String): Boolean {
-        val step = settings.value.setupStep
-        if (step != 1 && step != 2) return false
-        val low = t.lowercase()
-        when (step) {
-            1 -> {
-                val off = Regex("не нужн|не надо|^нет|no thanks|^no\\b|not needed|^skip|пропуст").containsMatchIn(low)
-                val m = Regex("^(\\d{1,2})(?::(\\d{2}))?$").find(low.replace(" ", ""))
-                if (!off && m == null) { prefs.update { it.copy(setupStep = 3) }; return false }
-                val time = m?.let { "%02d:%02d".format(it.groupValues[1].toInt().coerceIn(0, 23), it.groupValues[2].ifEmpty { "0" }.toInt().coerceIn(0, 59)) }
-                you(t)
-                updateSettings { it.copy(morningBrief = !off, morningTime = time ?: it.morningTime, setupStep = 2) }
-                ask(L.s.setupNameQ, listOf(L.s.skip))
-            }
-            2 -> {
-                val skip = Regex("^(пропуст|skip|не важно|нет$)").containsMatchIn(low)
-                // A long phrase is a task, not a name: stop asking and let the AI take it.
-                if (!skip && (t.length > 30 || t.trim().split(Regex("\\s+")).size > 3)) { prefs.update { it.copy(setupStep = 3) }; return false }
-                you(t)
-                val name = if (skip) "" else t.properName()
-                prefs.update { it.copy(userName = name.ifBlank { it.userName }, setupStep = 3) }
-                addAssistant(ChatMsg(fromUser = false, text = L.s.setupDone(name)))
-            }
-        }
-        return true
-    }
-
-    private fun you(t: String) {
-        val user = ChatMsg(fromUser = true, text = t)
-        store.update { it.copy(chat = (it.chat + user).takeLast(60)) }
-        _trayFrom.value = _trayFrom.value ?: user.id
-    }
+    fun finishSetup() { if (settings.value.setupStep != 3) prefs.update { it.copy(setupStep = 3) } }
 
     fun send(text: String, smart: Boolean = false, label: String? = null, scope: Scope = Scope.Main, files: List<Attachment> = emptyList(), asQuestion: Boolean = false, movedHere: Boolean = false) {
         // «/дело», «/тема», «/идея», «/работа», «/личное» — said by the user, so they decide; the AI only fills in the rest.
-        val tg = parseTags(text)
+        val tg = parseTags(if (scope == Scope.Main && !smart) onPickedDay(text) else text)
         lastSaid = tg.text to text
         val t = tg.text
         val tagKind = tg.kind
@@ -258,7 +235,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             }
             return
         }
-        if (scope == Scope.Main && files.isEmpty() && !smart && setupAnswer(t)) return
+        if (settings.value.setupStep in 1..2) finishSetup() // left over from the old chat questions: words are words
         if (_pending.value != null) confirm() // typing on means the preview was fine
         val s = settings.value
 
@@ -379,6 +356,14 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 else -> kotlinx.serialization.json.JsonPrimitive(v.toString())
             }
         })
+        // «итог дня в 21», «утреннюю сводку в 9» (Commands.daily) — the app's own setting, at once and offline.
+        if (c.what == "settings") {
+            val k = c.value.substringBefore('='); val v = c.value.substringAfter('=')
+            applySettings(mapOf(k to v))
+            val said = L.s.dailySet(k == "evening", v.takeIf { it != "off" })
+            if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = said)) else _toast.value = said
+            return true
+        }
         val d = data.value
         val actions: List<kotlinx.serialization.json.JsonObject> = when (scope) {
             is Scope.InTask -> {
@@ -944,6 +929,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** A topic's matter, the same «+ …» as a simple one: repeat, place, people — set by hand, no AI. */
     fun setDealRepeat(topicId: String, subId: String, r: ru.anjeib.margin.data.Repeat?) = store.update { it.setDealRepeat(topicId, subId, r) }
     fun setDealPlace(topicId: String, subId: String, place: String?) = store.update { it.setDealPlace(topicId, subId, place) }
+    /** «Ждём от …» set or taken off by hand on a topic's matter. */
+    fun setDealFrom(topicId: String, subId: String, who: String?) = store.update { d -> d.editDeal(topicId, subId) { it.copy(from = who?.trim()?.ifBlank { null }?.properName()) } }
     fun addDealPeople(topicId: String, subId: String, text: String) = store.update { it.addDealPeople(topicId, subId, ru.anjeib.margin.ai.Commands.items(text)) }
 
     /** «Решено · в архив»: the topic with its materials leaves the lists; news in it brings it back. */

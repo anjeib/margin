@@ -213,7 +213,7 @@ private fun BadgeLegend() {
         row(t("дата и время — чёрным; просрочено — терракотой", "dates in ink; late — terracotta")) {
             Text(androidx.compose.ui.text.buildAnnotatedString {
                 pushStyle(dateSpan()); append("10 окт"); pop(); append("   ")
-                pushStyle(dateSpan().copy(color = c.accent)); append("с 6 окт"); pop()
+                pushStyle(dateSpan().copy(color = c.accentText)); append("с 6 окт"); pop()
             }, style = Type.small.copy(fontSize = 13.sp))
         }
         row(t("петроль — ссылки и выбранное: люди, адреса, время", "petrol — links and what is chosen")) { Text(t("Вам от Димы", "From Dima"), style = Type.small.copy(color = c.link, fontSize = 13.5.sp)) }

@@ -44,6 +44,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -102,6 +104,7 @@ import ru.anjeib.margin.data.weekEnd
 import ru.anjeib.margin.data.weekStart
 import ru.anjeib.margin.data.dowFull
 import ru.anjeib.margin.data.dayMonthShort
+import ru.anjeib.margin.data.dayMonthYear
 import ru.anjeib.margin.data.listTasks
 import ru.anjeib.margin.data.materials
 import ru.anjeib.margin.data.noNextStep
@@ -312,14 +315,15 @@ fun TaskList(
                     .distinctBy { ru.anjeib.margin.data.slotRef(it.id)?.first ?: it.id }
                     .sortedWith(compareBy({ (it.dueDate ?: it.startDate) ?: LocalDate.MAX }, { it.title }))
                 // Undated matters — simple ones and topics' — live at the end of today, oldest last.
-                val undatedAll = (tasks.filter { !it.done && it.dueDate == null && it.startDate == null && it.waitingFor == null } + data.undatedTopicMatters())
+                // Waits without a day too: the summary only gathers them, nothing leaves the day's list (owner's rule).
+                val undatedAll = (tasks.filter { !it.done && it.dueDate == null && it.startDate == null } + data.undatedTopicMatters())
                     .sortedByDescending { it.createdAt }
                 plans.forEach { p ->
                     item("day" + p.date) {
                         DayBlock(p, today, open = true, heading = true, onToggle = {}, topicOf = { id -> data.tasks.find { it.id == id } },
                             onOpen = onOpen, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = landed,
                             undated = if (p.date == today) undatedAll else emptyList(),
-                            top = if (p.date == today) ({ TodaySummary(p, promises, today, onOpen, data) }) else null)
+                            top = if (p.date == today) ({ TodaySummary(p, promises, today, onOpen, data, onMoveOverdue = { vm.moveOverdue() }) }) else null)
                     }
                 }
                 // Sunday: the week in one quiet card — gathered by code, gone with «×» until next Sunday.
@@ -381,9 +385,11 @@ fun TaskList(
                 }
             
                 // One quiet look ahead for the evening: tomorrow's count, a tap opens the week.
-                val tomorrowCount = tomorrowPlan.deals.size + tomorrowPlan.events.size
-                if (tomorrowCount > 0) plain("tomorrow") {
-                    Text(s.quickTomorrow + " — " + s.summaryDeals(tomorrowCount) + "  ›", style = Type.small.copy(color = c.graphite, fontSize = 14.sp),
+                // Matters and meetings are counted apart — «5 дел» must not be three matters and two meetings.
+                val tomorrowParts = listOfNotNull(tomorrowPlan.deals.size.takeIf { it > 0 }?.let { s.summaryDeals(it) },
+                    tomorrowPlan.events.size.takeIf { it > 0 }?.let { s.summaryMeetings(it) })
+                if (tomorrowParts.isNotEmpty()) plain("tomorrow") {
+                    Text(s.quickTomorrow + " — " + tomorrowParts.joinToString(" · ") + "  ›", style = Type.small.copy(color = c.graphite, fontSize = 14.sp),
                         modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(8.dp)).clickable { onView(Views.WEEK) }.padding(vertical = 6.dp))
                 }
             }
@@ -835,15 +841,19 @@ fun TopicRow(t: Task, onOpen: () -> Unit, lit: Boolean = false) {
     }
 }
 
+/** «На завтра» in one move — the most frequent postponing; another day is in the long-press menu («Дата»). */
+val LocalTomorrow = androidx.compose.runtime.staticCompositionLocalOf<((String) -> Unit)?> { null }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SwipeTask(t: Task, onDone: () -> Unit, onLater: () -> Unit, modifier: Modifier, radius: Int = 18, content: @Composable () -> Unit) {
     val c = M.c
     val s = M.s
+    val tomorrow = LocalTomorrow.current
     val state = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
         when (v) {
             SwipeToDismissBoxValue.StartToEnd -> onDone()
-            SwipeToDismissBoxValue.EndToStart -> onLater()
+            SwipeToDismissBoxValue.EndToStart -> if (tomorrow != null) tomorrow(t.id) else onLater()
             else -> {}
         }
         false // always spring back; the list itself reflects the change
@@ -864,7 +874,7 @@ private fun SwipeTask(t: Task, onDone: () -> Unit, onLater: () -> Unit, modifier
                 if (dir != SwipeToDismissBoxValue.Settled)
                     // Show where the task will land, not an abstract «tomorrow».
                     Text(if (toEnd) (if (t.done) s.undo else s.markDone)
-                        else s.postponeTitle + " →",
+                        else (if (tomorrow != null) s.swipeTomorrow else s.postponeTitle) + " →",
                         style = Type.tab.copy(color = c.bg))
             }
         },
@@ -947,9 +957,15 @@ fun dayNotes(data: AppData, date: LocalDate): List<DayNote> {
 fun dayPlan(data: AppData, date: LocalDate, today: LocalDate, events: List<CalEvent>): DayPlan {
     // v2: a topic shows on a day only through its matters for that day — ordinary rows, grouped under one link to the topic.
     val deals = data.listTasks().filter { !it.done && dayOf(it.dueDate, it.startDate, today) == date }
-        .sortedWith(compareBy({ !it.isOverdue(today) }, { it.time ?: "99" }, { it.title }))
+        // A past day's leftovers first; today's passed hours keep their place in the day's order.
+        .sortedWith(compareBy({ it.dueDate?.isBefore(today) != true }, { it.time ?: "99" }, { it.title }))
     val steps = emptyList<TopicStep>()
-    val evs = events.filter { !it.allDay && it.start.toLocalDate() == date || it.allDay && it.start.toLocalDate() == date }
+    // An event shows on every day it covers (a three-day trip, a holiday); all-day ends are exclusive midnights.
+    val evs = events.filter { e ->
+        val first = e.start.toLocalDate()
+        val last = if (e.allDay || e.end.toLocalTime() == java.time.LocalTime.MIDNIGHT) e.end.toLocalDate().minusDays(1) else e.end.toLocalDate()
+        !date.isBefore(first) && !date.isAfter(maxOf(first, last))
+    }
     // A past day shows what got done on it, struck through — the matters themselves, not a count.
     val doneList = if (date.isBefore(today)) data.tasks.filter { it.doneAt == date.toString() && !it.topic && !it.dropped } +
         data.tasks.filter { it.topic }.flatMap { t -> t.subtasks.filter { it.done && it.doneAt == date.toString() }.map { t.questionRow(it).copy(done = true) } } else emptyList()
@@ -986,11 +1002,9 @@ internal fun KindMark(t: Task?) {
     }
 }
 
-/** The hour as a petrol link that opens the clock; late in terracotta. */
-// In the lists the hour is coloured, not a separate target: a tap anywhere on the row opens the matter (the hour — by a long press).
-@Suppress("UNUSED_PARAMETER")
-private fun androidx.compose.ui.text.AnnotatedString.Builder.timeLink(time: String, late: Boolean, link: Color, accent: Color, onTime: () -> Unit) {
-    withStyle(SpanStyle(color = if (late) accent else link, fontWeight = FontWeight.Medium)) { append(time) }
+/** The hour before the words, coloured by [hourColor]; not a separate target — a tap anywhere opens the matter (the hour — by a long press). */
+private fun androidx.compose.ui.text.AnnotatedString.Builder.timeLink(time: String, color: Color) {
+    withStyle(SpanStyle(color = color, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")) { append(time) }
     append("   ")
 }
 
@@ -1016,8 +1030,10 @@ internal fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: ()
     // A tap anywhere opens the matter; a long press — the few things done most: done, the day, the hour.
     Box {
     SoftMenu(quick, { quick = false }) {
+        val tomorrow = LocalTomorrow.current
         SoftMenuItem(s.markDone) { quick = false; tick() }
-        if (onLater != null) SoftMenuItem(s.dateWord) { quick = false; onLater() }
+        if (tomorrow != null && t.dueDate != today.plusDays(1)) SoftMenuItem(s.swipeTomorrow) { quick = false; tomorrow(t.id) }
+        if (onLater != null) SoftMenuItem(s.dateWord + "…") { quick = false; onLater() }
         SoftMenuItem(s.fieldTime) { quick = false; onTime() }
     }
     Row(Modifier.fillMaxWidth().background(LocalRowGround.current ?: c.bg).combinedClickable(onClick = onOpen, onLongClick = { view.confirmTick(); quick = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
@@ -1025,13 +1041,14 @@ internal fun DealRow(t: Task, today: LocalDate, onToggle: () -> Unit, onOpen: ()
         Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(ticking, size = 18.dp, onToggle = ::tick) }
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
+            val hour = hourColor(t.dueDate, t.time, today)
             val title = androidx.compose.ui.text.buildAnnotatedString {
-                t.time?.let { timeLink(it, late && t.dueDate == today, c.link, c.accent, onTime) }
+                t.time?.let { timeLink(it, hour) }
                 append(t.title)
             }
             Text(title, style = Type.body.copy(fontSize = 15.5.sp, color = if (ticking || faded) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 1.dp).drawStrike(strike.value, c.faint))
-            if (late && t.dueDate?.isBefore(today) == true) Text(s.lateSince(t.dueDate!!.dayMonthShort()), style = Type.small.copy(color = c.accent, fontSize = 12.5.sp))
+            if (late && t.dueDate?.isBefore(today) == true) Text(s.lateSince(t.dueDate!!.dayMonthShort()), style = Type.small.copy(color = c.accentText, fontSize = 12.5.sp))
             t.dayOf()?.let { (i, n) -> Text(s.dayOfDays(i, n), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp)) }
             TaskLine(t, whenText, true, today = today, tappable = false)
         }
@@ -1096,12 +1113,9 @@ internal fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String
                 val open = tid in unfolded.value
                 val rest = listOfNotNull(topic.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) },
                     others.size.takeIf { it > 0 }?.let { (if (group.isEmpty()) s.summaryDeals(it) else s.moreDeals(it)) + if (open) " ▴" else " ▾" })
-                val dateSp = dateSpan()
-                Text(buildAnnotatedString {
-                    born?.let { withStyle(dateSp) { append(it.dayMonthShort() + " ’" + "%02d".format(it.year % 100)) } }
-                    if (born != null && rest.isNotEmpty()) append("  ·  ")
-                    append(rest.joinToString("  ·  "))
-                }, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
+                // «тема с 18 авг» in the grey of the words around it — a date in ink here read as the matter's own date.
+                Text(listOfNotNull(born?.let { s.topicSince(it.dayMonthYear(today)) }).plus(rest).joinToString("  ·  "),
+                    style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
                     modifier = Modifier.padding(start = 54.dp, bottom = 6.dp).offset(y = (-4).dp).clip(RoundedCornerShape(6.dp))
                         .clickable(enabled = others.isNotEmpty()) { unfolded.value = if (open) unfolded.value - tid else unfolded.value + tid }.padding(vertical = 2.dp))
                 androidx.compose.animation.AnimatedVisibility(open && others.isNotEmpty(), enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(240)) + androidx.compose.animation.fadeIn(),
@@ -1120,7 +1134,7 @@ internal fun GroupedDeals(list: List<Task>, today: LocalDate, landed: Set<String
  * this only gathers them so they are seen at once.
  */
 @Composable
-private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, onOpen: (String) -> Unit, data: AppData = AppData()) {
+private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, onOpen: (String) -> Unit, data: AppData = AppData(), onMoveOverdue: () -> Unit = {}) {
     val c = M.c
     val s = M.s
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -1131,6 +1145,13 @@ private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, 
     Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
         Text(listOfNotNull(s.summaryDeals(plan.deals.size), topics.takeIf { it > 0 }?.let { s.summaryTopics(it) }, plan.events.size.takeIf { it > 0 }?.let { s.summaryMeetings(it) })
             .joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 14.sp), modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
+        // Several own matters left from past days: one tap puts them all on today (others' promises keep their dates).
+        val ownLate = plan.deals.count { it.dueDate?.isBefore(today) == true && it.waitingFor == null && it.promisedTo == null }
+        if (ownLate >= 2) Row(Modifier.padding(start = 2.dp, bottom = 6.dp).offset(y = (-6).dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(s.lateLeft(ownLate), style = Type.small.copy(color = c.accentText, fontSize = 14.sp))
+            Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+            PaperLink(s.allToToday, onClick = onMoveOverdue)
+        }
         // A soft petrol card for who owes whom, set apart from the matters under it.
         if (promises.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.linkSoft.copy(alpha = if (c.dark) 0.5f else 0.6f))
             .padding(horizontal = 14.dp, vertical = 12.dp)) {
@@ -1144,20 +1165,27 @@ private fun TodaySummary(plan: DayPlan, promises: List<Task>, today: LocalDate, 
             (if (allPromises) ordered else ordered.take(3)).forEach { t ->
                 val d = t.dueDate ?: t.startDate
                 val late = d?.isBefore(today) == true
-                // The whole promise is read, never cut: a long one wraps under itself, the date stays on its first line.
+                // The whole promise is read, never cut: a long one wraps under itself; the dates stand in one column on the right.
+                val incoming = t.waitingFor != null
+                val who = t.waitingFor ?: t.promisedTo!!
+                // From their day on (or a week without one), a wait offers «напомнить» — the words ready, the user sends.
+                val nudge = incoming && (d?.let { !it.isAfter(today) } ?: (runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()?.isBefore(today.minusDays(7)) == true))
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.id) }.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
-                    Box(Modifier.width(34.dp), contentAlignment = Alignment.CenterStart) {
-                        SoftRound(c.link) { ArrowGlyph(c.link, 14.dp, incoming = t.waitingFor != null) }
+                    Box(Modifier.width(34.dp).semantics { contentDescription = if (incoming) s.a11yWaiting else s.a11yPromised }, contentAlignment = Alignment.CenterStart) {
+                        SoftRound(c.link) { ArrowGlyph(c.link, 14.dp, incoming = incoming) }
                     }
-                    Text(androidx.compose.ui.text.buildAnnotatedString {
-                        withStyle(SpanStyle(color = c.link)) { append(t.waitingFor ?: t.promisedTo!!.dative()) }
-                        withStyle(SpanStyle(color = c.ink)) { append("  ·  " + t.title) }
-                    }, style = Type.small.copy(fontSize = 14.5.sp, lineHeight = 20.sp), modifier = Modifier.weight(1f).padding(top = 3.dp))
-                    d?.let { Text(if (it == today) s.quickToday.lowercase() else it.dayMonthShort(), style = dateStyle(12.5.sp, late),
-                        modifier = Modifier.padding(start = 10.dp, top = 5.dp)) }
-                    // They owe it and it's late: one tap writes them a reminder (the words ready, the user sends).
-                    if (late && t.waitingFor != null) Text(s.remindLink, style = Type.small.copy(color = c.link, fontSize = 12.5.sp),
-                        modifier = Modifier.padding(start = 8.dp, top = 3.dp).clip(RoundedCornerShape(6.dp)).clickable { remindAbout(ctx, data, t) }.padding(horizontal = 4.dp, vertical = 2.dp))
+                    Column(Modifier.weight(1f).padding(top = 3.dp)) {
+                        Text(androidx.compose.ui.text.buildAnnotatedString {
+                            // «от Димы · макет» / «Лёше · исходники» — and no name at all when the title already says it.
+                            if (!namedIn(t.title, who)) withStyle(SpanStyle(color = c.link)) { append((if (incoming) s.fromWho(who) else who.dative()) + "  ·  ") }
+                            withStyle(SpanStyle(color = c.ink)) { append(t.title) }
+                        }, style = Type.small.copy(fontSize = 14.5.sp, lineHeight = 20.sp))
+                        if (nudge) Box(Modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(6.dp)).clickable { remindAbout(ctx, data, t) }.padding(end = 8.dp), contentAlignment = Alignment.CenterStart) {
+                            Text(s.remindLink, style = Type.small.copy(color = c.link, fontSize = 13.sp, fontWeight = FontWeight.Medium))
+                        }
+                    }
+                    Text(d?.let { if (it == today) s.quickToday.lowercase() else it.dayMonthShort() } ?: "", style = dateStyle(12.5.sp, late),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(58.dp).padding(start = 8.dp, top = 5.dp))
                 }
             }
             if (promises.size > 3) Text(if (allPromises) s.collapse else s.more(promises.size - 3) + " ›", style = Type.small.copy(color = c.link, fontSize = 13.sp),
@@ -1188,7 +1216,7 @@ private fun MonthTopicRow(t: Task, onOpen: (String) -> Unit, onArchive: () -> Un
                 Row(Modifier.padding(start = 26.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (t.sphere != null) { SphereBadge(t.sphere); Spacer(Modifier.width(8.dp)) }
                     Text(listOfNotNull(s.nEntries(t.entries.size) + if (t.entries.isNotEmpty()) (if (open) " ▴" else " ▾") else "", openDeals.takeIf { it > 0 }?.let { s.summaryDeals(it) },
-                        born?.takeIf { it != last }?.let { s.sinceWord + " " + it.dayMonthShort() }).joinToString("  ·  "),
+                        born?.takeIf { it != last }?.let { s.startedOn(it.dayMonthYear()) }).joinToString("  ·  "),
                         style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = t.entries.isNotEmpty()) { open = !open }.padding(vertical = 2.dp))
                 }
@@ -1223,16 +1251,23 @@ private fun MonthIdeaRow(t: Task, grown: List<Task>, onOpen: (String) -> Unit) {
     val s = M.s
     var open by androidx.compose.runtime.saveable.rememberSaveable(t.id) { mutableStateOf(false) }
     val born = runCatching { LocalDate.parse(t.createdAt) }.getOrNull()
+    // The same as a topic in the list: on the margin — when it was last written in; under the title one line — sphere, records, since when.
+    val last = t.lastActivity()
     Column(Modifier.fillMaxWidth().animateContentSize(androidx.compose.animation.core.tween(240))) {
-        Margined(Modifier.padding(top = 4.dp), margin = { born?.let { DayMargin(it, LocalDate.now(), false, strong = true) } }) {
+        Margined(Modifier.padding(top = 4.dp), margin = { (last ?: born)?.let { DayMargin(it, LocalDate.now(), false, strong = true) } }) {
             Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(t.id) }, verticalAlignment = Alignment.Top) {
                     Box(Modifier.padding(top = 3.dp)) { ThoughtGlyph(c.graphite, 16.dp) }
                     Spacer(Modifier.width(10.dp))
-                    TitleWithSphere(t.title, t.sphere, Type.body.copy(fontSize = 16.sp, color = c.ink), Modifier.weight(1f))
+                    Text(t.title, style = Type.body.copy(fontSize = 16.sp, color = c.ink, fontWeight = FontWeight.Medium), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-                if (t.entries.isNotEmpty()) Text(s.nEntries(t.entries.size) + if (open) " ▴" else " ▾", style = Type.small.copy(color = c.graphite, fontSize = 13.sp),
-                    modifier = Modifier.padding(start = 26.dp, top = 3.dp).clip(RoundedCornerShape(6.dp)).clickable { open = !open }.padding(vertical = 2.dp))
+                Row(Modifier.padding(start = 26.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (t.sphere != null) { SphereBadge(t.sphere); Spacer(Modifier.width(8.dp)) }
+                    val line = listOfNotNull(t.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) + if (open) " ▴" else " ▾" },
+                        born?.takeIf { it != last }?.let { s.startedOn(it.dayMonthYear()) }).joinToString("  ·  ")
+                    if (line.isNotEmpty()) Text(line, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = t.entries.isNotEmpty()) { open = !open }.padding(vertical = 2.dp))
+                }
                 if (open) Column(Modifier.padding(start = 26.dp, top = 6.dp)) {
                     t.entries.forEach { e ->
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { onOpen(t.id) }.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
@@ -1250,7 +1285,7 @@ private fun MonthIdeaRow(t: Task, grown: List<Task>, onOpen: (String) -> Unit) {
                     Row(Modifier.padding(start = 24.dp, top = 4.dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(g.id) }.padding(vertical = 2.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("↳", style = Type.small.copy(color = c.link, fontSize = 13.sp))
                         Spacer(Modifier.width(5.dp))
-                        if (g.topic) TopicGlyph(c.link, 12.dp) else CheckCircle(g.done, size = 11.dp) {}
+                        if (g.topic) TopicGlyph(c.link, 12.dp) else if (g.done) TickGlyph(c.ok, 12.dp) else ArrowGlyph(c.link, 12.dp)
                         Spacer(Modifier.width(5.dp))
                         Text(g.title, style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -1302,8 +1337,9 @@ private fun TopicDayRow(topic: Task, steps: List<ru.anjeib.margin.data.Subtask>,
                 Box(Modifier.size(20.dp, 24.dp), contentAlignment = Alignment.Center) { if (q.from != null) ArrowGlyph(c.graphite, 14.dp, incoming = true) }
                 Box(Modifier.size(26.dp, 24.dp), contentAlignment = Alignment.CenterStart) { CheckCircle(false, size = 16.dp) { view.confirmTick(); onSettle(qid) } }
                 Spacer(Modifier.width(8.dp))
+                val hour = hourColor(q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, q.time, today)
                 val text = androidx.compose.ui.text.buildAnnotatedString {
-                    q.time?.let { timeLink(it, late || q.due == today.toString() && it < java.time.LocalTime.now().toString().take(5), c.link, c.accent) { onTime(qid) } }
+                    q.time?.let { timeLink(it, hour) }
                     append(if (q.from != null) M.s.waitPrefix(q.from).trimEnd(':') + ": " + q.title else q.title)
                 }
                 Text(text, style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(top = 2.dp))
@@ -1357,7 +1393,7 @@ fun DayBlock(
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle).padding(top = 8.dp), verticalAlignment = Alignment.Top) {
                         Column(Modifier.weight(1f)) {
                             val lines = buildList<@Composable () -> Unit> {
-                                plan.events.forEach { e -> add { CompactLine({ CalendarGlyph(c.graphite) }, e.start.toLocalTime().toString().take(5) + "  " + e.title) } }
+                                plan.events.forEach { e -> add { CompactLine({ CalendarGlyph(c.graphite) }, (if (e.allDay) s.allDay else e.start.toLocalTime().toString().take(5)) + "  " + e.title) } }
                                 plan.deals.forEach { t -> add { CompactLine({ KindMark(t) }, t.title + (t.topicTitle?.let { "  ·  $it" } ?: "")) } }
                                 plan.steps.forEach { st -> add { CompactLine({ if (st.q.from != null) ArrowGlyph(c.graphite, 14.dp, incoming = true) else TopicGlyph(c.graphite, 14.dp) },
                                     (if (st.q.from != null) s.waitPrefix(st.q.from).trimEnd(':') + ": " else "") + st.q.title + "  ·  " + st.topic.title) } }
@@ -1380,13 +1416,18 @@ fun DayBlock(
                     val dealsAll = plan.events.isNotEmpty() || plan.deals.isNotEmpty()
                     if (plan.quiet) Text(if (plan.date == today) s.freeDay else s.freeWord, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(top = 6.dp))
                     if (dealsAll) {
+                        val ctx = androidx.compose.ui.platform.LocalContext.current
                         plan.events.forEach { e ->
                             Tile {
-                                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                                // A tap opens the phone calendar at that hour — the event itself lives there.
+                                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                    val ms = e.start.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                    runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("content://com.android.calendar/time/$ms"))) }
+                                }.padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
                                     Box(Modifier.size(20.dp, 24.dp), contentAlignment = Alignment.Center) { CalendarGlyph(c.graphite) }
                                     Spacer(Modifier.width(34.dp))
                                     Column(Modifier.weight(1f)) {
-                                        Text(e.start.toLocalTime().toString().take(5) + "   " + e.title, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink))
+                                        Text((if (e.allDay) s.allDay else e.start.toLocalTime().toString().take(5)) + "   " + e.title, style = Type.body.copy(fontSize = 15.5.sp, color = c.ink))
                                         e.location?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 13.sp)) }
                                     }
                                 }

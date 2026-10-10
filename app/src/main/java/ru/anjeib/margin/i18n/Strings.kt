@@ -161,7 +161,7 @@ interface Strings {
     val inContacts: String
     val promisesTitle: String
     fun promiseToYou(from: String): String
-    /** «Вам от » + «Марины» + «» — the name part becomes a link. */
+    /** «ждём от » + «Марины» + «» — the name part becomes a link. */
     fun promiseToYouParts(from: String): Triple<String, String, String>
     fun promiseFromYouParts(to: String): Triple<String, String, String>
     fun promiseFromYou(to: String): String
@@ -391,6 +391,7 @@ interface Strings {
     val inboxHint: String
     val setupBriefQ: String
     val setupBriefOptions: List<String>
+    val obBrief: String
     val setupNameQ: String
     fun setupDone(name: String): String
     val settingsChanged: String
@@ -593,6 +594,13 @@ interface Strings {
     val notifEveningTitle: String
     fun notifEveningText(done: Int, left: Int): String
     val notifReminder: String
+    /** The quiet channel: morning, evening, «Разобрано N». */
+    val notifDigestChannel: String
+    /** The morning of the day something is owed: «Сегодня ждём от Димы: Макет». */
+    fun todayWaitFrom(who: String, what: String): String
+    fun todayPromisedTo(who: String, what: String): String
+    /** «итог дня в 21» / «утреннюю сводку в 9» said without the AI: what is set now (null time — off). */
+    fun dailySet(evening: Boolean, time: String?): String
 
     // ai prompts
     val aiLanguage: String
@@ -653,6 +661,18 @@ interface Strings {
     val kindTopic: String
     val kindThought: String
     fun lateSince(d: String): String
+    fun startedOn(d: String): String
+    val clearWord: String
+    fun dealOnHint(d: String): String
+    fun lateLeft(n: Int): String
+    val allToToday: String
+    val fieldWait: String
+    val fieldPromised: String
+    val promisedQ: String
+    val sideHint: String
+    fun fromWho(who: String): String
+    val a11yWaiting: String
+    val a11yPromised: String
     fun doneCountWord(n: Int): String
     val freeWord: String
     val dealsBadge: String
@@ -771,7 +791,7 @@ object Ru : Strings {
             "Идея" to "тема без дел — мысль, заметка, список. Когда в идее появляется дело, она становится темой",
             "Запись" to "ваш текст в ленте темы или идеи, с датой и временем. Дела из этой записи стоят под ней",
             "Дела темы" to "видны и в теме, и на «Сегодня» и в «Календаре» — в свои дни, со ссылкой на тему",
-            "Обещание" to "дело, в котором кто-то должен: ← ждём от человека, → обещали вы",
+            "Обещание" to "дело, в котором кто-то должен: ← ждём от человека, → обещали ему",
             "Сфера" to "«Личное» или «Работа» — у дел и тем; фильтр в «Обзоре»",
             "Архив" to "решённая тема со всей лентой; новость в ней возвращает её",
         )),
@@ -825,7 +845,7 @@ object Ru : Strings {
             "#тема" to "в какую тему: слова — в её ленту, дела — в её дела; сфера — от темы",
             "@человек" to "кто: контакт или компания; нового можно добавить из окошка",
             "/жду @Маша" to "ждём от Маши: ←",
-            "/обещаю @Лёша" to "вы обещали Лёше: →",
+            "/обещаю @Лёша" to "обещали Лёше: →",
             "/готово слова" to "отметить сделанным дело с такими словами; после «:» — запись в его тему",
             "/запись" to "только в ленту, без дел",
         )),
@@ -856,7 +876,7 @@ object Ru : Strings {
         )),
         HelpSection("Люди и обещания", "Margin узнаёт имена в любом падеже — даже со строчной буквы, как при диктовке.", pairs = listOf(
             "Дима пришлёт макет в среду" to "← ждём от Димы",
-            "обещал Анне показать калькулятор" to "→ вы обещали Анне",
+            "обещал Анне показать калькулятор" to "→ обещали Анне",
             "@человек" to "если нужно наверняка",
         )),
         HelpSection("Списки", "Начните строку с «1.», «1)», «-» или «•» — Enter продолжит список, Enter на пустом пункте закончит. Список, отправленный с главного экрана, станет несколькими делами; в записи темы останется просто списком."),
@@ -885,7 +905,7 @@ object Ru : Strings {
         )),
         HelpSection("Пересылка в Margin", "Из Telegram, MAX, почты: «Поделиться» или выделить текст → «В Margin». Или «Копировать» — и в Margin появится «Вставить скопированное». Margin понимает, что это чужие слова: что обещают вам, станет «ждём», о чём просят вас — делом."),
         HelpSection("Быстрый ввод и отзыв", "Быстро записать можно с плитки «Записать» в шторке (добавьте её через карандаш в быстрых настройках) или долгим нажатием на значок приложения — «Записать» / «Надиктовать». Если Margin понял фразу не так, нажмите «Не совсем понял» под результатом. «Отправить отзыв» в меню открывает письмо разработчику с журналами ошибок; ваши записи не отправляются."),
-        HelpSection("Неделя, напоминания, виджет", "По воскресеньям на «Сегодня» появляется итог недели: сколько сделано, кто кому должен, какие темы стоят на месте; «×» скрывает его до следующего воскресенья. Если кто-то просрочил обещание, рядом появится «напомнить»: Margin подготовит сообщение (SMS, если известен телефон, иначе через «Поделиться»), а отправите его вы. Виджет «Margin · Сегодня» на рабочем столе показывает дела дня и открывает поле ввода или диктовку. Тему целиком можно переслать текстом: ⋯ → «Переслать»."),
+        HelpSection("Неделя, напоминания, виджет", "По воскресеньям на «Сегодня» появляется итог недели: сколько сделано, кто кому должен, какие темы стоят на месте; «×» скрывает его до следующего воскресенья. Если кто-то просрочил обещание, рядом появится «напомнить»: Margin подготовит сообщение (SMS, если известен телефон, иначе через «Поделиться»), а отправите его вы. В день, когда кто-то обещал прислать или вы обещали отдать, утром придёт напоминание. Утренняя сводка и итог дня меняются словами: «сводку в 9», «итог дня в 21», «итог дня не нужен». Виджет «Margin · Сегодня» на рабочем столе показывает дела дня и открывает поле ввода или диктовку. Тему целиком можно переслать текстом: ⋯ → «Переслать»."),
         HelpSection("Приватность", "Настройки → «Приватность»: вход по отпечатку (или коду блокировки) и «Где ваши данные» — где хранятся записи и что уходит с телефона. На экране блокировки напоминания показываются без текста дел."),
         HelpSection("Примеры", "При первом запуске в Margin уже есть примеры — несколько дней молодого дизайнера, по одному на каждую возможность: тема с записями и файлами, дела со временем, повтором и на несколько дней, просроченное, обещания в обе стороны, дело без даты, идея, контакт и компания. Убрать их можно в Настройках → «Примеры», там же их можно вернуть. Ваши записи останутся на месте."),
     )
@@ -967,8 +987,8 @@ object Ru : Strings {
     override val mailAddressHint = "Адрес почты"
     override val mailPasswordHint = "Пароль приложения"
     override val mailPasswordHow = "Пароль приложения создаётся в настройках почты, обычный не подойдёт. Яндекс: id.yandex.ru → Безопасность → Пароли приложений → Почта (и включите IMAP в настройках почты). Gmail: myaccount.google.com/apppasswords. Mail.ru: Настройки → Безопасность → Пароли для внешних приложений."
-    override fun waitingShort(n: String) = "обещание: вам от ${n.genitive()}"
-    override fun promisedShort(n: String) = "обещание: ${n.dative()} от вас"
+    override fun waitingShort(n: String) = "ждём от ${n.genitive()}"
+    override fun promisedShort(n: String) = "обещали ${n.dative()}"
     override val promiseWord = "Обещание"
     override val feedbackTitle = "Пожаловаться или похвалить"
     override val storeRestoredTitle = "Последнее изменение могло не сохраниться"
@@ -1004,7 +1024,7 @@ object Ru : Strings {
     override val exportOpen = "Осталось:"
     override val exportNotes = "Последние записи:"
     override val weekTitle = "Неделя"
-    override fun weekLine(done: Int, owed: Int, owe: Int) = "Сделано: $done  ·  ждём: $owed  ·  обещали вы: $owe"
+    override fun weekLine(done: Int, owed: Int, owe: Int) = "Сделано: $done  ·  ждём: $owed  ·  обещали: $owe"
     override val weekStill = "Неделю без движения:"
     override val remindLink = "напомнить"
     override fun remindText(name: String, what: String, date: String?) = "Привет, $name. Напоминаю про $what" + (date?.let { " — договаривались на $it" } ?: "") + "."
@@ -1031,10 +1051,10 @@ object Ru : Strings {
     override fun notAContact(n: String) = "$n — нет в контактах"
     override val inContacts = "в контактах"
     override val promisesTitle = "Обещания"
-    override fun promiseToYou(from: String) = "Вам от ${from.genitive()}"
-    override fun promiseToYouParts(from: String) = Triple("Вам от ", from.genitive(), "")
-    override fun promiseFromYouParts(to: String) = Triple("", to.dative(), " от вас")
-    override fun promiseFromYou(to: String) = "${to.dative()} от вас"
+    override fun promiseToYou(from: String) = "ждём от ${from.genitive()}"
+    override fun promiseToYouParts(from: String) = Triple("ждём от ", from.genitive(), "")
+    override fun promiseFromYouParts(to: String) = Triple("обещали ", to.dative(), "")
+    override fun promiseFromYou(to: String) = "обещали ${to.dative()}"
     override fun forwardFrom(via: String) = "из $via"
     override fun forwardFiles(n: Int) = "📎 $n"
     override fun tgOn(bot: String) = "@$bot — пересылайте ему сообщения"
@@ -1054,7 +1074,7 @@ object Ru : Strings {
     override val nextWeekSoft = "След. неделя"
     override val later = "Позже"
     override val waiting = "От кого ждём?"
-    override fun waitingFor(who: String) = "Обещание: вам от ${who.genitive()}"
+    override fun waitingFor(who: String) = "Ждём от ${who.genitive()}"
     override val create = "Создать"
     override fun stepsCount(n: Int) = "$n " + pluralRu(n, "дело", "дела", "дел")
     override val chipEvening = "Итоги дня"
@@ -1164,7 +1184,7 @@ object Ru : Strings {
             "time" -> if (value == null) "время убрано" else "время: $value"
             "repeat" -> if (value == null) "повтор убран" else "повтор изменён"
             "waiting" -> if (value == null) "больше не ждём" else "ждём: $value"
-            "promised" -> if (value == null) "обещание снято" else "вы обещали: $value"
+            "promised" -> if (value == null) "обещание снято" else "обещали: $value"
             "place" -> if (value == null) "место убрано" else "место: $value"
             "done" -> "сделано"
             "dropped" -> "решили не делать"
@@ -1265,6 +1285,7 @@ object Ru : Strings {
     override val inboxHint = "что ещё не разложено по делам и темам"
     override val setupBriefQ = "Присылать утром короткую сводку дня? Выберите время — или «Не нужно»."
     override val setupBriefOptions = listOf("8:00", "9:00", "10:00", "Не нужно")
+    override val obBrief = "Утром — короткая сводка дня:"
     override val setupNameQ = "Как к вам обращаться? Напишите имя — или пропустите."
     override fun setupDone(name: String) = (if (name.isNotBlank()) "Приятно познакомиться, $name. " else "Готово. ") +
         "Пишите внизу, что нужно сделать, — обычными словами. Поменять это можно так же: «сводку в 9», «называй меня Аня»."
@@ -1323,7 +1344,7 @@ object Ru : Strings {
     override val everyWeek = "Каждую неделю"
     override val everyMonth = "Каждый месяц"
     override val everyYear = "Каждый год"
-    override val overdueWaiting = "Просрочено"
+    override val overdueWaiting = "Пора напомнить?"
     override val search = "Поиск"
     override val searchHint = "Дела, темы, идеи, люди…"
     override val nothing = "Ничего не найдено"
@@ -1352,7 +1373,7 @@ object Ru : Strings {
     override val toTaskPill = "В дело"
     override val ideasOpen = "ИДЕИ БЕЗ ДЕЛ"
     override fun waitLine(what: String) = "ждём: $what"
-    override fun promiseLine(what: String) = "вы обещали: $what"
+    override fun promiseLine(what: String) = "обещали: $what"
     override val ideaMark = "из идеи"
     override val linksTitle = "ОТКУДА"
     override val linkIdea = "Идея"
@@ -1385,7 +1406,7 @@ object Ru : Strings {
     override val makeSummary = "Собрать сводку"
     override fun fromNote(title: String, date: String) = "из идеи «$title» · $date"
     override fun fromChat(date: String) = "из разговора · $date"
-    override fun promised(who: String) = "Обещание: ${who.dative()} от вас"
+    override fun promised(who: String) = "Обещали ${who.dative()}"
     override fun summaryAt(t: String) = "обновлено $t"
     override val reopened = "Отметка снята"
     override val markedDone = "Сделано"
@@ -1461,6 +1482,15 @@ object Ru : Strings {
     override val notifEveningTitle = "Итоги дня"
     override fun notifEveningText(done: Int, left: Int) = "Сделано: $done. Осталось на сегодня: $left"
     override val notifReminder = "Напоминание"
+    override val notifDigestChannel = "Сводки"
+    override fun todayWaitFrom(who: String, what: String) = "Сегодня ждём от ${who.genitive()}: $what"
+    override fun todayPromisedTo(who: String, what: String) = "Сегодня обещали ${who.dative()}: $what"
+    override fun dailySet(evening: Boolean, time: String?) = when {
+        evening && time != null -> "Итог дня — в $time"
+        evening -> "Итог дня выключен"
+        time != null -> "Утренняя сводка — в $time"
+        else -> "Утренняя сводка выключена"
+    }
 
     override val aiLanguage = "русском"
     override val promptNext = "Что мне сделать дальше? Посоветуй одну-две задачи с учётом сроков и времени."
@@ -1520,6 +1550,18 @@ object Ru : Strings {
     override val kindTopic = "запись в теме"
     override val kindThought = "идея"
     override fun lateSince(d: String) = "просрочено с $d"
+    override fun startedOn(d: String) = "начата $d"
+    override val clearWord = "Очистить"
+    override fun dealOnHint(d: String) = "Дело на $d…"
+    override fun lateLeft(n: Int) = "с прошлых дней: $n"
+    override val allToToday = "всё на сегодня"
+    override val fieldWait = "Ждём от…"
+    override val fieldPromised = "Обещали…"
+    override val promisedQ = "Кому обещали?"
+    override val sideHint = "Имя — или пусто, чтобы убрать"
+    override fun fromWho(who: String) = "от ${who.genitive()}"
+    override val a11yWaiting = "ждём"
+    override val a11yPromised = "обещали"
     override fun doneCountWord(n: Int) = "сделано $n"
     override val freeWord = "свободно"
     override val dealsBadge = "Дела"
@@ -1668,7 +1710,7 @@ object En : Strings {
         HelpSection("Badges and colours", "", legend = "badges"),
         HelpSection("Sharing to Margin", "From Telegram, MAX, mail: “Share” or select text → “To Margin”. Or “Copy” — and “Paste what you copied” appears in Margin. Margin reads other people’s words as theirs: what they promise you becomes “waiting”, what they ask — a to-do."),
         HelpSection("Quick entry and feedback", "The “Write” tile in quick settings (add it with the pencil there) and a long press on the app icon — “Write” / “Dictate”. Understood wrong — “Understood wrong” under the result. “Send feedback” in the menu opens an e-mail to the developer with the error logs; your records are not sent."),
-        HelpSection("The week, reminders, widget", "On Sundays «Today» shows a quiet card of the week: done, who owes whom, topics that stood still; «×» hides it until next Sunday. When someone's promise is late, «remind» next to it prepares a message (SMS if the phone is known, otherwise Share); you send it. The «Margin · Today» widget shows the day and opens the field or dictation. A whole topic can be shared as text: ⋯ → Share."),
+        HelpSection("The week, reminders, widget", "On Sundays «Today» shows a quiet card of the week: done, who owes whom, topics that stood still; «×» hides it until next Sunday. When someone's promise is late, «remind» next to it prepares a message (SMS if the phone is known, otherwise Share); you send it. On the day someone promised something, or you did, a reminder comes in the morning. The morning and evening summaries change in words: “morning summary at 9”, “evening summary at 9pm”, “no evening summary”. The «Margin · Today» widget shows the day and opens the field or dictation. A whole topic can be shared as text: ⋯ → Share."),
         HelpSection("Privacy", "Settings → Privacy: a fingerprint (or screen lock) when Margin opens, and «Where your data is» — where the records live and what leaves the phone. On the lock screen reminders show without the to-do's words."),
         HelpSection("Contacts", "«Often» on top — who you have most to-dos with this month; then everyone, A–Z or «New». A phone, an e-mail or a link anywhere in your words opens its app (a bare «@name» — Telegram). A person's social pages are one field: paste the link, the network is told by the address."),
         HelpSection("Lists", "Start a line with «1.», «-» or «•» — Enter continues the list, Enter on an empty item ends it."),
@@ -1753,8 +1795,8 @@ object En : Strings {
     override val mailAddressHint = "Email address"
     override val mailPasswordHint = "App password"
     override val mailPasswordHow = "An app password is made in your mail settings; the usual one won’t do. Gmail: myaccount.google.com/apppasswords. Yandex: id.yandex.ru → Security → App passwords → Mail (and turn on IMAP). Mail.ru: Settings → Security → Passwords for external apps."
-    override fun waitingShort(n: String) = "promise to you from $n"
-    override fun promisedShort(n: String) = "promise to $n from you"
+    override fun waitingShort(n: String) = "waiting on $n"
+    override fun promisedShort(n: String) = "promised to $n"
     override val promiseWord = "Promise"
     override val feedbackTitle = "Complain or praise"
     override val storeRestoredTitle = "The last change may not have been saved"
@@ -1817,10 +1859,10 @@ object En : Strings {
     override fun notAContact(n: String) = "$n isn’t in contacts"
     override val inContacts = "in contacts"
     override val promisesTitle = "Promises"
-    override fun promiseToYou(from: String) = "to you from $from"
-    override fun promiseToYouParts(from: String) = Triple("to you from ", from, "")
-    override fun promiseFromYouParts(to: String) = Triple("to ", to, " from you")
-    override fun promiseFromYou(to: String) = "to $to from you"
+    override fun promiseToYou(from: String) = "waiting on $from"
+    override fun promiseToYouParts(from: String) = Triple("waiting on ", from, "")
+    override fun promiseFromYouParts(to: String) = Triple("promised to ", to, "")
+    override fun promiseFromYou(to: String) = "promised to $to"
     override fun forwardFrom(via: String) = "from $via"
     override fun forwardFiles(n: Int) = "📎 $n"
     override fun tgOn(bot: String) = "@$bot — forward messages to it"
@@ -1839,8 +1881,8 @@ object En : Strings {
     override val thisWeekSoft = "This week"
     override val nextWeekSoft = "Next week"
     override val later = "Later"
-    override val waiting = "Waiting"
-    override fun waitingFor(who: String) = "Promise: to you from $who"
+    override val waiting = "Waiting on whom?"
+    override fun waitingFor(who: String) = "Waiting on $who"
     override val create = "Create"
     override fun stepsCount(n: Int) = "$n " + if (n == 1) "step" else "steps"
     override val chipEvening = "Wrap up the day"
@@ -2051,6 +2093,7 @@ object En : Strings {
     override val inboxHint = "what isn’t sorted into matters and topics yet"
     override val setupBriefQ = "Send a short summary of the day in the morning? Pick a time — or “No need”."
     override val setupBriefOptions = listOf("8:00", "9:00", "10:00", "No need")
+    override val obBrief = "In the morning, a short summary of the day:"
     override val setupNameQ = "What should I call you? Type a name — or skip."
     override fun setupDone(name: String) = (if (name.isNotBlank()) "Nice to meet you, $name. " else "All set. ") +
         "Type below what needs doing, in plain words. You can change this the same way: “summary at 9”, “call me Anna”."
@@ -2109,7 +2152,7 @@ object En : Strings {
     override val everyWeek = "Every week"
     override val everyMonth = "Every month"
     override val everyYear = "Every year"
-    override val overdueWaiting = "It's overdue"
+    override val overdueWaiting = "Time to nudge?"
     override val search = "Search"
     override val searchHint = "To-dos, topics, ideas, people…"
     override val nothing = "Nothing found"
@@ -2171,7 +2214,7 @@ object En : Strings {
     override val makeSummary = "Make a summary"
     override fun fromNote(title: String, date: String) = "from note “$title” · $date"
     override fun fromChat(date: String) = "from a conversation · $date"
-    override fun promised(who: String) = "Promise: to $who from you"
+    override fun promised(who: String) = "Promised to $who"
     override fun summaryAt(t: String) = "updated $t"
     override val reopened = "To-do reopened"
     override val markedDone = "Done"
@@ -2247,6 +2290,15 @@ object En : Strings {
     override val notifEveningTitle = "Your day"
     override fun notifEveningText(done: Int, left: Int) = "Done: $done. Left for today: $left"
     override val notifReminder = "Reminder"
+    override val notifDigestChannel = "Summaries"
+    override fun todayWaitFrom(who: String, what: String) = "Today, waiting on $who: $what"
+    override fun todayPromisedTo(who: String, what: String) = "Today, promised to $who: $what"
+    override fun dailySet(evening: Boolean, time: String?) = when {
+        evening && time != null -> "Evening summary at $time"
+        evening -> "Evening summary off"
+        time != null -> "Morning summary at $time"
+        else -> "Morning summary off"
+    }
 
     override val aiLanguage = "English"
     override val promptNext = "What should I do next? Suggest one or two tasks given deadlines and the time of day."
@@ -2262,7 +2314,7 @@ object En : Strings {
     override fun topicSince(d: String) = "topic since $d"
     override val questionPrefix = "Open item:"
     override val solvedPrefix = "Done:"
-    override fun waitPrefix(who: String) = "Waiting for $who:"
+    override fun waitPrefix(who: String) = "Waiting on $who:"
     override fun gotPrefix(who: String) = "Received from $who:"
     override val becameTopic = "The to-do became a topic"
     override val revivedTopic = "The topic is back from the archive"
@@ -2306,6 +2358,18 @@ object En : Strings {
     override val kindTopic = "to the topic"
     override val kindThought = "idea"
     override fun lateSince(d: String) = "overdue since $d"
+    override fun startedOn(d: String) = "started $d"
+    override val clearWord = "Clear"
+    override fun dealOnHint(d: String) = "A to-do for $d…"
+    override fun lateLeft(n: Int) = "left from past days: $n"
+    override val allToToday = "all to today"
+    override val fieldWait = "Waiting on…"
+    override val fieldPromised = "Promised to…"
+    override val promisedQ = "Promised to whom?"
+    override val sideHint = "A name — or empty to remove"
+    override fun fromWho(who: String) = "from $who"
+    override val a11yWaiting = "waiting on"
+    override val a11yPromised = "promised"
     override fun doneCountWord(n: Int) = "$n done"
     override val freeWord = "free"
     override val dealsBadge = "To-dos"

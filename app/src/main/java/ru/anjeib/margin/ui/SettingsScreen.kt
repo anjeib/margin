@@ -449,7 +449,7 @@ private fun ForwardSettings(vm: MainVm) {
     ValueRow(s.viaMailTitle, if (st.mail) s.mailOn(st.mailAddress) else s.mailHint, if (st.mail) s.connected else "") { dialog = "mail" }
     st.error?.let {
         Divider()
-        Text(it, style = Type.small.copy(color = c.accent, fontSize = 12.5.sp), modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+        Text(it, style = Type.small.copy(color = c.accentText, fontSize = 12.5.sp), modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
     }
 
     @Composable
@@ -498,12 +498,12 @@ private fun ForwardSettings(vm: MainVm) {
                             Field(token, s.tgTokenHint, secret = true) { token = it.trim(); err = null }
                             Spacer(Modifier.height(6.dp))
                             Step(3, s.tgStep3)
-                            err?.let { Text(it, style = Type.small.copy(color = c.accent)) }
+                            err?.let { Text(it, style = Type.small.copy(color = c.accentText)) }
                         }
                     }
                 },
                 confirmButton = {
-                    if (st.telegram) TextButton({ vm.disconnectTelegram(); dialog = null }) { Text(s.disconnect, color = c.accent) }
+                    if (st.telegram) TextButton({ vm.disconnectTelegram(); dialog = null }) { Text(s.disconnect, color = c.accentText) }
                     else TextButton({
                         if (!busy && token.isNotBlank()) { busy = true; vm.connectTelegram(token) { e -> busy = false; err = e; if (e == null) open("https://t.me/${vm.forward.value.tgBot}?start=margin") } }
                     }) { if (busy) CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp)) else Text(s.connect, color = c.link) }
@@ -531,12 +531,12 @@ private fun ForwardSettings(vm: MainVm) {
                             Field(password, s.mailPasswordHint, secret = true) { password = it; err = null }
                             Spacer(Modifier.height(10.dp))
                             Text(s.mailPasswordHow, style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
-                            err?.let { Spacer(Modifier.height(6.dp)); Text(it, style = Type.small.copy(color = c.accent)) }
+                            err?.let { Spacer(Modifier.height(6.dp)); Text(it, style = Type.small.copy(color = c.accentText)) }
                         }
                     }
                 },
                 confirmButton = {
-                    if (st.mail) TextButton({ vm.disconnectMail(); dialog = null }) { Text(s.disconnect, color = c.accent) }
+                    if (st.mail) TextButton({ vm.disconnectMail(); dialog = null }) { Text(s.disconnect, color = c.accentText) }
                     else TextButton({
                         if (!busy && address.contains('@') && password.isNotBlank()) { busy = true; vm.connectMail(address, password) { e -> busy = false; err = e; if (e == null) dialog = null } }
                     }) { if (busy) CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp)) else Text(s.connect, color = c.link) }

@@ -34,12 +34,11 @@ class MetaItem(val text: AnnotatedString, val style: TextStyle, val onLong: (() 
 fun MetaLine(items: List<MetaItem>, modifier: Modifier = Modifier) {
     if (items.isEmpty()) return
     val c = M.c
-    FlowRow(modifier, itemVerticalAlignment = Alignment.CenterVertically) {
-        items.forEachIndexed { i, it ->
-            if (i > 0) Text("  ·  ", style = Type.small.copy(color = c.faint, fontSize = 14.5.sp))
-            Text(it.text, style = it.style, modifier = Modifier.clip(RoundedCornerShape(6.dp))
-                .combinedClickable(onClick = it.onClick, onLongClick = it.onLong).padding(vertical = 4.dp, horizontal = 1.dp))
-        }
+    // Each value is a tap of a finger's height; the dots stay between values on one line (DotFlow).
+    DotFlow(items.size, modifier, separator = { Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 14.5.sp)) }) { i ->
+        val it = items[i]
+        Text(it.text, style = it.style, modifier = Modifier.clip(RoundedCornerShape(6.dp))
+            .combinedClickable(onClick = it.onClick, onLongClick = it.onLong).padding(vertical = 9.dp, horizontal = 1.dp))
     }
 }
 

@@ -159,7 +159,7 @@ object Processor {
 class QueueWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result = try {
         val done = Processor.drain(applicationContext)
-        if (done.isNotEmpty()) Reminders.show(applicationContext, 4242, L.s.queueDoneText(done.size), done.joinToString("\n").take(600))
+        if (done.isNotEmpty()) Reminders.show(applicationContext, 4242, L.s.queueDoneText(done.size), done.joinToString("\n").take(600), digest = true)
         Result.success()
     } catch (e: Exception) {
         if (runAttemptCount < 5) Result.retry() else Result.failure()
