@@ -133,6 +133,9 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                         Spacer(Modifier.height(8.dp))
                         val st by vm.settings.collectAsState()
                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // The time already set (8:30 by default) is shown chosen, even when it is not one of the offered hours.
+                            val offered = s.setupBriefOptions.dropLast(1).map { "%02d:00".format(it.substringBefore(':').toInt()) }
+                            if (st.morningBrief && st.morningTime !in offered) Pill("✓ " + st.morningTime.removePrefix("0"), accent = true)
                             s.setupBriefOptions.forEachIndexed { i, o ->
                                 val off = i == s.setupBriefOptions.lastIndex
                                 val time = if (off) null else "%02d:00".format(o.substringBefore(':').toInt())

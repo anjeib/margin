@@ -279,7 +279,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         // A name already said in the title («Скинуть Лёше исходники») is not repeated under it.
         if (!t.done) {
             val parts = t.waitingFor?.let { s.promiseToYouParts(it) to it } ?: t.promisedTo?.let { s.promiseFromYouParts(it) to it }
-            parts?.let { (p, who) -> next(); if (namedIn(t.title, who)) append(p.first.trim()) else { append(p.first); name(who, p.second); append(p.third) } }
+            parts?.let { (p, who) -> next(); if (namedIn(t.title, who)) append(if (t.waitingFor != null) s.a11yWaiting else s.a11yPromised) else { append(p.first); name(who, p.second); append(p.third) } }
         }
         t.people.filter { p -> p != t.waitingFor && p != t.promisedTo && p != s.me && !namedIn(t.title, p) && p != hidePerson }.take(2).forEach { next(); name(it) }
         t.place?.let { pl ->

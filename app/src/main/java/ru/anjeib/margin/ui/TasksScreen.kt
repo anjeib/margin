@@ -429,7 +429,8 @@ fun TaskList(
                         SubTabs(listOf("topics" to s.topicsBadge, "deals" to s.dealsBadge, "ideas" to s.thoughts), if (monthTab == "overview") "topics" else monthTab, { monthTab = it })
                     }
                     // Личное / работа: the same pills as on the topics; a tap narrows the month to one, another tap shows both.
-                    Row(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // The filters wrap onto a second line on a narrow screen instead of squeezing the last one.
+                    androidx.compose.foundation.layout.FlowRow(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("personal" to c.ok, "work" to c.link).forEach { (k, col) ->
                             val on = monthSphere == k
                             Row(Modifier.clip(RoundedCornerShape(50)).background(if (on) col.copy(alpha = 0.16f) else Color.Transparent)
@@ -1171,12 +1172,19 @@ private fun MonthTopicRow(t: Task, onOpen: (String) -> Unit, onArchive: () -> Un
                 }
                 val openDeals = t.subtasks.count { !it.done }
                 // Always one line under the title: the sphere, how much is in it, since when.
-                Row(Modifier.padding(start = 26.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (t.sphere != null) { SphereBadge(t.sphere); Spacer(Modifier.width(8.dp)) }
-                    Text(listOfNotNull(s.nEntries(t.entries.size) + if (t.entries.isNotEmpty()) (if (open) " ▴" else " ▾") else "", openDeals.takeIf { it > 0 }?.let { s.summaryDeals(it) },
-                        born?.takeIf { it != last }?.let { s.startedOn(it.dayMonthYear()) }).joinToString("  ·  "),
-                        style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = t.entries.isNotEmpty()) { open = !open }.padding(vertical = 2.dp))
+                // The parts wrap whole onto a second line — «начата 19 сен» is never cut to «начата 19…».
+                val parts = buildList<Pair<String, Boolean>> {
+                    add(s.nEntries(t.entries.size) + (if (t.entries.isNotEmpty()) (if (open) " ▴" else " ▾") else "") to t.entries.isNotEmpty())
+                    if (openDeals > 0) add(s.summaryDeals(openDeals) to false)
+                    born?.takeIf { it != last }?.let { add(s.startedOn(it.dayMonthYear()) to false) }
+                }
+                Row(Modifier.padding(start = 26.dp, top = 4.dp), verticalAlignment = Alignment.Top) {
+                    if (t.sphere != null) { Box(Modifier.padding(top = 1.dp)) { SphereBadge(t.sphere) }; Spacer(Modifier.width(8.dp)) }
+                    DotFlow(parts.size, separator = { Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 13.sp)) }) { i ->
+                        val (text, tap) = parts[i]
+                        Text(text, style = Type.small.copy(color = c.graphite, fontSize = 13.sp),
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = tap) { open = !open }.padding(vertical = 2.dp))
+                    }
                 }
                 // Nothing left to do or wait for: say so, and offer the archive — quietly, here and not on «Сегодня».
                 if (t.noNextStep) Row(Modifier.padding(start = 26.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1222,10 +1230,13 @@ private fun MonthIdeaRow(t: Task, grown: List<Task>, onOpen: (String) -> Unit) {
                 }
                 Row(Modifier.padding(start = 26.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (t.sphere != null) { SphereBadge(t.sphere); Spacer(Modifier.width(8.dp)) }
-                    val line = listOfNotNull(t.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) + if (open) " ▴" else " ▾" },
-                        born?.takeIf { it != last }?.let { s.startedOn(it.dayMonthYear()) }).joinToString("  ·  ")
-                    if (line.isNotEmpty()) Text(line, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = t.entries.isNotEmpty()) { open = !open }.padding(vertical = 2.dp))
+                    val parts = listOfNotNull(t.entries.size.takeIf { it > 0 }?.let { (s.nEntries(it) + if (open) " ▴" else " ▾") to true },
+                        born?.takeIf { it != last }?.let { s.startedOn(it.dayMonthYear()) to false })
+                    DotFlow(parts.size, separator = { Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 13.sp)) }) { i ->
+                        val (text, tap) = parts[i]
+                        Text(text, style = Type.small.copy(color = c.graphite, fontSize = 13.sp),
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = tap) { open = !open }.padding(vertical = 2.dp))
+                    }
                 }
                 if (open) Column(Modifier.padding(start = 26.dp, top = 6.dp)) {
                     t.entries.forEach { e ->
