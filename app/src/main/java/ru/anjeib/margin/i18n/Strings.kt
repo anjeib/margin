@@ -783,6 +783,16 @@ interface Strings {
     fun thoughtSince(d: String): String
     val thoughtsToday: String
     val questionDateQ: String
+    val actWhen: String
+    val actMore: String
+    val actWait: String
+    val actPromised: String
+    val actDay: String
+    val actStep: String
+    val addTime: String
+    val commentsTitle: String
+    val filesWord: String
+    val allTab: String
 }
 
 object Ru : Strings {
@@ -794,7 +804,7 @@ object Ru : Strings {
         "Экраны" to listOf("Сегодня", "Календарь", "Обзор", "Тема", "Действия в теме", "Страница дела", "Входящие", "Материалы", "Архив"),
         "Ввод" to listOf("Поле ввода и метки", "Окошко тем", "Даты, время, повторы", "Списки", "Голос и файлы", "Быстрый ввод и отзыв", "Пересылка в Margin"),
         "Люди и обещания" to listOf("Люди и обещания", "Контакты", "Неделя, напоминания, виджет"),
-        "Значки и жесты" to listOf("Значки", "Бейджи и цвета", "Жесты"),
+        "Значки и жесты" to listOf("Значки", "Поля и цвета", "Жесты"),
         "Настройки и данные" to listOf("Настройки", "ИИ и без ИИ", "Приватность", "Примеры"),
     )
     override val helpSections = listOf(
@@ -819,33 +829,32 @@ object Ru : Strings {
             "Архив" to "решённая тема со всей лентой; новость в ней возвращает её",
         )),
         // ---- the screens, in order ----
-        HelpSection("Меню", "Слева вверху — меню разделов. Внизу — Настройки, Помощь, отзыв и номер сборки.", image = "drawer", pairs = listOf(
+        HelpSection("Меню", "Слева вверху — меню разделов. Внизу — Настройки, Помощь, отзыв и номер сборки. Справа вверху на «Сегодня» — Календарь, Обзор и поиск.", image = "drawer", pairs = listOf(
             "Входящие" to "записанное без интернета и присланное без подписи; число — сколько ждёт разбора",
             "Ежедневник" to "главный экран: Сегодня · Календарь · Обзор",
             "Материалы" to "все фото, файлы и голосовые",
             "Контакты" to "люди и компании",
             "Архив" to "завершённые темы",
         )),
-        HelpSection("Сегодня", "Что делать сейчас. Слева на полях — сегодняшнее число.", image = "today", pairs = listOf(
-            "сводка" to "сколько сегодня дел и тем, а в синей карточке «Обещания» — кто кому что должен («от Димы · макет», даты столбиком): просроченное, на ближайшие 3 дня и без даты; с дня срока — «напомнить»",
-            "дела дня" to "по времени (прошедший час — серым); с прошлых дней — сюда с пометкой «просрочено с 6 окт», а если их несколько — «всё на сегодня»",
-            "≡ Тема ›" to "дела одной темы — блоком под её названием; нажатие на название — тема, на дело — его карточка. Под блоком мелко «тема с 17 авг · 5 записей · ещё 3 дела ▾» — раскрывает остальные дела темы",
-            "Без даты" to "дела без даты с пометкой, с какого числа они ждут («с 3 окт»); старше недели — бледнее. Нажмите на заголовок, чтобы свернуть",
+        HelpSection("Сегодня", "Что делать сейчас. Слева на полях — сегодняшнее число, под названием дня — сводка: сколько дел и встреч, сколько осталось с прошлых дней. Ниже — разделы, каждый на своей панели; «когда» у строк — на полях слева от линии.", image = "today", pairs = listOf(
+            "Обещания" to "кто кому что должен: ← ждём от человека, → обещали ему; на полях — срок. Просроченное, на ближайшие 3 дня и без даты; с дня срока — «напомнить». Нажатие на стрелку закрывает обещание",
+            "Сегодня" to "дела и встречи по времени; на полях — час, у оставшихся с прошлых дней — «с 6 окт» терракотой; если их несколько — «всё на сегодня» у заголовка. Сделанное остаётся зачёркнутым; больше трёх — сворачивается в одну строку",
+            "≡ Тема" to "под делом мелко — тема, к которой оно относится",
+            "Без даты" to "дела без даты, под ними — с какого числа ждут («с 3 окт»); старше недели — бледнее. Нажмите на заголовок, чтобы свернуть",
             "Завтра — 3 дела · 1 встреча ›" to "внизу; открывает «Календарь»",
         )),
-        HelpSection("Календарь", "Что когда. Месяц сеткой: число под днём — сколько дел в его списке (сегодня — вместе с просроченным, терракотой, если оно есть; прошедший день — «✓2» сделанных), точка — встреча из календаря телефона. Сегодня обведено рамкой, выбранный день закрашен. Под сеткой — дела выбранного дня, как на «Сегодня»; выбрали другой день — новое дело без своей даты встанет на него. Стрелками листаются месяцы.", image = "calendar"),
-        HelpSection("Обзор", "Что у вас есть. Три вкладки и фильтр «Личное / Работа» нажатие оставляет одну сферу, повторное возвращает обе.", image = "overview", pairs = listOf(
-            "Темы" to "на полях — день последней записи, «начата 4 сен» под названием; «N записей ▾» раскрывает записи; «N дел»; у решённых — «всё сделано · В архив»",
-            "Дела" to "все открытые дела по дням и «Без даты»; «← ждём» и «→ обещали» — только кто кому должен",
-            "Идеи" to "как темы: на полях — день последней записи; «N записей ▾» раскрывает; ↳ — что из идеи выросло",
+        HelpSection("Календарь", "Что когда. Месяц сеткой: точки под числом — сколько дел в его списке (сегодня — вместе с просроченным, терракотой; прошедший день — сделанное), кольцо — встреча из календаря телефона. Сегодня обведено рамкой, выбранный день закрашен. Под сеткой — дела выбранного дня, как на «Сегодня»; выбрали другой день — новое дело без своей даты встанет на него. Стрелками листаются месяцы.", image = "calendar"),
+        HelpSection("Обзор", "Что у вас есть. Вкладки «Всё · Темы · Дела · Идеи», под ними чипы «Ждём», «Обещали», «Работа», «Личное» — нажатие сужает список, повторное снимает.", image = "overview", pairs = listOf(
+            "Темы" to "на полях — день последней записи; под названием — сколько дел открыто, ждём ли чего-то, сколько записей; у решённых — «В архив»",
+            "Дела" to "все открытые дела: с датой — по дням (дата на полях), потом без даты; «Ждём» и «Обещали» — только кто кому должен",
+            "Идеи" to "на полях — день последней записи; под названием — записи и дела, что из идеи выросли",
         )),
-        HelpSection("Тема", "Всё, что было в теме, по дням. Дни — на полях, между ними тонкая линия.", image = "topic", pairs = listOf(
-            "шапка" to "название (нажатие — переименовать), сфера (нажатие — переключить), «тема с 17 авг», скрепка с числом файлов",
-            "сводка" to "«2 из 9 сделано · 5 записей · 3 материала» и полоска; нажатие — только дела, ещё раз — вся лента",
-            "ЗАПИСЬ · 19:40" to "ваши слова; под ними — фото и файлы",
-            "ДЕЛО / ДЕЛА · N" to "блок дел этого дня; вложенные — с отступом и тонкой линией от родительского",
-            "«3 материала» в сводке" to "только материалы, с поиском и чипами; при прокрутке шапка темы сворачивается в одну строку",
-            "⋯" to "Изменить, В архив; у архивной — Вернуть, Удалить",
+        HelpSection("Тема", "Всё, что было в теме, по дням: каждый день — своя панель, его число на полях, под числом — время записи.", image = "topic", pairs = listOf(
+            "шапка" to "название (нажатие — переименовать), под ним — с какого числа тема и сколько сделано, справа — сфера (нажатие — переключить)",
+            "Всё · Дела · Записи · Файлы" to "вкладки: вся лента, только дела, только ваши слова, только файлы — с поиском",
+            "запись" to "ваши слова; под ними — фото и файлы",
+            "дело" to "кружок, слова и строка под ними: когда, кто должен; вложенные — с отступом и тонкой линией от родительского",
+            "⋯" to "Изменить, Поделиться, В архив; у архивной — Вернуть, Удалить",
         )),
         HelpSection("Действия в теме", "Долгое нажатие на запись или дело открывает маленькое меню. Удалённое остаётся в ленте зачёркнутым, с пометкой «удалено»; нажмите на него, чтобы вернуть или удалить насовсем.", image = "bubble", pairs = listOf(
             "Добавить дело" to "новое дело с отступом под этой строкой (поле ввода переходит в режим «Добавить дело»)",
@@ -853,16 +862,16 @@ object Ru : Strings {
             "Дата" to "день дела",
             "Удалить" to "зачеркнуть; вернуть можно",
         )),
-        HelpSection("Страница дела", "Открывается нажатием в любом месте строки — у любого дела, и простого, и из темы. Название можно поправить прямо в карточке. Комментарии пишите прямо на странице — у каждого на полях встанут дата и время. В поле внизу можно попросить словами: «перенеси на пятницу».", image = "deal", pairs = listOf(
-            "кружок у названия" to "отметить сделанным; долгое нажатие — Завтра, +неделя, Не буду делать, В идеи, Удалить",
-            "Добавить комментарий" to "свой текст к делу; у дела в списках появляется значок 💬",
-            "Личное / Работа" to "сфера; нажатие переключает",
-            "📅 Сегодня, 🕓 19:30" to "дата и время; нажмите, чтобы изменить",
-            "+ день · + повтор · + контакты · + место" to "заполнить недостающее",
-            "+ дело" to "добавить дело внутри — и дело станет темой",
-            "Откуда, Записи, История" to "ниже: откуда пришло, что записано, что менялось",
+        HelpSection("Страница дела", "Открывается нажатием в любом месте строки — у любого дела, и простого, и из темы. Как на «Сегодня»: на полях — «когда», справа — кружок и название, которое можно поправить прямо здесь; под ним одной строкой — кто, где, повтор. В поле внизу можно попросить словами: «перенеси на пятницу».", image = "deal", pairs = listOf(
+            "сегодня / 15:00 на полях" to "день и время; нажмите на день или на час, чтобы изменить",
+            "кружок у названия" to "отметить сделанным",
+            "Когда · Повтор · Контакты · Место" to "что задать; заданное — синим",
+            "Ещё" to "Ждём, Обещал, + день (дело на несколько дней), + дело (дело внутри — и дело станет темой)",
+            "≡ Тема ›" to "у дела из темы — сверху; ведёт в тему",
+            "Комментарии" to "свой текст к делу, у каждого на полях — дата и время; у дела в списках появляется значок 💬",
+            "⋯" to "Отложить, В тему…, Личное / Работа, Не буду делать, В идеи, Удалить",
         )),
-        HelpSection("Поле ввода и метки", "Наберите «/», «#» или «@» — появится окошко с вариантами; выбранное появится плашкой над полем. Ещё до отправки под полем видно, как Margin понял фразу.", image = "composer_slash", pairs = listOf(
+        HelpSection("Поле ввода и метки", "Наберите «/», «#» или «@» — появится окошко с вариантами; выбранное встанет над полем. Ещё до отправки под полем видно, как Margin понял фразу.", image = "composer_slash", pairs = listOf(
             "/дело  /тема  /идея" to "что это",
             "/работа  /личное" to "сфера",
             "#тема" to "в какую тему: слова — в её ленту, дела — в её дела; сфера — от темы",
@@ -887,8 +896,8 @@ object Ru : Strings {
             "Резервная копия" to "в аккаунт Google",
         )),
         // ---- legends ----
-        HelpSection("Значки", "Значок слева от кружка показывает, что это за дело.", legend = "icons"),
-        HelpSection("Бейджи и цвета", "", legend = "badges"),
+        HelpSection("Значки", "В одной колонке справа от линии — один знак строки: что это и что с ним можно сделать.", legend = "icons"),
+        HelpSection("Поля и цвета", "", legend = "badges"),
         // ---- writing ----
         HelpSection("Даты, время, повторы", "Пишите обычными словами — Margin поймёт и без ИИ.", pairs = listOf(
             "завтра в 15, в пятницу, 12 октября, 5.11, в 7 вечера" to "день и время",
@@ -1697,6 +1706,16 @@ object Ru : Strings {
     override fun thoughtSince(d: String) = "идея с $d"
     override val thoughtsToday = "Идеи за сегодня"
     override val questionDateQ = "Дата"
+    override val actWhen = "Когда"
+    override val actMore = "Ещё"
+    override val actWait = "Ждём"
+    override val actPromised = "Обещал"
+    override val actDay = "+ день"
+    override val actStep = "+ дело"
+    override val addTime = "+ время"
+    override val commentsTitle = "Комментарии"
+    override val filesWord = "Файлы"
+    override val allTab = "Всё"
 }
 
 object En : Strings {
@@ -1708,7 +1727,7 @@ object En : Strings {
         "Screens" to listOf("Today", "Calendar", "Overview", "Today · Calendar · Overview", "Inside a topic", "Inbox, Materials, Archive"),
         "Writing" to listOf("Marks in the field", "Examples", "Dates, times, repeats", "Lists", "Quick entry and feedback", "Sharing to Margin", "Offline"),
         "People and promises" to listOf("The week, reminders, widget"),
-        "Icons" to listOf("Icons", "Badges and colours"),
+        "Icons" to listOf("Icons", "Margin and colours"),
         "Settings and data" to listOf("Privacy"),
     )
     override val helpSections = listOf(
@@ -1725,16 +1744,16 @@ object En : Strings {
             "Topic" to "a to-do that grew: its own feed of records, files and to-dos. A to-do becomes a topic by itself on its second event",
             "Idea" to "a thought without to-dos; a feed like a topic's",
         )),
-        HelpSection("Menu", "Top left: Inbox, Planner, Materials, Contacts, Archive; Settings and Help below.", image = "drawer"),
-        HelpSection("Today", "The day's summary (how much, who owes what), to-dos by the hour, «No date», «Tomorrow — N».", image = "today"),
-        HelpSection("Calendar", "The month as a grid; the chosen day below.", image = "calendar"),
-        HelpSection("Overview", "Topics, To-dos, Ideas; filter Personal / Work.", image = "overview"),
+        HelpSection("Menu", "Top left: Inbox, Planner, Materials, Contacts, Archive; Settings and Help below. Top right on «Today»: Calendar, Overview and search.", image = "drawer"),
+        HelpSection("Today", "The day on the margin, its summary under the name; then sections, each on its own panel: Promises, Today (by the hour, done ones struck through), No date, Tomorrow — N. «When» stands on the margin left of the line.", image = "today"),
+        HelpSection("Calendar", "The month as a grid — dots under a day are what its list holds, a ring is a meeting; the chosen day below.", image = "calendar"),
+        HelpSection("Overview", "Tabs «All · Topics · To-dos · Ideas»; chips «Waiting», «Promised», «Work», «Personal» narrow the list.", image = "overview"),
         HelpSection("Today · Calendar · Overview", "", pairs = listOf(
-            "Today" to "the day's summary (how much, who owes what), to-dos by the hour (a topic's to-dos as one block under its name), «No date» with their age, «Tomorrow — N»",
-            "tap a to-do" to "its card, anywhere on the line; a long press — Done · Date · Time",
-            "the card" to "as tall as it needs; the title and a comment are edited in place, the field below takes changes in words; a to-do with a comment shows 💬",
+            "Today" to "the summary, promises, to-dos by the hour (the hour on the margin, «since 6 Oct» in terracotta when late), «No date» with their age, «Tomorrow — N»",
+            "tap a to-do" to "its card, anywhere on the line; a long press — Time · To a topic · Delete",
+            "the card" to "«when» on its margin, the circle and the title edited in place, one line of who and where, then When · Repeat · Contacts · Place · More; comments under it",
             "Calendar" to "the month as a grid — the number under a day is what its list holds, a dot is a meeting — and the chosen day; a new to-do without a date goes to the chosen day",
-            "Overview" to "everything: Topics, To-dos (filters «waiting on» / «promised»), Ideas; filter Personal / Work",
+            "Overview" to "everything: Topics, To-dos, Ideas as tabs; chips Waiting / Promised and Work / Personal",
         )),
         HelpSection("Marks in the field", "Marks tell the app exactly what you meant. Type the sign — a small window offers choices; the chosen one sits over the field. Combine them in any order.", pairs = listOf(
             "/todo  /topic  /idea" to "what it is",
@@ -1748,14 +1767,13 @@ object En : Strings {
         )),
         HelpSection("Examples", "", examples = listOf("#repair buy grout by Friday", "/wait @Masha keys by Saturday", "/done #coffee packaging: Oleg approved")),
         HelpSection("Dates, times, repeats", "Plain words work without the AI: tomorrow at 3, on Friday, in a week, on Mon and Thu at 7 pm (one to-do on several days), every Tuesday (a repeat)."),
-        HelpSection("Inside a topic", "Everything written in a topic goes into its feed: the day on the margin, «RECORD · time» over the words, to-dos in blocks.", image = "topic", pairs = listOf(
+        HelpSection("Inside a topic", "Everything written in a topic goes into its feed, day by day: each day is a panel, its date on the margin, the time of each record under it.", image = "topic", pairs = listOf(
             "the circle" to "done",
             "long press a line" to "a to-do under it, edit, due date, delete",
-            "tap the summary" to "to-dos only",
-            "«3 materials» in the summary" to "materials only",
+            "All · To-dos · Records · Files" to "tabs under the title: the whole feed or one kind",
         )),
-        HelpSection("Icons", "The narrow column left of the circle says what kind of to-do it is.", legend = "icons"),
-        HelpSection("Badges and colours", "", legend = "badges"),
+        HelpSection("Icons", "One column right of the line holds the one mark of a row: what it is and what a tap on it does.", legend = "icons"),
+        HelpSection("Margin and colours", "", legend = "badges"),
         HelpSection("Sharing to Margin", "From Telegram, MAX, mail: “Share” or select text → “To Margin”. Or “Copy” — and “Paste what you copied” appears in Margin. Margin reads other people’s words as theirs: what they promise you becomes “waiting”, what they ask — a to-do."),
         HelpSection("Quick entry and feedback", "The “Write” tile in quick settings (add it with the pencil there) and a long press on the app icon — “Write” / “Dictate”. Understood wrong — “Understood wrong” under the result. “Send feedback” in the menu opens an e-mail to the developer with the error logs; your records are not sent."),
         HelpSection("The week, reminders, widget", "On Sundays «Today» shows a quiet card of the week: done, who owes whom, topics that stood still; «×» hides it until next Sunday. When someone's promise is late, «remind» next to it prepares a message (SMS if the phone is known, otherwise Share); you send it. On the day someone promised something, or you did, a reminder comes in the morning. The morning and evening summaries change in words: “morning summary at 9”, “evening summary at 9pm”, “no evening summary”. The «Margin · Today» widget shows the day and opens the field or dictation. A whole topic can be shared as text: ⋯ → Share."),
@@ -2528,6 +2546,16 @@ object En : Strings {
     override fun thoughtSince(d: String) = "idea since $d"
     override val thoughtsToday = "Ideas today"
     override val questionDateQ = "Due date"
+    override val actWhen = "When"
+    override val actMore = "More"
+    override val actWait = "Waiting"
+    override val actPromised = "Promised"
+    override val actDay = "+ day"
+    override val actStep = "+ to-do"
+    override val addTime = "+ time"
+    override val commentsTitle = "Comments"
+    override val filesWord = "Files"
+    override val allTab = "All"
 }
 
 /** Current language for code outside composition (dates, notifications, prompts). */

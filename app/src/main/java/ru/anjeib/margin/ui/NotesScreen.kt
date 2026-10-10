@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Description
 import ru.anjeib.margin.data.shortLabel
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Notifications
@@ -69,77 +70,21 @@ import ru.anjeib.margin.data.text
 import java.time.LocalDate
 import java.time.LocalDateTime
 
+/** An old note in a panel: a page mark, its title, how much is in it; the day it was last written on the margin. */
 @Composable
-fun NotesList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPadding: PaddingValues) {
+fun NoteCard(n: Note, data: AppData, onClick: () -> Unit, modifier: Modifier = Modifier, why: String? = null, seat: Seat = Seat.Single, trailing: (@Composable () -> Unit)? = null) {
     val c = M.c
     val s = M.s
-    var q by rememberSaveable { mutableStateOf("") }
-    var searching by rememberSaveable { mutableStateOf(false) }
-    var filter by rememberSaveable { mutableStateOf<String?>(null) }
-    val words = q.lowercase().split(' ').filter { it.isNotBlank() }
-    val notes = data.notes.filter { n -> n.title != s.inboxNote && !n.archived }.filter { n ->
-        val hay = (n.title + " " + n.text + " " + n.aiSummary.orEmpty() + " " + n.entries.flatMap { it.attachments }.joinToString(" ") { it.name + " " + it.transcript.orEmpty() }).lowercase()
-        words.all { it in hay } && (filter == null || n.project == filter)
-    }
-    val projects = data.notes.mapNotNull { it.project }.distinct().sorted()
-
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item("h") {
-            Row(Modifier.padding(top = 18.dp, bottom = 10.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(s.notes, style = Type.display.copy(color = c.ink), modifier = Modifier.weight(1f))
-                Box(Modifier.size(44.dp).clip(CircleShape).clickable { searching = !searching; if (!searching) q = "" }, contentAlignment = Alignment.Center) {
-                    Icon(if (searching) Icons.Rounded.Close else Icons.Outlined.Search, null, tint = c.graphite)
-                }
-            }
-        }
-        if (searching) item("search") {
-            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.chip).padding(horizontal = 16.dp, vertical = 12.dp)) {
-                if (q.isEmpty()) Text(s.searchNotes, style = Type.body.copy(color = c.graphite))
-                BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth())
-            }
-        }
-        if (projects.isNotEmpty()) item("filters") {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill(s.allFilter, filled = filter == null, onClick = { filter = null })
-                projects.forEach { p -> Pill(projectLabel(p), filled = filter == p, onClick = { filter = if (filter == p) null else p }) }
-            }
-        }
-        if (notes.isEmpty()) item("empty") { Empty(s.emptyNotes, s.notesHint) }
-        val groups = notes.groupBy { it.project }
-        (groups.keys.filterNotNull().sorted() + listOf(null)).forEach { p ->
-            val l = groups[p] ?: return@forEach
-            if (filter == null && groups.size > 1) item("g-$p") { SectionLabel(p ?: s.noProject, Modifier.padding(start = 6.dp, top = 8.dp)) }
-            items(l, key = { it.id }) { n ->
-                // Swipe left — into the archive, right — delete; both can be undone.
-                SwipeActions(left = s.toArchive to { vm.archiveNote(n.id) }, right = s.delete to { vm.removeNote(n.id) }, modifier = Modifier.animateItem()) {
-                    NoteCard(n, data, onClick = { onOpen(n.id) })
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun NoteCard(n: Note, data: AppData, onClick: () -> Unit, modifier: Modifier = Modifier, why: String? = null) {
-    val c = M.c
-    val s = M.s
-    val date = runCatching { LocalDateTime.parse(n.updatedAt).toLocalDate().dayMonth() }.getOrDefault("")
+    val day = runCatching { LocalDateTime.parse(n.updatedAt).toLocalDate() }.getOrNull()
     val files = n.entries.flatMap { it.attachments }
-    Column(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 16.dp),
-    ) {
-        Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text(n.title.ifBlank { s.untitled }, style = Type.cardTitle.copy(color = c.ink), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(3.dp))
-                // How much is inside (one visit = one record), not its last line.
-                val records = n.entries.map { it.session ?: it.id }.distinct().size
-                Text(listOfNotNull(records.takeIf { it > 0 }?.let { s.entriesCount(it) }, date, attachmentsSummary(files)).joinToString(" · "),
-                    style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
-                why?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(top = 2.dp)) }
-            }
-        }
+    // How much is inside (one visit = one record), not its last line.
+    val records = n.entries.map { it.session ?: it.id }.distinct().size
+    PaperRow(seat, margin = day?.let { dayWord(it) }, mark = { Icon(Icons.Outlined.Description, null, tint = c.graphite, modifier = Modifier.size(19.dp)) },
+        modifier = modifier, onClick = onClick, trailing = trailing) {
+        RowTitle(n.title.ifBlank { s.untitled }, maxLines = 2)
+        val sub = listOfNotNull(records.takeIf { it > 0 }?.let { s.entriesCount(it) }, attachmentsSummary(files)).joinToString("  ·  ")
+        if (sub.isNotBlank()) RowSub(sub)
+        why?.let { RowSub(it) }
     }
 }
 

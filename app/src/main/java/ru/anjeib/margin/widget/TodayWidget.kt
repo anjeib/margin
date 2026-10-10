@@ -35,6 +35,9 @@ import androidx.glance.text.FontFamily
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import ru.anjeib.margin.data.dayMonthShort
+import androidx.glance.text.TextAlign
+import androidx.glance.text.FontStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -68,18 +71,24 @@ class TodayWidget : GlanceAppWidget() {
         val dayName = today.dayOfWeek.getDisplayName(DateStyle.FULL_STANDALONE, locale).replaceFirstChar { it.uppercase() }
         val dayDate = today.dayOfMonth.toString() + " " + today.month.getDisplayName(DateStyle.SHORT, locale).trimEnd('.')
         provideContent {
-            Body(context, dayName, dayDate, due.take(6).map { (it.time?.let { t -> "$t  " } ?: "") + it.title to ((it.dueDate ?: it.startDate)?.isBefore(today) == true) },
+            // v8: «когда» left of a thin rule, as on the app's margin — the hour, or «с 8 окт» when late.
+            Body(context, dayName, dayDate, due.take(6).map { t ->
+                val late = (t.dueDate ?: t.startDate)?.isBefore(today) == true
+                Triple(if (late) s.sinceWord + " " + (t.dueDate ?: t.startDate)!!.dayMonthShort() else t.time.orEmpty(), t.title, late)
+            },
                 (due.size - 6).coerceAtLeast(0), s.tileWrite, s.widgetFree, s.moreWord)
         }
     }
 
     @Composable
-    private fun Body(ctx: Context, dayName: String, dayDate: String, rows: List<Pair<String, Boolean>>, more: Int, write: String, free: String, moreWord: String) {
+    private fun Body(ctx: Context, dayName: String, dayDate: String, rows: List<Triple<String, String, Boolean>>, more: Int, write: String, free: String, moreWord: String) {
         val bg = ColorProvider(day = Color(0xFFF6F3EE), night = Color(0xFF141210))
         val ink = ColorProvider(day = Color(0xFF1A1A1A), night = Color(0xFFEDE7DD))
         val graphite = ColorProvider(day = Color(0xFF6B665E), night = Color(0xFFADA596))
         val accent = ColorProvider(day = Color(0xFFC8643B), night = Color(0xFFD9774E))
         val chip = ColorProvider(day = Color(0xFFECE6DC), night = Color(0xFF2A2622))
+        val card = ColorProvider(day = Color(0xFFFCFAF7), night = Color(0xFF1E1B18))
+        val rule = ColorProvider(day = Color(0xD9C8643B), night = Color(0xD9D9774E))
         fun open(action: String?) = actionStartActivity(Intent(ctx, MainActivity::class.java).apply { if (action != null) setAction(action) }
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
         Column(GlanceModifier.fillMaxSize().background(bg).cornerRadius(20.dp).padding(14.dp)) {
@@ -89,20 +98,23 @@ class TodayWidget : GlanceAppWidget() {
                 Text(dayDate, style = TextStyle(color = graphite, fontSize = 13.sp))
             }
             Spacer(GlanceModifier.height(8.dp))
-            Column(GlanceModifier.defaultWeight().fillMaxWidth().clickable(open(null))) {
-                if (rows.isEmpty()) Text(free, style = TextStyle(color = graphite, fontSize = 14.sp))
-                rows.forEach { (line, late) ->
+            // The day's matters on one panel, as on «Сегодня».
+            Column(GlanceModifier.defaultWeight().fillMaxWidth().background(card).cornerRadius(14.dp).padding(vertical = 6.dp).clickable(open(null))) {
+                if (rows.isEmpty()) Text(free, style = TextStyle(color = graphite, fontSize = 14.sp, fontStyle = FontStyle.Italic), modifier = GlanceModifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                rows.forEach { (whenText, line, late) ->
                     Row(GlanceModifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        // A thin terracotta margin rule, as in the app; late matters marked by its colour.
-                        Box(GlanceModifier.width(2.dp).height(16.dp).background(if (late) accent else chip)) {}
+                        Text(whenText, maxLines = 1, style = TextStyle(color = if (late) accent else graphite, fontSize = 12.sp, fontStyle = FontStyle.Italic,
+                            fontFamily = FontFamily.Serif, textAlign = TextAlign.End), modifier = GlanceModifier.width(52.dp))
                         Spacer(GlanceModifier.width(8.dp))
+                        Box(GlanceModifier.width(1.dp).height(18.dp).background(rule)) {}
+                        Spacer(GlanceModifier.width(10.dp))
                         Text(line, maxLines = 1, style = TextStyle(color = ink, fontSize = 14.sp))
                     }
                 }
-                if (more > 0) Text("$moreWord $more", style = TextStyle(color = graphite, fontSize = 12.sp), modifier = GlanceModifier.padding(start = 10.dp, top = 2.dp))
+                if (more > 0) Text("$moreWord $more", style = TextStyle(color = graphite, fontSize = 12.sp, fontStyle = FontStyle.Italic), modifier = GlanceModifier.padding(start = 71.dp, top = 2.dp))
             }
             Row(GlanceModifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(GlanceModifier.defaultWeight().height(40.dp).background(chip).cornerRadius(20.dp).padding(horizontal = 14.dp).clickable(open(MainActivity.ACTION_WRITE)),
+                Box(GlanceModifier.defaultWeight().height(40.dp).background(card).cornerRadius(20.dp).padding(horizontal = 14.dp).clickable(open(MainActivity.ACTION_WRITE)),
                     contentAlignment = Alignment.CenterStart) {
                     Text(write + "…", style = TextStyle(color = graphite, fontSize = 14.sp))
                 }

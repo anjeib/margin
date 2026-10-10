@@ -89,31 +89,29 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
             item("h") { PageHead(s.inboxNote, s.inboxHint) }
             if (data.queue.isEmpty() && note?.entries.isNullOrEmpty()) item("empty") { Margined { Empty(s.inboxEmpty, s.inboxEmptyHint) } }
             if (data.queue.isNotEmpty()) {
-                item("q-h") { Margined(Modifier.padding(top = 10.dp, bottom = 2.dp)) { GroupBadge(s.waitingNet) } }
-                var last: LocalDate? = null
-                data.queue.forEach { q ->
-                    val d = dayOf(q.at); val first = d != last; last = d
+                item("q-h") { SectionHead(s.waitingNet, count = data.queue.size, top = 10.dp) }
+                data.queue.forEachIndexed { i, q ->
                     item("q" + q.id) {
-                        InboxRow(day = if (first) d else null, today = today, icon = { Icon(Icons.Outlined.CloudOff, null, tint = c.graphite, modifier = Modifier.size(15.dp)) },
-                            title = q.text.ifBlank { attachmentsSummary(q.files) ?: "" }, meta = listOfNotNull(q.at.drop(11).take(5), s.sortsWhenOnline).joinToString("  ·  "),
+                        InboxRow(seat = seatOf(i, data.queue.size), hour = q.at.drop(11).take(5), icon = { Icon(Icons.Outlined.CloudOff, null, tint = c.graphite, modifier = Modifier.size(19.dp)) },
+                            title = q.text.ifBlank { attachmentsSummary(q.files) ?: "" }, meta = s.sortsWhenOnline,
                             thumb = null, onThumb = {}, onRemove = { vm.dropQueued(q.id) },
                             menu = { close, _ -> SoftMenuItem(s.removeWord, danger = true) { close(); vm.dropQueued(q.id) } })
                     }
                 }
             }
             if (note != null && note.entries.isNotEmpty()) {
-                // Without a badge: everything here is «unplaced» — only what waits for the internet is set apart.
-                if (data.queue.isNotEmpty()) item("n-h") { Spacer(Modifier.height(10.dp)) }
-                var last: LocalDate? = null
-                note.entries.reversed().forEach { e ->
-                    val d = dayOf(e.at); val first = d != last; last = d
+                // v8: by day — the day as a section's label, the hour on the margin of each row.
+                val byDay = note.entries.reversed().groupBy { dayOf(it.at) }
+                byDay.forEach { (d, list) ->
+                item("d" + d) { SectionHead(d?.let { dayWord(it, today) } ?: "—", count = list.size) }
+                list.forEachIndexed { i, e ->
                     val a = e.attachments.firstOrNull()
                     item("e" + e.id) {
-                        InboxRow(day = if (first) d else null, today = today,
-                            icon = { Icon(kindIcon(a?.kind ?: "text"), null, tint = c.graphite, modifier = Modifier.size(15.dp)) },
+                        InboxRow(seat = seatOf(i, list.size), hour = e.at.drop(11).take(5),
+                            icon = { Icon(kindIcon(a?.kind ?: "text"), null, tint = c.graphite, modifier = Modifier.size(19.dp)) },
                             // A photo without words is «Фото без подписи», not its file name; the kind is the mark on the left.
                             title = e.text.ifBlank { a?.caption ?: a?.let { if (it.kind == "photo") s.photoNoCaption else attachmentLabel(it).ifBlank { it.name } } ?: "" },
-                            meta = listOfNotNull(e.at.drop(11).take(5), attachmentsSummary(e.attachments)?.takeIf { e.attachments.size > 1 || e.text.isNotBlank() },
+                            meta = listOfNotNull(attachmentsSummary(e.attachments)?.takeIf { e.attachments.size > 1 || e.text.isNotBlank() },
                                 if (a != null && "ocr:${a.id}" in working) "…" else null).joinToString("  ·  "),
                             thumb = a?.takeIf { it.kind == "photo" || it.kind == "video" }, onThumb = { viewing = it },
                             onOpen = { if (a != null) viewing = a else editing = e },
@@ -136,6 +134,7 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
                             })
                     }
                 }
+                }
             }
         }
     }
@@ -144,40 +143,29 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
     editing?.let { e -> data.inboxNote()?.let { n -> TextDialog(s.edit, e.text, "", onDismiss = { editing = null }) { v -> vm.editEntryText("note:${n.id}", e.id, v); editing = null } } }
 }
 
-/** One thing in «Входящие»: the day on the margin (the first of the day), the kind mark, the words, a quiet line; a tap — its menu. */
+/** One thing in «Входящие»: its hour on the margin, the kind mark, the words, a quiet line; a tap opens it, a hold — its menu. */
 @Composable
-private fun InboxRow(day: LocalDate?, today: LocalDate, icon: @Composable () -> Unit, title: String, meta: String, thumb: Attachment?, onThumb: (Attachment) -> Unit,
+private fun InboxRow(seat: Seat, hour: String, icon: @Composable () -> Unit, title: String, meta: String, thumb: Attachment?, onThumb: (Attachment) -> Unit,
                      onOpen: (() -> Unit)? = null, onRemove: (() -> Unit)? = null, canPick: Boolean = false,
                      menu: @Composable (close: () -> Unit, pick: Boolean) -> Unit) {
-    val c = M.c
     val s = M.s
     var open by remember { mutableStateOf(false) }
     // The swipe to the right asks «в какую тему» at once.
     var pick by remember { mutableStateOf(false) }
-    Column {
-        if (day != null) Hairline(Modifier.padding(start = MarginW, top = 6.dp))
-        Margined(margin = day?.let { d -> { DayMargin(d, today, false, strong = true) } }) {
-            Box {
-                // A tap opens the thing itself; a long press — what can be done with it; swipes — away or into a topic.
-                SwipeActions(left = onRemove?.let { s.removeWord to it }, right = if (canPick) (s.toTopicPick to { pick = true; open = true }) else null, radius = 10) {
-                Row(Modifier.fillMaxWidth().background(c.bg).clip(RoundedCornerShape(10.dp)).combinedClickable(onClick = { if (onOpen != null) onOpen() else open = true }, onLongClick = { open = true })
-                    .padding(vertical = 10.dp), verticalAlignment = Alignment.Top) {
-                    Box(Modifier.size(20.dp, 22.dp), contentAlignment = Alignment.Center) { icon() }
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(title, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        // The hour first in ink, what else quiet after it.
-                        val dateSp = dateSpan()
-                        if (meta.isNotBlank()) Text(buildAnnotatedString {
-                            val hour = Regex("^\\d{2}:\\d{2}").find(meta)?.value
-                            if (hour != null) { withStyle(dateSp) { append(hour) }; append(meta.removePrefix(hour)) } else append(meta)
-                        }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
+    Margined(margin = hour.takeIf { it.isNotBlank() && it != "00:00" }?.let { h -> { RowMargin(h) } }) {
+        Box {
+            // A tap opens the thing itself; a long press — what can be done with it; swipes — away or into a topic.
+            SwipeActions(left = onRemove?.let { s.removeWord to it }, right = if (canPick) (s.toTopicPick to { pick = true; open = true }) else null,
+                modifier = Modifier.bleed(PanelBleed), shape = seat.shape()) {
+                PanelPiece(seat, bleed = false) {
+                    RowBody(mark = icon, onClick = { if (onOpen != null) onOpen() else open = true }, onLong = { open = true },
+                        trailing = thumb?.let { a -> { Box(Modifier.clip(RoundedCornerShape(10.dp)).clickable { onThumb(a) }) { Thumb(a, 52.dp) } } }) {
+                        RowTitle(title)
+                        if (meta.isNotBlank()) RowSub(meta)
                     }
-                    thumb?.let { a -> Box(Modifier.padding(start = 10.dp).clip(RoundedCornerShape(10.dp)).clickable { onThumb(a) }) { Thumb(a, 56.dp) } }
                 }
-                }
-                SoftMenu(open, { open = false; pick = false }) { menu({ open = false; pick = false }, pick) }
             }
+            SoftMenu(open, { open = false; pick = false }) { menu({ open = false; pick = false }, pick) }
         }
     }
 }

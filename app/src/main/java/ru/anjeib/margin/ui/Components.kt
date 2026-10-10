@@ -113,12 +113,10 @@ fun MenuGlyph(color: Color = M.c.ink) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, interactive: Boolean = true,
-                /** The ring's colour — the matter's sphere (sage personal, petrol work); null — graphite. */
+                /** Ignored since v8 (the ring is one colour); kept so old call sites compile. */
                 tint: Color? = null, onToggle: () -> Unit) {
     val c = M.c
-    // A bullet the size of the other glyphs — a small «bagel» (owner's call, 10 окт): a thick ring;
-    // done — the hole closes into a sage disc and a white tick comes up on it.
-    val d = size * 0.8f
+    val d = size * 0.9f
     val p by androidx.compose.animation.core.animateFloatAsState(if (done) 1f else 0f, androidx.compose.animation.core.tween(280), label = "bagel")
     Box(
         Modifier
@@ -130,16 +128,18 @@ fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, i
                 else Modifier.combinedClickable(role = androidx.compose.ui.semantics.Role.Checkbox, onLongClick = onLong, onClick = onToggle)),
         contentAlignment = Alignment.Center,
     ) {
-        val ring = androidx.compose.ui.graphics.lerp(tint ?: c.graphite.copy(alpha = 0.78f), c.ok, p)
+        // v8: a thin ring that reads as something to tap; done — it fills with petrol and a tick comes up on it.
+        val ring = androidx.compose.ui.graphics.lerp(c.graphite.copy(alpha = 0.7f), c.link, p)
         val tick = c.bg
         androidx.compose.foundation.Canvas(Modifier.size(d)) {
             val w = this.size.width; val h = this.size.height
-            val r = w * 0.42f
-            val t = r * (0.46f + 0.54f * p)
-            drawCircle(ring, radius = r - t / 2, center = androidx.compose.ui.geometry.Offset(w / 2, h / 2), style = androidx.compose.ui.graphics.drawscope.Stroke(width = t))
-            val q = ((p - 0.45f) / 0.55f).coerceIn(0f, 1f)
-            if (q > 0f) drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(w * 0.31f, h * 0.51f); lineTo(w * 0.45f, h * 0.64f); lineTo(w * 0.7f, h * 0.37f) },
-                tick.copy(alpha = q), style = androidx.compose.ui.graphics.drawscope.Stroke(width = (w * 0.09f).coerceAtLeast(1.4.dp.toPx()), cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            val r = w * 0.46f
+            val sw = 1.5.dp.toPx()
+            if (p > 0f) drawCircle(c.link.copy(alpha = p), radius = r, center = androidx.compose.ui.geometry.Offset(w / 2, h / 2))
+            drawCircle(ring, radius = r - sw / 2, center = androidx.compose.ui.geometry.Offset(w / 2, h / 2), style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw))
+            val q = ((p - 0.35f) / 0.65f).coerceIn(0f, 1f)
+            if (q > 0f) drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(w * 0.3f, h * 0.52f); lineTo(w * 0.44f, h * 0.65f); lineTo(w * 0.7f, h * 0.38f) },
+                tick.copy(alpha = q), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round,
                     join = androidx.compose.ui.graphics.StrokeJoin.Round))
         }
     }
@@ -193,7 +193,7 @@ fun Monogram(name: String, size: Dp = 22.dp) {
 
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {
-    Text(text.uppercase(), style = Type.label.copy(color = M.c.graphite), modifier = modifier)
+    Text(text.uppercase(), style = Type.label.copy(color = M.c.graphite, letterSpacing = 1.5.sp), modifier = modifier)
 }
 
 @Composable
@@ -201,51 +201,9 @@ fun Hairline(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(1.dp).background(M.c.hairline))
 }
 
-@Composable
-fun MetaIcon(icon: ImageVector, tint: Color = M.c.graphite) {
-    Icon(icon, null, tint = tint, modifier = Modifier.size(14.dp))
-}
-
 // ---------------- top tabs ----------------
 
-@Composable
-fun QuietTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, counts: List<Int>? = null, alertFirst: Boolean = false) {
-    val c = M.c
-    Row(horizontalArrangement = Arrangement.spacedBy(22.dp), verticalAlignment = Alignment.CenterVertically) {
-        labels.forEachIndexed { i, l ->
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { onSelect(i) }
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(l, style = Type.tab.copy(color = if (i == selected) c.ink else c.graphite, fontWeight = if (i == selected) FontWeight.SemiBold else FontWeight.Medium))
-                    counts?.getOrNull(i)?.takeIf { it > 0 }?.let { n ->
-                        Text(" $n", style = Type.small.copy(fontSize = 14.sp, color = if (i == 0 && alertFirst) c.link else c.graphite))
-                    }
-                }
-                Spacer(Modifier.height(5.dp))
-                Box(Modifier.size(4.dp).clip(CircleShape).background(if (i == selected) c.link else Color.Transparent))
-            }
-        }
-    }
-}
-
 // ---------------- task card ----------------
-
-/** When a task is: on its own soft ground with an icon, so the eye tells it from the title at once. Late — in accent. */
-@Composable
-fun DatePill(text: String, late: Boolean, timed: Boolean) {
-    val c = M.c
-    Row(Modifier.clip(RoundedCornerShape(50)).background(if (late) c.accentSoft else c.chip).padding(start = 8.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (timed) Icons.Outlined.Schedule else Icons.Outlined.CalendarToday, null, tint = if (late) c.accentText else c.graphite, modifier = Modifier.size(13.dp))
-        Spacer(Modifier.width(5.dp))
-        Text(text, style = Type.small.copy(color = if (late) c.accentText else c.ink, fontSize = 13.5.sp), maxLines = 1)
-    }
-}
 
 /** Who is a contact and what a tap on a name does — given by the app, so rows anywhere can link names. */
 data class PeopleLinks(val isContact: (String) -> Boolean = { false }, val onName: (String) -> Unit = {})
@@ -261,7 +219,11 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
              /** false in the day lists: names and places are coloured words, the whole row is the one target. */
              tappable: Boolean = true,
              /** On a person's page their own name is not repeated in each row. */
-             hidePerson: String? = null) {
+             hidePerson: String? = null,
+             /** v8: the topic a matter belongs to, first and petrol — «≡ Кофейня «Зерно»». */
+             topic: String? = null,
+             /** v8: a last quiet word — «с 25 сен» for a matter lying without a day. */
+             extra: String? = null) {
     val c = M.c
     val s = M.s
     val links = LocalPeopleLinks.current
@@ -276,6 +238,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
             withLink(androidx.compose.ui.text.LinkAnnotation.Clickable(tag, androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = color))) { onClick() }) { append(shown) }
         }
         fun name(n0: String, shown: String = n0) = link("p:$n0", shown, if (links.isContact(n0)) c.link else c.graphite) { links.onName(n0) }
+        topic?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = c.link)) { append("≡ $it") } }
         // When first, darker than the rest — the eye finds it without looking; late in accent.
         whenText?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = if (t.dueDate?.isBefore(today) == true) c.accentText else c.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)) { append(it) } }
         // A name already said in the title («Скинуть Лёше исходники») is not repeated under it.
@@ -299,6 +262,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         if (showProject) t.project?.let { next(); append("#" + projectLabel(it)) }
         // The user left a comment: a small mark says it is there (the words are in the card).
         if (t.comments.isNotEmpty()) { next(); appendInlineContent("note", "≡") }
+        extra?.let { next(); append(it) }
     }
     val inline = mapOf("note" to androidx.compose.foundation.text.InlineTextContent(
         androidx.compose.ui.text.Placeholder(14.sp, 14.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {
@@ -309,88 +273,6 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
     })
     if (text.isNotEmpty()) Text(text, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
         inlineContent = inline, modifier = Modifier.padding(top = 3.dp))
-}
-
-/** A person as a badge with the whole name — «Марина Петрова», not «М». */
-@Composable
-fun PersonBadge(name: String, big: Boolean = false, onClick: (() -> Unit)? = null) {
-    val c = M.c
-    Row(Modifier.clip(RoundedCornerShape(50)).background(c.chip).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-        .padding(start = if (big) 10.dp else 7.dp, end = if (big) 12.dp else 9.dp, top = if (big) 6.dp else 3.dp, bottom = if (big) 6.dp else 3.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Outlined.Person, null, tint = c.graphite, modifier = Modifier.size(if (big) 15.dp else 13.dp))
-        Spacer(Modifier.width(4.dp))
-        Text(name, style = Type.small.copy(color = c.ink, fontSize = if (big) 14.sp else 13.sp), maxLines = 1)
-    }
-}
-
-/** The task's line in a card: the same quiet line as in lists; [timed] — the time already stands on the left. */
-@Composable
-fun TaskMeta(t: Task, showProject: Boolean = true, showIdea: Boolean = false, timed: Boolean = false) {
-    // On «Сегодня» with the hour on the left, «сегодня 16:00» would only repeat it.
-    val whenText = if (timed && t.dueDate == java.time.LocalDate.now()) null else t.whenLabel()
-    TaskLine(t, whenText, showProject, showIdea)
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun TaskCard(
-    t: Task,
-    onToggle: () -> Unit,
-    onOpen: () -> Unit,
-    onToggleSub: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    timeColumn: String? = null,
-    showProject: Boolean = true,
-    showIdea: Boolean = false,
-) {
-    val c = M.c
-    var expanded by rememberSaveable(t.id) { mutableStateOf(false) }
-    val rot by animateFloatAsState(if (expanded) 180f else 0f, label = "chev")
-    Column(
-        modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(c.card)
-            .combinedClickable(onClick = onOpen)
-            .padding(start = 4.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (timeColumn != null) {
-                Text(timeColumn, style = Type.small.copy(color = c.graphite), modifier = Modifier.padding(start = 12.dp).width(44.dp))
-            }
-            CheckCircle(t.done, onToggle = onToggle)
-            Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                Text(
-                    t.title,
-                    style = Type.task.copy(
-                        color = if (t.done) c.graphite else c.ink,
-                        textDecoration = if (t.done) TextDecoration.LineThrough else null,
-                    ),
-                    maxLines = 3, overflow = TextOverflow.Ellipsis,
-                )
-                // The last thing written about it, faint — no need to open the card to remember.
-                if (!t.done) t.entries.lastOrNull { it.text.isNotBlank() }?.let { e ->
-                    Text(e.text, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                if (!t.done) {
-                    Spacer(Modifier.height(5.dp))
-                    TaskMeta(t, showProject, showIdea, timed = timeColumn != null)
-                }
-            }
-            if (t.subtasks.isNotEmpty() && !t.done) {
-                Box(
-                    Modifier.size(36.dp).clip(CircleShape).clickable { expanded = !expanded },
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.graphite, modifier = Modifier.rotate(rot)) }
-            }
-        }
-        AnimatedVisibility(expanded && !t.done, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            Column(Modifier.padding(start = if (timeColumn != null) 56.dp else 0.dp, bottom = 4.dp)) {
-                SubtaskTree(t.subtasks, 0, onToggleSub)
-            }
-        }
-    }
 }
 
 @Composable
@@ -430,26 +312,10 @@ fun SubtaskRow(s: Subtask, depth: Int, onToggle: () -> Unit, onLong: (() -> Unit
 @Composable
 fun Empty(title: String, hint: String) {
     val c = M.c
-    Column(Modifier.fillMaxWidth().padding(vertical = 48.dp, horizontal = 8.dp)) {
-        Text(title, style = Type.title.copy(color = c.ink))
-        Spacer(Modifier.height(8.dp))
-        Text(hint, style = Type.body.copy(color = c.graphite))
-    }
-}
-
-/** A thin bar that fills over [durationMs] — the auto-confirm countdown. */
-@Composable
-fun Countdown(running: Boolean, durationMs: Long, key: Any) {
-    val c = M.c
-    var started by remember(key) { mutableStateOf(false) }
-    val f by animateFloatAsState(
-        if (started && running) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(if (running) durationMs.toInt() else 0, easing = androidx.compose.animation.core.LinearEasing),
-        label = "countdown",
-    )
-    androidx.compose.runtime.LaunchedEffect(key) { started = true }
-    Box(Modifier.fillMaxWidth().height(2.dp).background(c.hairline)) {
-        if (running) Box(Modifier.fillMaxWidth(f).height(2.dp).background(c.link))
+    // v8: the empty page in Margin's voice — a quiet serif line and its explanation in italic.
+    Column(Modifier.fillMaxWidth().padding(vertical = 28.dp)) {
+        Text(title, style = Type.cardTitle.copy(color = c.ink))
+        if (hint.isNotBlank()) Voice(hint, Modifier.padding(top = 6.dp))
     }
 }
 
@@ -464,6 +330,7 @@ fun SwipeActions(
     right: Pair<String, () -> Unit>?,
     modifier: Modifier = Modifier,
     radius: Int = 18,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(radius.dp),
     content: @Composable () -> Unit,
 ) {
     val c = M.c
@@ -481,15 +348,14 @@ fun SwipeActions(
         backgroundContent = {
             val dir = state.dismissDirection
             val toEnd = dir == SwipeToDismissBoxValue.StartToEnd
-            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(radius.dp))
-                .background(if (dir == SwipeToDismissBoxValue.Settled) c.bg else if (toEnd) c.accent else c.ink).padding(horizontal = 22.dp),
+            Box(Modifier.fillMaxSize().clip(shape)
+                .background(if (dir == SwipeToDismissBoxValue.Settled) c.card else if (toEnd) c.accent else c.ink).padding(horizontal = 22.dp),
                 contentAlignment = if (toEnd) Alignment.CenterStart else Alignment.CenterEnd) {
                 if (dir != SwipeToDismissBoxValue.Settled) Text((if (toEnd) right?.first else left?.first).orEmpty(), style = Type.tab.copy(color = c.bg))
             }
         },
     ) { content() }
 }
-
 
 /** Is [name] already said in [title], in any case form («Лёша» in «Скинуть Лёше исходники»)? Compares the stem. */
 fun namedIn(title: String, name: String): Boolean {

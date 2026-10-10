@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.draw.shadow
+
 import androidx.compose.animation.animateContentSize
 import ru.anjeib.margin.data.dayMonthYear
 import androidx.compose.ui.semantics.selected
@@ -264,7 +266,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) { Icon(Icons.Outlined.MoreHoriz, s.moreActions, tint = c.graphite) }
                 // An open topic goes to the archive (it keeps everything); deleting is for one already there.
                 SoftMenu(menu, { menu = false }) {
-                    SoftMenuItem(s.edit) { menu = false; dialog = "rename" }
+                    SoftMenuItem(s.rename) { menu = false; dialog = "rename" }
                     // «что сделано и что ждём» as plain text — for a client, a colleague, a note to self.
                     SoftMenuItem(s.shareWord) { menu = false; shareTopic(ctx, task) }
                     if (!task.done) SoftMenuItem(s.toArchive) { menu = false; dialog = "archive" }
@@ -284,32 +286,28 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                     maxLines = if (folded) 1 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(bottom = if (folded) 8.dp else 0.dp).clip(RoundedCornerShape(8.dp)).clickable { dialog = "rename" })
                 if (!folded) {
-                // The sphere and age; the materials are a part of the summary below (not a second switch up here).
+                // v8: under the title one line in Margin's voice — since when, how far — and the sphere as a chip;
+                // then words as tabs, the same as in «Обзор»: everything, the matters, the records, the files.
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     val since = runCatching { LocalDate.parse(task.createdAt) }.getOrNull()?.dayMonthYear()
-                    SphereBadge(task.sphere, Modifier.padding(end = 8.dp)) { vm.setSphere(task.id, nextSphere(task.sphere)) }
-                    val sinceText = since?.let { if (task.thought && task.subtasks.isEmpty()) s.thoughtSince(it) else s.topicSince(it) } ?: ""
-                    val dateSp = dateSpan()
-                    Text(buildAnnotatedString {
-                        // «тема с 17 авг»: the words quiet, the date in ink.
-                        val at = since?.let { sinceText.lastIndexOf(it) } ?: -1
-                        if (at >= 0) { append(sinceText.substring(0, at)); withStyle(dateSp) { append(since!!) }; append(sinceText.substring(at + since!!.length)) } else append(sinceText)
-                    }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f))
+                    val sinceText = since?.let { if (task.thought && task.subtasks.isEmpty()) s.thoughtSince(it) else s.topicSince(it) }
+                    Voice(listOfNotNull(sinceText, total.takeIf { it > 0 }?.let { s.progressSolved(doneCount, it) }).joinToString("  ·  "), Modifier.weight(1f))
+                    SphereBadge(task.sphere, Modifier.padding(start = 8.dp)) { vm.setSphere(task.id, nextSphere(task.sphere)) }
                 }
-                // The same soft card as the summary on «Сегодня»: how far, how much, who owes what. A tap — the matters only.
-                TopicSummary(task, dealsOnly, saidOnly, materialsMode,
-                    onDeals = { dealsOnly = !dealsOnly; saidOnly = false; materialsMode = false },
-                    onSaid = { saidOnly = !saidOnly; dealsOnly = false; materialsMode = false },
-                    onMaterials = { materialsMode = !materialsMode; dealsOnly = false; saidOnly = false })
-                if (task.done) Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    Text(s.inArchiveSince(task.doneAt?.let { runCatching { LocalDate.parse(it).dayMonthShort() }.getOrNull() } ?: ""), style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
-                    Text(s.bringBack, style = Type.small.copy(color = c.link), modifier = Modifier.clickable { vm.reviveTopic(task.id) })
+                val files = task.materials().size
+                val tab = when { dealsOnly -> "deals"; saidOnly -> "said"; materialsMode -> "files"; else -> "all" }
+                TextTabs(listOfNotNull("all" to s.allTab, total.takeIf { it > 0 }?.let { "deals" to s.dealsBadge + " " + it },
+                    task.entries.size.takeIf { it > 0 }?.let { "said" to s.records + " " + it }, files.takeIf { it > 0 }?.let { "files" to s.filesWord + " " + it }),
+                    tab, { k -> dealsOnly = k == "deals"; saidOnly = k == "said"; materialsMode = k == "files" }, Modifier.padding(top = 8.dp, bottom = 10.dp))
+                if (task.done) Panel(Modifier.padding(bottom = 10.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(s.inArchiveSince(task.doneAt?.let { runCatching { LocalDate.parse(it).dayMonthShort() }.getOrNull() } ?: ""), style = Type.body.copy(color = c.graphite, fontSize = 15.sp), modifier = Modifier.weight(1f))
+                        PaperLink(s.bringBack) { vm.reviveTopic(task.id) }
+                    }
                 }
                 }
             }
         }
-        Hairline(Modifier.padding(start = MarginW))
         Box(Modifier.weight(1f).fillMaxWidth()) {
             // The feed opens at its end; once scrolled away from the start, one quiet way back to it.
             val awayFromStart by remember { androidx.compose.runtime.derivedStateOf { feedState.firstVisibleItemIndex > 2 } }
@@ -326,10 +324,11 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             }
             // The feed fades in under the header instead of being cut through a line of words.
             Box(Modifier.fillMaxWidth().height(18.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.bg, c.bg.copy(alpha = 0f)))))
-            androidx.compose.animation.AnimatedVisibility(awayFromStart && !materialsMode, modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 12.dp),
+            // At the bottom right, by the thumb, floating over the feed — not over the first words under the title.
+            androidx.compose.animation.AnimatedVisibility(awayFromStart && !materialsMode, modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 10.dp, end = 14.dp),
                 enter = androidx.compose.animation.fadeIn(tween(180)), exit = androidx.compose.animation.fadeOut(tween(180))) {
                 Text(s.toStart, style = Type.small.copy(color = c.link, fontSize = 13.sp),
-                    modifier = Modifier.clip(RoundedCornerShape(50)).background(c.card).clickable { scope.launch { feedState.animateScrollToItem(0) } }
+                    modifier = Modifier.shadow(4.dp, RoundedCornerShape(50)).clip(RoundedCornerShape(50)).background(c.card).clickable { scope.launch { feedState.animateScrollToItem(0) } }
                         .padding(horizontal = 12.dp, vertical = 6.dp))
             }
         }
@@ -381,64 +380,6 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     dateQ?.let { q -> QuestionDateDialog(q, onDismiss = { dateQ = null }) { d -> vm.setQuestionDue(task.id, q.id, d); dateQ = null } }
 }
 
-/** The topic's summary: «2 из 9 сделано · 5 записей · 3 файла», the progress, and who owes what inside it. */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable
-private fun TopicSummary(task: Task, dealsOnly: Boolean, saidOnly: Boolean, materials: Boolean, onDeals: () -> Unit, onSaid: () -> Unit, onMaterials: () -> Unit) {
-    val c = M.c
-    val s = M.s
-    val total = task.subtasks.size
-    val done = task.subtasks.count { it.done }
-    val files = task.materials().size
-    // Each part of the summary is its own filter: the matters, the records, the materials; the chosen one in petrol with «✕».
-    @Composable fun part(text: String, on: Boolean, onClick: () -> Unit) = Text(if (on) "$text  ✕" else text,
-        style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 14.sp, fontFeatureSettings = "tnum"),
-        modifier = Modifier.clip(RoundedCornerShape(6.dp)).semantics { selected = on }.clickable(onClick = onClick).padding(vertical = 9.dp, horizontal = 2.dp))
-    Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 12.dp).clip(RoundedCornerShape(16.dp)).background(c.linkSoft.copy(alpha = if (c.dark) 0.5f else 0.6f))
-        .padding(horizontal = 12.dp, vertical = 8.dp)) {
-        // The parts wrap whole onto a second line, never a word of one.
-        val parts = listOfNotNull(
-            (if (total > 0) Triple(s.progressSolved(done, total), dealsOnly, onDeals) else null),
-            task.entries.size.takeIf { it > 0 }?.let { Triple(s.nEntries(it), saidOnly, onSaid) },
-            files.takeIf { it > 0 }?.let { Triple(s.nMaterials(it), materials, onMaterials) },
-        )
-        DotFlow(parts.size, separator = { Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 14.sp)) }) { i -> val (t, on, f) = parts[i]; part(t, on, f) }
-        // The bar is 3 dp to look at, but the finger gets the whole strip around it.
-        if (total > 0) Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = s.progressSolved(done, total), onClick = onDeals).padding(vertical = 8.dp)) {
-            TopicProgress(done, total)
-        }
-    }
-}
-
-/** A quiet icon in the topic's header with an optional raised count; [on] — filled petrol. */
-@Composable
-private fun HeaderIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, count: Int = 0, on: Boolean, tint: Color = M.c.graphite, onClick: () -> Unit) {
-    val c = M.c
-    val bg by androidx.compose.animation.animateColorAsState(if (on) c.link else Color.Transparent, tween(200), label = "hi")
-    Row(Modifier.padding(start = 4.dp).clip(RoundedCornerShape(50)).background(bg).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.Top) {
-        Icon(icon, label, tint = if (on) c.bg else tint, modifier = Modifier.size(19.dp))
-        if (count > 0) Text(count.toString(), style = Type.small.copy(color = if (on) c.bg else c.graphite, fontSize = 10.sp), modifier = Modifier.padding(start = 1.dp))
-    }
-}
-
-/** «Вопросы² ›» — the door to the questions page, at the end of the progress line. */
-@Composable
-private fun QuestionsPill(n: Int, on: Boolean, onClick: () -> Unit) {
-    val c = M.c
-    val bg by androidx.compose.animation.animateColorAsState(if (on) c.link else Color.Transparent, tween(220), label = "qp")
-    val fg = if (on) c.bg else c.link
-    Row(Modifier.clip(RoundedCornerShape(50)).background(bg).border(1.dp, c.link, RoundedCornerShape(50)).clickable(onClick = onClick)
-        .padding(start = 14.dp, end = 10.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        // The count as on «Сегодня 3»: on the same line, smaller and quieter than the word.
-        Text(buildAnnotatedString {
-            append(M.s.questionsTab)
-            if (n > 0) withStyle(SpanStyle(fontSize = 13.sp, fontWeight = FontWeight.Normal, color = if (on) c.bg.copy(alpha = 0.75f) else c.graphite)) { append(" $n") }
-        }, style = Type.small.copy(color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium))
-        Text(if (on) " ‹" else " ›", style = Type.small.copy(color = fg, fontSize = 15.sp))
-    }
-}
-
 /** The feed with only what was attached: a search that reads text on photos and in voice notes, kinds, still on the thread. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -466,19 +407,15 @@ private fun MaterialsFeed(task: Task, onView: (Attachment) -> Unit) {
                         }
                     }
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 10.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("all" to s.all, "photo" to s.kindPhotos, "file" to s.kindDocs, "audio" to s.kindVoice).forEach { (k, l) ->
-                            val on = kind == k
-                            Text(l, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 13.sp),
-                                modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else c.chip).clickable { kind = k }.padding(horizontal = 11.dp, vertical = 6.dp))
-                        }
+                        listOf("all" to s.all, "photo" to s.kindPhotos, "file" to s.kindDocs, "audio" to s.kindVoice).forEach { (k, l) -> Chip(l, kind == k, onClick = { kind = k }) }
                     }
                 }
             }
         }
-        if (entries.isEmpty()) item("none") { Margined { Text(if (task.materials().isEmpty()) s.materialsEmpty else s.noMaterialsFound, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(top = 16.dp)) } }
+        if (entries.isEmpty()) item("none") { Margined(Modifier.padding(top = 16.dp)) { Voice(if (task.materials().isEmpty()) s.materialsEmpty else s.noMaterialsFound) } }
         entries.forEach { e ->
             item(e.id) {
-                Margined(Modifier.animateItem().padding(top = 10.dp), node = c.accent.copy(alpha = 0.8f), nodeY = 12.dp, margin = { MarginText(dateOfStamp(e.at)?.dayMonthShort() ?: "") }) {
+                Margined(Modifier.animateItem().padding(top = 10.dp), margin = { MarginText(dateOfStamp(e.at)?.let { dayWord(it) } ?: "") }) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         e.attachments.filter(::ok).forEach { a -> BigMaterial(a, onView) }
                     }
@@ -533,47 +470,40 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
             if (task.source != null) {
                 val born = task.history.firstOrNull { it.kind == "created" }?.at?.let { runCatching { LocalDateTime.parse(it.take(16)) }.getOrNull() }
                 val stamp = born?.let { it.toLocalDate().dayMonthShort() + ", " + it.toLocalTime().toString().take(5) } ?: LocalDate.parse(task.createdAt).dayMonthShort()
-                Margined {
-                    Text("↳ " + s.fromMessage(stamp), style = Type.small.copy(color = c.graphite, fontSize = 13.sp),
-                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp).clip(RoundedCornerShape(6.dp)).clickable(onClick = onSource).padding(2.dp))
-                }
+                Margined(Modifier.padding(bottom = 8.dp)) { Voice("↳ " + s.fromMessage(stamp), link = true, onClick = onSource) }
             } else Spacer(Modifier.height(4.dp))
         }
-        // As on «Сегодня»: the day on the margin (a number in serif, the month, the weekday) once for each day, a rule between days.
-        var lastDay: LocalDate? = null
+        // v8: each day of the feed is one panel — its date big on the margin once, the hours of the records under it.
+        val days = feed.map { dateOfStamp(it.at) }
         feed.forEachIndexed { idx, line ->
-            // Matters that follow one another are one block under one badge: «ДЕЛО» or «ДЕЛА · 3».
-            // A block is one day's run of matters: a new day starts a new block with its own badge.
-            val lineDay = dateOfStamp(line.at)
-            val startsBlock = line is FeedLine.Deal && (feed.getOrNull(idx - 1) !is FeedLine.Deal || (line.depth == 0 && lineDay != lastDay))
-            val badge = if (startsBlock) {
-                val n = feed.drop(idx).withIndex().takeWhile { (i, it) -> it is FeedLine.Deal && (i == 0 || it.depth > 0 || dateOfStamp(it.at) == lineDay) }.count { it.value.depth == 0 }
-                if (n == 1) s.stepOne.uppercase() else s.dealsBadge.uppercase() + " · " + n
-            } else null
-            val day = dateOfStamp(line.at)
-            val firstOfDay = line.depth == 0 && day != null && day != lastDay
-            val newDayAfter = firstOfDay && lastDay != null
-            if (firstOfDay) lastDay = day
+            val day = days[idx]
+            val first = idx == 0 || days[idx - 1] != day
+            val last = idx == feed.lastIndex || days[idx + 1] != day
+            val seat = when { first && last -> Seat.Single; first -> Seat.First; last -> Seat.Last; else -> Seat.Middle }
+            val hour = timeOfStamp(line.at).takeIf { line is FeedLine.Said && it.isNotBlank() && it != "00:00" }
+            val margin: (@Composable () -> Unit)? = when {
+                first && day != null -> ({ Column(horizontalAlignment = Alignment.CenterHorizontally) { DayMargin(day, LocalDate.now(), false, strong = true); hour?.let { MarginNote(it, modifier = Modifier.padding(top = 2.dp)) } } })
+                hour != null -> ({ RowMargin(hour) })
+                else -> null
+            }
             item(line.key) {
                 val fresh = line.key in freshKeys
                 // Lines slide into place but never fade: a line fading out under «только дела» kept its day on the margin
                 // on top of the next one's (review 0.13, defect 13). New lines have their own arrival.
-                Column(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).arrive(fresh, freshKeys.indexOf(line.key)).landing(hl == line.key, 10)) {
-                    if (newDayAfter) Hairline(Modifier.padding(start = MarginW, top = 8.dp, bottom = 4.dp))
-                    val dayMark = if (firstOfDay) day else null
+                Column(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).arrive(fresh, freshKeys.indexOf(line.key)).landing(hl == line.key, 10)
+                    .padding(top = if (first && idx > 0) 14.dp else 0.dp)) {
                     when (line) {
-                        is FeedLine.Said -> NoteLine(task, line.e, line.removed, dayMark, fresh, working, vm, act)
-                        is FeedLine.Deal -> DealLine(task, line.q, line.removed, line.depth, dayMark, badge, vm, act)
+                        is FeedLine.Said -> NoteLine(task, line.e, line.removed, seat, margin, fresh, working, vm, act)
+                        is FeedLine.Deal -> DealLine(task, line.q, line.removed, line.depth, seat, margin, vm, act)
                     }
                 }
             }
         }
         if (task.noNextStep) item("end") {
             Margined(Modifier.padding(top = 18.dp)) {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(1.dp, c.hairline, RoundedCornerShape(14.dp))
-                    .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(s.allSettled, style = Type.small.copy(color = c.graphite, fontSize = 14.sp), modifier = Modifier.weight(1f))
-                    Text(s.toArchive, style = Type.small.copy(color = c.link, fontSize = 14.sp), modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onArchive).padding(4.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Voice(s.allSettled, Modifier.weight(1f))
+                    PaperLink(s.toArchive, onClick = onArchive)
                 }
             }
         }
@@ -613,10 +543,10 @@ private fun RemovedMenu(open: Boolean, onDismiss: () -> Unit, onRestore: () -> U
     }
 }
 
-/** The user's words: plain ink on the paper, no card; files under them. */
+/** The user's words on the day's panel: plain ink, no badge — the hour is on the margin; files under them. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun NoteLine(task: Task, e: Entry, removed: Boolean, day: LocalDate?, fresh: Boolean, working: Set<String>, vm: MainVm, act: FeedActions) {
+private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin: (@Composable () -> Unit)?, fresh: Boolean, working: Set<String>, vm: MainVm, act: FeedActions) {
     val c = M.c
     val s = M.s
     var menu by remember(e.id) { mutableStateOf(false) }
@@ -631,25 +561,20 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, day: LocalDate?, fr
     LaunchedEffect(draft) { if (editing && draft != e.text) { kotlinx.coroutines.delay(900); save() } }
     androidx.compose.runtime.DisposableEffect(e.id) { onDispose { save() } }
     val sel by androidx.compose.animation.animateColorAsState(if (tools) c.chip else Color.Transparent, tween(180), label = "sel")
-    Margined(Modifier.padding(top = 6.dp), margin = day?.let { d -> { DayMargin(d, LocalDate.now(), false, strong = true) } }) {
+    Margined(margin = margin) {
+        PanelPiece(seat, dividerStart = 16.dp) {
         Box {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(sel)
-                .combinedClickable(onClick = { if (removed) menu = true else editing = true }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp)) {
+            Column(Modifier.fillMaxWidth().background(sel)
+                .combinedClickable(onClick = { if (removed) menu = true else editing = true }, onLongClick = { if (removed) menu = true else tools = true }).padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
-                        // What it is and when: a record — the user's own words; the matters that came of them hang under it.
-                        Row(Modifier.padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(s.recordBadge.uppercase(), style = Type.label.copy(color = c.graphite, fontSize = 10.5.sp, letterSpacing = 1.1.sp),
-                                modifier = Modifier.clip(RoundedCornerShape(50)).background(c.chip).padding(horizontal = 8.dp, vertical = 2.dp))
-                            timeOfStamp(e.at).takeIf { it.isNotBlank() && it != "00:00" }?.let { Text(it, style = dateStyle(12.5.sp), modifier = Modifier.padding(start = 8.dp)) }
-                        }
                         if (editing) androidx.compose.foundation.text.BasicTextField(draft, { draft = it },
-                            textStyle = Type.body.copy(color = c.ink, fontSize = 15.5.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
+                            textStyle = Type.body.copy(color = c.ink, fontSize = 15.5.sp, lineHeight = 22.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
                             modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { f ->
                                 // The field reports «not focused» as it appears: leave editing only once the cursor has been in it.
                                 if (f.isFocused) hadFocus = true else if (editing && hadFocus) { save(); editing = false; hadFocus = false }
                             })
-                        else if (e.text.isNotBlank()) ListAwareText(e.text, Type.body.copy(color = if (removed) c.faint else c.ink, fontSize = 15.5.sp,
+                        else if (e.text.isNotBlank()) ListAwareText(e.text, Type.body.copy(color = if (removed) c.faint else c.ink, fontSize = 15.5.sp, lineHeight = 22.sp,
                             textDecoration = if (removed) androidx.compose.ui.text.style.TextDecoration.LineThrough else null))
                         // A list in a record is a list of thoughts, not matters: bullets, no ticks.
                         e.items.forEach { Row(Modifier.padding(vertical = 1.dp)) {
@@ -657,7 +582,7 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, day: LocalDate?, fr
                             Text(it.title, style = Type.body.copy(color = if (removed) c.faint else c.ink, fontSize = 15.5.sp), modifier = Modifier.weight(1f))
                         } }
                     }
-                    if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 6.dp))
+                    if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 3.dp))
                     // Long press: a small bubble — a matter under the record, edit, remove.
                     Box {
                         SoftMenu(tools, { tools = false }) {
@@ -668,23 +593,23 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, day: LocalDate?, fr
                     }
                 }
                 if (e.attachments.isNotEmpty() && !removed) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(10.dp))
                     MaterialRow(e.attachments, fresh, working, act.view)
                 }
             }
             RemovedMenu(menu, { menu = false }, onRestore = { vm.restoreRecord(task.id, e.id) }, onPurge = { vm.purgeRecord(task.id, e.id) })
         }
+        }
     }
 }
 
 /**
- * A matter: a coloured line with a dash — petrol to do, amber when we wait for someone; done, the dash becomes a tick and
- * the words are struck through in green; removed — grey, struck, «удалено». Lines added under it hang indented, lighter.
+ * A matter on the day's panel: the circle (the arrow when we wait for someone), the words, one quiet line — when, who owes it,
+ * when it was done; removed — grey, struck, «удалено». Matters added under it hang indented on a thin guide.
  */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: LocalDate?, badge: String?, vm: MainVm, act: FeedActions) {
-    // The same row as on «Сегодня»: the kind mark, the circle, the hour as a petrol link, the words in ink, a quiet line under.
+private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat: Seat, margin: (@Composable () -> Unit)?, vm: MainVm, act: FeedActions) {
     val c = M.c
     val s = M.s
     val view = LocalView.current
@@ -696,8 +621,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
     val sel by androidx.compose.animation.animateColorAsState(if (tools) c.chip else Color.Transparent, tween(180), label = "sel")
     val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     val today = LocalDate.now()
-    // Late as on «Сегодня»: a day gone, or today's hour already past.
-    val late = !q.done && !removed && due != null && (due.isBefore(today) || (due == today && q.time != null && q.time!! < java.time.LocalTime.now().toString().take(5)))
+    val late = !q.done && !removed && due != null && due.isBefore(today)
     fun tick() {
         if (removed) return
         if (!q.done) view.confirmTick()
@@ -705,62 +629,56 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, day: 
         if (next != null) vm.toggleSlot("q:${task.id}:${q.id}", next.id) else vm.toggleQuestion(task.id, q.id)
     }
     // Nested matters hang from their parent's circle: a thin guide down from it and a short elbow to each child.
-    val guideX = 29.dp + 30.dp * (depth - 1).coerceAtLeast(0)
-    val indent = if (depth == 0) 0.dp else guideX + 6.dp
-    Margined(Modifier.padding(top = if (badge != null) 10.dp else 0.dp), margin = day?.let { d -> { DayMargin(d, LocalDate.now(), false, strong = true) } }) {
-        Column {
-        // The block's badge: petrol, as the matters are what is to be done.
-        if (badge != null) Text(badge, style = Type.label.copy(color = c.link, fontSize = 10.5.sp, letterSpacing = 1.1.sp),
-            modifier = Modifier.padding(bottom = 2.dp).clip(RoundedCornerShape(50)).background(c.linkSoft).padding(horizontal = 8.dp, vertical = 2.dp))
+    val step = 26.dp
+    val guideX = MarkCol / 2 + step * (depth - 1).coerceAtLeast(0)
+    val indent = step * depth
+    Margined(margin = margin) {
+        PanelPiece(seat) {
         Box(Modifier.drawBehind {
             if (depth > 0) {
-                val x = guideX.toPx(); val y = 20.dp.toPx(); val col = c.hairline.copy(alpha = 1f)
+                val x = guideX.toPx(); val y = 26.dp.toPx(); val col = c.hairline
                 drawLine(col, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.2.dp.toPx())
-                drawLine(col, Offset(x, y), Offset(indent.toPx() + 2.dp.toPx(), y), strokeWidth = 1.2.dp.toPx())
+                drawLine(col, Offset(x, y), Offset((indent + 8.dp).toPx(), y), strokeWidth = 1.2.dp.toPx())
             }
         }) {
-            Row(Modifier.fillMaxWidth().padding(start = indent).clip(RoundedCornerShape(10.dp)).background(sel)
-                .combinedClickable(onClick = { if (removed) menu = true else act.openDeal(q) }, onLongClick = { if (removed) menu = true else tools = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
-                if (depth == 0) KindMark(if (q.done || removed) null else task.questionRow(q))
-                // A removed matter has no bagel at all — three states read by shape: ring open, disc done, nothing removed.
-                Box(Modifier.size(if (depth == 0) 26.dp else 22.dp, 24.dp), contentAlignment = Alignment.CenterStart) { if (!removed) CheckCircle(q.done, size = if (depth == 0) 18.dp else 15.dp, tint = sphereColor(task.sphere), onToggle = ::tick) }
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    val hour = hourColor(due, q.time, today)
-                    val title = buildAnnotatedString {
-                        // Several days carry their hours in the line of days below — not again before the words.
-                        if (q.time != null && !q.done && !removed && q.slots.isEmpty()) {
-                            withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("time", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = hour, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"))) { act.timeDeal(q) }) { append(q.time!!) }
-                            append("   ")
-                        }
-                        append(q.title)
+            Row(Modifier.fillMaxWidth().background(sel).padding(start = indent)
+                .combinedClickable(onClick = { if (removed) menu = true else act.openDeal(q) }, onLongClick = { if (removed) menu = true else tools = true })
+                .padding(end = 14.dp, top = RowTop - 2.dp, bottom = RowTop - 2.dp), verticalAlignment = Alignment.Top) {
+                // A removed matter has no circle at all — three states read by shape: ring open, disc done, nothing removed;
+                // something we wait for wears the arrow, which closes it as «получено».
+                Box(Modifier.size(MarkCol, 26.dp), contentAlignment = Alignment.Center) {
+                    if (!removed) {
+                        if (q.from != null && !q.done) Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = true, size = if (depth == 0) 28.dp else 24.dp) }
+                        else CheckCircle(q.done, size = if (depth == 0) 21.dp else 18.dp, onToggle = ::tick)
                     }
-                    Text(title, style = Type.body.copy(fontSize = if (depth == 0) 15.5.sp else 14.5.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 1.dp).drawWithContent {
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f).padding(top = 2.dp)) {
+                    Text(q.title, style = Type.body.copy(fontSize = if (depth == 0) 16.sp else 15.sp, lineHeight = 22.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.drawWithContent {
                             drawContent()
                             if (strike.value > 0f) { val y = 11.dp.toPx(); drawLine(c.faint, Offset(0f, y), Offset(size.width * strike.value, y), strokeWidth = 1.3.dp.toPx()) }
                         })
-                    // Several days: each, ticked ones in green.
+                    // Several days: each, ticked ones struck.
                     if (q.slots.isNotEmpty() && !removed) Text(buildAnnotatedString {
                         q.slots.forEachIndexed { i, sl ->
                             if (i > 0) append("  ·  ")
                             val d = runCatching { LocalDate.parse(sl.date) }.getOrNull()
-                            withStyle(SpanStyle(color = if (sl.done) c.ok else c.ink, fontWeight = if (sl.done) null else FontWeight.Medium, fontFeatureSettings = "tnum", textDecoration = if (sl.done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)) {
-                                append((if (sl.done) "✓ " else "") + (d?.dayMonthShort() ?: sl.date) + (sl.time?.let { ", $it" } ?: ""))
+                            withStyle(SpanStyle(color = if (sl.done) c.graphite else c.ink, fontFeatureSettings = "tnum", textDecoration = if (sl.done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)) {
+                                append((d?.let { dayWord(it, today) } ?: sl.date) + (sl.time?.let { " $it" } ?: ""))
                             }
                         }
-                    }, style = Type.small.copy(fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
-                    // The quiet line: when (late in terracotta), who owes it, when it was done.
+                    }, style = Type.small.copy(fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))
+                    // The quiet line: when (late in terracotta) with its hour, who owes it, when it was done.
                     if (!removed) {
-                        val whenText = if (q.slots.isEmpty() && !q.done) due?.let { if (it.isBefore(today)) s.lateSince(it.dayMonthShort()) else (if (it == today) s.quickToday.lowercase() else if (it == today.plusDays(1)) s.quickTomorrow.lowercase() else it.dayMonthShort()) } else null
+                        val whenText = if (q.slots.isEmpty() && !q.done) due?.let { (if (late) s.lateSince(it.dayMonthShort()) else dayWord(it, today)) + (q.time?.let { t -> " $t" } ?: "") } else null
                         val rest = listOfNotNull(q.from?.let { s.promiseToYou(it) }, q.assignee,
                             if (q.done) q.doneAt?.let { d -> LocalDate.parse(d).dayMonthShort().let { if (q.isWait) s.gotOn(it) else s.solvedOn(it) } } else null)
-                        val dateSp = dateSpan()
                         if (whenText != null || rest.isNotEmpty()) Text(buildAnnotatedString {
-                            whenText?.let { withStyle(if (late) dateSp.copy(color = c.accentText) else dateSp) { append(it) } }
+                            whenText?.let { withStyle(SpanStyle(color = if (late) c.accentText else c.ink)) { append(it) } }
                             if (whenText != null && rest.isNotEmpty()) append("  ·  ")
                             append(rest.joinToString("  ·  "))
-                        }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 1.dp))
+                        }, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))
                     }
                 }
                 if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 3.dp))
@@ -822,124 +740,6 @@ private fun ScanLine() {
 
 // ---------------- questions ----------------
 
-@Composable
-private fun QuestionsPage(task: Task, hl: String?, vm: MainVm, onFeed: (String) -> Unit, onEdit: (Subtask) -> Unit, onDate: (Subtask) -> Unit) {
-    val c = M.c
-    val s = M.s
-    val open = task.subtasks.filter { !it.done && !it.isWait }
-    val waits = task.subtasks.filter { !it.done && it.isWait }
-    val done = task.subtasks.filter { it.done }
-    var showDone by remember(task.id) { mutableStateOf(done.any { it.id == hl }) }
-    val state = rememberLazyListState()
-    LaunchedEffect(hl) {
-        val order = open + waits + (if (showDone) done else emptyList())
-        val i = order.indexOfFirst { it.id == hl }
-        if (i >= 0) state.animateScrollToItem(i)
-    }
-    LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = 24.dp)) {
-        if (task.subtasks.isEmpty()) item("empty") { Margined { Text(s.noQuestions, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(vertical = 20.dp)) } }
-        if (open.isNotEmpty()) item("h-open") { QHead(s.openCaps, open.size) }
-        open.forEach { q -> item(q.id) { QuestionRow(task, q, hl == q.id, vm, onFeed, onEdit, onDate) } }
-        if (waits.isNotEmpty()) item("h-wait") { QHead(s.waitingCaps, waits.size) }
-        waits.forEach { q -> item(q.id) { QuestionRow(task, q, hl == q.id, vm, onFeed, onEdit, onDate) } }
-        if (done.isNotEmpty()) item("h-done") {
-            Margined {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { showDone = !showDone }, verticalAlignment = Alignment.CenterVertically) {
-                    QHeadText(s.solvedCaps, done.size)
-                    Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.graphite, modifier = Modifier.padding(top = 14.dp).size(18.dp).rotate(if (showDone) 0f else -90f))
-                }
-            }
-        }
-        if (showDone) done.forEach { q -> item(q.id) { QuestionRow(task, q, hl == q.id, vm, onFeed, onEdit, onDate) } }
-    }
-}
-
-@Composable
-private fun QHead(label: String, n: Int) = Margined { QHeadText(label, n) }
-
-@Composable
-private fun QHeadText(label: String, n: Int) {
-    Row(Modifier.padding(top = 20.dp, bottom = 6.dp)) {
-        SectionLabel(label)
-        Text("  $n", style = Type.label.copy(color = M.c.graphite))
-    }
-}
-
-/**
- * One question. Its day on the margin. Settling it fills the circle and draws the line through the words like a pen;
- * something we waited for turns its hourglass over before it becomes «получено».
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun QuestionRow(task: Task, q: Subtask, lit: Boolean, vm: MainVm, onFeed: (String) -> Unit, onEdit: (Subtask) -> Unit, onDate: (Subtask) -> Unit) {
-    val c = M.c
-    val s = M.s
-    val view = LocalView.current
-    val scope = rememberCoroutineScope()
-    val motion = motionOn()
-    var menu by remember { mutableStateOf(false) }
-    val made = task.events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }
-    val strike = remember(q.id) { Animatable(if (q.done) 1f else 0f) }
-    LaunchedEffect(q.done) { strike.animateTo(if (q.done) 1f else 0f, tween(if (motion) 320 else 0, easing = FastOutSlowInEasing)) }
-    val turn = remember(q.id) { Animatable(0f) }
-    // While it settles the row stays put: the circle fills, the pen draws through, then it moves to «Решено».
-    var settling by remember(q.id) { mutableStateOf(false) }
-    fun settle() {
-        if (q.done || !motion) { if (!q.done) view.confirmTick(); vm.toggleQuestion(task.id, q.id); return }
-        view.confirmTick()
-        scope.launch {
-            settling = true
-            if (q.isWait) turn.animateTo(1f, tween(360, easing = FastOutSlowInEasing))
-            else strike.animateTo(1f, tween(340, easing = FastOutSlowInEasing))
-            kotlinx.coroutines.delay(260)
-            vm.toggleQuestion(task.id, q.id)
-            settling = false; turn.snapTo(0f)
-        }
-    }
-    val late = !q.done && q.due != null && LocalDate.parse(q.due).isBefore(LocalDate.now())
-    val marginText = when {
-        q.done -> q.doneAt?.let { LocalDate.parse(it).dayMonthShort() }
-        q.due != null -> (if (q.isWait) "~" else "") + LocalDate.parse(q.due).dayMonthShort() + (q.time?.let { "\n$it" } ?: "")
-        else -> null
-    }
-    Box {
-        Margined(Modifier.landing(lit, 0).combinedClickable(onClick = { onDate(q) }, onLongClick = { menu = true }),
-            margin = marginText?.let { m -> { Box(Modifier.padding(top = if (!q.done && isSoon(q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() })) SoonLift + 6.dp else 0.dp)) { MarginText(m, late = late, petrol = q.isWait && !q.done, faint = q.done) } } }) {
-            Column {
-                if (!q.done) SoonBadge(q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, Modifier.padding(top = 6.dp))
-                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
-                    Box(Modifier.size(28.dp).clip(CircleShape).clickable(onClick = ::settle), contentAlignment = Alignment.Center) {
-                        if (q.isWait && !q.done) {
-                            if (turn.value < 0.98f) Box(Modifier.graphicsLayer { alpha = 1f - turn.value; translationX = -12f * turn.value }) { ArrowGlyph(c.link, 19.dp, incoming = true) } else TickGlyph(c.ok, 20.dp)
-                        } else CheckCircle(q.done || settling, size = 19.dp, onToggle = ::settle)
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f).padding(top = 3.dp)) {
-                        // The line through the words is drawn, not switched on.
-                        StrikeText(if (q.isWait) q.title.replaceFirstChar { it.uppercase() } + " — " + (q.from ?: "") else q.title,
-                            Type.body.copy(fontSize = 16.sp, color = if (q.done || settling) c.faint else c.ink), strike.value, c.faint)
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
-                            val parts = listOfNotNull(if (q.done) (if (q.isWait) s.gotIt else s.solvedWord).lowercase() else if (q.due == null) s.noDateQ else null, q.assignee)
-                            if (parts.isNotEmpty()) Text(parts.joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp))
-                            made?.let { ev ->
-                                if (parts.isNotEmpty()) Text("  ·  ", style = Type.small.copy(color = c.graphite))
-                                Text(s.inFeed(dateOfStamp(ev.at)?.dayMonthShort() ?: ""), style = Type.small.copy(color = c.link, fontSize = 13.5.sp),
-                                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { onFeed("d:" + q.id) })
-                            }
-                        }
-                    }
-                }
-                Hairline(Modifier.padding(start = 38.dp))
-            }
-        }
-        SoftMenu(menu, { menu = false }) {
-            DropdownMenuItem(text = { Text(s.edit, style = Type.body) }, onClick = { menu = false; onEdit(q) })
-            DropdownMenuItem(text = { Text(s.questionDateQ, style = Type.body) }, onClick = { menu = false; onDate(q) })
-            DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accentText)) }, onClick = { menu = false; vm.deleteSubtask(task.id, q.id) })
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun QuestionDateDialog(q: Subtask, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
@@ -994,7 +794,7 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                 Box(Modifier.size(40.dp).clip(CircleShape).background(if (searching) c.linkSoft else Color.Transparent).clickable { searching = !searching; if (!searching) q = "" },
                     contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Search, s.searchWord, tint = if (searching) c.link else c.graphite, modifier = Modifier.size(21.dp)) }
             } } }
-            if (all.isEmpty()) item("none") { Margined { Text(s.materialsEmpty, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(top = 10.dp)) } }
+            if (all.isEmpty()) item("none") { Margined(Modifier.padding(top = 10.dp)) { Voice(s.materialsEmpty) } }
             else item("search") {
                 Margined {
                     Column {
@@ -1002,43 +802,29 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                             exit = androidx.compose.animation.shrinkVertically(tween(180)) + androidx.compose.animation.fadeOut()) {
                             val focus = remember { androidx.compose.ui.focus.FocusRequester() }
                             LaunchedEffect(Unit) { kotlinx.coroutines.delay(150); runCatching { focus.requestFocus() } }
-                            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(14.dp))
-                                .padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.weight(1f)) {
-                                    if (q.isEmpty()) Text(s.searchMaterials, style = Type.body.copy(color = c.graphite, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp), cursorBrush = SolidColor(c.link),
-                                        modifier = Modifier.fillMaxWidth().focusRequester(focus))
-                                }
-                            }
+                            Box(Modifier.padding(bottom = 10.dp).bleed(PanelBleed)) { SearchField(q, { q = it }, s.searchMaterials, Modifier.focusRequester(focus)) }
                         }
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf("all" to s.all, "photo" to s.kindPhotos, "file" to s.kindDocs, "audio" to s.kindVoice).forEach { (k, l) ->
-                                val on = kind == k
-                                Text(l, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 14.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal),
-                                    modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else Color.Transparent)
-                                        .border(1.dp, if (on) Color.Transparent else c.hairline, RoundedCornerShape(50)).clickable { kind = k }.padding(horizontal = 12.dp, vertical = 5.dp))
-                            }
+                            listOf("all" to s.all, "photo" to s.kindPhotos, "file" to s.kindDocs, "audio" to s.kindVoice).forEach { (k, l) -> Chip(l, kind == k, onClick = { kind = k }) }
                         }
                     }
                 }
             }
-            if (all.isNotEmpty() && shown.isEmpty()) item("nf") { Margined { Text(s.noMaterialsFound, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(top = 14.dp)) } }
+            if (all.isNotEmpty() && shown.isEmpty()) item("nf") { Margined(Modifier.padding(top = 14.dp)) { Voice(s.noMaterialsFound) } }
             days.forEach { (d, list) ->
                 val date = runCatching { LocalDate.parse(d) }.getOrNull()
                 item("day$d") {
                     Column(Modifier.animateItem()) {
-                        Margined(Modifier.padding(top = 6.dp, bottom = 10.dp), margin = { date?.let { DayMargin(it, today, false, strong = true) } }) {
-                            Column {
+                        Margined(Modifier.padding(top = 14.dp), margin = { date?.let { DayMargin(it, today, false, strong = true) } }) {
+                            Panel { Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)) {
                                 // One link per topic or matter that day, its files under it.
                                 list.groupBy { it.first.id }.values.forEach { g ->
                                     val t = g.first().first
-                                    Row(Modifier.padding(top = 8.dp, bottom = 6.dp).clip(RoundedCornerShape(6.dp)).clickable(enabled = onTopic != null) { onTopic?.invoke(t.id) }.padding(vertical = 2.dp),
+                                    Row(Modifier.padding(top = 6.dp, bottom = 6.dp).clip(RoundedCornerShape(6.dp)).clickable(enabled = onTopic != null) { onTopic?.invoke(t.id) }.padding(vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically) {
-                                        Text("↳", style = Type.small.copy(color = c.link, fontSize = 13.sp))
-                                        Spacer(Modifier.width(5.dp))
-                                        if (t.topic && !(t.thought && t.subtasks.isEmpty())) TopicGlyph(c.link, 12.dp) else if (t.thought) ThoughtGlyph(c.link, 12.dp) else if (t.done) TickGlyph(c.ok, 12.dp) else ArrowGlyph(c.link, 12.dp)
-                                        Spacer(Modifier.width(5.dp))
-                                        Text(t.title, style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        if (t.thought && t.subtasks.isEmpty()) ThoughtGlyph(c.link, 14.dp) else TopicGlyph(c.link, 14.dp)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(t.title + "  ›", style = Type.small.copy(color = c.link, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                     // Pictures in a grid of three (no empty two thirds of a line); documents and voice as rows with their name whole.
                                     val pics = g.filter { (_, _, a) -> a.kind == "photo" || a.kind == "video" }
@@ -1053,8 +839,9 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                                         val side = (maxWidth - 16.dp) / 3
                                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 3) {
                                             pics.forEach { (_, e, a) ->
-                                                Column(Modifier.width(side).clip(RoundedCornerShape(10.dp)).clickable { onView(a) }) {
-                                                    Thumb(a, side)
+                                                // Only the picture has round corners — the caption under it must not lose its first letters to them.
+                                                Column(Modifier.width(side).clickable { onView(a) }) {
+                                                    Box(Modifier.clip(RoundedCornerShape(10.dp))) { Thumb(a, side) }
                                                     (a.caption ?: timeOfStamp(e.at).takeIf { it.isNotBlank() && it != "00:00" })?.let {
                                                         Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
                                                     }
@@ -1064,8 +851,8 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                                         }
                                     }
                                     docs.forEach { (_, e, a) ->
-                                        Row(Modifier.fillMaxWidth().padding(top = if (pics.isNotEmpty()) 8.dp else 0.dp).clip(RoundedCornerShape(10.dp)).background(c.card)
-                                            .border(1.dp, c.hairline, RoundedCornerShape(10.dp)).clickable { onView(a) }.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.Top) {
+                                        Row(Modifier.fillMaxWidth().padding(top = if (pics.isNotEmpty()) 8.dp else 0.dp).clip(RoundedCornerShape(10.dp)).background(c.bg)
+                                            .clickable { onView(a) }.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.Top) {
                                             Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.padding(top = 1.dp).size(20.dp))
                                             Spacer(Modifier.width(10.dp))
                                             Column(Modifier.weight(1f)) {
@@ -1077,9 +864,8 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                                         }
                                     }
                                 }
-                            }
+                            } }
                         }
-                        Hairline(Modifier.padding(start = MarginW))
                     }
                 }
             }

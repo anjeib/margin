@@ -83,13 +83,11 @@ fun ForwardSheet(
             Spacer(Modifier.height(8.dp))
             // Where from and who: the app by name, the sender with their address — and a way to keep them.
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 12.dp)) {
-                Text(from.uppercase(), style = Type.label.copy(color = c.link))
+                Text(from.uppercase(), style = Type.label.copy(color = c.graphite, letterSpacing = 1.5.sp))
                 if (sender != null) {
                     Spacer(Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(36.dp).clip(CircleShape).background(c.chip), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.Person, null, tint = c.graphite, modifier = Modifier.size(19.dp))
-                        }
+                        Avatar(sender.title, 36.dp)
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(sender.title, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -113,9 +111,9 @@ fun ForwardSheet(
             }
             if (result != null) {
                 // What the words became, the way the result bubble says it in the app — and a door to it.
-                Column(Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(16.dp)).background(c.linkSoft.copy(alpha = if (c.dark) 0.5f else 0.6f))
+                Column(Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(16.dp)).background(c.card)
                     .padding(horizontal = 14.dp, vertical = 12.dp)) {
-                    Text(s.forwardResult.uppercase(), style = Type.label.copy(color = c.link))
+                    Text(s.forwardResult.uppercase(), style = Type.label.copy(color = c.graphite, letterSpacing = 1.5.sp))
                     Spacer(Modifier.height(6.dp))
                     Text(result.line, style = Type.body.copy(color = c.ink, fontSize = 15.sp, lineHeight = 21.sp))
                 }
@@ -125,7 +123,7 @@ fun ForwardSheet(
                 }
                 return@Column
             }
-            Text(if (sorting) s.forwardSorting else s.forwardHint, style = Type.small.copy(color = if (sorting) c.link else c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp))
+            Text(if (sorting) s.forwardSorting else s.forwardHint, style = Type.italic.copy(color = if (sorting) c.link else c.graphite, fontSize = 14.5.sp), modifier = Modifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp))
             // The same live field as everywhere: words, voice, «+» — what to do with it, or just send.
             SmartComposer(
                 vm,

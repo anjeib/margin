@@ -35,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import ru.anjeib.margin.data.dayMonthShort
+import ru.anjeib.margin.data.dowFull
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,49 +51,6 @@ import ru.anjeib.margin.i18n.L
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
-
-/** The sections, always one tap away under the top bar: Задачи · Заметки · Люди · Проекты. */
-@Composable
-fun SectionRow(selected: Int, onSelect: (Int) -> Unit) {
-    val c = M.c
-    val s = M.s
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        // v2: notes became thoughts among the topics, projects became labels.
-        listOf(s.casesTitle, s.materialsTitle, s.peopleTitle).forEachIndexed { i, l ->
-            val on = i == selected
-            Text(l, style = Type.small.copy(color = if (on) c.ink else c.graphite, fontSize = 14.sp),
-                modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.chip else Color.Transparent)
-                    .clickable { onSelect(i) }.padding(horizontal = 12.dp, vertical = 6.dp))
-        }
-    }
-}
-
-/** «Проекты»: every project with what is open in it; a tap opens its page. */
-@Composable
-fun ProjectsScreen(data: AppData, onOpen: (String) -> Unit, contentPadding: PaddingValues) {
-    val c = M.c
-    val s = M.s
-    val projects = (data.projects + data.tasks.mapNotNull { it.project } + data.notes.filter { !it.archived }.mapNotNull { it.project }).distinct()
-        .filter { p -> data.tasks.any { it.project == p } || data.notes.any { !it.archived && it.project == p } }
-        .sortedByDescending { p -> data.tasks.count { !it.done && it.project == p } }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item("h") { Text(s.projects.lowercase().replaceFirstChar { it.uppercase() }, style = Type.display.copy(color = c.ink), modifier = Modifier.padding(top = 18.dp, bottom = 12.dp, start = 4.dp)) }
-        if (projects.isEmpty()) item("empty") { Empty(s.projectsEmpty, s.projectsHint) }
-        items(projects, key = { it }) { p ->
-            val open = data.tasks.filter { !it.done && it.project == p }
-            val notes = data.notes.count { !it.archived && it.project == p }
-            val late = open.count { it.isOverdue() }
-            val next = open.mapNotNull { it.dueDate }.filter { !it.isBefore(LocalDate.now()) }.minOrNull()
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).clickable { onOpen(p) }.padding(horizontal = 18.dp, vertical = 16.dp)) {
-                Text(projectLabel(p), style = Type.cardTitle.copy(color = c.ink))
-                Spacer(Modifier.height(3.dp))
-                Text(listOfNotNull(s.projectStats(open.size, notes), late.takeIf { it > 0 }?.let { s.overdue.lowercase() + " " + it },
-                    next?.let { s.nextDue(it.shortLabel().lowercase()) }).joinToString(" · "),
-                    style = Type.small.copy(color = if (late > 0) c.accentText else c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
-}
 
 /** «Календарь»: a month with how many open tasks fall on each day; a tap lists that day below. */
 @Composable
@@ -198,11 +156,14 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
             }
             }
         }
-        // The picked day, the same block as on «Сегодня» and «Неделя»: its date on the margin, «Дела» and «Темы».
-        item("day") {
-            DayBlock(plans[day] ?: dayPlan(data, day, today, monthEvents), today, open = true, heading = false, onToggle = {},
-                onOpen = onOpenTask, onDone = { vm.completeWithUndo(it) }, onLater = { postponing = it }, onTime = { timeFor = it }, landed = emptySet())
+        // The picked day, the same panel as on «Сегодня»: its hours on the margin, done ones struck through.
+        val plan = plans[day] ?: dayPlan(data, day, today, monthEvents)
+        item("day-head") {
+            SectionHead(if (day == today) s.today else day.dowFull() + ", " + day.dayMonthShort(), top = 18.dp,
+                count = (plan.deals.size + plan.events.size).takeIf { it > 0 })
         }
+        if (plan.quiet) item("day-free") { Margined { Voice(if (day == today) s.freeDay else s.freeWord.replaceFirstChar { it.uppercase() }) } }
+        else dayPanel(plan, today, "c" + day, emptySet(), onOpenTask, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it })
     }
     androidx.compose.animation.AnimatedVisibility(folded, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(200)),
         exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(200))) {
@@ -229,38 +190,33 @@ fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpe
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
         item("h") { PageHead(s.archiveTitle, s.archiveSub) }
         if (notes.isEmpty() && people.isEmpty() && topics.isEmpty()) item("empty") {
-            Margined { Text(s.archiveEmpty, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(top = 8.dp)) }
+            Margined(Modifier.padding(top = 8.dp)) { Voice(s.archiveEmpty) }
         }
         // v2: settled topics with their materials; news in one brings it back. The day it was settled on the margin.
-        if (topics.isNotEmpty()) item("th") { Margined(Modifier.padding(top = 10.dp, bottom = 6.dp)) { GroupBadge(s.topicsBadge) } }
-        items(topics, key = { "t" + it.id }) { t ->
-            Column(Modifier.animateItem()) {
-                Margined(Modifier.padding(vertical = 4.dp), margin = { t.doneAt?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }?.let { DayMargin(it, LocalDate.now(), false, strong = true) } }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.weight(1f)) { TopicRow(t, onOpen = { onOpenTask(t.id) }) }
-                        Spacer(Modifier.width(8.dp))
-                        PaperLink(s.bringBack) { vm.reviveTopic(t.id) }
-                    }
-                }
-                Hairline(Modifier.padding(start = MarginW + MarginGap))
-            }
-        }
-        if (notes.isNotEmpty()) item("nh") { Margined(Modifier.padding(top = 18.dp, bottom = 6.dp)) { GroupBadge(s.notes) } }
-        items(notes, key = { "n" + it.id }) { n ->
-            Margined(Modifier.animateItem().padding(vertical = 4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { NoteCard(n, data, onClick = { onOpenNote(n.id) }) }
-                    Spacer(Modifier.width(8.dp))
-                    PaperLink(s.restoreWord) { vm.archiveNote(n.id, false) }
+        if (topics.isNotEmpty()) item("th") { SectionHead(s.topicsBadge, count = topics.size, top = 12.dp) }
+        topics.forEachIndexed { i, t ->
+            item("t" + t.id) {
+                Box(Modifier.animateItem()) {
+                    TopicPaperRow(t, seatOf(i, topics.size), onOpen = { onOpenTask(t.id) },
+                        margin = t.doneAt?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }?.let { dayWord(it) },
+                        trailing = { PaperLink(s.bringBack) { vm.reviveTopic(t.id) } })
                 }
             }
         }
-        if (people.isNotEmpty()) item("ph") { Margined(Modifier.padding(top = 18.dp, bottom = 6.dp)) { GroupBadge(s.peopleTitle) } }
-        items(people, key = { "p" + it.id }) { p ->
-            Margined(Modifier.animateItem().padding(vertical = 10.dp).clickable { onOpenPerson(p.id) }, margin = { Monogram(p.name, 30.dp) }) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(p.name, style = Type.body.copy(color = c.ink, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), modifier = Modifier.weight(1f))
-                    PaperLink(s.restoreWord) { vm.archivePerson(p.id, false) }
+        if (notes.isNotEmpty()) item("nh") { SectionHead(s.notes, count = notes.size) }
+        notes.forEachIndexed { i, n ->
+            item("n" + n.id) {
+                Box(Modifier.animateItem()) {
+                    NoteCard(n, data, onClick = { onOpenNote(n.id) }, seat = seatOf(i, notes.size), trailing = { PaperLink(s.restoreWord) { vm.archiveNote(n.id, false) } })
+                }
+            }
+        }
+        if (people.isNotEmpty()) item("ph") { SectionHead(s.peopleTitle, count = people.size) }
+        people.forEachIndexed { i, p ->
+            item("p" + p.id) {
+                PaperRow(seatOf(i, people.size), mark = { Avatar(p.name, 32.dp) }, modifier = Modifier.animateItem(), onClick = { onOpenPerson(p.id) },
+                    trailing = { PaperLink(s.restoreWord) { vm.archivePerson(p.id, false) } }) {
+                    RowTitle(p.name, maxLines = 1)
                 }
             }
         }

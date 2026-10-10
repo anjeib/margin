@@ -93,8 +93,7 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                     0 -> Column {
                         Said(s.tourWriteExample)
                         Text("↓", style = Type.body.copy(color = c.link, fontSize = 20.sp), modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 2.dp))
-                        DealRow(call, today, onToggle = {}, onOpen = {}, onTime = {}, whenText = call.dueDate?.shortLabel()?.lowercase())
-                        DealRow(edits, today, onToggle = {}, onOpen = {}, onTime = {}, whenText = edits.dueDate?.shortLabel()?.lowercase())
+                        TourRows(listOf(call, edits), today)
                         Spacer(Modifier.height(16.dp))
                         Text(s.tourMarksText, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
                         Spacer(Modifier.height(8.dp))
@@ -102,11 +101,11 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                             s.tourMarks.forEach { Pill(it) }
                         }
                     }
-                    1 -> GroupedDeals(topicRows, today, emptySet(), onOpen = {}, onDone = {}, onLater = {}, onTime = {}, topicOf = { topic })
+                    1 -> TourRows(topicRows, today)
                     2 -> Column {
                         // A picture of the row, not a live one: the words say what a tap and a hold do.
                         Box(Modifier.fillMaxWidth()) {
-                            DealRow(call, today, onToggle = {}, onOpen = {}, onTime = {}, whenText = call.dueDate?.shortLabel()?.lowercase())
+                            TourRows(listOf(call), today)
                             Box(Modifier.matchParentSize().clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {})
                         }
                         Spacer(Modifier.height(10.dp))
@@ -162,5 +161,13 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
             })
             Spacer(Modifier.width(2.dp))
         }
+    }
+}
+
+/** Rows of the tour as they stand on «Сегодня»: the rule, «когда» on its margin, the matters on a panel — a picture, not controls. */
+@Composable
+private fun TourRows(list: List<ru.anjeib.margin.data.Task>, today: java.time.LocalDate) {
+    Column(Modifier.fillMaxWidth().marginRule(M.c.accent.copy(alpha = 0.85f), over = true)) {
+        list.forEachIndexed { i, t -> MatterRow(t, seatOf(i, list.size), today, whenNote(t, today, underDay = false), {}, {}, {}, null, swipe = false) }
     }
 }

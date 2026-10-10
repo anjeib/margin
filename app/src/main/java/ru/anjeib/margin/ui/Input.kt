@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.draw.shadow
+
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import android.Manifest
@@ -333,7 +335,9 @@ fun SmartComposer(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             if (ruled) Spacer(Modifier.width(MarginW - edge))
             Row(
-                Modifier.weight(1f).padding(start = if (ruled) FieldInset else 0.dp).heightIn(min = FieldH).clip(shape).background(c.card)
+                // v8: the field floats a little over the page — a soft shadow, the one raised thing besides menus.
+                Modifier.weight(1f).padding(start = if (ruled) FieldInset else 0.dp).heightIn(min = FieldH)
+                    .shadow(6.dp, shape, ambientColor = c.ink.copy(alpha = 0.10f), spotColor = c.ink.copy(alpha = 0.14f)).clip(shape).background(c.card)
                     .border(1.dp, c.hairline, shape).padding(start = 2.dp, end = 5.dp),
                 // Long text grows upwards; the buttons stay where the thumb is.
                 verticalAlignment = Alignment.Bottom,

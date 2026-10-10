@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.sp
  */
 
 /** Width of the margin column; the rule runs at this x. */
-val MarginW = 62.dp
+val MarginW = 68.dp
 /** Gap between the rule and the content. */
 val MarginGap = 14.dp
 
@@ -91,13 +91,12 @@ fun Modifier.marginRule(color: Color, fraction: Float = 1f, top: Dp = 0.dp, over
     if (!over) drawContent()
 }
 
-/** Small text on the margin: an hour, «завтра», «~21 окт». [late] — terracotta; [petrol] — a date someone owes. */
+/** Small text on the margin: an hour, «завтра», «~21 окт» — Margin's grey italic (v8); [late] — terracotta; [petrol] — a date someone owes. */
 @Composable
 fun MarginText(text: String, late: Boolean = false, petrol: Boolean = false, faint: Boolean = false) {
     val c = M.c
-    // Dates and hours read first: ink and medium; only something closed (faint) steps back to graphite.
-    Text(text, style = Type.small.copy(color = when { late -> c.accentText; petrol -> c.link; faint -> c.graphite; else -> c.ink }, fontSize = 12.5.sp,
-        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End, lineHeight = 15.sp), modifier = Modifier.padding(top = 3.dp))
+    Text(text, style = Type.italic.copy(color = when { late -> c.accentText; petrol -> c.link; faint -> c.faint; else -> c.graphite }, fontSize = 13.5.sp,
+        fontFeatureSettings = "tnum", textAlign = TextAlign.End, lineHeight = 17.sp), modifier = Modifier.padding(top = 3.dp))
 }
 
 /** The one look of a date or an hour inside a line: ink, medium, figures of one width. */
@@ -153,12 +152,10 @@ fun ThoughtGlyph(color: Color, size: Dp = 18.dp, line: Dp = 1.5.dp) = Canvas(Mod
     }, color, style = stroke(line))
 }
 
-/** An idea in a list: the bulb on a soft sage circle (owner's reference, 10 окт) — no «ИДЕЯ» word needed. */
+/** An idea in a list: the bulb in the graphite line of every mark (v8: no sage round). */
 @Composable
 fun IdeaMark(size: Dp = 28.dp) {
-    val c = M.c
-    Box(Modifier.size(size).clip(androidx.compose.foundation.shape.CircleShape).background(c.ok.copy(alpha = if (c.dark) 0.24f else 0.2f)),
-        contentAlignment = Alignment.Center) { ThoughtGlyph(c.ok, size * 0.68f, 1.7.dp) }
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) { ThoughtGlyph(M.c.graphite, size * 0.82f, 1.5.dp) }
 }
 
 /** «Обещания»: two people, one a little behind the other. */
@@ -171,64 +168,11 @@ fun PeopleGlyph(color: Color, size: Dp = 16.dp) = Canvas(Modifier.size(size)) {
     drawPath(Path().apply { moveTo(w * 0.74f, h * 0.6f); cubicTo(w * 0.84f, h * 0.64f, w * 0.9f, h * 0.72f, w * 0.9f, h * 0.84f) }, color, style = stroke(1.4.dp))
 }
 
-/** A glyph on a soft round ground of its colour — the arrows of «Обещания». */
-@Composable
-fun SoftRound(color: Color, size: Dp = 26.dp, content: @Composable () -> Unit) {
-    Box(Modifier.size(size).clip(androidx.compose.foundation.shape.CircleShape).background(color.copy(alpha = if (M.c.dark) 0.2f else 0.12f)),
-        contentAlignment = Alignment.Center) { content() }
-}
-
-/** «Ждём»: an hourglass; [sand] — how much has run down, [turn] — 0..1 of the flip that turns it into «получено». */
-@Composable
-fun HourglassGlyph(color: Color, size: Dp = 18.dp, sand: Float = 0.35f, turn: Float = 0f) = Canvas(Modifier.size(size).graphicsLayer { rotationZ = 180f * turn }) {
-    val w = this.size.width; val h = this.size.height
-    drawLine(color, Offset(w * 0.22f, h * 0.12f), Offset(w * 0.78f, h * 0.12f), strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)
-    drawLine(color, Offset(w * 0.22f, h * 0.88f), Offset(w * 0.78f, h * 0.88f), strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)
-    val glass = Path().apply {
-        moveTo(w * 0.3f, h * 0.12f); lineTo(w * 0.3f, h * 0.24f); lineTo(w * 0.5f, h * 0.5f); lineTo(w * 0.3f, h * 0.76f); lineTo(w * 0.3f, h * 0.88f)
-        moveTo(w * 0.7f, h * 0.12f); lineTo(w * 0.7f, h * 0.24f); lineTo(w * 0.5f, h * 0.5f); lineTo(w * 0.7f, h * 0.76f); lineTo(w * 0.7f, h * 0.88f)
-    }
-    drawPath(glass, color, style = stroke())
-    // The sand at the bottom: a small heap that grows.
-    val s = sand.coerceIn(0f, 1f)
-    if (s > 0f) {
-        val top = h * (0.86f - 0.16f * s)
-        drawPath(Path().apply { moveTo(w * 0.36f, h * 0.84f); lineTo(w * 0.5f, top); lineTo(w * 0.64f, h * 0.84f); close() }, color.copy(alpha = 0.55f))
-    }
-}
-
-/** A question: a circle with a question mark. */
-@Composable
-fun QuestionGlyph(color: Color, size: Dp = 18.dp) = Canvas(Modifier.size(size)) {
-    val w = this.size.width; val h = this.size.height
-    drawCircle(color, radius = w * 0.42f, style = stroke())
-    val q = Path().apply {
-        moveTo(w * 0.38f, h * 0.4f); cubicTo(w * 0.38f, h * 0.27f, w * 0.62f, h * 0.27f, w * 0.62f, h * 0.4f)
-        cubicTo(w * 0.62f, h * 0.49f, w * 0.5f, h * 0.5f, w * 0.5f, h * 0.6f)
-    }
-    drawPath(q, color, style = stroke(1.4.dp))
-    drawCircle(color, radius = 1.dp.toPx(), center = Offset(w * 0.5f, h * 0.72f))
-}
-
 /** Settled: a light tick. */
 @Composable
 fun TickGlyph(color: Color, size: Dp = 18.dp) = Canvas(Modifier.size(size)) {
     val w = this.size.width; val h = this.size.height
     drawPath(Path().apply { moveTo(w * 0.2f, h * 0.52f); lineTo(w * 0.42f, h * 0.72f); lineTo(w * 0.8f, h * 0.3f) }, color, style = stroke(1.7.dp))
-}
-
-/** A thin progress bar for a topic's questions: «2 из 3». Animates when a question is settled. */
-@Composable
-fun TopicProgress(done: Int, total: Int, modifier: Modifier = Modifier) {
-    val c = M.c
-    val target = if (total == 0) 0f else done.toFloat() / total
-    val a = remember { Animatable(target) }
-    LaunchedEffect(target) { a.animateTo(target, tween(420, easing = FastOutSlowInEasing)) }
-    Canvas(modifier.fillMaxWidth().size(width = 0.dp, height = 3.dp)) {
-        val r = size.height / 2
-        drawRoundRect(c.hairline, cornerRadius = androidx.compose.ui.geometry.CornerRadius(r, r))
-        drawRoundRect(c.link, size = Size(size.width * a.value, size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(r, r))
-    }
 }
 
 /** A short confirming tick in the hand — for «решено», «получено», «в архив». Silent where the phone can't. */
@@ -354,14 +298,6 @@ fun ClipGlyph(color: Color, size: Dp = 14.dp, modifier: Modifier = Modifier) = C
     }, color, style = stroke(1.3.dp))
 }
 
-/** A thing with its own hour. */
-@Composable
-fun ClockGlyph(color: Color, size: Dp = 14.dp) = Canvas(Modifier.size(size)) {
-    val w = this.size.width; val h = this.size.height
-    drawCircle(color, radius = w * 0.36f, center = Offset(w / 2, h / 2), style = stroke(1.4.dp))
-    drawPath(Path().apply { moveTo(w * 0.5f, h * 0.3f); lineTo(w * 0.5f, h * 0.5f); lineTo(w * 0.64f, h * 0.6f) }, color, style = stroke(1.4.dp))
-}
-
 /** «+» of the field, on the margin: two thin strokes. */
 @Composable
 fun PlusGlyph(color: Color, size: Dp = 18.dp) = Canvas(Modifier.size(size)) {
@@ -395,12 +331,11 @@ fun CalendarGlyph(color: Color, size: Dp = 14.dp) = Canvas(Modifier.size(size)) 
     drawLine(color, Offset(w * 0.66f, h * 0.12f), Offset(w * 0.66f, h * 0.3f), strokeWidth = 1.4.dp.toPx(), cap = StrokeCap.Round)
 }
 
-/** «ДЕЛА», «ТЕМЫ»: a quiet petrol badge over a group. */
+/** «ДЕЛА», «ТЕМЫ»: the quiet caps label over a group — the same as [SectionHead], no pill (v8). */
 @Composable
 fun GroupBadge(text: String, modifier: Modifier = Modifier) {
     val c = M.c
-    Text(text.uppercase(), style = Type.label.copy(color = c.link, fontSize = 10.5.sp, letterSpacing = 1.1.sp),
-        modifier = modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(c.linkSoft).padding(horizontal = 10.dp, vertical = 3.dp))
+    Text(text.uppercase(), style = Type.label.copy(color = c.graphite, letterSpacing = 1.5.sp), modifier = modifier.padding(vertical = 2.dp))
 }
 
 /** Only the vertical part of a screen's padding: on «Поля» screens the rule is the left edge. */
@@ -414,7 +349,7 @@ fun PageHead(title: String, subtitle: String? = null, modifier: Modifier = Modif
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(title, style = Type.display.copy(color = c.ink), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                if (subtitle != null) Text(subtitle, style = Type.small.copy(color = c.graphite, fontSize = 15.sp), modifier = Modifier.padding(top = 4.dp))
+                if (subtitle != null) Voice(subtitle, Modifier.padding(top = 2.dp))
             }
             trailing?.invoke()
         }
@@ -462,52 +397,10 @@ fun SphereBadge(sphere: String?, modifier: Modifier = Modifier, onClick: (() -> 
 /** personal → work → personal: one tap switches. */
 fun nextSphere(cur: String?) = if (cur == "personal") "work" else "personal"
 
-/** A title with its sphere riding at the end of the last line, so a long name wraps naturally instead of being pushed. */
+/** The menu one step under the title («Люди · Компании»): words as tabs, as everywhere (v8). */
 @Composable
-fun TitleWithSphere(title: String, sphere: String?, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier, maxLines: Int = 2) {
-    if (sphere == null) { Text(title, style = style, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = modifier); return }
-    val text = androidx.compose.ui.text.buildAnnotatedString { append(title); append(" "); appendInlineContent("sphere", "·") }
-    val inline = mapOf("sphere" to androidx.compose.foundation.text.InlineTextContent(
-        androidx.compose.ui.text.Placeholder(76.sp, 20.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.Center)) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) { SphereBadge(sphere, Modifier.padding(start = 4.dp)) }
-    })
-    Text(text, style = style, inlineContent = inline, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = modifier)
-}
-
-/** «Сегодня» / «Завтра» over a row, at the right: the margin keeps only dates, this catches the eye. Nothing for other days. */
-@Composable
-fun SoonBadge(day: java.time.LocalDate?, modifier: Modifier = Modifier) {
-    val c = M.c
-    val today = java.time.LocalDate.now()
-    val (text, fg, bg) = when (day) {
-        today -> Triple(M.s.quickToday, c.accentText, c.accentSoft)
-        today.plusDays(1) -> Triple(M.s.quickTomorrow, c.link, c.linkSoft)
-        else -> return
-    }
-    Row(modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
-        Text(text.uppercase(), style = Type.label.copy(color = fg, fontSize = 10.5.sp, letterSpacing = 1.sp),
-            modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(bg).padding(horizontal = 8.dp, vertical = 2.dp))
-    }
-}
-
-/** Whether [SoonBadge] shows for [day] — rows push their margin and node down by [SoonLift] then. */
-fun isSoon(day: java.time.LocalDate?): Boolean = day != null && day in setOf(java.time.LocalDate.now(), java.time.LocalDate.now().plusDays(1))
-val SoonLift = 19.dp
-
-/** The menu one step under the top tabs («Темы · Дела · Идеи», «Люди · Компании»): the chosen one on a petrol pill. */
-@Composable
-fun SubTabs(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
-    val c = M.c
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        options.forEach { (k, l) ->
-            val on = selected == k
-            Text(l, style = Type.body.copy(color = if (on) c.link else c.ink.copy(alpha = 0.72f), fontSize = 16.sp,
-                fontWeight = if (on) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
-                modifier = Modifier.padding(end = 6.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(if (on) c.linkSoft else Color.Transparent)
-                    .clickable { onSelect(k) }.padding(horizontal = 14.dp, vertical = 7.dp))
-        }
-    }
-}
+fun SubTabs(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) =
+    TextTabs(options, selected, onSelect, modifier)
 
 /** A line that starts a list: «1.», «2)», «-», «–», «—», «•», «*». */
 val listMarker = Regex("^\\s*(\\d{1,2}[.)]|[-–—•*])\\s+")
@@ -546,36 +439,6 @@ fun continueList(old: String, new: String): String {
 
 /** Hours and dates on the margin of lists — the same everywhere: today stays ink in lists of things (not a timeline). */
 
-/** The ground a row stands on: the page, or the soft block it sits in — rows paint it under themselves for swipes. */
-val LocalRowGround = androidx.compose.runtime.compositionLocalOf<Color?> { null }
-
-/**
- * One thing of the day on its own soft block: a matter, an idea, a file — or all of one topic's matters together.
- * The block reaches a little into the gap by the rule, so the words keep their line with everything else on the page.
- */
-@Composable
-fun Tile(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    val ground = M.c.card
-    androidx.compose.runtime.CompositionLocalProvider(LocalRowGround provides ground) {
-        Column(
-            modifier.padding(vertical = 4.dp).bleedStart(TileInset).fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
-                .background(ground).padding(start = TileInset, end = 10.dp, top = 2.dp, bottom = 2.dp),
-            content = content,
-        )
-    }
-}
-
-private val TileInset = 9.dp
-
-/** Lays the content [d] wider and further left than its slot — a ground that starts before the words do. */
-private fun Modifier.bleedStart(d: Dp): Modifier = this.layout { m, c ->
-    val px = d.roundToPx()
-    if (!c.hasBoundedWidth) { val p = m.measure(c); return@layout layout(p.width, p.height) { p.place(0, 0) } }
-    val p = m.measure(c.copy(minWidth = (c.minWidth + px).coerceAtMost(c.maxWidth + px), maxWidth = c.maxWidth + px))
-    layout((p.width - px).coerceAtLeast(0), p.height) { p.place(-px, 0) }
-}
-
-
 /**
  * The colour of a matter's hour: ink, digits of one width. A passed hour today is quiet graphite — it is not an alarm,
  * the evening must not turn into a red wall; only a past day is late, in terracotta text.
@@ -590,14 +453,3 @@ fun hourColor(due: java.time.LocalDate?, time: String?, today: java.time.LocalDa
     }
 }
 
-
-/** «Обзор»: three lines of different length — everything there is, one under another. */
-@Composable
-fun OverviewGlyph(color: Color, size: Dp = 18.dp) = Canvas(Modifier.size(size)) {
-    val w = this.size.width; val h = this.size.height
-    drawPath(Path().apply {
-        moveTo(w * 0.16f, h * 0.3f); lineTo(w * 0.84f, h * 0.3f)
-        moveTo(w * 0.16f, h * 0.5f); lineTo(w * 0.7f, h * 0.5f)
-        moveTo(w * 0.16f, h * 0.7f); lineTo(w * 0.78f, h * 0.7f)
-    }, color, style = stroke(1.4.dp))
-}

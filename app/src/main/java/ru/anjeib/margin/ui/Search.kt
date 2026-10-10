@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -106,7 +108,7 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
             Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, s.cancel, tint = c.ink)
             }
-            Box(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(c.chip).padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Box(Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(24.dp)).padding(horizontal = 18.dp, vertical = 13.dp)) {
                 if (q.isEmpty()) Text(s.searchHint, style = Type.body.copy(color = c.graphite))
                 BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link),
                     modifier = Modifier.fillMaxWidth().padding(end = if (q.isNotEmpty()) 28.dp else 0.dp).focusRequester(focus))
@@ -117,69 +119,67 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
             Spacer(Modifier.width(8.dp))
         }
         // Three kinds to narrow the search to — or, with nothing typed, to look through.
-        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(start = MarginW + 12.dp, end = 16.dp, top = 2.dp, bottom = 4.dp),
+        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(start = MarginW + MarginGap - PanelBleed, end = 16.dp, top = 4.dp, bottom = 4.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-            listOf("people", "topics", "files").zip(s.searchTry).forEach { (k, label) ->
-                val on = kind == k
-                Text(label, style = Type.small.copy(color = if (on) c.link else c.graphite, fontSize = 14.sp),
-                    modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) c.linkSoft else c.chip)
-                        .clickable { kind = if (on) null else k }.padding(horizontal = 12.dp, vertical = 6.dp))
-            }
+            listOf("people", "topics", "files").zip(s.searchTry).forEach { (k, label) -> Chip(label.replaceFirstChar { it.uppercase() }, kind == k, onClick = { kind = if (kind == k) null else k }) }
         }
-        // «Поля» under the search line: matters with their date on the margin, topics with their progress, people with their face.
+        // «Поля и панели» under the search line: each kind its own panel, «когда» on the margin.
         val topics = tasks.filter { it.topic }
         val deals = tasks.filterNot { it.topic }
+        val today = LocalDate.now()
         LazyColumn(Modifier.fillMaxSize().screenRule(), contentPadding = PaddingValues(bottom = 24.dp)) {
             if (words.isEmpty() && kind == null && recent.isNotEmpty()) {
-                item { Margined(Modifier.padding(top = 16.dp, bottom = 4.dp)) { GroupBadge(s.searchRecent) } }
-                items(recent, key = { "r$it" }) { r -> Margined { PaperLink(r, quiet = true) { q = r } } }
+                item("rh") { SectionHead(s.searchRecent, top = 16.dp) }
+                recent.forEachIndexed { i, r ->
+                    item("r$r") { PaperRow(seatOf(i, recent.size), mark = { Icon(Icons.Outlined.History, null, tint = c.graphite, modifier = Modifier.size(19.dp)) }, onClick = { q = r }) { RowTitle(r, maxLines = 1) } }
+                }
             }
-            if ((words.isNotEmpty() || browsing) && tasks.isEmpty() && notes.isEmpty() && people.isEmpty() && files.isEmpty()) item { Margined { Empty(s.nothing, "") } }
+            if ((words.isNotEmpty() || browsing) && tasks.isEmpty() && notes.isEmpty() && people.isEmpty() && files.isEmpty()) item("none") { Margined(Modifier.padding(top = 20.dp)) { Voice(s.nothing) } }
             if (deals.isNotEmpty()) {
-                item { Margined(Modifier.padding(top = 16.dp, bottom = 4.dp)) { GroupBadge(s.dealsBadge) } }
-                items(deals, key = { "t" + it.id }) { t ->
-                    Margined(margin = { (t.dueDate ?: t.startDate)?.let { DayMargin(it, LocalDate.now(), false) } }) {
-                        TaskRow(t, LocalDate.now(), true, onToggle = { vm.completeWithUndo(t.id) }, onOpen = { keep(); onTask(t.id) })
+                item("dh") { SectionHead(s.dealsBadge, count = deals.size, top = 16.dp) }
+                deals.forEachIndexed { i, t ->
+                    item("t" + t.id) {
+                        MatterRow(t, seatOf(i, deals.size), today, whenNote(t, today, underDay = false),
+                            onToggle = { vm.completeWithUndo(t.id) }, onOpen = { keep(); onTask(t.id) }, onTime = { keep(); onTask(t.id) }, onLater = null, swipe = false)
                     }
                 }
             }
             if (topics.isNotEmpty()) {
-                item { Margined(Modifier.padding(top = 16.dp, bottom = 4.dp)) { GroupBadge(s.topicsBadge) } }
-                items(topics, key = { "t" + it.id }) { t ->
-                    // TopicRow keeps its own margin (the topic mark).
-                    Column {
-                        TopicRow(t, onOpen = { keep(); onTask(t.id) })
+                item("th") { SectionHead(s.topicsBadge, count = topics.size) }
+                topics.forEachIndexed { i, t ->
+                    item("t" + t.id) {
                         // Found in one of its matters: that matter, which opens lit in the topic's feed.
-                        if (words.isNotEmpty() && !words.all { it in norm(t.title) })
-                            flat(t.subtasks).firstOrNull { q -> words.all { it in norm(q.title + " " + q.assignee.orEmpty()) } }?.let { sub ->
-                                Margined(Modifier.padding(bottom = 6.dp)) { PaperLink("↳ " + sub.title) { keep(); onTask("q:${t.id}:${sub.id}") } }
-                            }
+                        val sub = if (words.isNotEmpty() && !words.all { it in norm(t.title) })
+                            flat(t.subtasks).firstOrNull { q -> words.all { it in norm(q.title + " " + q.assignee.orEmpty()) } } else null
+                        TopicPaperRow(t, seatOf(i, topics.size), onOpen = { keep(); onTask(sub?.let { "q:${t.id}:${it.id}" } ?: t.id) },
+                            found = sub?.title)
                     }
                 }
             }
             if (files.isNotEmpty()) {
-                item { Margined(Modifier.padding(top = 16.dp, bottom = 4.dp)) { GroupBadge(s.searchTry[2]) } }
-                items(files.take(60), key = { "f" + it.third.id }) { (t, e, a) ->
-                    Margined(Modifier.clickable { keep(); viewing = a }.padding(vertical = 8.dp),
-                        margin = { runCatching { LocalDate.parse(e.at.take(10)) }.getOrNull()?.let { DayMargin(it, LocalDate.now(), false) } }) {
-                        Column {
-                            Text(a.caption ?: a.name.ifBlank { a.kind }, style = Type.body.copy(color = c.ink), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("↳ " + t.title, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                item("fh") { SectionHead(s.searchTry[2], count = files.size) }
+                val shown = files.take(60)
+                shown.forEachIndexed { i, (t, e, a) ->
+                    item("f" + a.id) {
+                        PaperRow(seatOf(i, shown.size), margin = runCatching { LocalDate.parse(e.at.take(10)) }.getOrNull()?.let { dayWord(it, today) },
+                            mark = { Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.size(19.dp)) }, onClick = { keep(); viewing = a }) {
+                            RowTitle(a.caption ?: a.name.ifBlank { a.kind }, maxLines = 1)
+                            RowSub("≡ " + t.title, link = true)
                         }
                     }
                 }
             }
             if (notes.isNotEmpty()) {
-                item { Margined(Modifier.padding(top = 20.dp, bottom = 8.dp)) { GroupBadge(s.notes) } }
-                items(notes, key = { "n" + it.id }) { n -> Margined { NoteCard(n, data, onClick = { keep(); onNote(n.id) }, modifier = Modifier.padding(bottom = 8.dp)) } }
+                item("nh") { SectionHead(s.notes, count = notes.size) }
+                notes.forEachIndexed { i, n -> item("n" + n.id) { NoteCard(n, data, onClick = { keep(); onNote(n.id) }, seat = seatOf(i, notes.size)) } }
             }
             if (people.isNotEmpty()) {
-                item { Margined(Modifier.padding(top = 20.dp, bottom = 8.dp)) { GroupBadge(s.peopleTitle) } }
-                items(people, key = { "p" + it.id }) { p ->
-                    Margined(Modifier.clickable { keep(); onPerson(p.id) }.padding(vertical = 10.dp), margin = { Monogram(p.name, 30.dp) }) {
-                        Column {
-                            Text(p.name, style = Type.body.copy(color = c.ink))
-                            p.about?.let { Text(it, style = Type.small.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                item("ph") { SectionHead(s.peopleTitle, count = people.size) }
+                people.forEachIndexed { i, p ->
+                    item("p" + p.id) {
+                        PaperRow(seatOf(i, people.size), mark = { Avatar(p.name, 32.dp) }, onClick = { keep(); onPerson(p.id) }) {
+                            RowTitle(p.name, maxLines = 1)
+                            p.about?.let { RowSub(it) }
                         }
                     }
                 }

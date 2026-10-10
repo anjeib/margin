@@ -322,8 +322,9 @@ private fun maskKey(k: String) = if (k.length < 12) k else k.take(6) + "••�
 @Composable
 private fun Group(label: String, content: @Composable () -> Unit) {
     val c = M.c
-    SectionLabel(label, Modifier.padding(start = 8.dp, bottom = 8.dp, top = 6.dp))
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card)) { content() }
+    // v8: the caps label over one panel, as every section in the app.
+    SectionLabel(label, Modifier.padding(bottom = 8.dp, top = 6.dp))
+    Column(Modifier.bleed(PanelBleed).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) { content() }
     Spacer(Modifier.height(22.dp))
 }
 
@@ -338,10 +339,9 @@ private fun ValueRow(label: String, hint: String?, value: String, chevron: Boole
         // The value sits on the label's line; the hint runs under both on the whole width (it used to be squeezed beside the value).
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(label, style = Type.body.copy(color = c.ink), modifier = Modifier.weight(1f, fill = false))
-                Spacer(Modifier.weight(1f))
+                Text(label, style = Type.body.copy(color = c.ink), modifier = Modifier.weight(1f))
                 if (value.isNotBlank()) Text(value, style = Type.small.copy(color = c.graphite, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 12.dp).widthIn(max = 180.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                    modifier = Modifier.padding(start = 12.dp).widthIn(max = 150.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
             }
             hint?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp)) }
         }

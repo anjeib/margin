@@ -110,56 +110,58 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 if (postponing) PostponeDialog(onDismiss = { postponing = false }) { d -> vm.postponeTo(ref, d); postponing = false }
                 fun person(n: String) { data.contact(n)?.let { pp -> onOpenPerson?.invoke(pp.id) } ?: vm.offerContact(n) }
                 Margined {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Its topic — a way back to it.
-                        if (onOpenTopic != null) Row(Modifier.weight(1f).clip(RoundedCornerShape(6.dp)), verticalAlignment = Alignment.CenterVertically) {
-                            TopicGlyph(c.link, 13.dp)
-                            Spacer(Modifier.width(7.dp))
-                            PaperLink(topic.title + "  ›") { commit(); onOpenTopic() }
-                        } else Spacer(Modifier.weight(1f))
-                        Box(Modifier.width(48.dp)) {
-                            CardMenu { close ->
-                                if (!q.done) SoftMenuItem(s.postponeMenu) { close(); postponing = true }
-                                rowActs?.let { r -> if (!q.done) SoftMenuItem(s.toOtherTopic) { close(); commit(); onClose(); r.toTopic(ref) } }
-                                if (onOpenTopic != null) SoftMenuItem(s.openTopic) { close(); commit(); onOpenTopic() }
-                                SoftMenuItem(s.delete, danger = true) { close(); vm.removeDeal(topic.id, q.id); onClose() }
-                            }
-                        }
+                    // Its topic — a way back to it — at the left of the top line, ⋯ at the right.
+                    CardMenu(context = if (onOpenTopic != null) ({ TopicLink(topic.title) { commit(); onOpenTopic() } }) else null) { close ->
+                        if (!q.done) SoftMenuItem(s.postponeMenu) { close(); postponing = true }
+                        rowActs?.let { r -> if (!q.done) SoftMenuItem(s.toOtherTopic) { close(); commit(); onClose(); r.toTopic(ref) } }
+                        SoftMenuItem(s.delete, danger = true) { close(); vm.removeDeal(topic.id, q.id); onClose() }
                     }
                 }
-                Margined(Modifier.padding(top = 2.dp), margin = { if (q.slots.isEmpty()) CardDay(due, late) { dialog = "date" } }) {
-                    CardBlock(title, { title = it }, q.done, topic.sphere, onToggle = {
-                        val next = q.slots.firstOrNull { !it.done }
-                        if (next != null) vm.toggleSlot(ref, next.id) else vm.toggleQuestion(topic.id, q.id)
-                    }, hour = q.time?.takeIf { q.slots.isEmpty() }, onHour = if (q.slots.isEmpty() && due != null) ({ dialog = "time" }) else null,
-                        quiet = q.from?.let { s.promiseToYou(it) }, due = due)
+                fun tick() {
+                    val next = q.slots.firstOrNull { !it.done }
+                    if (next != null) vm.toggleSlot(ref, next.id) else vm.toggleQuestion(topic.id, q.id)
                 }
+                val meta = buildList {
+                    q.from?.let { add(MetaItem(Meta.promise(s.promiseToYouParts(it)), Meta.quiet()) { dialog = "waiting" }) }
+                    people.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { person(p) }) }
+                    q.place?.let { add(MetaItem(Meta.plain(it), Meta.link(), onLong = { fill("place") }) {
+                        runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(it)))) }
+                    }) }
+                    q.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
+                }
+                CardHead(title, { title = it }, q.done, onToggle = ::tick,
+                    margin = if (q.slots.isEmpty()) ({ CardWhen(due, q.time, late, onDay = { dialog = "date" }, onHour = if (due != null) ({ dialog = "time" }) else null) }) else null,
+                    meta = meta,
+                    mark = if (q.from != null && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = true, size = 32.dp) } }) else null)
                 if (q.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(q.slots, onToggle = { vm.toggleSlot(ref, it) }, onRemove = { vm.removeSlot(ref, it) }) }
-                Margined(Modifier.padding(top = 2.dp)) {
+                Margined(Modifier.padding(top = 10.dp)) {
                     Column {
-                        CardTools(listOf(
-                            CardTool(s.fieldPlace, q.place, { fill("place") }) { Icon(Icons.Outlined.Place, null, tint = it, modifier = Modifier.size(16.dp)) },
-                            CardTool(s.fieldPeople, people.takeIf { it.isNotEmpty() }?.joinToString(", "), { if (people.size == 1) person(people[0]) else fill("people") }) { PeopleGlyph(it, 16.dp) },
-                            CardTool(s.fieldRepeat, q.repeat?.label(), { dialog = "repeat" }) { RepeatGlyph(it, 16.dp) },
-                            CardTool(s.moreWord, null, { more = !more }, bare = true) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(16.dp)) },
+                        ActionBar(listOf(
+                            Action(s.actWhen, due != null, { dialog = "date" }) { CalendarGlyph(it, 22.dp) },
+                            Action(s.fieldRepeat, q.repeat != null, { dialog = "repeat" }) { RepeatGlyph(it, 22.dp) },
+                            Action(s.fieldPeople, people.isNotEmpty(), { fill("people") }) { PeopleGlyph(it, 22.dp) },
+                            Action(s.fieldPlace, q.place != null, { fill("place") }) { Icon(Icons.Outlined.Place, null, tint = it, modifier = Modifier.size(22.dp)) },
+                            Action(s.actMore, more, { more = !more }) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(22.dp)) },
                         ))
                         androidx.compose.animation.AnimatedVisibility(more) {
-                            CardTools(listOf(CardTool(s.fieldWait, q.from?.let { s.promiseToYou(it) }, { dialog = "waiting" }) { ArrowGlyph(it, 15.dp, incoming = true) }) +
-                                (if (!q.done && q.repeat == null) listOf(CardTool(s.addDay, null, { dialog = "day" }) { CalendarGlyph(it, 15.dp) }) else emptyList()) +
-                                (if (!q.done) listOf(CardTool(s.stepOne, null, { fill("step") }) { TopicGlyph(it, 15.dp) }) else emptyList()))
+                            ActionBar(listOfNotNull(
+                                Action(s.actWait, q.from != null, { dialog = "waiting" }) { ArrowGlyph(it, 20.dp, incoming = true) },
+                                if (!q.done && q.repeat == null) Action(s.actDay, false, { dialog = "day" }) { CalendarGlyph(it, 20.dp) } else null,
+                                if (!q.done) Action(s.actStep, false, { fill("step") }) { TopicGlyph(it, 20.dp) } else null,
+                            ), Modifier.padding(top = 2.dp), slots = 5)
                         }
                     }
                 }
-                Hairline(Modifier.padding(start = MarginW, top = 6.dp))
                 val born = topic.events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at ?: topic.createdAt
-                WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null,
+                WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
                     onEdit = { id, t -> vm.editComment(ref, id, t) }, onAdd = { t, at -> vm.addComment(ref, t, at) })
                 // Their day has come: «напомнить» here too, the same as on a simple matter (one behaviour for every wait).
-                if (q.from != null && !q.done && due?.isAfter(LocalDate.now()) == false) Margined(Modifier.padding(top = 14.dp)) {
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.linkSoft).padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text(s.overdueWaiting, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.weight(1f))
-                        Pill(s.remindPerson(q.from), filled = true, onClick = { remindAbout(ctxOpen, data, row) })
+                if (q.from != null && !q.done && due?.isAfter(LocalDate.now()) == false) Margined(Modifier.padding(top = 16.dp)) {
+                    Panel {
+                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(s.overdueWaiting, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.weight(1f))
+                            Pill(s.remindPerson(q.from), filled = true, onClick = { remindAbout(ctxOpen, data, row) })
+                        }
                     }
                 }
                 Margined { CreatedLine(born) }

@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.PeopleOutline
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.TaskAlt
@@ -217,9 +219,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                     onTry = { prefill = it; focusKey = System.currentTimeMillis() }, contentPadding = pad,
                                 )
                             }
-                            NOTES -> NotesList(data, vm, onOpen = { openNote = it }, contentPadding = pad)
                             PEOPLE -> PeopleList(data, vm, onOpen = { openPerson = it }, contentPadding = pad)
-                            PROJECTS -> ProjectsScreen(data, onOpen = { go(TASKS, Views.project(it)) }, contentPadding = pad)
                             CALENDAR -> CalendarScreen(data, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
                             ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad, onOpenTask = { openId(it) })
                             MATERIALS -> MaterialsGrid(data.tasks.filter { !(it.topic && it.done) }, onView = { viewing = it }, onTopic = { openId(it) }) { t -> PageHead(s.materialsTitle, s.materialsSub, trailing = t) }
@@ -442,13 +442,24 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
             .semantics { contentDescription = s.a11yMenu }, contentAlignment = Alignment.Center) {
             MenuGlyph()
         }
+        // One row of controls (v8): from the day — the calendar and the overview beside the search; elsewhere only the search.
         Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-            if (screen == TASKS || screen == PEOPLE) Box(
-                Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onSearch),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Outlined.Search, s.search, tint = M.c.graphite, modifier = Modifier.size(21.dp)) }
+            // For the first few days a small word sits under the calendar and the overview — an icon alone is easy to miss.
+            val ui = LocalContext.current.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
+            val seen = remember { ui.getInt("doorsSeen", 0) }
+            LaunchedEffect(Unit) { if (seen < 5) ui.edit().putInt("doorsSeen", seen + 1).apply() }
+            @Composable fun tool(label: String, onClick: () -> Unit, word: Boolean = false, glyph: @Composable () -> Unit) =
+                Column(Modifier.widthIn(min = 44.dp).clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = label, onClick = onClick).semantics { contentDescription = label }
+                    .padding(horizontal = 4.dp, vertical = if (word && seen < 5) 2.dp else 11.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    glyph()
+                    if (word && seen < 5) Text(label.lowercase(), style = Type.small.copy(color = c.link, fontSize = 10.5.sp), maxLines = 1)
+                }
+            if (screen == TASKS && !away) {
+                tool(s.calendarTitle, { onTab(1) }, word = true) { Icon(Icons.Outlined.CalendarMonth, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
+                tool(s.overviewWord, { onTab(2) }, word = true) { Icon(Icons.Outlined.GridView, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
+            }
+            if (screen == TASKS || screen == PEOPLE) tool(s.search, onSearch) { Icon(Icons.Outlined.Search, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
         }
-        // No tabs: «Календарь» and «Обзор» open from the doors beside the day's name.
     }
 }
 

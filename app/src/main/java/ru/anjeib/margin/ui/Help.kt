@@ -63,7 +63,7 @@ fun HelpScreen(contentPadding: PaddingValues) {
             if (g != null) {
                 item("h") {
                     Column {
-                        Margined(Modifier.padding(top = 8.dp)) { PaperLink("← " + s.helpTitle) { group = null } }
+                        Margined(Modifier.padding(top = 8.dp)) { Voice("‹  " + s.helpTitle, link = true, onClick = { group = null }) }
                         PageHead(g, null)
                     }
                 }
@@ -71,28 +71,20 @@ fun HelpScreen(contentPadding: PaddingValues) {
             } else {
                 item("h") { PageHead(s.helpTitle, s.helpIntro) }
                 item("q") {
-                    Margined(Modifier.padding(bottom = 8.dp)) {
-                        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.chip).padding(horizontal = 16.dp, vertical = 12.dp)) {
-                            if (q.isEmpty()) Text(s.helpSearch, style = Type.body.copy(color = c.graphite))
-                            androidx.compose.foundation.text.BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink),
-                                cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link), modifier = Modifier.fillMaxWidth())
-                        }
-                    }
+                    Margined(Modifier.padding(bottom = 12.dp)) { androidx.compose.foundation.layout.Box(Modifier.bleed(PanelBleed)) { SearchField(q, { q = it }, s.helpSearch) } }
                 }
                 if (words.isNotEmpty()) {
                     val found = s.helpSections.filter { h -> words.all { it in h.hay() } }
-                    if (found.isEmpty()) item("none") { Margined { Empty(s.nothing, "") } }
+                    if (found.isEmpty()) item("none") { Margined(Modifier.padding(top = 8.dp)) { Voice(s.nothing) } }
                     items(found, key = { "f" + it.title }) { HelpCard(it) { zoom = it } }
-                } else items(s.helpGroups, key = { "g" + it.first }) { (title, _) ->
-                    // A group: its name and, quietly, what is inside.
-                    Margined(Modifier.clickable { group = title }.padding(vertical = 12.dp)) {
-                        Column {
-                            Text(title, style = Type.cardTitle.copy(color = c.ink))
-                            Text(sectionsOf(title).joinToString(" · ") { it.title }, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), maxLines = 2,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                } else s.helpGroups.forEachIndexed { i, (title, _) ->
+                    // A group: its name and, quietly, what is inside — one panel for the whole index.
+                    item("g$title") {
+                        PlainRow(seatOf(i, s.helpGroups.size), onClick = { group = title }) {
+                            Text(title, style = Type.body.copy(color = c.ink, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
+                            RowSub(sectionsOf(title).joinToString(" · ") { it.title }, maxLines = 2)
                         }
                     }
-                    Hairline(Modifier.padding(start = MarginW))
                 }
             }
             item("end") { Spacer(Modifier.height(24.dp)) }
@@ -120,15 +112,16 @@ private fun helpBitmap(name: String): androidx.compose.ui.graphics.ImageBitmap? 
 @Composable
 private fun HelpCard(h: HelpSection, onZoom: (String) -> Unit) {
     val c = M.c
-    Column {
-        Margined(Modifier.padding(top = 14.dp, bottom = 14.dp)) {
-            Column {
-                GroupBadge(h.title, Modifier.padding(bottom = 8.dp))
-                if (h.text.isNotBlank()) Text(h.text, style = Type.body.copy(color = c.ink, fontSize = 15.sp))
+    // A section: its caps label over one panel with the words, the screenshot, the legend, what to say.
+    SectionHead(h.title, top = 18.dp)
+    Margined {
+        Panel {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                if (h.text.isNotBlank()) Text(h.text, style = Type.body.copy(color = c.ink, fontSize = 15.sp, lineHeight = 22.sp))
                 h.image?.let { name ->
                     helpBitmap(name)?.let { bmp ->
                         androidx.compose.foundation.Image(bmp, null, contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
-                            modifier = Modifier.padding(top = 10.dp).width(210.dp).clip(RoundedCornerShape(14.dp))
+                            modifier = Modifier.padding(top = 12.dp).width(210.dp).clip(RoundedCornerShape(14.dp))
                                 .border(1.dp, c.hairline, RoundedCornerShape(14.dp)).clickable { onZoom(name) })
                     }
                 }
@@ -137,8 +130,8 @@ private fun HelpCard(h: HelpSection, onZoom: (String) -> Unit) {
                     "badges" -> BadgeLegend()
                 }
                 if (h.examples.isNotEmpty()) {
-                    Spacer(Modifier.height(10.dp))
-                    // Things to say look like what you'd type: quotes on a soft ground.
+                    Spacer(Modifier.height(12.dp))
+                    // Things to say look like what you'd type: quotes on the field's ground.
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         h.examples.forEach { Said(it) }
                     }
@@ -149,7 +142,6 @@ private fun HelpCard(h: HelpSection, onZoom: (String) -> Unit) {
                 }
             }
         }
-        Hairline(Modifier.padding(start = MarginW))
     }
 }
 
@@ -170,61 +162,50 @@ private fun HelpPair(what: String, does: String, mark: (@Composable () -> Unit)?
     }
 }
 
-/** The marks of a to-do row, drawn by the same code as the lists. */
+/** The marks of a row, drawn by the same code as the lists. */
 @Composable
 private fun IconLegend() {
     val c = M.c
     val ru = ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.Ru
     fun t(r: String, e: String) = if (ru) r else e
     Column(Modifier.padding(top = 6.dp)) {
-        HelpPair("", t("дело — нажатие на «бублик» отмечает сделанным", "a to-do — a tap on the ring marks it done")) { CheckCircle(false, size = 16.dp, interactive = false) {} }
-        HelpPair("", t("сделано", "done")) { CheckCircle(true, size = 16.dp, interactive = false) {} }
-        HelpPair("", t("у дела есть час — он стоит перед словами", "it has an hour — written before the words")) { ClockGlyph(c.graphite, 15.dp) }
-        HelpPair("", t("ждём от кого-то — нам должны", "waiting on someone")) { ArrowGlyph(c.graphite, 15.dp, incoming = true) }
-        HelpPair("", t("обещали кому-то", "promised to someone")) { ArrowGlyph(c.graphite, 15.dp) }
-        HelpPair("", t("повторяется", "repeats")) { RepeatGlyph(c.graphite, 15.dp) }
-        HelpPair("", t("встреча из календаря телефона", "a meeting from the phone's calendar")) { CalendarGlyph(c.graphite, 15.dp) }
-        HelpPair("", t("тема — над её делами и в списках", "a topic — above its to-dos and in lists")) { TopicGlyph(c.graphite, 15.dp) }
-        HelpPair("", t("идея", "an idea")) { IdeaMark(22.dp) }
-        HelpPair("", t("сделано в прошедший день", "done on a past day")) { TickGlyph(c.ok, 15.dp) }
+        HelpPair("", t("дело — нажатие на кружок отмечает сделанным", "a to-do — a tap on the circle marks it done")) { CheckCircle(false, size = 18.dp, interactive = false) {} }
+        HelpPair("", t("сделано — кружок закрашен, слова зачёркнуты; дело остаётся в своём дне", "done — the circle filled, the words struck; it stays on its day")) { CheckCircle(true, size = 18.dp, interactive = false) {} }
+        HelpPair("", t("ждём от кого-то — нажатие на стрелку: «получено»", "waiting on someone — a tap on the arrow: received")) { PromiseMark(incoming = true, size = 26.dp) }
+        HelpPair("", t("обещали кому-то", "promised to someone")) { PromiseMark(incoming = false, size = 26.dp) }
+        HelpPair("", t("встреча из календаря телефона", "a meeting from the phone's calendar")) { CalendarGlyph(c.graphite, 18.dp) }
+        HelpPair("", t("тема — в «Обзоре», поиске и архиве", "a topic — in the overview, search and archive")) { TopicGlyph(c.graphite, 18.dp) }
+        HelpPair("", t("идея", "an idea")) { IdeaMark(24.dp) }
     }
 }
 
-/** Badges, colours and quiet lines — drawn as they are on screen. */
+/** The margin, the labels and the colours — drawn as they are on screen. */
 @Composable
 private fun BadgeLegend() {
     val c = M.c
     val s = M.s
     val ru = ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.Ru
     fun t(r: String, e: String) = if (ru) r else e
+    val today = java.time.LocalDate.now()
     Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         @Composable fun row(does: String, mark: @Composable () -> Unit) = Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.foundation.layout.Box(Modifier.weight(0.42f)) { mark() }
             Spacer(Modifier.width(12.dp))
             Text(does, style = Type.small.copy(color = c.graphite, fontSize = 14.sp), modifier = Modifier.weight(0.58f))
         }
-        row(t("сфера дела или темы", "the sphere")) { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { SphereBadge("personal"); SphereBadge("work") } }
-        row(t("заголовок блока: дела, контакты, история…", "a block's heading")) { GroupBadge(s.dealsBadge + " · 2") }
-        row(t("ваши слова в ленте темы и время", "your words in a topic's feed")) {
-            Text(s.recordBadge.uppercase() + "  19:40", style = Type.label.copy(color = c.graphite, fontSize = 10.5.sp, letterSpacing = 1.1.sp),
-                modifier = Modifier.clip(RoundedCornerShape(50)).background(c.chip).padding(horizontal = 8.dp, vertical = 2.dp))
+        row(t("на полях — только «когда»: час, день", "on the margin — only when: the hour, the day")) { MarginNote("15:00", modifier = Modifier.padding(end = 8.dp)) }
+        row(t("с прошлых дней — терракотой", "left from past days — terracotta")) { MarginNote(s.sinceWord + " " + today.minusDays(2).dayMonthShort(), late = true) }
+        row(t("подпись раздела над его панелью", "a section's label over its panel")) { GroupBadge(s.dealsBadge + "  ·  2") }
+        row(t("тема дела — под его словами; нажатие — открыть", "a to-do's topic — under its words")) {
+            Text("≡ " + t("Ремонт ванной", "Bathroom"), style = Type.small.copy(color = c.link, fontSize = 13.5.sp))
         }
-        row(t("срок сегодня или завтра — над строкой", "due today or tomorrow")) { Row { SoonBadge(java.time.LocalDate.now(), Modifier.width(80.dp)) } }
-        row(t("тема над её делами; нажатие — открыть", "the topic above its to-dos")) {
-            Row(verticalAlignment = Alignment.CenterVertically) { TopicGlyph(c.link, 13.dp); Spacer(Modifier.width(6.dp)); Text(t("Ремонт ванной", "Bathroom") + "  ›", style = Type.small.copy(color = c.link, fontSize = 13.5.sp)) }
-        }
-        val today = java.time.LocalDate.now()
-        row(t("дата и время — чёрным; с прошлых дней — терракотой", "dates in ink; left from past days — terracotta")) {
-            Text(androidx.compose.ui.text.buildAnnotatedString {
-                pushStyle(dateSpan()); append(today.plusDays(2).dayMonthShort()); pop(); append("   ")
-                pushStyle(dateSpan().copy(color = c.accentText)); append(s.lateSince(today.minusDays(3).dayMonthShort())); pop()
-            }, style = Type.small.copy(fontSize = 13.sp))
-        }
+        row(t("сфера темы — в «Обзоре» и в теме", "a topic's sphere — in the overview and the topic")) { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { SphereBadge("personal"); SphereBadge("work") } }
         row(t("петроль — ссылки и выбранное: люди, адреса", "petrol — links and what is chosen")) { Text(s.promiseToYou(t("Дима", "Dima")), style = Type.small.copy(color = c.link, fontSize = 13.5.sp)) }
+        row(t("курсивом — голос Margin: сводки и подсказки", "italic — Margin's own voice")) { Voice(t("3 дела · 1 встреча", "3 to-dos · 1 meeting")) }
         row(t("удалено — зачёркнуто; нажатие — вернуть", "removed — struck through")) {
             Text(t("Придумать маскота", "A mascot"), style = Type.small.copy(color = c.faint, fontSize = 13.5.sp, textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough))
         }
-        row(t("на полях — день; число серифом", "the day on the margin")) { DayMargin(java.time.LocalDate.now(), java.time.LocalDate.now(), false, strong = true) }
+        row(t("на полях ленты темы — день записи", "the day of a record on a topic's margin")) { DayMargin(today, today, false, strong = true) }
     }
 }
 
@@ -233,5 +214,5 @@ private fun BadgeLegend() {
 fun Said(text: String) {
     val c = M.c
     Text(if (ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.En) "“$text”" else "«$text»", style = Type.small.copy(color = c.ink, fontSize = 14.sp),
-        modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(c.chip).padding(horizontal = 10.dp, vertical = 6.dp))
+        modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(c.bg).border(1.dp, c.hairline, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 6.dp))
 }

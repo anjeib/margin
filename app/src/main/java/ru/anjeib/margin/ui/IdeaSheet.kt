@@ -63,21 +63,17 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
             // under a line — what was written in it, each piece with its day and hour.
             Margined {
                 CardMenu { close ->
-                    SoftMenuItem(s.openWhole) { close(); commitTitle(); onOpenFull() }
                     SoftMenuItem(if (task.sphere == "work") s.makePersonal else s.makeWork) { close(); vm.setSphere(task.id, nextSphere(task.sphere)) }
                     SoftMenuItem(s.delete, danger = true) { close(); vm.removeMatter(task.id); onClose() }
                 }
             }
-            Margined(Modifier.offset(y = (-8).dp)) {
-                CardBlock(title, { title = it }, false, task.sphere, onToggle = {}, hour = null, onHour = null, quiet = null, due = null, mark = { IdeaMark(26.dp) })
-            }
-            Hairline(Modifier.padding(start = MarginW, top = 2.dp))
+            CardHead(title, { title = it }, false, onToggle = {}, margin = null, meta = emptyList(), mark = { IdeaMark(28.dp) })
             val born = task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
-            WrittenLane(task.entries.filter { it.text.isNotBlank() }.map { LaneItem(it.id, it.at, it.text) }, s.ideaHint, Modifier.padding(top = 4.dp), after = null,
+            WrittenLane(task.entries.filter { it.text.isNotBlank() }.map { LaneItem(it.id, it.at, it.text) }, s.ideaHint, Modifier.padding(top = 10.dp), after = null, label = s.records,
                 onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
                 onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
             // Files, matters and all the rest of it — on the full page.
-            Margined(Modifier.padding(top = 18.dp)) { PaperLink(s.openWhole + "  ›", quiet = true) { commitTitle(); onOpenFull() } }
+            Margined(Modifier.padding(top = 14.dp)) { Voice(s.openWhole + "  ›", link = true, onClick = { commitTitle(); onOpenFull() }) }
             Margined { CreatedLine(born) }
         }
     }
