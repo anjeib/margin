@@ -843,7 +843,7 @@ object Ru : Strings {
         )),
         // ---- the screens, in order ----
         HelpSection("Меню", "Слева вверху — меню разделов. Внизу — Настройки, Помощь, отзыв и номер сборки. Справа вверху на «Сегодня» — Календарь, Обзор и поиск.", image = "drawer", pairs = listOf(
-            "Входящие" to "записанное без интернета и присланное без подписи; число — сколько ждёт разбора",
+            "Входящие" to "записанное без интернета или пока облако не отвечало, и присланное без подписи; число — сколько ждёт разбора",
             "Ежедневник" to "главный экран: Сегодня · Календарь · Обзор",
             "Материалы" to "все фото, файлы и голосовые",
             "Контакты" to "люди и компании",
@@ -854,6 +854,7 @@ object Ru : Strings {
             "Сегодня" to "дела и встречи по времени; на полях — час, у оставшихся с прошлых дней — «с 6 окт» терракотой; если их несколько — «всё на сегодня» у заголовка. Сделанное остаётся зачёркнутым; больше трёх — сворачивается в одну строку",
             "≡ Тема" to "под делом мелко — тема, к которой оно относится",
             "Без даты" to "дела без даты, под ними — с какого числа ждут («с 3 окт»); старше недели — бледнее. Нажмите на заголовок, чтобы свернуть",
+            "Идеи за сегодня" to "идеи, записанные сегодня",
             "Завтра — 3 дела · 1 встреча ›" to "внизу; открывает «Календарь»",
         )),
         HelpSection("Календарь", "Что когда. Месяц сеткой: точки под числом — сколько дел в его списке (сегодня — вместе с просроченным, терракотой; прошедший день — сделанное), кольцо — встреча из календаря телефона. Сегодня обведено рамкой, выбранный день закрашен. Под сеткой — дела выбранного дня, как на «Сегодня»; выбрали другой день — новое дело без своей даты встанет на него. Стрелками листаются месяцы.", image = "calendar"),
@@ -896,7 +897,7 @@ object Ru : Strings {
         )),
         HelpSection("Окошко тем", "«#» показывает ваши темы, свежие сверху. Начните печатать название, чтобы найти нужную.", image = "composer_hash",
             examples = listOf("#ремонт купить затирку до пятницы", "/жду @Маша ключи до субботы", "/обещаю @Лёша исходники завтра", "/готово #зерно упаковку: Олег одобрил", "#квартира /запись хозяйка согласна на кошку", "позвонить @ЖЭК насчёт счётчиков")),
-        HelpSection("Входящие", "Что ещё не разложено: записанное без интернета (Margin разберёт это, когда появится связь) и присланное без подписи. Нажмите на строку, чтобы открыть фото, файл или текст; смахните влево — «Убрать», вправо — «В тему…». В просмотре фото кнопка «Распознать» добавит под ним текст с фото — его можно поправить.", image = "inbox"),
+        HelpSection("Входящие", "Что ещё не разложено: записанное без интернета или пока облако Margin не отвечало (Margin разберёт это, когда появится связь) и присланное без подписи. Нажмите на строку, чтобы открыть фото, файл или текст; смахните влево — «Убрать», вправо — «В тему…». В просмотре фото кнопка «Распознать» добавит под ним текст с фото — его можно поправить.", image = "inbox"),
         HelpSection("Материалы", "Все фото, файлы и голосовые по дням. Над файлами — ссылка на тему или дело. Лупа ищет и по тексту на фото и в голосовых; кнопки «Фото», «Документы», «Голосовые» оставляют один вид.", image = "materials"),
         HelpSection("Контакты", "Две вкладки: «Люди» и «Компании». Сверху — «Часто»: с кем больше всего дел за месяц; ниже — все, по алфавиту или сначала новые. В строке — кто это и что с ним открыто (ждём, обещали), справа — число дел. В карточке человека — телефон, почта, адрес, MAX, Telegram и соцсети: вставьте ссылку, сеть Margin узнает сам. Нажатие звонит, пишет или открывает, долгое — изменить. Там же «О человеке», дела и история. В ⋯ — переименовать, объединить, «Это компания».", image = "contacts"),
         HelpSection("Архив", "Завершённые темы со всей лентой и материалами. «Вернуть» снова делает тему рабочей; новая запись в ней — тоже.", image = "archive"),
@@ -905,8 +906,9 @@ object Ru : Strings {
             "Календарь" to "учитывать встречи из календаря телефона",
             "Оформление" to "светлая, тёмная или как в системе; язык",
             "Разбор текста" to "Телефон / Авто / ИИ — см. «ИИ и без ИИ»",
-            "Пример данных" to "загрузить два месяца жизни дизайнера; «Вернуть мои данные»",
+            "Примеры" to "убрать примеры или вернуть их",
             "Резервная копия" to "в аккаунт Google",
+            "Приватность" to "вход по отпечатку и «Где ваши данные»",
         )),
         // ---- legends ----
         HelpSection("Значки", "В одной колонке справа от линии — один знак строки: что это и что с ним можно сделать.", legend = "icons"),
@@ -931,7 +933,7 @@ object Ru : Strings {
             "смахнуть дело вправо" to "сделано",
             "смахнуть дело влево" to "отложить: завтра, через неделю или своя дата",
             "нажатие на дело" to "его карточка (в любом месте строки)",
-            "долгое нажатие на дело" to "меню: Готово, Завтра, Дата…, Время",
+            "долгое нажатие на дело" to "меню: Отложить…, Время, В тему…, Удалить",
             "долгое нажатие в теме" to "меню строки",
             "во «Входящих»: влево / вправо" to "Убрать / В тему…",
             "телефон, почта, ссылка в тексте" to "звонок, письмо или приложение по адресу (Telegram, MAX, Instagram…); «@ник» — Telegram",
@@ -952,7 +954,7 @@ object Ru : Strings {
         )),
         HelpSection("Пересылка в Margin", "Из Telegram, MAX, почты: «Поделиться» или выделить текст → «В Margin». Или «Копировать» — и в Margin появится «Вставить скопированное». Margin понимает, что это чужие слова: что обещают вам, станет «ждём», о чём просят вас — делом."),
         HelpSection("Быстрый ввод и отзыв", "Быстро записать можно с плитки «Записать» в шторке (добавьте её через карандаш в быстрых настройках) или долгим нажатием на значок приложения — «Записать» / «Надиктовать». Если Margin понял фразу не так, нажмите «Не совсем понял» под результатом. «Отправить отзыв» в меню открывает письмо разработчику с журналами ошибок; ваши записи не отправляются."),
-        HelpSection("Неделя, напоминания, виджет", "По воскресеньям на «Сегодня» появляется итог недели: сколько сделано, кто кому должен, какие темы стоят на месте; «×» скрывает его до следующего воскресенья. Если кто-то просрочил обещание, рядом появится «напомнить»: Margin подготовит сообщение (SMS, если известен телефон, иначе через «Поделиться»), а отправите его вы. В день, когда кто-то обещал прислать или вы обещали отдать, утром придёт напоминание. Утренняя сводка и итог дня меняются словами: «сводку в 9», «итог дня в 21», «итог дня не нужен». Виджет «Margin · Сегодня» на рабочем столе показывает дела дня и открывает поле ввода или диктовку. Тему целиком можно переслать текстом: ⋯ → «Переслать»."),
+        HelpSection("Неделя, напоминания, виджет", "По воскресеньям на «Сегодня» появляется итог недели: сколько сделано, кто кому должен, какие темы стоят на месте; «Скрыть» убирает его до следующего воскресенья. Если кто-то просрочил обещание, рядом появится «напомнить»: Margin подготовит сообщение (SMS, если известен телефон, иначе через «Поделиться»), а отправите его вы. В день, когда кто-то обещал прислать или вы обещали отдать, утром придёт напоминание. Утренняя сводка и итог дня меняются словами: «сводку в 9», «итог дня в 21», «итог дня не нужен». Виджет «Margin · Сегодня» на рабочем столе показывает дела дня и открывает поле ввода или диктовку. Тему целиком можно отправить заказчику или коллеге страницей PDF: ⋯ → «Поделиться PDF»."),
         HelpSection("Приватность", "Настройки → «Приватность»: вход по отпечатку (или коду блокировки) и «Где ваши данные» — где хранятся записи и что уходит с телефона. На экране блокировки напоминания показываются без текста дел."),
         HelpSection("Примеры", "При первом запуске в Margin уже есть примеры — несколько дней молодого дизайнера, по одному на каждую возможность: тема с записями и файлами, дела со временем, повтором и на несколько дней, просроченное, обещания в обе стороны, дело без даты, идея, контакт и компания. Убрать их можно в Настройках → «Примеры», там же их можно вернуть. Ваши записи останутся на месте."),
     )
@@ -1772,9 +1774,9 @@ object En : Strings {
         HelpSection("Overview", "Tabs «All · Topics · To-dos · Ideas»; chips «Waiting», «Promised», «Work», «Personal» narrow the list.", image = "overview"),
         HelpSection("Today · Calendar · Overview", "", pairs = listOf(
             "Today" to "the summary, promises, to-dos by the hour (the hour on the margin, «since 6 Oct» in terracotta when late), «No date» with their age, «Tomorrow — N»",
-            "tap a to-do" to "its card, anywhere on the line; a long press — Time · To a topic · Delete",
+            "tap a to-do" to "its card, anywhere on the line; a long press — Put off… · Time · To a topic · Delete",
             "the card" to "«when» on its margin, the circle and the title edited in place, one line of who and where, then When · Repeat · Contacts · Place · More; below them you write right on the page, the date and time go on the margin",
-            "Calendar" to "the month as a grid — the number under a day is what its list holds, a dot is a meeting — and the chosen day; a new to-do without a date goes to the chosen day",
+            "Calendar" to "the month as a grid — dots under a day are what its list holds, a ring is a meeting — and the chosen day; a new to-do without a date goes to the chosen day",
             "Overview" to "everything: Topics, To-dos, Ideas as tabs; chips Waiting / Promised and Work / Personal",
         )),
         HelpSection("Marks in the field", "Marks tell the app exactly what you meant. Type the sign — a small window offers choices; the chosen one sits over the field. Combine them in any order.", pairs = listOf(
@@ -1798,12 +1800,12 @@ object En : Strings {
         HelpSection("Margin and colours", "", legend = "badges"),
         HelpSection("Sharing to Margin", "From Telegram, MAX, mail: “Share” or select text → “To Margin”. Or “Copy” — and “Paste what you copied” appears in Margin. Margin reads other people’s words as theirs: what they promise you becomes “waiting”, what they ask — a to-do."),
         HelpSection("Quick entry and feedback", "The “Write” tile in quick settings (add it with the pencil there) and a long press on the app icon — “Write” / “Dictate”. Understood wrong — “Understood wrong” under the result. “Send feedback” in the menu opens an e-mail to the developer with the error logs; your records are not sent."),
-        HelpSection("The week, reminders, widget", "On Sundays «Today» shows a quiet card of the week: done, who owes whom, topics that stood still; «×» hides it until next Sunday. When someone's promise is late, «remind» next to it prepares a message (SMS if the phone is known, otherwise Share); you send it. On the day someone promised something, or you did, a reminder comes in the morning. The morning and evening summaries change in words: “morning summary at 9”, “evening summary at 9pm”, “no evening summary”. The «Margin · Today» widget shows the day and opens the field or dictation. A whole topic can be shared as text: ⋯ → Share."),
+        HelpSection("The week, reminders, widget", "On Sundays «Today» shows a quiet card of the week: done, who owes whom, topics that stood still; «Dismiss» hides it until next Sunday. When someone's promise is late, «remind» next to it prepares a message (SMS if the phone is known, otherwise Share); you send it. On the day someone promised something, or you did, a reminder comes in the morning. The morning and evening summaries change in words: “morning summary at 9”, “evening summary at 9pm”, “no evening summary”. The «Margin · Today» widget shows the day and opens the field or dictation. A whole topic can be sent to a client or a colleague as a PDF page: ⋯ → «Share as PDF»."),
         HelpSection("Privacy", "Settings → Privacy: a fingerprint (or screen lock) when Margin opens, and «Where your data is» — where the records live and what leaves the phone. On the lock screen reminders show without the to-do's words."),
         HelpSection("Contacts", "«Often» on top — who you have most to-dos with this month; then everyone, A–Z or «New». A phone, an e-mail or a link anywhere in your words opens its app (a bare «@name» — Telegram). A person's social pages are one field: paste the link, the network is told by the address."),
         HelpSection("Lists", "Start a line with «1.», «-» or «•» — Enter continues the list, Enter on an empty item ends it."),
         HelpSection("Inbox, Materials, Archive", "Inbox — what was written offline or saved without words; a tap opens it, swipe left — Remove, right — To a topic…; on a photo «Recognize» puts its text under it. Materials — all files by day, with search. Archive — settled topics; news in one brings it back."),
-        HelpSection("Offline", "Settings → «Reading your words»: Phone — code only; Auto — hard phrases go to the AI when online; AI — as before. The line over the field shows what was understood before you send."),
+        HelpSection("Offline", "Settings → «Reading your words»: Phone — code only; Auto — hard phrases go to the AI when online; AI — as before. The line over the field shows what was understood before you send. When the phone is online but Margin's cloud doesn't answer or crawls, Margin works on the phone by itself — «no cloud» by the day's summary — and goes back once the cloud answers; what waited in Inbox is sorted then. Voice: in the cloud; offline or without the cloud — on the phone (the model downloads by itself over Wi-Fi)."),
     )
     override val tourWriteTitle = "Write as you think"
     override val tourWriteText = "One field at the bottom — type or dictate. Margin sorts it into to-dos, dates and promises, even offline or on a poor connection."

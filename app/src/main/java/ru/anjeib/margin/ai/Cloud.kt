@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -12,11 +13,16 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
+import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Whether Margin's cloud answers — not whether Android thinks there is internet. A phone can be «online»
@@ -87,15 +93,39 @@ object Cloud {
     }
 
     /**
-     * One knock: a bare TCP connection to the door within a second — nothing is sent, nothing is billed, the function
+     * One knock: a bare TCP connection to the door (any of its addresses, see [reach]) within a second — nothing is sent, nothing is billed, the function
      * doesn't even start. It answers → the cloud is there; it doesn't → work on the phone right away.
      */
     suspend fun knock(s: ru.anjeib.margin.data.Settings): Boolean = withContext(Dispatchers.IO) {
-        val ok = try {
-            Socket().use { it.connect(InetSocketAddress(door(s), 443), KNOCK_MS) }; true
-        } catch (e: IOException) { false }
+        val addrs = try { InetAddress.getAllByName(door(s)).toList() } catch (e: IOException) { emptyList() }
+        val ok = reach(addrs, KNOCK_MS)
         if (ok) { misses = 0; heard = System.currentTimeMillis(); _state.value = State.Ok } else _state.value = State.Down
         ok
+    }
+
+    /**
+     * Knocks on all of the door's addresses side by side and takes the first that answers. The cloud's hosts have IPv6
+     * addresses too, and a network can hand them out while IPv6 goes nowhere: knocking only on the first address left
+     * Margin «без облака» for good, though the requests themselves (which try every address) got through.
+     */
+    internal suspend fun reach(
+        addrs: List<InetAddress>,
+        timeoutMs: Int,
+        connect: (InetAddress, Int) -> Unit = { a, ms -> Socket().use { it.connect(InetSocketAddress(a, 443), ms) } },
+    ): Boolean {
+        // IPv4 first, a couple of each family: enough to get past one dead route, not a storm of sockets.
+        val tries = (addrs.filterIsInstance<Inet4Address>().take(2) + addrs.filterNot { it is Inet4Address }.take(2))
+        if (tries.isEmpty()) return false
+        val first = CompletableDeferred<Boolean>()
+        val left = AtomicInteger(tries.size)
+        // Not children of the caller: a blocking connect can't be cancelled, and the answer shouldn't wait for the dead one.
+        tries.forEach { a ->
+            scope.launch {
+                val ok = try { connect(a, timeoutMs); true } catch (e: Exception) { false }
+                if (ok) first.complete(true) else if (left.decrementAndGet() == 0) first.complete(false)
+            }
+        }
+        return withTimeoutOrNull(timeoutMs + 500L) { first.await() } ?: false
     }
 
     /** Knocks in the background unless the answer is fresh or a knock is already on its way (typing, coming to the front). */
