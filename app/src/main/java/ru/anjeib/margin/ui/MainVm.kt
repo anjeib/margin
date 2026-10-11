@@ -15,7 +15,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.anjeib.margin.ai.AiException
@@ -53,6 +55,17 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     val data: StateFlow<AppData> = store.data
     val settings: StateFlow<Settings> = prefs.settings
+
+    private val _net = MutableStateFlow(ru.anjeib.margin.ai.Cloud.network(ctx))
+    /** A quiet word by the day's summary while the AI can't be reached: «без интернета» or «без облака» — Margin reads on the phone then. */
+    val away: StateFlow<String?> = kotlinx.coroutines.flow.combine(_net, ru.anjeib.margin.ai.Cloud.state, prefs.settings) { net, st, s ->
+        when {
+            !Processor.ready(s) -> null
+            !net -> L.s.noNetMark
+            st == ru.anjeib.margin.ai.Cloud.State.Down -> L.s.noCloudMark
+            else -> null
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     /** The saved file could not be read as is (see [Store.load]); told once. */
     val storeProblem: StateFlow<ru.anjeib.margin.data.LoadProblem?> = store.problem
     fun dismissStoreProblem() = store.dismissProblem()
@@ -117,10 +130,15 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         refreshCalendar()
         Processor.schedule(ctx)
         ru.anjeib.margin.voice.LocalWhisper.refresh(ctx)
+        ru.anjeib.margin.voice.ModelWorker.schedule(ctx)
         // Back online → let the queue worker run right away.
         runCatching {
             ctx.getSystemService(android.net.ConnectivityManager::class.java)?.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: android.net.Network) { Processor.schedule(ctx) }
+                override fun onCapabilitiesChanged(network: android.net.Network, caps: android.net.NetworkCapabilities) {
+                    _net.value = caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                }
+                override fun onLost(network: android.net.Network) { _net.value = ru.anjeib.margin.ai.Cloud.network(ctx) }
             })
         }
     }
@@ -133,7 +151,9 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** While the app is open the bot is asked continuously (a forward shows up in seconds), mail every two minutes. */
     fun foreground(on: Boolean) {
         forwardJob?.cancel()
+        cloudJob?.cancel()
         if (!on) return
+        watchCloud()
         val F = ru.anjeib.margin.ai.Forward
         F.load(ctx)
         forwardJob = viewModelScope.launch {
@@ -143,12 +163,24 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 if (!st.telegram && !st.mail) break
                 var n = 0
                 if (st.mail && System.currentTimeMillis() - mailAt > 120_000) { mailAt = System.currentTimeMillis(); n += F.pollMail(ctx) }
-                n += if (st.telegram && Processor.online(ctx)) F.pollTelegram(ctx, waitSec = 25) else { kotlinx.coroutines.delay(30_000); 0 }
+                n += if (st.telegram && ru.anjeib.margin.ai.Cloud.network(ctx)) F.pollTelegram(ctx, waitSec = 25) else { kotlinx.coroutines.delay(30_000); 0 }
                 if (n > 0) sortForwarded()
                 if (F.state.value.error != null) kotlinx.coroutines.delay(30_000)
             }
         }
     }
+
+    private var cloudJob: kotlinx.coroutines.Job? = null
+
+    /** While the app is in front Margin knows whether its cloud answers (a knock every half-minute); once it answers again, what waited is sorted. */
+    private fun watchCloud() {
+        cloudJob = viewModelScope.launch {
+            ru.anjeib.margin.ai.Cloud.keepWatch(ctx, { settings.value }) { sortForwarded(); Processor.schedule(ctx) }
+        }
+    }
+
+    /** Why the AI can't be asked now, in the user's words: no network at all, or Margin's cloud not answering. */
+    private fun whyOff() = if (ru.anjeib.margin.ai.Cloud.network(ctx)) L.s.cloudOff else L.s.errNet
 
     /** Sorts what came in right here, and says what it became under the field instead of a notification. */
     private fun sortForwarded() {
@@ -216,6 +248,14 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun finishSetup() { if (settings.value.setupStep != 3) prefs.update { it.copy(setupStep = 3) } }
 
     fun send(text: String, smart: Boolean = false, label: String? = null, scope: Scope = Scope.Main, files: List<Attachment> = emptyList(), asQuestion: Boolean = false, movedHere: Boolean = false) {
+        // Whether the cloud answers is known before asking it: usually from the knock while typing; if not, one knock — at most a second.
+        val C = ru.anjeib.margin.ai.Cloud
+        val s = settings.value
+        if (Processor.ready(s) && C.network(ctx) && !C.down && !C.fresh()) viewModelScope.launch { C.check(s); sendNow(text, smart, label, scope, files, asQuestion, movedHere) }
+        else sendNow(text, smart, label, scope, files, asQuestion, movedHere)
+    }
+
+    private fun sendNow(text: String, smart: Boolean, label: String?, scope: Scope, files: List<Attachment>, asQuestion: Boolean, movedHere: Boolean) {
         // «/дело», «/тема», «/идея», «/работа», «/личное» — said by the user, so they decide; the AI only fills in the rest.
         val tg = parseTags(if (scope == Scope.Main && !smart) onPickedDay(text) else text)
         lastSaid = tg.text to text
@@ -266,17 +306,20 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         if (cmd != null && runCommand(cmd, scope, files, userId)) return
         // Read on the phone: always offline or without a key, in «Телефон» mode, in «Авто» when the phone is sure,
         // and whenever the marks said it outright (#, @, /жду, /обещал, /дело…) — then they are what counts.
+        var phone: LocalParser.Result? = null
         if (!smart && scope != Scope.Notes && (cmd == null || tagKind != null)) {
             // A slip in the phone's reading must never lose the words: then they go the usual way (the AI or the queue).
             val who = tg.people.firstOrNull()
             val local = runCatching { LocalParser.parse(t, data.value, kind = when (tagKind) { "note" -> "idea"; "topic" -> "topic"; "task" -> "task"; else -> null }, sphere = tagSphere,
                 people = tg.people, waitFor = who.takeIf { tg.wait }, promiseTo = who.takeIf { tg.promise }, wait = tg.wait, promise = tg.promise) }
                 .getOrElse { LocalParser.Result(emptyList(), false, "error") }
+            phone = local.takeIf { it.items.isNotEmpty() && (it.sure || tg.explicit) }
             val mode = s.parseMode
             val offline = !Processor.online(ctx) || !Processor.ready(s)
             // A question is for the assistant only: without it, say so rather than file the question as a matter.
             if (local.why == "question" && offline) {
-                if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = L.s.askOffline)) else _toast.value = L.s.askOffline
+                val why = if (Processor.ready(s) && ru.anjeib.margin.ai.Cloud.network(ctx)) L.s.askCloudOff else L.s.askOffline
+                if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = why)) else _toast.value = why
                 return
             }
             // «Авто» without the internet: what the phone is unsure of waits in «Входящие» for the AI, as that screen promises —
@@ -344,8 +387,14 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 }
             } catch (e: Exception) {
                 val msg = (e as? AiException)?.message ?: e.message ?: e.toString()
-                // Lost connection mid-way: keep the words for later instead of losing them.
-                if (msg == L.s.errNet || !Processor.online(ctx)) queue(t, scope, files)
+                // Lost connection mid-way: what the phone read for sure is made now, the rest is kept for later — never lost.
+                val sure = phone
+                if ((msg == L.s.errNet || !Processor.online(ctx)) && sure != null) {
+                    val plan = LocalParser.plan(sure, scope, asQuestion, source = t)
+                    count("parse:phone")
+                    if (scope == Scope.Main) propose(plan, files, userId, false, source) else applyScoped(plan, scope, files, source, movedHere)
+                }
+                else if (msg == L.s.errNet || !Processor.online(ctx)) queue(t, scope, files)
                 else {
                     if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = msg, error = true)) else _toast.value = msg
                     if (files.isNotEmpty()) fileAway(scope, files, data.value, null) // never lose what was attached
@@ -484,7 +533,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun recognize(a: Attachment) {
         val s = settings.value
         if (!Processor.ready(s)) { _toast.value = L.s.noKey; return }
-        if (!Processor.online(ctx)) { _toast.value = L.s.errNet; return }
+        if (!Processor.online(ctx)) { _toast.value = whyOff(); return }
         viewModelScope.launch {
             _working.value += "ocr:${a.id}"
             try {
@@ -507,7 +556,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun photoText(owner: String, entryId: String, a: Attachment, action: String) {
         val s = settings.value
         if (!Processor.ready(s)) { _toast.value = L.s.noKey; return }
-        if (a.ocr == null && !Processor.online(ctx)) { _toast.value = L.s.errNet; return }
+        if (a.ocr == null && !Processor.online(ctx)) { _toast.value = whyOff(); return }
         viewModelScope.launch {
             _working.value += "ocr:${a.id}"
             try {
@@ -632,8 +681,10 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** Offline: park the input in the queue (shown as «Входящие») and sort it once the network is back. */
     private fun queue(text: String, scope: Scope, files: List<Attachment>) {
         Processor.enqueue(ctx, ru.anjeib.margin.data.Queued(text = text, scope = Processor.scopeOf(scope), files = files))
-        if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = L.s.offlineSaved, caption = L.s.offline))
-        else _notice.value = Notice(key(scope), L.s.offlineSaved, null)
+        val net = ru.anjeib.margin.ai.Cloud.network(ctx)
+        val text = if (net) L.s.cloudSaved else L.s.offlineSaved
+        if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = text, caption = if (net) L.s.cloudOff else L.s.offline))
+        else _notice.value = Notice(key(scope), text, null)
     }
 
     /** «В тему…»: the matter becomes one of the topic's matters, with a moment to take it back. */
@@ -873,15 +924,28 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     // ---------------- dictation ----------------
 
     /**
-     * Turns a WAV recording into text: the AI voice model when online, the on-device Whisper model
-     * when offline (or always, if the user prefers). Calls back on the main thread.
+     * Turns a WAV recording into text. In the cloud (SpeechKit) while it answers — fast and accurate; on the phone (Whisper,
+     * downloaded by itself over Wi-Fi) without a network, while the cloud is down, when the cloud fails on this very recording,
+     * or always if the user keeps their voice on the phone. Calls back on the main thread.
      */
     fun transcribe(audio: Attachment, onText: (String) -> Unit) {
+        val C = ru.anjeib.margin.ai.Cloud
+        if (Processor.ready(settings.value) && C.network(ctx) && !C.down && !C.fresh()) viewModelScope.launch { C.check(settings.value); transcribeNow(audio, onText) }
+        else transcribeNow(audio, onText)
+    }
+
+    private fun transcribeNow(audio: Attachment, onText: (String) -> Unit) {
         val s = settings.value
         val local = ru.anjeib.margin.voice.LocalWhisper
-        val useLocal = local.ready(ctx) && (s.whisperAlways || !Processor.online(ctx) || !Processor.ready(s))
-        if (!useLocal && (!Processor.online(ctx) || !Processor.ready(s))) {
-            _toast.value = if (local.supported) L.s.whisperOfferOffline else L.s.errNet
+        val canLocal = local.ready(ctx)
+        val cloud = Processor.online(ctx) && Processor.ready(s)
+        val useLocal = canLocal && (s.whisperAlways || !cloud)
+        if (!useLocal && !cloud) {
+            _toast.value = when {
+                local.state.value is ru.anjeib.margin.voice.LocalWhisper.State.Downloading -> L.s.whisperLoading
+                local.supported -> L.s.whisperOfferOffline
+                else -> whyOff()
+            }
             return
         }
         _working.value += "voice"
@@ -889,14 +953,16 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             try {
                 val d = data.value
                 val hints = (d.persons.map { it.name } + d.projects).distinct().take(40)
-                val text = if (useLocal) {
-                    val f = Files.file(ctx, audio) ?: return@launch
-                    local.transcribe(ctx, f, if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) "ru" else "en", hints)
-                } else {
+                val lang = if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) "ru" else "en"
+                suspend fun onPhone(): String = Files.file(ctx, audio)?.let { local.transcribe(ctx, it, lang, hints) } ?: ""
+                val text = if (useLocal) onPhone() else try {
                     val bytes = withContext(Dispatchers.IO) { Files.file(ctx, audio)?.readBytes() } ?: return@launch
                     val r = ru.anjeib.margin.ai.Llm.transcribe(s, bytes, hints)
                     prefs.addSpend(r.rub)
                     r.content
+                } catch (e: AiException) {
+                    // The cloud didn't answer: the recording is here, the phone reads it — nothing to say again.
+                    if (e.message == L.s.errNet && canLocal) onPhone() else throw e
                 }
                 if (text.isNotBlank()) onText(text)
             } catch (e: Exception) {
@@ -1030,6 +1096,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** The line under the field while typing: what the phone understood, and whether the AI will refine it. */
     fun previewOf(text: String): String? {
+        // Typing has begun: find out now whether the cloud answers — by the time the words are sent, it's known.
+        if (text.isNotBlank() && Processor.ready(settings.value) && ru.anjeib.margin.ai.Cloud.network(ctx)) ru.anjeib.margin.ai.Cloud.warm(settings.value)
         val tg = parseTags(text)
         val t = tg.text
         val kind = tg.kind

@@ -301,18 +301,20 @@ fun VoiceLink(text: String, onClick: () -> Unit, quiet: Boolean = false) {
 
 /** The day's summary under its name, in Margin's voice: «4 дела · 1 встреча · с прошлых дней: 2». */
 @Composable
-fun daySummary(plan: DayPlan, today: LocalDate): androidx.compose.ui.text.AnnotatedString {
+fun daySummary(plan: DayPlan, today: LocalDate, away: String? = null): androidx.compose.ui.text.AnnotatedString {
     val c = M.c
     val s = M.s
     val late = plan.deals.count { it.dueDate?.isBefore(today) == true }
     // Owner, 10 окт: «с прошлых дней: 1» read as a riddle — say it in words, right after the count it belongs to:
     // «7 дел, 2 просрочены · 1 встреча».
     return buildAnnotatedString {
-        if (plan.deals.isEmpty() && plan.events.isEmpty()) { append(s.freeDay); return@buildAnnotatedString }
+        if (plan.deals.isEmpty() && plan.events.isEmpty()) append(s.freeDay)
         if (plan.deals.isNotEmpty()) {
             append(s.summaryDeals(plan.deals.size))
             if (late > 0) { append(", "); withStyle(SpanStyle(color = c.accentText)) { append(s.lateOfDay(late)) } }
         }
         if (plan.events.isNotEmpty()) { if (plan.deals.isNotEmpty()) append("  ·  "); append(s.summaryMeetings(plan.events.size)) }
+        // Without the cloud Margin reads on the phone and the unsure waits in «Входящие» — said once, quietly, here.
+        away?.let { append("  ·  "); withStyle(SpanStyle(color = c.faint)) { append(it) } }
     }
 }

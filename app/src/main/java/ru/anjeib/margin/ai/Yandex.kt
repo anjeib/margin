@@ -67,7 +67,8 @@ object Yandex {
     suspend fun chat(apiKey: String, folder: String, model: String, system: String, messages: List<Pair<String, String>>, json: Boolean = true): YaReply =
         chat(Door(apiKey, folder), model, system, messages, json)
 
-    suspend fun chat(door: Door, model: String, system: String, messages: List<Pair<String, String>>, json: Boolean = true): YaReply =
+    /** [quick]: a phrase to read — its answer comes in seconds, so a line that crawls gives up sooner (the phone reads it then). */
+    suspend fun chat(door: Door, model: String, system: String, messages: List<Pair<String, String>>, json: Boolean = true, quick: Boolean = false): YaReply =
         withContext(Dispatchers.IO) {
             fun body(withFormat: Boolean) = buildJsonObject {
                 put("model", "gpt://${door.modelFolder}/$model/latest")
@@ -79,8 +80,9 @@ object Yandex {
                 put("max_tokens", 1500)
                 if (withFormat) put("response_format", buildJsonObject { put("type", "json_object") })
             }.toString()
-            var (code, text) = try { post(door, body(json)) } catch (e: java.io.IOException) { throw AiException(ru.anjeib.margin.i18n.L.s.errNet) }
-            if (json && code == 400) { val r = try { post(door, body(false)) } catch (e: java.io.IOException) { throw AiException(ru.anjeib.margin.i18n.L.s.errNet) }; code = r.first; text = r.second }
+            val readMs = if (quick) 30_000 else 120_000
+            var (code, text) = try { post(door, body(json), readMs) } catch (e: java.io.IOException) { throw AiException(ru.anjeib.margin.i18n.L.s.errNet) }
+            if (json && code == 400) { val r = try { post(door, body(false), readMs) } catch (e: java.io.IOException) { throw AiException(ru.anjeib.margin.i18n.L.s.errNet) }; code = r.first; text = r.second }
             if (door.refused(code)) throw AiException(ru.anjeib.margin.i18n.L.s.errInvite)
             if (code !in 200..299) { android.util.Log.w("Margin", "Yandex $code: ${text.take(300)}"); throw AiException(ru.anjeib.margin.i18n.L.s.errService) }
             val root = AppJson.parseToJsonElement(text).jsonObject
@@ -100,13 +102,15 @@ object Yandex {
         val pcm = if (wav.size > 44) wav.copyOfRange(44, wav.size) else wav
         val url = URL(door.url("stt&lang=$lang", "https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?folderId=${door.folder}&lang=$lang&format=lpcm&sampleRateHertz=16000"))
         val c = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"; doOutput = true; connectTimeout = 20_000; readTimeout = 60_000
+            requestMethod = "POST"; doOutput = true; connectTimeout = Cloud.CONNECT_MS; readTimeout = 60_000
             door.sign(this); setRequestProperty("Content-Type", "application/octet-stream")
         }
         try {
-            c.outputStream.use { it.write(pcm) }
-            val code = c.responseCode
-            val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+            val (code, text) = Cloud.watch {
+                c.outputStream.use { it.write(pcm) }
+                val code = c.responseCode
+                code to ((if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: "")
+            }
             if (door.refused(code)) throw AiException(ru.anjeib.margin.i18n.L.s.errInvite)
             if (code !in 200..299) throw AiException("SpeechKit $code")
             val result = AppJson.parseToJsonElement(text).jsonObject["result"]?.jsonPrimitive?.contentOrNull.orEmpty()
@@ -128,13 +132,15 @@ object Yandex {
             put("content", android.util.Base64.encodeToString(jpeg, android.util.Base64.NO_WRAP))
         }.toString()
         val c = (URL(door.url("ocr", "https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText")).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"; doOutput = true; connectTimeout = 20_000; readTimeout = 60_000
+            requestMethod = "POST"; doOutput = true; connectTimeout = Cloud.CONNECT_MS; readTimeout = 60_000
             door.sign(this); setRequestProperty("Content-Type", "application/json")
         }
         try {
-            c.outputStream.use { it.write(body.toByteArray()) }
-            val code = c.responseCode
-            val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+            val (code, text) = Cloud.watch {
+                c.outputStream.use { it.write(body.toByteArray()) }
+                val code = c.responseCode
+                code to ((if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: "")
+            }
             if (door.refused(code)) throw AiException(ru.anjeib.margin.i18n.L.s.errInvite)
             if (code !in 200..299) throw AiException("Vision $code")
             val full = AppJson.parseToJsonElement(text).jsonObject["result"]?.jsonObject?.get("textAnnotation")?.jsonObject
@@ -148,11 +154,11 @@ object Yandex {
     /** Key check: the model list is free. */
     suspend fun check(door: Door): String = withContext(Dispatchers.IO) {
         val c = (URL(door.url("models", "$BASE/models")).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 20_000; readTimeout = 30_000
+            connectTimeout = Cloud.CONNECT_MS; readTimeout = 30_000
             door.sign(this)
         }
         try {
-            val code = c.responseCode
+            val code = Cloud.watch { c.responseCode }
             if (door.refused(code)) throw AiException(ru.anjeib.margin.i18n.L.s.errInvite)
             if (code !in 200..299) throw AiException(if (code == 401 || code == 403) ru.anjeib.margin.i18n.L.s.errBadKey else "Yandex $code")
             ru.anjeib.margin.i18n.L.s.connected + " · Yandex AI Studio"
@@ -161,9 +167,10 @@ object Yandex {
         } finally { c.disconnect() }
     }
 
-    private fun post(door: Door, body: String): Pair<Int, String> {
+    /** A long answer (a review of the week) is not a slow line: only a phrase's reading is held to [Cloud.SLOW_MS]. */
+    private fun post(door: Door, body: String, readMs: Int): Pair<Int, String> = Cloud.watch(if (readMs > 30_000) Long.MAX_VALUE else Cloud.SLOW_MS) {
         val c = (URL(door.url("chat", "$BASE/chat/completions")).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"; doOutput = true; connectTimeout = 20_000; readTimeout = 120_000
+            requestMethod = "POST"; doOutput = true; connectTimeout = Cloud.CONNECT_MS; readTimeout = readMs
             setRequestProperty("Content-Type", "application/json")
             door.sign(this)
         }
@@ -171,6 +178,6 @@ object Yandex {
         val code = c.responseCode
         val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
         c.disconnect()
-        return code to text
+        code to text
     }
 }

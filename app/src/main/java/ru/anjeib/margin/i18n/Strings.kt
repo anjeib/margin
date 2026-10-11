@@ -529,6 +529,17 @@ interface Strings {
     val queueDoneTitle: String
     val waitingNet: String
     val whisperOfferOffline: String
+    /** Margin's cloud doesn't answer though the phone is online: the caption and what is said when words wait. */
+    val cloudOff: String
+    val cloudSaved: String
+    val askCloudOff: String
+    /** Dictation while the speech model is still on its way. */
+    val whisperLoading: String
+    /** Under «Распознавать речь на телефоне» until the model is here. */
+    val whisperComing: String
+    /** The quiet word next to the day's summary: the AI isn't reachable, Margin reads on the phone. */
+    val noCloudMark: String
+    val noNetMark: String
     val snoozeHour: String
     val repeat: String
     val noRepeat: String
@@ -545,14 +556,8 @@ interface Strings {
     val calendarRead: String
     val calendarHint: String
     val offlineSection: String
-    val whisperState: String
-    val whisperMissing: String
     val whisperBase: String
     val whisperSmall: String
-    val whisperAlways: String
-    val whisperAlwaysHint: String
-    val deleteModel: String
-    val cancelDownload: String
     val backupSection: String
     val googleBackupHint: String
     val googleBackup: String
@@ -574,7 +579,6 @@ interface Strings {
     fun remindPerson(name: String): String
     fun nudgeText(what: String): String
     fun whisperDownloading(p: Int): String
-    fun whisperReady(name: String): String
 
     // errors
     val errNoKey: String
@@ -897,7 +901,7 @@ object Ru : Strings {
         HelpSection("Контакты", "Две вкладки: «Люди» и «Компании». Сверху — «Часто»: с кем больше всего дел за месяц; ниже — все, по алфавиту или сначала новые. В строке — кто это и что с ним открыто (ждём, обещали), справа — число дел. В карточке человека — телефон, почта, адрес, MAX, Telegram и соцсети: вставьте ссылку, сеть Margin узнает сам. Нажатие звонит, пишет или открывает, долгое — изменить. Там же «О человеке», дела и история. В ⋯ — переименовать, объединить, «Это компания».", image = "contacts"),
         HelpSection("Архив", "Завершённые темы со всей лентой и материалами. «Вернуть» снова делает тему рабочей; новая запись в ней — тоже.", image = "archive"),
         HelpSection("Настройки", "", image = "settings", pairs = listOf(
-            "Голос" to "распознавать речь на телефоне (без интернета) или в облаке; отправлять сразу после диктовки",
+            "Голос" to "распознавать речь только на телефоне — голос не уходит в интернет; отправлять сразу после диктовки",
             "Календарь" to "учитывать встречи из календаря телефона",
             "Оформление" to "светлая, тёмная или как в системе; язык",
             "Разбор текста" to "Телефон / Авто / ИИ — см. «ИИ и без ИИ»",
@@ -940,11 +944,11 @@ object Ru : Strings {
             "Поделиться → В Margin" to "из любого приложения; выделенный текст → «В Margin»",
         )),
         // ---- AI ----
-        HelpSection("ИИ и без ИИ", "Настройки → «Разбор текста»: «Телефон» — Margin разбирает всё сам, без ИИ; «Авто» (по умолчанию) — сложное передаёт ИИ, когда есть сеть; «ИИ» — всё через ИИ, а без сети — на телефоне. Фразы с метками (#, @, /…) всегда разбираются на телефоне.", pairs = listOf(
+        HelpSection("ИИ и без ИИ", "Настройки → «Разбор текста»: «Телефон» — Margin разбирает всё сам, без ИИ; «Авто» (по умолчанию) — сложное передаёт ИИ, когда есть сеть; «ИИ» — всё через ИИ, а без сети — на телефоне. Фразы с метками (#, @, /…) всегда разбираются на телефоне. Если сеть есть, но облако Margin не отвечает или отвечает медленно, Margin сам переходит на телефон — у даты появится «без облака» — и сам возвращается, когда облако снова отвечает; то, что ждало во «Входящих», тогда разбирается.", pairs = listOf(
             "всегда без ИИ" to "дела, темы, идеи, даты, время, повторы, несколько дней, люди, обещания, списки, все метки, отметки, перенос, поиск, все экраны",
             "ИИ в «Авто», если есть сеть" to "отчёты («созвонились…»), правки («перенеси…», «Исправить: …»), длинная диктовка без точек, несколько дел со своими датами в одной фразе, телефоны и почта",
             "только с ИИ" to "короткое название для новой темы; текст с фото (визитка → контакт, доска → дела); разбор пересланных сообщений (кто что обещал); исправление опечаток в исходной фразе",
-            "голос" to "в облаке или на телефоне без сети — переключатель в «Голосе»",
+            "голос" to "в облаке; без сети или когда облако не отвечает — на телефоне (модель скачивается сама по Wi-Fi)",
         )),
         HelpSection("Пересылка в Margin", "Из Telegram, MAX, почты: «Поделиться» или выделить текст → «В Margin». Или «Копировать» — и в Margin появится «Вставить скопированное». Margin понимает, что это чужие слова: что обещают вам, станет «ждём», о чём просят вас — делом."),
         HelpSection("Быстрый ввод и отзыв", "Быстро записать можно с плитки «Записать» в шторке (добавьте её через карандаш в быстрых настройках) или долгим нажатием на значок приложения — «Записать» / «Надиктовать». Если Margin понял фразу не так, нажмите «Не совсем понял» под результатом. «Отправить отзыв» в меню открывает письмо разработчику с журналами ошибок; ваши записи не отправляются."),
@@ -953,7 +957,7 @@ object Ru : Strings {
         HelpSection("Примеры", "При первом запуске в Margin уже есть примеры — несколько дней молодого дизайнера, по одному на каждую возможность: тема с записями и файлами, дела со временем, повтором и на несколько дней, просроченное, обещания в обе стороны, дело без даты, идея, контакт и компания. Убрать их можно в Настройках → «Примеры», там же их можно вернуть. Ваши записи останутся на месте."),
     )
     override val tourWriteTitle = "Пишите как думаете"
-    override val tourWriteText = "Одно поле внизу — пишите или диктуйте. Margin сам разложит всё на дела, даты и обещания, даже без интернета."
+    override val tourWriteText = "Одно поле внизу — пишите или диктуйте. Margin сам разложит всё на дела, даты и обещания, даже без интернета и при плохой связи."
     override val tourWriteExample = "Завтра в 15 созвон с Мариной, она пришлёт правки до среды"
     override val tourMarks = listOf("#тема", "@человек", "/жду", "/обещаю", "/идея")
     override val tourMarksText = "Метки — когда нужна точность:"
@@ -1057,7 +1061,7 @@ object Ru : Strings {
     override val whereDataText = "Записи хранятся на этом телефоне — в памяти приложения, других копий у Margin нет.\n\n" +
         "Резервная копия: если включена, раз в день уходит в ваш аккаунт Google (Google Диск) и доступна только вам.\n\n" +
         "Фразы: простые Margin разбирает на телефоне, они никуда не уходят. Сложные, когда есть интернет, отправляются в Yandex AI Studio (серверы в России) вместе с нужной частью записей: связанными делами и именами. Яндекс эти запросы не сохраняет.\n\n" +
-        "Голос: на телефоне (Whisper) или в Yandex SpeechKit.\n\n" +
+        "Голос: в Yandex SpeechKit, а без сети — на телефоне (Whisper). С переключателем «Распознавать речь на телефоне» голос не уходит в интернет никогда.\n\n" +
         "Журналы ошибок уходят разработчику только письмом, которое вы отправляете сами; ваших записей в них нет.\n\n" +
         "На экране блокировки напоминания показываются без текста дел."
     override val widgetFree = "На сегодня дел нет"
@@ -1379,7 +1383,14 @@ object Ru : Strings {
     override val offlineSaved = "Нет интернета. Всё сохранено во «Входящие» — Margin разберёт, когда появится сеть."
     override val queueDoneTitle = "Входящие разобраны"
     override val waitingNet = "ЖДУТ ИНТЕРНЕТА"
-    override val whisperOfferOffline = "Нет интернета. Скачайте офлайн-распознавание в настройках, чтобы диктовать без сети."
+    override val whisperOfferOffline = "Распознавание речи на телефоне скачается само при Wi-Fi. Пока напишите текстом."
+    override val cloudOff = "Облако не отвечает"
+    override val cloudSaved = "Облако Margin не отвечает. Всё сохранено во «Входящие» — Margin разберёт, как только появится связь."
+    override val askCloudOff = "Облако Margin сейчас не отвечает — спросите чуть позже. Записывать дела можно как обычно."
+    override val whisperLoading = "Распознавание речи на телефоне ещё скачивается. Пока напишите текстом."
+    override val whisperComing = "Пока модель не скачалась, голос распознаётся в облаке."
+    override val noCloudMark = "без облака"
+    override val noNetMark = "без интернета"
     override val snoozeHour = "Через час"
     override val repeat = "Повтор"
     override val noRepeat = "Не повторять"
@@ -1396,14 +1407,8 @@ object Ru : Strings {
     override val calendarRead = "Учитывать календарь телефона"
     override val calendarHint = "ИИ видит встречи и не ставит дела поверх них"
     override val offlineSection = "ОФЛАЙН-РАСПОЗНАВАНИЕ"
-    override val whisperState = "Whisper на телефоне"
-    override val whisperMissing = "Не скачан"
     override val whisperBase = "Базовая · 60 МБ · быстрее"
     override val whisperSmall = "Точная · 190 МБ · лучше русский"
-    override val whisperAlways = "Всегда распознавать на телефоне"
-    override val whisperAlwaysHint = "Без отправки голоса в интернет"
-    override val deleteModel = "Удалить модель"
-    override val cancelDownload = "Остановить загрузку"
     override val backupSection = "РЕЗЕРВНАЯ КОПИЯ"
     override val googleBackupHint = "Раз в день дела, темы, идеи и настройки сохраняются в ваш аккаунт Google (Google Диск) и вернутся на новом телефоне."
     override val googleBackup = "Копия в аккаунте Google"
@@ -1503,7 +1508,6 @@ object Ru : Strings {
     override fun remindPerson(name: String) = "Напомнить " + name.dative()
     override fun nudgeText(what: String) = "Привет! Как там «$what»?"
     override fun whisperDownloading(p: Int) = "Загрузка… $p%"
-    override fun whisperReady(name: String) = "Готово · $name"
     override val errNoKey = "Добавьте ключ OpenRouter в настройках"
     override val errWeird = "Непонятный ответ OpenRouter"
     override val errNet = "Нет связи с интернетом"
@@ -1802,7 +1806,7 @@ object En : Strings {
         HelpSection("Offline", "Settings → «Reading your words»: Phone — code only; Auto — hard phrases go to the AI when online; AI — as before. The line over the field shows what was understood before you send."),
     )
     override val tourWriteTitle = "Write as you think"
-    override val tourWriteText = "One field at the bottom — type or dictate. Margin sorts it into to-dos, dates and promises, even offline."
+    override val tourWriteText = "One field at the bottom — type or dictate. Margin sorts it into to-dos, dates and promises, even offline or on a poor connection."
     override val tourWriteExample = "Call with Marina tomorrow at 3 pm, she sends the edits by Wednesday"
     override val tourMarks = listOf("#topic", "@person", "/wait", "/promised", "/idea")
     override val tourMarksText = "Marks — when it has to be exact:"
@@ -1906,7 +1910,7 @@ object En : Strings {
     override val whereDataText = "Your records live on this phone, in the app's own storage — Margin keeps no other copy.\n\n" +
         "Backup: when on, once a day to your Google account (Google Drive), visible only to you.\n\n" +
         "Reading phrases: simple ones are read on the phone and go nowhere. Harder ones, when online, go to Yandex AI Studio (servers in Russia) with the part of your records they need — related to-dos and names. Yandex does not store these requests.\n\n" +
-        "Voice: on the phone (Whisper) or Yandex SpeechKit.\n\n" +
+        "Voice: Yandex SpeechKit, and on the phone (Whisper) when offline. With «Recognize speech on the phone» on, your voice never leaves the phone.\n\n" +
         "Error logs reach the developer only in an e-mail you send yourself; your records are not in them.\n\n" +
         "On the lock screen reminders show without the to-do's words."
     override val widgetFree = "Nothing for today"
@@ -2228,7 +2232,14 @@ object En : Strings {
     override val offlineSaved = "No internet. Everything is saved to Inbox and will be sorted as soon as you're back online."
     override val queueDoneTitle = "Inbox sorted"
     override val waitingNet = "WAITING FOR INTERNET"
-    override val whisperOfferOffline = "No internet. Download offline recognition in Settings to dictate without a connection."
+    override val whisperOfferOffline = "On-phone speech recognition downloads by itself over Wi-Fi. For now, type it."
+    override val cloudOff = "The cloud isn't answering"
+    override val cloudSaved = "Margin's cloud isn't answering. Everything is saved to Inbox and will be sorted as soon as the connection is back."
+    override val askCloudOff = "Margin's cloud isn't answering right now — ask a bit later. Writing things down works as usual."
+    override val whisperLoading = "On-phone speech recognition is still downloading. For now, type it."
+    override val whisperComing = "Until the model is here, speech is recognized in the cloud."
+    override val noCloudMark = "no cloud"
+    override val noNetMark = "offline"
     override val snoozeHour = "In an hour"
     override val repeat = "Repeat"
     override val noRepeat = "Don't repeat"
@@ -2245,14 +2256,8 @@ object En : Strings {
     override val calendarRead = "Use the phone calendar"
     override val calendarHint = "AI sees meetings and plans around them"
     override val offlineSection = "OFFLINE RECOGNITION"
-    override val whisperState = "Whisper on the phone"
-    override val whisperMissing = "Not downloaded"
     override val whisperBase = "Base · 60 MB · faster"
     override val whisperSmall = "Accurate · 190 MB · better quality"
-    override val whisperAlways = "Always recognize on the phone"
-    override val whisperAlwaysHint = "Voice never leaves the phone"
-    override val deleteModel = "Delete model"
-    override val cancelDownload = "Stop download"
     override val backupSection = "BACKUP"
     override val googleBackupHint = "Once a day to-dos, topics, ideas and settings are saved to your Google account (Google Drive) and come back on a new phone."
     override val googleBackup = "Copy to your Google account"
@@ -2352,7 +2357,6 @@ object En : Strings {
     override fun remindPerson(name: String) = "Nudge $name"
     override fun nudgeText(what: String) = "Hi! How is “$what” going?"
     override fun whisperDownloading(p: Int) = "Downloading… $p%"
-    override fun whisperReady(name: String) = "Ready · $name"
     override val errNoKey = "Add your OpenRouter key in settings"
     override val errWeird = "Unexpected response from OpenRouter"
     override val errNet = "No internet connection"

@@ -2,8 +2,6 @@ package ru.anjeib.margin.ai
 
 import android.content.Context
 import kotlinx.coroutines.sync.withLock
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
@@ -27,11 +25,8 @@ import ru.anjeib.margin.notify.Reminders
 /** Shared plumbing: where attachments land, the Inbox note, and the offline queue. */
 object Processor {
 
-    fun online(ctx: Context): Boolean {
-        val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return true
-        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-    }
+    /** The AI can be asked now: the phone has a network and Margin's cloud answers (see [Cloud]). */
+    fun online(ctx: Context): Boolean = Cloud.network(ctx) && !Cloud.down
 
     fun ready(s: ru.anjeib.margin.data.Settings) = Llm.ready(s)
 
@@ -162,6 +157,8 @@ class QueueWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx,
         if (done.isNotEmpty()) Reminders.show(applicationContext, 4242, L.s.queueDoneText(done.size), done.joinToString("\n").take(600), digest = true)
         Result.success()
     } catch (e: Exception) {
-        if (runAttemptCount < 5) Result.retry() else Result.failure()
+        // The cloud may be down for hours while the phone is online: keep trying (WorkManager spaces the tries out).
+        // Anything else (the service refused this item) — a few tries, as before.
+        if (e.message == L.s.errNet || runAttemptCount < 5) Result.retry() else Result.failure()
     }
 }

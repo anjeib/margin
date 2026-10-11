@@ -233,7 +233,8 @@ fun TaskList(
                         Column {
                             BasicText(today.dowFull(), style = Type.display.copy(color = c.ink), maxLines = 1,
                                 autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 40.sp, stepSize = 1.sp))
-                            Voice(daySummary(plan, today), Modifier.padding(top = 2.dp))
+                            val away by vm.away.collectAsState()
+                            Voice(daySummary(plan, today, away), Modifier.padding(top = 2.dp))
                             TodayHints(plan, data, ui, onRemoveSamples = { vm.removeSamples() })
                         }
                     }

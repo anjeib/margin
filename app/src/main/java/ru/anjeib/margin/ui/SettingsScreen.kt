@@ -81,35 +81,22 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         Text(s.settings, style = Type.display.copy(color = c.ink), modifier = Modifier.padding(top = 14.dp, bottom = 18.dp))
 
         Group(s.voiceSection) {
-            // One switch for people: speech on the phone (Whisper) or in the cloud. Models live in the developer section.
+            // One switch for people: their voice stays on the phone, or goes to the cloud (faster, more accurate).
+            // The model itself comes by itself over Wi-Fi (ModelWorker) — nothing to download or delete here; the developer section can swap it.
             if (ru.anjeib.margin.voice.LocalWhisper.supported) {
                 ToggleRow(s.onDevice, s.onDeviceHint, settings.whisperAlways) { v ->
-                    if (v && whisper !is ru.anjeib.margin.voice.LocalWhisper.State.Ready && whisper !is ru.anjeib.margin.voice.LocalWhisper.State.Downloading) vm.downloadWhisper(ru.anjeib.margin.voice.LocalWhisper.Model.Small)
+                    // Asked for in so many words: fetch it now, whatever the network.
+                    if (v && whisper !is ru.anjeib.margin.voice.LocalWhisper.State.Ready && whisper !is ru.anjeib.margin.voice.LocalWhisper.State.Downloading)
+                        vm.downloadWhisper(ru.anjeib.margin.voice.ModelWorker.pick(ctx))
                     vm.updateSettings { it.copy(whisperAlways = v) }
                 }
                 val st = whisper
-                if (settings.whisperAlways || st is ru.anjeib.margin.voice.LocalWhisper.State.Downloading) {
-                    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
-                        Text(
-                            when (st) {
-                                is ru.anjeib.margin.voice.LocalWhisper.State.Missing -> s.whisperMissing
-                                is ru.anjeib.margin.voice.LocalWhisper.State.Downloading -> s.whisperDownloading((st.progress * 100).toInt())
-                                is ru.anjeib.margin.voice.LocalWhisper.State.Ready -> s.whisperReady(if (st.model == ru.anjeib.margin.voice.LocalWhisper.Model.Small) s.whisperSmall else s.whisperBase)
-                                is ru.anjeib.margin.voice.LocalWhisper.State.Failed -> st.message
-                            },
-                            style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
-                        )
-                        if (st is ru.anjeib.margin.voice.LocalWhisper.State.Downloading) {
-                            Spacer(Modifier.height(8.dp))
-                            androidx.compose.material3.LinearProgressIndicator(progress = { st.progress }, color = c.link, trackColor = c.hairline,
-                                modifier = Modifier.fillMaxWidth().height(3.dp), drawStopIndicator = {}, gapSize = 0.dp)
-                        }
-                    }
-                    when (st) {
-                        is ru.anjeib.margin.voice.LocalWhisper.State.Downloading -> { Divider(); ValueRow(s.cancelDownload, null, "", chevron = false) { ru.anjeib.margin.voice.LocalWhisper.cancelDownload() } }
-                        is ru.anjeib.margin.voice.LocalWhisper.State.Ready -> { Divider(); ValueRow(s.deleteModel, null, "", chevron = false) { ru.anjeib.margin.voice.LocalWhisper.delete(ctx); vm.updateSettings { it.copy(whisperAlways = false) } } }
-                        is ru.anjeib.margin.voice.LocalWhisper.State.Failed, is ru.anjeib.margin.voice.LocalWhisper.State.Missing -> { Divider(); ValueRow(s.whisperSmall, null, "↓") { vm.downloadWhisper(ru.anjeib.margin.voice.LocalWhisper.Model.Small) } }
-                    }
+                if (settings.whisperAlways && st !is ru.anjeib.margin.voice.LocalWhisper.State.Ready) {
+                    Text(
+                        listOfNotNull((st as? ru.anjeib.margin.voice.LocalWhisper.State.Downloading)?.let { s.whisperDownloading((it.progress * 100).toInt()) }, s.whisperComing).joinToString(" "),
+                        style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                    )
                 }
                 Divider()
             }

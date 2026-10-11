@@ -162,7 +162,7 @@ object OpenRouter {
 
     private fun open(url: String, apiKey: String?): HttpURLConnection =
         (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 20_000
+            connectTimeout = Cloud.CONNECT_MS
             readTimeout = 90_000
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("HTTP-Referer", "https://margin.app")
@@ -174,13 +174,13 @@ object OpenRouter {
         val c = open(url, apiKey)
         c.requestMethod = "POST"; c.doOutput = true
         c.outputStream.use { it.write(body.toByteArray()) }
-        read(c)
+        Cloud.watch(Long.MAX_VALUE) { read(c) }
     } catch (e: IOException) {
         throw AiException(L.s.errNet)
     }
 
     private fun get(url: String, apiKey: String?): Pair<Int, String> = try {
-        read(open(url, apiKey))
+        Cloud.watch { read(open(url, apiKey)) }
     } catch (e: IOException) {
         throw AiException(L.s.errNet)
     }
