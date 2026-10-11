@@ -127,6 +127,9 @@ fun SmartComposer(
     val settings by vm.settings.collectAsState()
     val working by vm.working.collectAsState()
     var text by rememberSaveable { mutableStateOf("") }
+    // The text as the user last left it in the field, and where their cursor was.
+    var typedText by remember { mutableStateOf("") }
+    var typedSel by remember { mutableStateOf(androidx.compose.ui.text.TextRange(0)) }
     // Chosen marks ride in front of the words when they are sent: «/дело #[topic] @[Маша] Отправить счёт».
     var tags by rememberSaveable { mutableStateOf(listOf<String>()) }
     fun tagged(t: String) = (tags.joinToString(" ") + " " + t).trim().also { tags = emptyList() }
@@ -362,8 +365,16 @@ fun SmartComposer(
                 attach()
                 Box(Modifier.weight(1f).heightIn(min = FieldH - 2.dp).padding(vertical = 9.dp, horizontal = 2.dp), contentAlignment = Alignment.CenterStart) {
                     if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = Type.body.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // Words put in from outside (shared, dictated, a mode's prefill) get the cursor after them, not before
+                    // (Fable, 0.35); what the user types keeps the cursor where they put it.
+                    val value = if (typedText == text) androidx.compose.ui.text.input.TextFieldValue(text, typedSel)
+                        else androidx.compose.ui.text.input.TextFieldValue(text, androidx.compose.ui.text.TextRange(text.length))
                     BasicTextField(
-                        value = text, onValueChange = { text = continueList(text, it) },
+                        value = value, onValueChange = { v ->
+                            val next = continueList(text, v.text)
+                            text = next; typedText = next
+                            typedSel = if (next == v.text) v.selection else androidx.compose.ui.text.TextRange(next.length)
+                        },
                         textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link), maxLines = 6,
                         modifier = Modifier.fillMaxWidth().focusRequester(focus),
                     )

@@ -478,7 +478,10 @@ object Assistant {
                         Task(
                             title = title,
                             start = a.date("start"),
-                            due = if (strict && oneDate) onSaidWeekday(a.date("due"), source.lowercase()) else a.date("due"),
+                            // One dated thing: the weekday of the whole phrase; several: the weekday of the words this one came from
+                            // (Fable, 0.35: «…созвон завтра в 14, она пришлёт фидбек к четвергу» — the wait went on «завтра»).
+                            due = if (strict && oneDate) onSaidWeekday(a.date("due"), source.lowercase())
+                                else if (strict) clauseWeekday(a.date("due"), title, a.str("waiting_for") != null, source) else a.date("due"),
                             time = a.time("time"),
                             remindAt = a.dateTime("remind_at"),
                             people = a.strList("people"),
@@ -700,8 +703,16 @@ object Assistant {
                             touchedNotes += n.id; notes++
                             continue
                         }
-                        val title = ((if (lazyTitle) project?.let { "$it · $ideas" } else given) ?: given ?: text.lineSequence().firstOrNull()?.take(60) ?: continue).sentence()
-                        val body = if (title == text) "" else text
+                        // No title of its own: the words up to the first pause make it, the rest is the record — never a title cut
+                        // at 60 letters with its comma and the whole phrase again under it (Fable, 0.35).
+                        val first = text.lineSequence().firstOrNull()?.trim().orEmpty()
+                        val head = Regex("^(.{3,60}?)\\s*[,.;:!?—–]\\s").find(first)?.groupValues?.get(1)?.trim()
+                            ?: if (first.length > 60) first.take(60).substringBeforeLast(' ').trim() + "…" else first
+                        val title = ((if (lazyTitle) project?.let { "$it · $ideas" } else given) ?: given ?: head.takeIf { it.isNotBlank() } ?: continue).trimEnd(',', ';', ':', ' ').sentence()
+                        // Split at a pause: the record keeps the rest; cut without one («…»): the record keeps the whole text.
+                        val rest = if (given == null && !(lazyTitle && project != null) && !head.endsWith("…") && text.startsWith(head))
+                            text.removePrefix(head).trimStart(',', '.', ';', ':', '!', '?', '—', '–', '-', ' ').trim() else text
+                        val body = if (title == text || rest.isBlank()) "" else rest.sentence()
                         val n = Note(title = title, project = project, entries = listOfNotNull(body.takeIf { it.isNotBlank() }?.let { Entry(text = it) }))
                         learn(emptyList(), n.project)
                         d = d.copy(notes = listOf(n) + d.notes)
@@ -772,7 +783,14 @@ object Assistant {
             val moved = plan.actions.filter { it.str("type") in setOf("complete_subtask", "add_subtasks") }.mapNotNull { it.str("task_id") }.toSet()
             val written = plan.actions.filter { it.str("type") == "add_entry" }.mapNotNull { it.str("task_id") }.toSet()
             (moved - written).filter { id -> id in touched && d.tasks.any { it.id == id && it.topic } }.forEach { id ->
-                d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(entries = it.entries + Entry(text = origin)) else it })
+                // Only the sentences about this topic's matters — a phrase about two clients must not put the other one in this feed
+                // (Fable, 0.35: «…лендинг для Авиасейлс… И надо в пн показать Олегу мудборд» landed whole in «Зерно»).
+                val topic = data.tasks.find { it.id == id }
+                val names = plan.actions.filter { it.str("task_id") == id }.flatMap { a ->
+                    subtasks(a["subtasks"]).map { it.title } + listOfNotNull(a.str("subtask_id")?.let { sid -> topic?.subtasks?.let { flat(it) }?.find { it.id == sid }?.title })
+                }
+                val words = partAbout(origin, names) ?: return@forEach
+                d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(entries = it.entries + Entry(text = words)) else it })
             }
         }
         // «…спецификацию пришлёт в понедельник»: the phone reads a new day for what someone owes; if the model wrote the news
@@ -781,7 +799,9 @@ object Assistant {
             val said = runCatching { LocalParser.parse(source, data).items }.getOrDefault(emptyList()).filter { it.due != null }
             said.forEach { w ->
                 val day = w.due!!.toString()
-                val who = listOfNotNull(w.waitingFor) + w.people
+                // Someone who owes: the one waited for, or a person named in words that say they will send / return something.
+                // «показать Олегу мудборд в пн» is the user's own matter — it never moves what Олег owes (Fable, 0.35).
+                val who = listOfNotNull(w.waitingFor) + w.people.takeIf { oweCue.containsMatchIn(w.title.lowercase()) }.orEmpty()
                 if (who.isEmpty()) return@forEach
                 (listOfNotNull(focus) + touched).distinct().forEach { id ->
                     val t = d.tasks.find { it.id == id } ?: return@forEach
@@ -791,7 +811,8 @@ object Assistant {
                         val oq = o?.let { flat(it.subtasks).find { it.id == q.id } }
                         if (q.due == day || (oq != null && oq.due != q.due)) return@forEach
                         d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(subtasks = it.subtasks.mapTree(q.id) { x -> x.copy(due = day) }) else it })
-                    } else if (!t.done && t.slots.isEmpty() && t.repeat == null && t.waitingFor != null && who.any { sameName(t.waitingFor, it) }) {
+                    } else if (o != null && !t.done && t.slots.isEmpty() && t.repeat == null && t.waitingFor != null && who.any { sameName(t.waitingFor, it) }) {
+                        // Only a wait that was there before: a new one keeps the day the model gave it (checked against its own words above).
                         if (t.due == day || (o != null && o.due != t.due)) return@forEach
                         d = d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(due = day) else it })
                     }
@@ -847,6 +868,33 @@ object Assistant {
         val best = scored.maxOfOrNull { it.second }
         scored.filter { it.second == best }.singleOrNull()?.let { return it.first }
         return open.filter { !it.isWait }.singleOrNull() ?: open.singleOrNull()
+    }
+
+    /** The phrase in parts: sentences, then the clauses inside them («…, она пришлёт фидбек к четвергу»). */
+    private fun clauses(source: String): List<String> =
+        source.split(Regex("[.!?;\\n]+|,|\\s(?:и|а|но|and|but)\\s")).map { it.trim() }.filter { it.isNotBlank() }
+
+    /**
+     * A new task among several dated ones: the clause it came from (most shared words; a wait — the clause that says
+     * someone will send it) decides the weekday, when that clause names one and no «сегодня / завтра».
+     */
+    private fun clauseWeekday(date: String?, title: String, waiting: Boolean, source: String): String? {
+        val t = stems(title)
+        val best = clauses(source).map { c -> c to ((stems(c) intersect t).size + if (waiting && oweCue.containsMatchIn(c.lowercase())) 3 else 0) }
+            .filter { it.second > 0 }.maxByOrNull { it.second }?.first?.lowercase() ?: return date
+        if (Regex("сегодн|завтра|today|tomorrow").containsMatchIn(best)) return date
+        return onSaidWeekday(date, best)
+    }
+
+    /** The sentences of [source] about [names] (the matters it added or settled); null — none; all of them — the phrase as is. */
+    private fun partAbout(source: String, names: List<String>): String? {
+        val sentences = source.split(Regex("(?<=[.!?;])\\s+|\\n+")).map { it.trim() }.filter { it.isNotBlank() }
+        if (sentences.size <= 1 || names.isEmpty()) return source.trim().sentence()
+        val want = stems(names.joinToString(" "))
+        val kept = sentences.filter { (stems(it) intersect want).isNotEmpty() }
+        if (kept.isEmpty()) return null
+        if (kept.size == sentences.size) return source.trim().sentence()
+        return kept.joinToString(" ") { it.replace(Regex("^(?i)(и|а|ещё|еще|and|also)\\s+"), "") }.trim().sentence()
     }
 
     private fun onSaidWeekday(date: String?, low: String): String? {

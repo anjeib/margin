@@ -57,7 +57,11 @@ import androidx.compose.ui.unit.sp
  */
 
 /** Width of the margin column; the rule runs at this x. */
-val MarginW = 74.dp
+// The margin grows with the phone's font size: at 1.3× «завтра» broke into «завтр / а» (Fable, 0.35).
+// Set once per configuration by [MarginTheme]; 10 dp of air to the rule, the words' column scales with the font.
+var MarginW: Dp = 74.dp
+    internal set
+internal fun marginFor(fontScale: Float): Dp = 10.dp + 64.dp * fontScale.coerceIn(1f, 2f)
 /** Gap between the rule and the content. */
 val MarginGap = 14.dp
 
@@ -365,7 +369,7 @@ fun Modifier.screenRule(): Modifier = marginRule(M.c.accent.copy(alpha = 0.85f),
 fun Modifier.fieldRule(): Modifier = marginRule(M.c.accent.copy(alpha = 0.85f))
 
 /** Where the field's words begin when its column is padded 14 dp from the edge: just right of the rule. */
-val FieldLead = MarginW - 14.dp + 4.dp
+val FieldLead: Dp get() = MarginW - 14.dp + 4.dp
 
 /** A petrol word, medium — a link as everywhere in the app (no underline); [quiet] — graphite. */
 @Composable

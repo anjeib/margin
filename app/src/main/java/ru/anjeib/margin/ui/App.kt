@@ -147,9 +147,10 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(shared) { if (!shared.isNullOrBlank()) { prefill = shared; screen = TASKS; onSharedConsumed() } }
     // «Записать» / «Надиктовать» (tile, icon shortcut): back to the main field, keyboard up or the microphone on.
     var focusKey by remember { mutableStateOf<Long?>(null) }
+    // Shared into the main field: the words stand there with the cursor after them, ready to be put right (Fable, 0.35).
+    LaunchedEffect(shared) { if (!shared.isNullOrBlank()) { prefill = shared; screen = TASKS; focusKey = System.currentTimeMillis(); onSharedConsumed() } }
     var micKey by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(launch) {
         val (what, at) = launch ?: return@LaunchedEffect
@@ -261,6 +262,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             onKeepContact = { vm.keepContact(it) },
                             onMoveTo = { vm.moveToTopic(it) },
                             onMisparse = { pd, got -> vm.misparsed(pd, got) },
+                            draftOf = { vm.draftOf(it) },
                             onAskWhen = { _, what ->
                                 // The preview's ids are not the saved ones: take the new task without a time from what was saved.
                                 val ids = vm.confirm()
@@ -445,19 +447,13 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
         }
         // One row of controls (v8): from the day — the calendar and the overview beside the search; elsewhere only the search.
         Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-            // For the first few days a small word sits under the calendar and the overview — an icon alone is easy to miss.
-            val ui = LocalContext.current.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
-            val seen = remember { ui.getInt("doorsSeen", 0) }
-            LaunchedEffect(Unit) { if (seen < 5) ui.edit().putInt("doorsSeen", seen + 1).apply() }
-            @Composable fun tool(label: String, onClick: () -> Unit, word: Boolean = false, glyph: @Composable () -> Unit) =
-                Column(Modifier.widthIn(min = 44.dp).clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = label, onClick = onClick).semantics { contentDescription = label }
-                    .padding(horizontal = 4.dp, vertical = if (word && seen < 5) 2.dp else 11.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    glyph()
-                    if (word && seen < 5) Text(label.lowercase(), style = Type.small.copy(color = c.link, fontSize = 10.5.sp), maxLines = 1)
-                }
+            // Icons alone, one style for all four (owner, 11 окт): what they are is said in the tour, in detail — in «Помощь».
+            @Composable fun tool(label: String, onClick: () -> Unit, glyph: @Composable () -> Unit) =
+                Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = label, onClick = onClick).semantics { contentDescription = label },
+                    contentAlignment = Alignment.Center) { glyph() }
             if (screen == TASKS && !away) {
-                tool(s.calendarTitle, { onTab(1) }, word = true) { Icon(Icons.Outlined.CalendarMonth, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
-                tool(s.overviewWord, { onTab(2) }, word = true) { Icon(Icons.Outlined.GridView, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
+                tool(s.calendarTitle, { onTab(1) }) { Icon(Icons.Outlined.CalendarMonth, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
+                tool(s.overviewWord, { onTab(2) }) { Icon(Icons.Outlined.GridView, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
             }
             if (screen == TASKS || screen == PEOPLE) tool(s.search, onSearch) { Icon(Icons.Outlined.Search, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
         }

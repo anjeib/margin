@@ -200,6 +200,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** The day picked in «Календарь» (not today): what is written then goes to that day unless the words name another. */
     val calendarDay = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)
     fun pickCalendarDay(d: LocalDate?) { calendarDay.value = d }
+    /** The day the calendar should open on — «Завтра — 3 дела ›» opens it on tomorrow (Fable, 0.35); taken once. */
+    val calendarOpenOn = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)
 
     /** Adds the picked calendar day in words when the phrase has no date of its own — the parser and the AI then read it as said. */
     private fun onPickedDay(t: String): String {
@@ -275,6 +277,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             // A question is for the assistant only: without it, say so rather than file the question as a matter.
             if (local.why == "question" && offline) {
                 if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = L.s.askOffline)) else _toast.value = L.s.askOffline
+                return
+            }
+            // «Авто» without the internet: what the phone is unsure of waits in «Входящие» for the AI, as that screen promises —
+            // a long phrase made into one matter with the whole phrase for a title is worse than a short wait (Fable, 0.35).
+            if (local.items.isNotEmpty() && !Processor.online(ctx) && Processor.ready(s) && mode == "auto" && !local.sure && !tg.explicit) {
+                queue(t, scope, files)
                 return
             }
             if (local.items.isNotEmpty() && (offline || mode == "local" || tg.explicit || (mode == "auto" && local.sure))) {
@@ -1038,6 +1046,10 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val ai = s.parseMode != "local" && Processor.online(ctx) && Processor.ready(s) && (s.parseMode == "cloud" || (!r.sure && kind == null))
         return if (ai) line + "  ·  " + L.s.previewAi else line
     }
+
+    /** The phone's own reading of words the AI is still working on — the same line as the live hint, without «уточнит ИИ». */
+    fun draftOf(text: String): String? = runCatching { previewOf(text) }.getOrNull()
+        ?.removeSuffix("  ·  " + L.s.previewAi)?.takeIf { it.isNotBlank() }
 
     // ---------------- «Пример данных» ----------------
 

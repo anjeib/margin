@@ -70,18 +70,21 @@ class TodayWidget : GlanceAppWidget() {
         val locale = if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) Locale.forLanguageTag("ru") else Locale.ENGLISH
         val dayName = today.dayOfWeek.getDisplayName(DateStyle.FULL_STANDALONE, locale).replaceFirstChar { it.uppercase() }
         val dayDate = today.dayOfMonth.toString() + " " + today.month.getDisplayName(DateStyle.SHORT, locale).trimEnd('.')
+        // «когда» grows with the phone's font size, as on the app's margin.
+        val whenW = (60f * context.resources.configuration.fontScale.coerceIn(1f, 2f)).dp
         provideContent {
             // v8: «когда» left of a thin rule, as on the app's margin — the hour, or «с 8 окт» when late.
             Body(context, dayName, dayDate, due.take(6).map { t ->
                 val late = (t.dueDate ?: t.startDate)?.isBefore(today) == true
                 Triple(if (late) s.sinceWord + " " + (t.dueDate ?: t.startDate)!!.dayMonthShort() else t.time.orEmpty(), t.title, late)
             },
-                (due.size - 6).coerceAtLeast(0), s.tileWrite, s.widgetFree, s.moreWord)
+                (due.size - 6).coerceAtLeast(0), s.tileWrite, s.widgetFree, s.moreWord, whenW)
         }
     }
 
     @Composable
-    private fun Body(ctx: Context, dayName: String, dayDate: String, rows: List<Triple<String, String, Boolean>>, more: Int, write: String, free: String, moreWord: String) {
+    private fun Body(ctx: Context, dayName: String, dayDate: String, rows: List<Triple<String, String, Boolean>>, more: Int, write: String, free: String, moreWord: String,
+                     whenW: androidx.compose.ui.unit.Dp = 60.dp) {
         val bg = ColorProvider(day = Color(0xFFF6F3EE), night = Color(0xFF141210))
         val ink = ColorProvider(day = Color(0xFF1A1A1A), night = Color(0xFFEDE7DD))
         val inkSoft = ColorProvider(day = Color(0xCC1A1A1A), night = Color(0xCCEDE7DD))
@@ -106,14 +109,14 @@ class TodayWidget : GlanceAppWidget() {
                     Row(GlanceModifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                         // The same «когда» as on the app's margin: larger, medium, in ink a touch softer than the words.
                         Text(whenText, maxLines = 1, style = TextStyle(color = if (late) accent else inkSoft, fontSize = 13.5.sp, fontStyle = FontStyle.Italic,
-                            fontWeight = FontWeight.Medium, fontFamily = FontFamily.Serif, textAlign = TextAlign.End), modifier = GlanceModifier.width(60.dp))
+                            fontWeight = FontWeight.Medium, fontFamily = FontFamily.Serif, textAlign = TextAlign.End), modifier = GlanceModifier.width(whenW))
                         Spacer(GlanceModifier.width(8.dp))
                         Box(GlanceModifier.width(1.dp).height(18.dp).background(rule)) {}
                         Spacer(GlanceModifier.width(10.dp))
                         Text(line, maxLines = 1, style = TextStyle(color = ink, fontSize = 14.sp))
                     }
                 }
-                if (more > 0) Text("$moreWord $more", style = TextStyle(color = graphite, fontSize = 12.sp, fontStyle = FontStyle.Italic), modifier = GlanceModifier.padding(start = 79.dp, top = 2.dp))
+                if (more > 0) Text("$moreWord $more", style = TextStyle(color = graphite, fontSize = 12.sp, fontStyle = FontStyle.Italic), modifier = GlanceModifier.padding(start = whenW + 19.dp, top = 2.dp))
             }
             Row(GlanceModifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(GlanceModifier.defaultWeight().height(40.dp).background(card).cornerRadius(20.dp).padding(horizontal = 14.dp).clickable(open(MainActivity.ACTION_WRITE)),

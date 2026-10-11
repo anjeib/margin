@@ -111,4 +111,16 @@ class StoreTest {
         assertTrue(s.data.value.tasks.isEmpty())
         assertNull(s.problem.value)
     }
+
+    /** A stamp equal to «now» was left out of the file and came back as the moment of reading: a matter made today
+     *  looked made tomorrow, a record lost its hour (found 11 окт). Stamps are always written. */
+    @Test fun stampsOfNowAreKept() {
+        val t = Task(title = "Сегодняшнее", entries = listOf(ru.anjeib.margin.data.Entry(text = "запись")))
+        val json = AppJson.encodeToString(AppData.serializer(), AppData(tasks = listOf(t)))
+        assertTrue(json.contains("\"createdAt\""))
+        assertTrue(json.contains("\"at\""))
+        val back = AppJson.decodeFromString(AppData.serializer(), json).tasks.single()
+        assertEquals(t.createdAt, back.createdAt)
+        assertEquals(t.entries.single().at, back.entries.single().at)
+    }
 }

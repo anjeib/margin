@@ -267,7 +267,7 @@ fun TaskList(
                         item("u" + t.id) {
                             MatterRow(t, seatOf(i, undated.size), today, null to false, modifier = Modifier.animateItem(),
                                 onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) }, onTime = { timeFor = t.id }, onLater = { postponing = t.id },
-                                faded = born(t)?.isBefore(today.minusDays(7)) == true, lit = t.id in landed,
+                                faded = born(t)?.isBefore(today.minusDays(7)) == true, lit = t.id in landed, onOpenTopic = onOpen,
                                 extra = born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() })
                         }
                     }
@@ -300,7 +300,9 @@ fun TaskList(
                 // One look ahead for the evening: tomorrow's count, a tap opens the calendar.
                 val tomorrowParts = listOfNotNull(tomorrowPlan.deals.size.takeIf { it > 0 }?.let { s.summaryDeals(it) },
                     tomorrowPlan.events.size.takeIf { it > 0 }?.let { s.summaryMeetings(it) })
-                if (tomorrowParts.isNotEmpty()) item("tomorrow") { VoiceLink(s.quickTomorrow + " — " + tomorrowParts.joinToString(" · "), { onView(Views.WEEK) }, quiet = true) }
+                if (tomorrowParts.isNotEmpty()) item("tomorrow") {
+                    VoiceLink(s.quickTomorrow + " — " + tomorrowParts.joinToString(" · "), { vm.calendarOpenOn.value = today.plusDays(1); onView(Views.WEEK) }, quiet = true)
+                }
             }
 
             view == Views.ALL -> {
@@ -364,7 +366,7 @@ fun TaskList(
                         item("od" + t.id) {
                             MatterRow(t, seatOf(i, deals.size), today, whenNote(t, today, underDay = false), modifier = Modifier.animateItem(),
                                 onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) }, onTime = { timeFor = t.id }, onLater = { postponing = t.id },
-                                lit = t.id in landed, extra = if (t.anchor == null) born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() } else null)
+                                lit = t.id in landed, onOpenTopic = onOpen, extra = if (t.anchor == null) born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() } else null)
                         }
                     }
                 }
@@ -595,27 +597,17 @@ private fun WeekCard(w: ru.anjeib.margin.data.WeekReview, inbox: Int, onOpen: (S
 }
 
 /**
- * Two quiet lines under the day's name, in Margin's voice, each until it is not needed: that the matters around are
- * examples (with a way to clear them right here), and the swipes for the first few days.
+ * One quiet line under the day's name while the samples are there, the way out in the words themselves:
+ * «Ниже — примеры · убрать». The swipes are told in the tour, not here (owner, 11 окт: four lines of italics before the first matter).
  */
 @Composable
 private fun TodayHints(plan: DayPlan, data: AppData, ui: android.content.SharedPreferences, onRemoveSamples: () -> Unit) {
     val c = M.c
     val s = M.s
-    var swipeSeen by remember { mutableStateOf(ui.getInt("swipeHint", 0)) }
-    androidx.compose.runtime.LaunchedEffect(Unit) { if (swipeSeen < 3) ui.edit().putInt("swipeHint", swipeSeen + 1).apply() }
-    val hint = Type.italic.copy(color = c.graphite, fontSize = 14.5.sp, lineHeight = 20.sp)
-    // The way out sits in the words themselves: «Рядом — примеры, чтобы осмотреться · убрать».
     if (data.tasks.any { it.sample }) Text(buildAnnotatedString {
-        append(s.samplesHere + "  ·  ")
+        append(s.samplesShort + "  ·  ")
         withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("samples", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = c.link))) { onRemoveSamples() }) { append(s.removeSamplesShort) }
-    }, style = hint, modifier = Modifier.padding(top = 6.dp))
-    if (swipeSeen < 3 && plan.deals.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(s.swipeHintLine, style = hint, modifier = Modifier.weight(1f))
-        Box(Modifier.size(40.dp).clip(CircleShape).clickable { swipeSeen = 3; ui.edit().putInt("swipeHint", 3).apply() }, contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Close, s.dismiss, tint = c.graphite, modifier = Modifier.size(16.dp))
-        }
-    }
+    }, style = Type.italic.copy(color = c.graphite, fontSize = 14.5.sp, lineHeight = 20.sp), modifier = Modifier.padding(top = 4.dp))
 }
 
 /**

@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+
 package ru.anjeib.margin.data
 
 import kotlinx.serialization.Serializable
@@ -44,7 +46,7 @@ data class Subtask(
 @Serializable
 data class TopicEvent(
     val id: String = newId(),
-    val at: String = nowStamp(),
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS) val at: String = nowStamp(),
     val kind: String,
     val ref: String? = null,
     val entry: String? = null,
@@ -54,7 +56,7 @@ fun nowStamp(): String = java.time.LocalDateTime.now().withNano(0).withSecond(0)
 
 /** One comment on a matter, typed right in its card; the day and hour it was written stand on the margin. */
 @Serializable
-data class Comment(val id: String = newId(), val at: String = nowStamp(), val text: String)
+data class Comment(val id: String = newId(), @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS) val at: String = nowStamp(), val text: String)
 
 @Serializable
 data class ContactInfo(val name: String, val phone: String? = null, val email: String? = null)
@@ -85,7 +87,7 @@ data class Attachment(
 @Serializable
 data class Entry(
     val id: String = newId(),
-    val at: String = nowStamp(),
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS) val at: String = nowStamp(),
     val text: String = "",
     val attachments: List<Attachment> = emptyList(),
     /** One visit to the note: blocks written in the same visit sit under one date line. */
@@ -156,7 +158,7 @@ data class Repeat(
  */
 @Serializable
 data class Change(
-    val at: String = nowStamp(),
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS) val at: String = nowStamp(),
     val kind: String,
     val value: String? = null,
     val by: String = "you",
@@ -184,7 +186,7 @@ data class Queued(
     val text: String,
     val scope: String = "main", // main | notes | task:<id>
     val files: List<Attachment> = emptyList(),
-    val at: String = nowStamp(),
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS) val at: String = nowStamp(),
     /** Forwarded from elsewhere: telegram | mail | max | share — the words are someone else's, see [Forwarded]. */
     val via: String? = null,
     /** Who wrote the forwarded words (null — unknown or the user). */
@@ -252,7 +254,7 @@ data class Task(
     val dropped: Boolean = false,
     /** What changed and who changed it — shown folded in the card, so an AI edit is never a mystery. */
     val history: List<Change> = emptyList(),
-    val createdAt: String = LocalDate.now().toString(),
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS) val createdAt: String = LocalDate.now().toString(),
     /** v2: the task grew into a topic — a living feed with questions, not a single checkbox. */
     val topic: Boolean = false,
     /** What happened in the topic besides the user's own words. */
@@ -301,7 +303,7 @@ data class Note(
     /** A note that is all title had its spelling and capitals tidied once («Посмотреть «Одиссею» Нолана»). */
     val titleFixed: Boolean = false,
     val extractedTasks: Int = 0,
-    val updatedAt: String = java.time.LocalDateTime.now().withNano(0).toString(),
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS) val updatedAt: String = java.time.LocalDateTime.now().withNano(0).toString(),
 )
 
 @Serializable

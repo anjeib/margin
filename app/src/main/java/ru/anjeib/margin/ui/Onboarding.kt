@@ -1,5 +1,14 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.heightIn
+
+import androidx.compose.foundation.verticalScroll
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Search
+
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -77,11 +86,14 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
     val topicRows = topic.subtasks.map { topic.questionRow(it) }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)) {
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
+        // Its height stays when «Пропустить» goes on the last page — the title must not jump.
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 40.dp), horizontalArrangement = Arrangement.End) {
             if (page < pages.lastIndex) QuietLink(s.skip, onDone)
         }
         androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth()) { p ->
-            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+            // The title stands at one height on every page (Fable, 0.35: centred pages left the top half empty and moved the title
+            // as one leafed through); a long page scrolls instead of hiding under the button on a small phone.
+            Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(top = 48.dp, bottom = 16.dp)) {
                 Text("Margin", style = Type.label.copy(color = c.accentText, fontSize = 13.sp))
                 Spacer(Modifier.height(12.dp))
                 Text(pages[p].first, style = Type.display.copy(color = c.ink, fontSize = 36.sp, lineHeight = 42.sp))
@@ -115,15 +127,29 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                             Pill(s.tourHold)
                         }
                         Spacer(Modifier.height(16.dp))
+                        // The top bar's icons have no words on the screen: here, once, what each one is.
+                        Text(s.tourIconsText, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+                        listOf<Pair<androidx.compose.ui.graphics.vector.ImageVector, String>>(
+                            Icons.Outlined.CalendarMonth to s.tourIconCalendar,
+                            Icons.Outlined.GridView to s.tourIconOverview,
+                            Icons.Outlined.Search to s.tourIconSearch,
+                        ).forEach { (icon, text) ->
+                            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.Icon(icon, null, tint = c.ink, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(10.dp))
+                                Text(text, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
                         Text(s.tourUndo, style = Type.small.copy(color = c.graphite, fontSize = 14.sp, lineHeight = 20.sp))
                         Spacer(Modifier.height(8.dp))
                         Text(s.tourMore, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
                     }
                     else -> Column {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            if (Build.VERSION.SDK_INT >= 33) Pill(if (notifOk) "✓ " + s.notifications + " · " + s.granted else s.notifications, accent = !notifOk,
+                            if (Build.VERSION.SDK_INT >= 33) Pill(if (notifOk) "✓ " + s.notifications else s.notifications, accent = !notifOk,
                                 onClick = if (notifOk) null else ({ notif.launch(Manifest.permission.POST_NOTIFICATIONS) }))
-                            Pill(if (calOk) "✓ " + s.calendar + " · " + s.granted else s.calendar, accent = !calOk,
+                            Pill(if (calOk) "✓ " + s.calendar else s.calendar, accent = !calOk,
                                 onClick = if (calOk) null else ({ cal.launch(Manifest.permission.READ_CALENDAR) }))
                         }
                         // The morning summary is chosen here, with the notifications it needs — not asked later in the chat over «Сегодня».

@@ -139,6 +139,7 @@ fun MarginTheme(mode: ThemeMode, strings: Strings, content: @Composable () -> Un
         ThemeMode.Auto -> isSystemInDarkTheme()
     }
     val p = if (dark) DarkPalette else LightPalette
+    MarginW = marginFor(androidx.compose.ui.platform.LocalDensity.current.fontScale)
     val scheme = if (dark) darkColorScheme(
         primary = p.accent, onPrimary = Color.White, background = p.bg, onBackground = p.ink,
         surface = p.card, onSurface = p.ink, surfaceVariant = p.chip, onSurfaceVariant = p.graphite,

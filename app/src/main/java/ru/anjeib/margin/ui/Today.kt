@@ -81,6 +81,8 @@ fun MatterRow(
     onToggle: () -> Unit, onOpen: () -> Unit, onTime: () -> Unit, onLater: (() -> Unit)?,
     modifier: Modifier = Modifier, faded: Boolean = false, hidePerson: String? = null, extra: String? = null,
     showTopic: Boolean = true, lit: Boolean = false, swipe: Boolean = true,
+    /** A tap on «≡ Тема» under the words opens the topic itself. */
+    onOpenTopic: ((String) -> Unit)? = null,
 ) {
     val c = M.c
     val s = M.s
@@ -133,7 +135,8 @@ fun MatterRow(
                     if (!t.done) {
                         val days = t.dayOf()?.let { (i, n) -> s.dayOfDays(i, n) }
                         TaskLine(t, null, showProject = true, today = today, tappable = false, hidePerson = hidePerson,
-                            topic = t.topicTitle?.takeIf { showTopic }, extra = listOfNotNull(days, extra).joinToString("  ·  ").ifBlank { null })
+                            topic = t.topicTitle?.takeIf { showTopic }, extra = listOfNotNull(days, extra).joinToString("  ·  ").ifBlank { null },
+                            onTopic = t.topicId?.let { tid -> onOpenTopic?.let { f -> { f(tid) } } })
                     }
                 }
             }
@@ -206,7 +209,11 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
         }, onClick = onOpen) {
         RowTitle(t.title)
         androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text(if (incoming) s.fromWho(who) else who.dative(), style = Type.small.copy(color = c.link, fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))
+            // The arrow alone was a riddle (Fable, 0.35): the words say it — «ждём от Олега», «обещали Лёше», as in «Обзор».
+            Text(buildAnnotatedString {
+                val (a, name, b) = if (incoming) s.promiseToYouParts(who) else s.promiseFromYouParts(who)
+                append(a); withStyle(SpanStyle(color = c.link)) { append(name) }; append(b)
+            }, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))
             if (nudge) {
                 Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))
                 Text(s.remindLink, style = Type.small.copy(color = c.link, fontSize = 13.5.sp, fontWeight = FontWeight.Medium),
@@ -256,7 +263,7 @@ fun LazyListScope.dayPanel(
                 when (it) {
                     is DayItem.Matter -> MatterRow(it.t, seat, today, whenNote(it.t, today, underDay = true),
                         onToggle = { onDone(it.t.id) }, onOpen = { onOpen(it.t.id) }, onTime = { onTime(it.t.id) }, onLater = { onLater(it.t.id) },
-                        lit = it.t.id in landed || (it.t.topicId != null && it.t.topicId in landed))
+                        lit = it.t.id in landed || (it.t.topicId != null && it.t.topicId in landed), onOpenTopic = onOpen)
                     is DayItem.Event -> EventPaperRow(it.e, seat)
                     is DayItem.Done -> DonePaperRow(it.t, seat, onToggle = { onDone(it.t.id) }, onOpen = { onOpen(it.t.topicId ?: it.t.id) })
                     is DayItem.Note -> NotePaperRow(it.n, seat, onOpen)

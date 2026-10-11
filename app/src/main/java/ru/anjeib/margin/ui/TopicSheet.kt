@@ -271,7 +271,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 SoftMenu(menu, { menu = false }) {
                     SoftMenuItem(s.rename) { menu = false; dialog = "rename" }
                     // «что сделано и что ждём» as plain text — for a client, a colleague, a note to self.
-                    SoftMenuItem(s.shareWord) { menu = false; shareTopic(ctx, task) }
+                    SoftMenuItem(s.sharePdf) { menu = false; shareTopic(ctx, task) }
                     if (!task.done) SoftMenuItem(s.toArchive) { menu = false; dialog = "archive" }
                     else {
                         SoftMenuItem(s.bringBack) { menu = false; vm.reviveTopic(task.id) }
@@ -892,7 +892,19 @@ fun topicText(t: Task): String {
 }
 
 private fun shareTopic(ctx: android.content.Context, t: Task) {
-    val i = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+    // A PDF made here, on the phone, into the system's «Поделиться» — mail, a messenger, Drive (owner, 11 окт).
+    // If the page can't be made, the topic goes as text, as before.
+    val pdf = runCatching { ru.anjeib.margin.data.TopicPdf.make(ctx, t) }.getOrNull()
+    val i = if (pdf != null) {
+        val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", pdf)
+        android.content.Intent(android.content.Intent.ACTION_SEND).setType("application/pdf")
+            .putExtra(android.content.Intent.EXTRA_STREAM, uri).putExtra(android.content.Intent.EXTRA_SUBJECT, t.title)
+            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            .apply { clipData = android.content.ClipData.newRawUri(t.title, uri) }
+    } else android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
         .putExtra(android.content.Intent.EXTRA_SUBJECT, t.title).putExtra(android.content.Intent.EXTRA_TEXT, topicText(t))
-    runCatching { ctx.startActivity(android.content.Intent.createChooser(i, t.title).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    // Not back into Margin itself.
+    runCatching { ctx.startActivity(android.content.Intent.createChooser(i, t.title)
+        .putExtra(android.content.Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(android.content.ComponentName(ctx, ru.anjeib.margin.ForwardActivity::class.java)))
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }

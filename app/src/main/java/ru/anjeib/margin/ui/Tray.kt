@@ -89,6 +89,8 @@ fun Tray(
     onMoveTo: (String) -> Unit = {},
     /** «Разобрало не так»: the words, who read them (phone or AI) and what came out. */
     onMisparse: (Pending, String) -> Unit = { _, _ -> },
+    /** How the phone read the words — shown while the AI is still thinking (Fable, 0.35: ten seconds of three dots). */
+    draftOf: (String) -> String? = { null },
 ) {
     val c = M.c
     val s = M.s
@@ -127,7 +129,10 @@ fun Tray(
                         label = "bubble",
                     ) { p ->
                         if (p != null) ResultBubble(p, data, onConfirm, onEdit, onReject, onHold, onSeparate, onAskWhen, onKeepContact, onMoveTo, onMisparse)
-                        else UserBubble(m, working = busy && m.id == lastUser)
+                        else Column {
+                            UserBubble(m, working = busy && m.id == lastUser)
+                            if (busy && m.id == lastUser) DraftLine(remember(m.id) { draftOf(m.text) })
+                        }
                     }
                 } else AssistantMsg(m, canUndo(m.id), onUndo = { onUndo(m.id) }, onOpenTask = onOpenTask, onOption = onOption, onOpenSettings = onOpenSettings)
             }
@@ -151,6 +156,21 @@ private fun UserBubble(m: ChatMsg, working: Boolean) {
                 else Text(m.at, style = Type.small.copy(color = c.onBubble.copy(alpha = 0.72f), fontSize = 11.5.sp))
             }
         }
+    }
+}
+
+/**
+ * Under the words while the AI reads them: what the phone already made of them, and that there is no need to wait —
+ * the answer comes by itself (the request goes on when the screen is left).
+ */
+@Composable
+private fun DraftLine(draft: String?) {
+    val c = M.c
+    val s = M.s
+    Column(Modifier.fillMaxWidth().padding(start = 48.dp, top = 6.dp), horizontalAlignment = Alignment.End) {
+        Text(draft?.let { s.draftLine(it) } ?: s.draftReading, style = Type.italic.copy(color = c.graphite, fontSize = 14.5.sp, lineHeight = 20.sp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        Text(s.draftLeave, style = Type.italic.copy(color = c.faint, fontSize = 13.5.sp, lineHeight = 19.sp), modifier = Modifier.padding(top = 2.dp))
     }
 }
 

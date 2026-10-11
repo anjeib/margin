@@ -191,4 +191,36 @@ class GuardsTest {
         val r1 = run(AppData(tasks = listOf(one)), """{"actions":[{"type":"update_task","task_id":"t3","due":"$mon"}]}""", "перенеси на понедельник", focus = "t3")
         assertEquals(mon, r1.tasks.first().subtasks.first().due)
     }
+
+    /** Fable, 0.35: one phrase about two clients — nothing of the other client moves, nothing of it lands in this topic's feed, «к четвергу» holds. */
+    @Test fun twoClientsInOnePhrase() {
+        val fb = ru.anjeib.margin.data.Subtask(id = "fb", title = "Фидбек по упаковке", from = "Олег", due = today.plusDays(1).toString())
+        val zerno = Task(id = "zerno", title = "Айдентика для кофейни «Зерно»", topic = true, people = listOf("Олег"), subtasks = listOf(fb))
+        val mon = today.with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.MONDAY))
+        val thu = today.with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.THURSDAY))
+        val said = "Завтра в 14 созвон с Катей по лендингу для Авиасейлс, она пришлёт фидбек к четвергу. И надо в пн показать Олегу мудборд"
+        val json = """{"actions":[
+            {"type":"create_task","title":"Созвон с Катей по лендингу Авиасейлс","due":"${today.plusDays(1)}","time":"14:00","people":["Катя"],"project":"Авиасейлс"},
+            {"type":"create_task","title":"Фидбек по лендингу от Кати","waiting_for":"Катя","due":"${today.plusDays(1)}"},
+            {"type":"add_subtasks","task_id":"zerno","subtasks":[{"title":"Показать Олегу мудборд","due":"$mon"}]}]}"""
+        val d = Assistant.apply(AppData(tasks = listOf(zerno)), Assistant.parsePlan(json), said, strict = true, recent = setOf("zerno")).data
+        val z = d.tasks.first { it.id == "zerno" }
+        // Олег's own matter is not touched by «показать Олегу».
+        assertEquals(today.plusDays(1).toString(), z.subtasks.first { it.id == "fb" }.due)
+        // Only the words about this topic go into its feed.
+        assertTrue(z.entries.none { it.text.contains("Авиасейлс") })
+        assertTrue(z.entries.any { it.text.contains("мудборд") })
+        // «она пришлёт фидбек к четвергу»: the wait is on Thursday, not on the phrase's first date.
+        assertEquals(thu.toString(), d.tasks.first { it.waitingFor == "Катя" }.due)
+        assertEquals(today.plusDays(1).toString(), d.tasks.first { it.title.startsWith("Созвон") }.due)
+    }
+
+    /** Fable, 0.35: «/идея …, можно продавать на принтах» — the title stopped at 60 letters with a comma, the record repeated it all. */
+    @Test fun longIdeaSplitsAtItsFirstPause() {
+        val said = "Серия постеров про московское метро в стиле конструктивизма, можно продавать на принтах"
+        val d = Assistant.apply(AppData(), Assistant.parsePlan("""{"actions":[{"type":"create_note","text":"$said"}]}"""), "/идея $said", strict = true).data
+        val idea = d.tasks.single { it.thought }
+        assertEquals("Серия постеров про московское метро в стиле конструктивизма", idea.title)
+        assertEquals(listOf("Можно продавать на принтах"), idea.entries.map { it.text })
+    }
 }

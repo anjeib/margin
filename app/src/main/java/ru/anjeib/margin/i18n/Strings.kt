@@ -684,7 +684,6 @@ interface Strings {
     fun srcMatter(t: String): String
     val samplesHere: String
     val removeSamplesShort: String
-    val swipeHintLine: String
     val clearWord: String
     fun dealOnHint(d: String): String
     val allToToday: String
@@ -794,6 +793,15 @@ interface Strings {
     val allTab: String
     val laneHint: String
     fun lateOfDay(n: Int): String
+    val tourIconsText: String
+    val tourIconCalendar: String
+    val tourIconOverview: String
+    val tourIconSearch: String
+    val samplesShort: String
+    fun draftLine(desc: String): String
+    val draftReading: String
+    val draftLeave: String
+    val sharePdf: String
 }
 
 object Ru : Strings {
@@ -855,7 +863,7 @@ object Ru : Strings {
             "Всё · Дела · Записи · Файлы" to "вкладки: вся лента, только дела, только ваши слова, только файлы — с поиском",
             "запись" to "ваши слова; под ними — фото и файлы",
             "дело" to "кружок, слова и строка под ними: когда, кто должен; вложенные — с отступом и тонкой линией от родительского",
-            "⋯" to "Изменить, Поделиться, В архив; у архивной — Вернуть, Удалить",
+            "⋯" to "Переименовать, Поделиться PDF (страница темы для заказчика или коллеги), В архив; у архивной — Вернуть, Удалить",
         )),
         HelpSection("Действия в теме", "Долгое нажатие на запись или дело открывает маленькое меню. Удалённое остаётся в ленте зачёркнутым, с пометкой «удалено»; нажмите на него, чтобы вернуть или удалить насовсем.", image = "bubble", pairs = listOf(
             "Добавить дело" to "новое дело с отступом под этой строкой (поле ввода переходит в режим «Добавить дело»)",
@@ -957,7 +965,7 @@ object Ru : Strings {
     override val tourGesturesTitle = "Нажмите на дело"
     override val tourGesturesText = "Откроется его карточка."
     override val tourSwipeDone = "→ вправо — сделано"
-    override val tourSwipeLater = "← влево — отложить"
+    override val tourSwipeLater = "← влево — на когда отложить"
     override val tourHold = "удержать — меню"
     override val tourOpened = "В приложении откроется карточка этого дела"
     override fun pageOf(n: Int, of: Int) = "$n из $of"
@@ -1608,7 +1616,6 @@ object Ru : Strings {
     override fun srcMatter(t: String) = "дело «$t»"
     override val samplesHere = "Рядом — примеры, чтобы осмотреться"
     override val removeSamplesShort = "убрать"
-    override val swipeHintLine = "Дело вправо — готово, влево — отложить; удержать — меню"
     override val clearWord = "Очистить"
     override fun dealOnHint(d: String) = "Дело на $d…"
     override val allToToday = "всё на сегодня"
@@ -1718,6 +1725,15 @@ object Ru : Strings {
     override val allTab = "Всё"
     override val laneHint = "Пишите прямо здесь — дата и время встанут на полях"
     override fun lateOfDay(n: Int) = "$n " + pluralRu(n, "просрочено", "просрочены", "просрочено")
+    override val tourIconsText = "Вверху справа:"
+    override val tourIconCalendar = "календарь — что на какой день"
+    override val tourIconOverview = "обзор — все темы, дела и идеи"
+    override val tourIconSearch = "поиск — по словам, людям и файлам"
+    override val samplesShort = "Ниже — примеры"
+    override fun draftLine(desc: String) = "Пока понял так: $desc — уточняю…"
+    override val draftReading = "Читаю…"
+    override val draftLeave = "Можно не ждать — доделаю сам"
+    override val sharePdf = "Поделиться PDF"
 }
 
 object En : Strings {
@@ -1798,7 +1814,7 @@ object En : Strings {
     override val tourGesturesTitle = "Tap to open"
     override val tourGesturesText = "A tap on a to-do opens its card."
     override val tourSwipeDone = "→ right — done"
-    override val tourSwipeLater = "← left — put off"
+    override val tourSwipeLater = "← left — put off to…"
     override val tourHold = "hold — menu"
     override val tourOpened = "In the app, this to-do's card opens"
     override fun pageOf(n: Int, of: Int) = "$n of $of"
@@ -2449,7 +2465,6 @@ object En : Strings {
     override fun srcMatter(t: String) = "to-do “$t”"
     override val samplesHere = "The matters around are examples"
     override val removeSamplesShort = "clear them"
-    override val swipeHintLine = "Swipe right — done, left — put off; hold — menu"
     override val clearWord = "Clear"
     override fun dealOnHint(d: String) = "A to-do for $d…"
     override val allToToday = "all to today"
@@ -2559,6 +2574,15 @@ object En : Strings {
     override val allTab = "All"
     override val laneHint = "Write right here — the date and time go on the margin"
     override fun lateOfDay(n: Int) = "$n overdue"
+    override val tourIconsText = "Top right:"
+    override val tourIconCalendar = "calendar — what is on which day"
+    override val tourIconOverview = "overview — all topics, to-dos and ideas"
+    override val tourIconSearch = "search — words, people and files"
+    override val samplesShort = "Below are examples"
+    override fun draftLine(desc: String) = "So far: $desc — checking…"
+    override val draftReading = "Reading…"
+    override val draftLeave = "No need to wait — I'll finish on my own"
+    override val sharePdf = "Share as PDF"
 }
 
 /** Current language for code outside composition (dates, notifications, prompts). */

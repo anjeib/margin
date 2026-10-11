@@ -140,7 +140,8 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
                 deals.forEachIndexed { i, t ->
                     item("t" + t.id) {
                         MatterRow(t, seatOf(i, deals.size), today, whenNote(t, today, underDay = false),
-                            onToggle = { vm.completeWithUndo(t.id) }, onOpen = { keep(); onTask(t.id) }, onTime = { keep(); onTask(t.id) }, onLater = null, swipe = false)
+                            onToggle = { vm.completeWithUndo(t.id) }, onOpen = { keep(); onTask(t.id) }, onTime = { keep(); onTask(t.id) }, onLater = null, swipe = false,
+                            onOpenTopic = { keep(); onTask(it) })
                     }
                 }
             }

@@ -263,7 +263,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 open.forEachIndexed { i, t ->
                     MatterRow(t, seatOf(i, open.size), today, whenNote(t, today, underDay = false),
                         onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpenTask(t.id) }, onTime = { onOpenTask(t.id) }, onLater = null,
-                        hidePerson = person.name, swipe = false)
+                        hidePerson = person.name, swipe = false, onOpenTopic = onOpenTask)
                 }
             }
             if (openTopics.isNotEmpty()) {

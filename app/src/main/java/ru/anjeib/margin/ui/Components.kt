@@ -223,7 +223,9 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
              /** v8: the topic a matter belongs to, first and petrol — «≡ Кофейня «Зерно»». */
              topic: String? = null,
              /** v8: a last quiet word — «с 25 сен» for a matter lying without a day. */
-             extra: String? = null) {
+             extra: String? = null,
+             /** The topic opens on its own tap (Fable, 0.35: it looked like a link and opened the matter). */
+             onTopic: (() -> Unit)? = null) {
     val c = M.c
     val s = M.s
     val links = LocalPeopleLinks.current
@@ -238,7 +240,11 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
             withLink(androidx.compose.ui.text.LinkAnnotation.Clickable(tag, androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = color))) { onClick() }) { append(shown) }
         }
         fun name(n0: String, shown: String = n0) = link("p:$n0", shown, if (links.isContact(n0)) c.link else c.graphite) { links.onName(n0) }
-        topic?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = c.link)) { append("≡ $it") } }
+        topic?.let { tp ->
+            next()
+            if (onTopic != null) withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("topic", androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = c.link))) { onTopic() }) { append("≡ $tp") }
+            else withStyle(androidx.compose.ui.text.SpanStyle(color = c.link)) { append("≡ $tp") }
+        }
         // When first, darker than the rest — the eye finds it without looking; late in accent.
         whenText?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = if (t.dueDate?.isBefore(today) == true) c.accentText else c.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)) { append(it) } }
         // A name already said in the title («Скинуть Лёше исходники») is not repeated under it.
