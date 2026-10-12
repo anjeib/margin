@@ -223,4 +223,40 @@ class GuardsTest {
         assertEquals("Серия постеров про московское метро в стиле конструктивизма", idea.title)
         assertEquals(listOf("Можно продавать на принтах"), idea.entries.map { it.text })
     }
+
+    // GigaChat, 12 окт: who owes whom was lost — «Напомнить Саше о смете» instead of «ждём от Саши». The phone reads it outright.
+    @Test fun aLostWaitIsFoundAgain() {
+        val said = "Саша обещал прислать смету, через пару дней напомнить."
+        val d = run(AppData(), """{"actions":[{"type":"create_task","title":"Напомнить Саше о смете","due":"${today.plusDays(2)}","people":["Саша"]}]}""", said)
+        val t = d.tasks.single()
+        assertEquals("Саша", t.waitingFor)
+        assertTrue(t.title, !t.title.startsWith("Напомнить") && t.title.contains("смет", true))
+        assertTrue(t.people.none { it == "Саша" })
+    }
+
+    @Test fun aLostPromiseIsFoundAgain() {
+        val said = "Обещал Анне показать калькулятор до пятницы"
+        val d = run(AppData(), """{"actions":[{"type":"create_task","title":"Показать калькулятор Анне","people":["Анна"]}]}""", said)
+        assertEquals("Анна", d.tasks.single().promisedTo)
+        assertEquals(null, d.tasks.single().waitingFor)
+    }
+
+    @Test fun anErrandStaysAnErrand() {
+        val d = run(AppData(), """{"actions":[{"type":"create_task","title":"Заказать муку у Тимура","people":["Тимур"]}]}""", "заказать муку у Тимура в понедельник")
+        assertEquals(null, d.tasks.single().waitingFor)
+        assertEquals(null, d.tasks.single().promisedTo)
+    }
+
+    @Test fun theModelsOwnWaitIsKept() {
+        val d = run(AppData(), """{"actions":[{"type":"create_task","title":"Смета","waiting_for":"Саша"}]}""", "Саша обещал прислать смету")
+        assertEquals("Саша", d.tasks.single().waitingFor)
+    }
+
+    @Test fun aLostWaitInALongPhrase() {
+        val said = "Саша обещал прислать смету, через пару дней напомнить. Ещё почитать про новый Claude, купить корм коту и подумать над главной vuzburo — мне кажется, нужен калькулятор стоимости и отзывы"
+        val d = run(AppData(), """{"actions":[{"type":"create_task","title":"Напомнить Саше о смете","start":"${today.plusDays(2)}","due":"${today.plusDays(2)}","people":["Саша"],"entry":"Саша обещал прислать смету, напомнить через пару дней."},{"type":"create_task","title":"Почитать про новый Claude"},{"type":"create_task","title":"Купить корм коту"}]}""", said)
+        val t = d.tasks.first { it.title.contains("смет", true) }
+        assertEquals("Саша", t.waitingFor)
+        assertEquals("Получить смету", t.title)
+    }
 }

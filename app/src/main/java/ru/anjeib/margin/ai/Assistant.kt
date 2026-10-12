@@ -819,6 +819,29 @@ object Assistant {
                 }
             }
         }
+        // «Саша обещал прислать смету», «Лена сдаёт график, я жду», «обещал Виктору оплату»: who owes whom is the heart of Margin.
+        // A model that wrote «Напомнить Саше о смете» (GigaChat, 12 окт) lost it; the phone reads it outright, and a new matter
+        // about the same person and the same words takes it. Never over a wait or a promise the model did set.
+        if (strict && source.isNotBlank()) {
+            val owed = runCatching { LocalParser.parse(source, data).items }.getOrDefault(emptyList()).filter { it.waitingFor != null || it.promisedTo != null }
+            owed.forEach { w ->
+                val person = w.waitingFor ?: w.promisedTo ?: return@forEach
+                val said = stems(w.title)
+                val t = touched.mapNotNull { id -> d.tasks.find { it.id == id } }.filter { t ->
+                    data.tasks.none { it.id == t.id } && !t.topic && t.waitingFor == null && t.promisedTo == null &&
+                        (t.people.any { sameName(it, person) } || stems(t.title).any { st -> stems(person).contains(st) }) &&
+                        (stems(t.title) intersect said).isNotEmpty()
+                }.singleOrNull() ?: return@forEach
+                // «Напомнить Саше о смете» is the model's reading of a wait: the matter is what Саша sends.
+                val retitle = Regex("^(?:напомнить|напомни|remind)\\s", RegexOption.IGNORE_CASE).containsMatchIn(t.title) && w.title.isNotBlank()
+                d = d.copy(tasks = d.tasks.map { if (it.id != t.id) it else it.copy(
+                    waitingFor = if (w.waitingFor != null) person else null, promisedTo = if (w.waitingFor == null) person else null,
+                    people = it.people.filterNot { p -> sameName(p, person) },
+                    // The phone's title up to the first comma, without «от Саши»: «Получить смету».
+                    title = if (retitle) w.title.substringBefore(',').replace(Regex("\\s+(?:от|у)\\s+\\p{L}+$"), "").trim().ifBlank { it.title }.sentence() else it.title,
+                ) })
+            }
+        }
         val s = L.s
         val caption = when {
             created > 1 -> s.tasksCreated(created)

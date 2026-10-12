@@ -23,6 +23,52 @@ class YandexCompareTest {
     private val orKey = System.getenv("OPENROUTER_KEY") ?: ""
     private val folder = runCatching { File("$home/.yc_margin_folder").readText().trim() }.getOrDefault("")
 
+    // Cloud.ru Foundation Models (models hosted by Cloud.ru itself): «cr:<model>» in MODELS. Key — CLOUDRU_KEY in secrets.properties.
+    private val crKey = System.getenv("CLOUDRU_KEY") ?: runCatching {
+        java.util.Properties().apply { File("../secrets.properties").inputStream().use { load(it) } }.getProperty("CLOUDRU_KEY").orEmpty().trim()
+    }.getOrDefault("")
+    /** ₽ per 1M tokens incl. VAT (input, output) — Cloud.ru tariff of 2 Oct 2026, own-hosted models only. */
+    private val crPrice = mapOf(
+        "GigaChat/GigaChat-3-Pro" to (73.0292 to 176.3876),
+        "GigaChat/GigaChat-2-Max" to (569.3374 to 569.3374),
+        "deepseek-ai/DeepSeek-V4-Pro" to (183.0 to 732.0),
+        "openai/gpt-oss-120b" to (15.86 to 61.0),
+        "Qwen/Qwen3.6-35B-A3B" to (219.6 to 329.4),
+        "zai-org/GLM-5.1" to (198.86 to 829.6),
+        "moonshotai/Kimi-K2.6" to (175.68 to 725.9),
+    )
+    data class CrReply(val content: String, val input: Int, val output: Int, val rub: Double)
+    private fun cloudru(model: String, system: String, user: String): CrReply {
+        fun post(withFormat: Boolean): Pair<Int, String> {
+            val body = kotlinx.serialization.json.buildJsonObject {
+                put("model", kotlinx.serialization.json.JsonPrimitive(model))
+                put("messages", kotlinx.serialization.json.JsonArray(listOf("system" to system, "user" to user).map { (r, c) ->
+                    kotlinx.serialization.json.JsonObject(mapOf("role" to kotlinx.serialization.json.JsonPrimitive(r), "content" to kotlinx.serialization.json.JsonPrimitive(c))) }))
+                put("temperature", kotlinx.serialization.json.JsonPrimitive(0.2))
+                put("max_tokens", kotlinx.serialization.json.JsonPrimitive(1500))
+                if (withFormat) put("response_format", kotlinx.serialization.json.JsonObject(mapOf("type" to kotlinx.serialization.json.JsonPrimitive("json_object"))))
+            }.toString()
+            val c = (java.net.URL("https://foundation-models.api.cloud.ru/v1/chat/completions").openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "POST"; doOutput = true; connectTimeout = 10_000; readTimeout = 120_000
+                setRequestProperty("Content-Type", "application/json"); setRequestProperty("Authorization", "Bearer $crKey")
+            }
+            c.outputStream.use { it.write(body.toByteArray()) }
+            val code = c.responseCode
+            return code to ((if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: "")
+        }
+        var (code, text) = post(true)
+        if (code == 400 || code == 422) { val r = post(false); code = r.first; text = r.second }
+        if (code !in 200..299) error("Cloud.ru $code: ${text.take(200)}")
+        val root = ru.anjeib.margin.data.AppJson.parseToJsonElement(text) as kotlinx.serialization.json.JsonObject
+        fun o(e: kotlinx.serialization.json.JsonElement?) = e as? kotlinx.serialization.json.JsonObject
+        val content = (o(o((root["choices"] as kotlinx.serialization.json.JsonArray).first())?.get("message"))?.get("content") as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty()
+        val u = o(root["usage"])
+        val inp = (u?.get("prompt_tokens") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull() ?: 0
+        val out = (u?.get("completion_tokens") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull() ?: 0
+        val (pi, po) = crPrice[model] ?: (0.0 to 0.0)
+        return CrReply(content, inp, out, (inp * pi + out * po) / 1_000_000.0)
+    }
+
     private val today = java.time.LocalDate.now()
     private fun next(d: java.time.DayOfWeek) = today.with(java.time.temporal.TemporalAdjusters.nextOrSame(d)).toString()
     private val tomorrow = today.plusDays(1).toString()
@@ -35,19 +81,29 @@ class YandexCompareTest {
 
     data class Step(val text: String, val scopeTask: String? = null, val check: (AppData, AppData) -> Boolean)
 
+    // Ideas live as thoughts (topics without matters) since «Темы»; old notes are still read. Matters are tasks that aren't thoughts.
+    data class Idea(val project: String?, val text: String)
+    private fun ideas(d: AppData) = d.notes.map { n -> Idea(n.project, n.title + " " + n.entries.joinToString(" ") { it.text }) } +
+        d.tasks.filter { it.thought }.map { t -> Idea(t.project, t.title + " " + t.entries.joinToString(" ") { it.text }) }
+    private fun deals(d: AppData) = d.tasks.filter { !it.thought }
+
     private val steps = listOf(
         Step("На этой неделе разобраться с vuzburo и запустить. Дима сделает дизайн, на мне тексты и оплата.") { _, d ->
             val t = d.tasks.firstOrNull { it.project == "vuzburo" }
             t != null && t.due == sunday && t.subtasks.size >= 2 && t.people.any { it.contains("Дим") }
         },
         Step("для vuzburo ещё купить домен и настроить почту") { b, d ->
-            d.tasks.size == b.tasks.size && d.tasks.first { it.project == "vuzburo" }.subtasks.size >= b.tasks.first { it.project == "vuzburo" }.subtasks.size + 2
+            deals(d).size == deals(b).size && d.tasks.first { it.project == "vuzburo" }.subtasks.size >= b.tasks.first { it.project == "vuzburo" }.subtasks.size + 2
         },
         Step("Саша обещал прислать смету, через пару дней напомнить. Ещё почитать про новый Claude, купить корм коту и подумать над главной vuzburo — мне кажется, нужен калькулятор стоимости и отзывы") { b, d ->
-            val new = d.tasks.filter { t -> b.tasks.none { it.id == t.id } }
-            new.size >= 3 && new.any { it.waitingFor?.contains("Саш") == true } && d.notes.any { it.project == "vuzburo" }
+            val new = deals(d).filter { t -> b.tasks.none { it.id == t.id } }
+            new.size >= 3 && new.any { it.waitingFor?.contains("Саш") == true } &&
+                ideas(d).any { it.project == "vuzburo" || it.text.contains("калькулятор", true) || it.text.contains("отзыв", true) }
         },
-        Step("созвониться с Анной по договору") { b, d -> d.tasks.size == b.tasks.size + 1 && d.tasks.last().let { t -> t.people.any { it.contains("Анн") } || t.title.contains("Анн") } },
+        Step("созвониться с Анной по договору") { b, d ->
+            val new = deals(d).filter { t -> b.tasks.none { it.id == t.id } }
+            new.size == 1 && new.single().let { t -> t.people.any { it.contains("Анн") } || t.title.contains("Анн") }
+        },
         Step("завтра в 18:00 стоматолог") { _, d -> d.tasks.any { it.title.contains("томатолог", true) && it.due == tomorrow && it.time == "18:00" } },
         Step("Дима должен прислать макет в среду") { b, d ->
             val new = d.tasks.filter { t -> b.tasks.none { it.id == t.id } }
@@ -55,10 +111,10 @@ class YandexCompareTest {
         },
         Step("Дима — наш дизайнер, его телефон +7 999 123-45-67") { _, d -> d.persons.any { it.name.contains("Дим") && it.phone?.contains("999") == true && it.about != null } },
         Step("идея: на главной vuzburo сделать блок с ценами без «от»") { b, d ->
-            d.tasks.size == b.tasks.size && d.notes.any { n -> n.project == "vuzburo" && n.entries.any { it.text.contains("цен", true) } }
+            deals(d).size == deals(b).size && ideas(d).any { (it.project == "vuzburo" || it.text.contains("vuzburo", true)) && it.text.contains("цен", true) }
         },
         Step("Добавь в заметку: зайти в Бахчисарай в среду.") { _, d ->
-            d.notes.any { n -> n.project != "vuzburo" && (n.title + n.entries.joinToString { it.text }).contains("Бахчисара", true) }
+            ideas(d).any { it.project != "vuzburo" && !it.text.contains("vuzburo", true) && it.text.contains("Бахчисара", true) } // not into the vuzburo note
         },
         Step("Обещал Анне показать калькулятор до пятницы") { _, d ->
             d.tasks.any { it.promisedTo?.contains("Анн") == true && it.due == friday && it.waitingFor == null }
@@ -114,7 +170,12 @@ class YandexCompareTest {
                     val ok = try {
                         val t0 = System.currentTimeMillis()
                         val content: String
-                        if (m.startsWith("or:")) {
+                        if (m.startsWith("cr:")) {
+                            val sys = Assistant.systemPrompt(d, s, scope, query = st.text)
+                            var r = cloudru(m.removePrefix("cr:"), sys, Assistant.userMessage(st.text))
+                            if (Assistant.isBroken(r.content)) { rub += r.rub; r = cloudru(m.removePrefix("cr:"), sys, Assistant.userMessage(st.text)); retries++ }
+                            content = r.content; rub += r.rub; inTok += r.input; outTok += r.output
+                        } else if (m.startsWith("or:")) {
                             // Baseline: the current OpenRouter model, cost converted at ~100 ₽/$.
                             val r = ru.anjeib.margin.ai.OpenRouter.chat(orKey, m.removePrefix("or:"), Assistant.systemPrompt(d, s, scope, query = st.text), listOf("user" to Assistant.userMessage(st.text)), quick = true)
                             content = r.content; rub += r.costUsd * 100
@@ -162,7 +223,7 @@ class YandexCompareTest {
     private val cases = listOf(
         Case("мука: повтор, не ожидание", "кажд понедельник заказать муку у тимура", emptyList()) { b, d ->
             val t = d.tasks.firstOrNull { it.title.contains("мук", true) }
-            t != null && t.waitingFor == null && t.repeat?.freq == "weekly" && t.repeat.days == listOf(1) && d.tasks.size == b.tasks.size + 1
+            t != null && t.waitingFor == null && t.repeat?.freq == "weekly" && t.repeat.days == listOf(1) && deals(d).size == deals(b).size + 1
         },
         Case("аренда: первое число — в будущем", "аренда первого числа каждый месяц", emptyList()) { _, d ->
             val t = d.tasks.firstOrNull { it.title.contains("аренд", true) }
@@ -180,10 +241,10 @@ class YandexCompareTest {
             untouched(b, d, "мастер") && d.tasks.first { it.title.contains("мастер", true) }.let { it.due == dayAfter && it.time == "09:00" }
         },
         Case("подзадачи в открытой карточке", "подзадачи: собрать мудборд, 3 варианта эскизов, финальная презентация", olga(), scopeTask = "логотип") { b, d ->
-            untouched(b, d, "логотип") && d.tasks.size == b.tasks.size && d.tasks.first { it.title.contains("логотип", true) }.subtasks.size == 3
+            untouched(b, d, "логотип") && deals(d).size == deals(b).size && d.tasks.first { it.title.contains("логотип", true) }.subtasks.size == 3
         },
         Case("подзадачи из главного поля", "к логотипу для кофейни подзадачи: собрать мудборд, 3 варианта эскизов, финальная презентация", olga()) { b, d ->
-            untouched(b, d, "логотип") && d.tasks.size == b.tasks.size && d.tasks.first { it.title.contains("логотип", true) }.subtasks.size == 3
+            untouched(b, d, "логотип") && deals(d).size == deals(b).size && d.tasks.first { it.title.contains("логотип", true) }.subtasks.size == 3
         },
         Case("срок у дела человека", "Дента+: Катя делает макеты главной к четвергу, Артём верстает после макетов, Ирина должна прислать тексты до среды", emptyList()) { _, d ->
             // Katya's deadline must survive somewhere: as a task (subtasks have no dates).
@@ -221,12 +282,18 @@ class YandexCompareTest {
                     val ok = try {
                         val sys = Assistant.systemPrompt(b, s, scope, query = c.text)
                         val mm = if (m == "hybrid") (if (Assistant.isComplex(c.text, scope)) "deepseek-v4.1-flash" else "aliceai-llm-flash") else m
-                        var r = Yandex.chat(key, folder, mm, sys, listOf("user" to Assistant.userMessage(c.text)))
-                        if (Assistant.isBroken(r.content)) { rub += r.rub; r = Yandex.chat(key, folder, mm, sys, listOf("user" to Assistant.userMessage(c.text))) }
-                        rub += r.rub
-                        val d = Assistant.apply(b, Assistant.parsePlan(r.content).copy(question = null), c.text, strict = true, focus = (scope as? Scope.InTask)?.taskId).data
+                        val content = if (m.startsWith("cr:")) {
+                            var r = cloudru(m.removePrefix("cr:"), sys, Assistant.userMessage(c.text))
+                            if (Assistant.isBroken(r.content)) { rub += r.rub; r = cloudru(m.removePrefix("cr:"), sys, Assistant.userMessage(c.text)) }
+                            rub += r.rub; r.content
+                        } else {
+                            var r = Yandex.chat(key, folder, mm, sys, listOf("user" to Assistant.userMessage(c.text)))
+                            if (Assistant.isBroken(r.content)) { rub += r.rub; r = Yandex.chat(key, folder, mm, sys, listOf("user" to Assistant.userMessage(c.text))) }
+                            rub += r.rub; r.content
+                        }
+                        val d = Assistant.apply(b, Assistant.parsePlan(content).copy(question = null), c.text, strict = true, focus = (scope as? Scope.InTask)?.taskId).data
                         val good = runCatching { c.check(b, d) }.getOrDefault(false)
-                        if (!good) println("  FAIL $m [${c.name}] via $mm: " + r.content.replace("\n", " ").take(600))
+                        if (!good) println("  FAIL $m [${c.name}] via $mm: " + content.replace("\n", " ").take(600))
                         good
                     } catch (e: Exception) { println("  $m [${c.name}] error: ${e.message?.take(200)}"); false }
                     total++; if (ok) pass++ else fails[c.name] = (fails[c.name] ?: 0) + 1
