@@ -57,6 +57,8 @@ object Yandex {
         "gpt-oss-120b" to Triple(0.3, 0.3, 0.3),
         "yandexgpt-lite" to Triple(0.2, 0.2, 0.2),
         "yandexgpt-5.1" to Triple(0.8, 0.8, 0.8),
+        // Margin's door on Cloud.ru answers with GigaChat (Cloud.ru tariff, 2 Oct 2026, incl. VAT).
+        "GigaChat/GigaChat-3-Pro" to Triple(0.073, 0.073, 0.176),
     )
 
     fun cost(model: String, u: Usage): Double {
@@ -94,7 +96,9 @@ object Yandex {
                 cached = (u?.get("prompt_tokens_details") as? JsonObject)?.get("cached_tokens")?.jsonPrimitive?.intOrNull ?: 0,
                 output = u?.get("completion_tokens")?.jsonPrimitive?.intOrNull ?: 0,
             )
-            YaReply(content, usage, cost(model, usage))
+            // The door may answer with another model (GigaChat on Cloud.ru): the spend is counted by the one that answered.
+            val answered = root["model"]?.jsonPrimitive?.contentOrNull?.takeIf { it in prices } ?: model
+            YaReply(content, usage, cost(answered, usage))
         }
 
     /** SpeechKit v1 synchronous recognition of a 16 kHz mono WAV (≤30 s). Billed per started 15 s. */

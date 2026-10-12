@@ -21,3 +21,4 @@ server/blocked.local
 .cxx/
 app/.cxx/
 third_party
+server/cloudru/env.local
