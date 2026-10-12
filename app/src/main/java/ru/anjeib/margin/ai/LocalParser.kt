@@ -113,6 +113,8 @@ object LocalParser {
 
     private class Names(d: AppData) {
         val byForm = HashMap<String, String>()
+        /** The user's own contacts as they spelled them — for «ЖЭК», «МТС» written right in titles. */
+        val contacts: List<String> = d.persons.filter { !it.archived }.map { it.name }
         init {
             commonNames.forEach { n -> forms(n).forEach { f -> byForm.putIfAbsent(f, n.replace("Артем", "Артём")) } }
             // The user's own people win over the dictionary («Маша» their friend, «ЖЭК» their office).
@@ -126,7 +128,10 @@ object LocalParser {
 
     // ---------------- cues ----------------
 
-    private const val IDEA = "(?:идея|мысль|заметка|на заметку|подумать о|подумать над)\\s*[:—–-]?\\s*"
+    // «идея: …», «у меня идея …», «есть идея, …», «запиши идею …», «новая мысль — …»: said any way, it's an idea (owner, 12 окт).
+    private const val IDEA = "(?:(?:(?:у\\s+меня|есть|запиши|записать|добавь|новая|новую)\\s+){0,3}(?:идея|идею|мысль|заметк\\p{L}*)(?:\\s+такая)?|на заметку|подумать о|подумать над)\\s*[:—–,.-]?\\s*"
+    // «дело: …», «новое дело …», «задача …», «запиши дело …» — the word says what it is and leaves the title; «дело в том…» is no matter.
+    private const val TASK = "(?:(?:новое|новую|новая|добавь|добавить|запиши|записать|создай|создать)\\s+)?(?:дело|задач[ауи])(?!\\s+в\\s+том)\\s*[:—–,.-]?\\s*"
     private val ideaCue = Regex("^$IDEA", RegexOption.IGNORE_CASE)
     /** Reports and edits need what exists and what it means — the AI's work. */
     // Only what is plainly a question: «…?» at the end, or «что горит» — «Когда приедет Дима, отдать ключи» stays a matter.
@@ -149,7 +154,8 @@ object LocalParser {
               /** The hour now — a weekday or a repeat whose hour has already passed today starts next time. */
               now: LocalTime? = LocalTime.now().takeIf { today == LocalDate.now() }): Result {
         // Times and days said in words («в пятнадцать», «двадцатого октября») read as digits — dictation writes them so.
-        val text = SpokenNumbers.normalize(text0.trim())
+        // «Идея. Блог о дизайне» — speech puts a full stop after the word that says what it is: read it as «Идея: …».
+        val text = SpokenNumbers.normalize(text0.trim()).replace(Regex("^\\s*(идея|мысль|заметка|дело|задача)\\s*[.!]\\s+", RegexOption.IGNORE_CASE), "$1: ")
         if (text.isEmpty()) return Result(emptyList(), true)
         val names = Names(d)
         var sure = true
@@ -277,6 +283,7 @@ object LocalParser {
         fun cut(r: Regex, f: (MatchResult) -> Unit): Boolean = cutIf(r) { f(it); true }
         var kind = kind0 ?: "task"
         cut(Regex("^\\s*$IDEA", RegexOption.IGNORE_CASE)) { kind = "idea" }
+        if (kind == "task") cut(Regex("^\\s*$TASK", RegexOption.IGNORE_CASE)) { }
 
         var due: LocalDate? = null; var start: LocalDate? = null; var time: String? = null; var part: String? = null
         var days = emptyList<Pair<LocalDate, String?>>()
@@ -448,7 +455,7 @@ object LocalParser {
         title = title.replace(filler, "").trim().trim(',', '.', '—', '-', ':', ' ')
         if (waitingFor != null && !asSaid) title = "Получить ${title.replaceFirstChar { it.lowercase() }} от ${waitingFor!!.genitive()}"
         if (title.isBlank()) title = chunk.trim()
-        title = title.sentence().withNames(listOfNotNull(waitingFor, promisedTo) + people)
+        title = title.sentence().withNames(listOfNotNull(waitingFor, promisedTo) + people).properNames(names.contacts, listOfNotNull(waitingFor, promisedTo) + people)
 
         return Item(kind = kind, title = title, due = due, start = start, time = time, part = part, days = days, repeat = repeat,
             people = people, waitingFor = waitingFor, promisedTo = promisedTo, place = place, sphere = sphere)
@@ -521,5 +528,21 @@ object LocalParser {
             i.sphere?.let { if (rus) (if (it == "work") "работа" else "личное") else it },
         )
         return parts.joinToString("  ·  ")
+    }
+
+    /**
+     * Names written as they are: a contact's own spelling («жэк», «Мтс» → «ЖЭК», «МТС»), and a surname after a known first
+     * name («с Иваном петровым» → «с Иваном Петровым») — dictation and quick typing leave them small.
+     */
+    internal fun String.properNames(contacts: List<String>, people: List<String>): String {
+        var t = this
+        contacts.flatMap { it.split(Regex("\\s+")) }.filter { w -> w.length >= 2 && w.drop(1).any { it.isUpperCase() } }.distinct().forEach { w ->
+            t = Regex("(?<![\\p{L}\\d])" + Regex.escape(w) + "(?![\\p{L}\\d])", RegexOption.IGNORE_CASE).replace(t, w)
+        }
+        val firsts = people.map { it.substringBefore(' ').lowercase() }.filter { it.length >= 3 }.map { it.take((it.length - 1).coerceAtLeast(3)) }
+        if (firsts.isEmpty()) return t
+        return Regex("(\\p{Lu}\\p{Ll}+)(\\s+)(\\p{Ll}+(?:ов|ев|ёв|ин|ын|ск|цк)\\p{Ll}{0,3})(?![\\p{L}\\d])").replace(t) { m ->
+            if (firsts.any { m.groupValues[1].lowercase().startsWith(it) }) m.groupValues[1] + m.groupValues[2] + m.groupValues[3].replaceFirstChar { it.uppercaseChar() } else m.value
+        }
     }
 }

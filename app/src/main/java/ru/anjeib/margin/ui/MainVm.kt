@@ -268,8 +268,19 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun isRequest(text: String) = Commands.isRequest(text)
 
     private fun sendNow(text: String, smart: Boolean, label: String?, scope: Scope, files: List<Attachment>, asQuestion: Boolean, movedHere: Boolean) {
+        // «в тему Ремонт ванной купить плитку» — into that topic, as «#тема» would send it (on the phone, offline too).
+        if (!smart && scope == Scope.Main) Commands.intoTopic(text, data.value.tasks.filter { it.topic && !it.done }.map { it.id to it.title })?.let { (id, said) ->
+            data.value.tasks.find { it.id == id }?.let { _toast.value = L.s.movedToTopic(it.title); land(listOf(it.id)) }
+            // «купить плитку» (a verb first) is a matter of the topic; «хозяйка согласна» — a record in its feed.
+            val deal = Regex("^\\p{L}+(?:ть|ти|чь|ться|тись)(?![\\p{L}])", RegexOption.IGNORE_CASE).containsMatchIn(said)
+            return sendNow(said, false, label, Scope.InTask(id), files, asQuestion = deal, movedHere = true)
+        }
         // «Сделай тему Правки к приложению» — a topic now, by its name, on the phone (as «/тема Правки к приложению»).
         if (!smart && scope == Scope.Main) Commands.newTopic(text)?.let { name -> return sendNow("/" + L.s.tagTopic + " " + name, false, label ?: text, scope, files, asQuestion, movedHere) }
+        // «Дело: купить хлеб», «добавь дело позвонить маме» — a matter, read on the phone (dates and people too), not left to the AI.
+        if (!smart && scope == Scope.Main) Commands.parse(text)?.takeIf { it.what == "task" && it.value.isNotBlank() }?.let { c ->
+            return sendNow("/" + L.s.tagDeal + " " + c.value, false, label ?: text, scope, files, asQuestion, movedHere)
+        }
         // «/дело», «/тема», «/идея», «/работа», «/личное» — said by the user, so they decide; the AI only fills in the rest.
         val tg = parseTags(if (scope == Scope.Main && !smart) onPickedDay(text) else text)
         lastSaid = tg.text to text

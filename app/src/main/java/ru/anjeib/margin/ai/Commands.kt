@@ -68,10 +68,36 @@ object Commands {
             Regex("^$verb\\s+(?:нов(?:ую|ый|ая)\\s+|a\\s+new\\s+|new\\s+)?$what\\s*[:—–\\-]?\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)),
             Regex("^нов(?:ая|ый|ую)\\s+$what\\s*[:—–\\-]?\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)),
             Regex("^new\\s+$what\\s*[:—–\\-]?\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)),
-            Regex("^(?:тема|проект|topic|project)\\s*:\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)),
-        ).firstNotNullOfOrNull { it.find(t)?.groupValues?.get(1) } ?: return null
+            Regex("^(?:тема|проект|topic|project)\\s*[:.]\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)),
+            // «тема переезд» — said without a colon: a short phrase starting with the word is a topic's name (not «тема для поста…»).
+            Regex("^(?:тема|проект)\\s+(?!(?:для|о|об|про|на|в|с|у|это|такая)\\s)(.+)$", RegexOption.IGNORE_CASE).takeIf { t.split(Regex("\\s+")).size <= 6 },
+        ).filterNotNull().firstNotNullOfOrNull { it.find(t)?.groupValues?.get(1) } ?: return null
         val clean = name.trim().trim('«', '»', '"', '“', '”', '.', ' ')
         return clean.takeIf { it.length >= 2 }?.replaceFirstChar { it.uppercaseChar() }
+    }
+
+    /**
+     * «в тему Ремонт ванной купить плитку», «В теме ремонт ванной: купить плитку», «к теме ремонт ванной добавь смету»:
+     * the words go into an existing topic named by the words after «тему», as «#тема» would send them. [topics] — (id, title)
+     * of open topics; the longest name that fits wins; a word of the name may be in another case («ремонта ванной»).
+     * Returns the topic's id and what to write there, or null.
+     */
+    fun intoTopic(text: String, topics: List<Pair<String, String>>): Pair<String, String>? {
+        val m = Regex("^(?:в|во|к|для)\\s+тем[уеы]\\s+(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(text.trim()) ?: return null
+        val rest = m.groupValues[1]
+        val words = Regex("[\\p{L}\\d]+").findAll(rest).toList()
+        fun same(a: String, b: String): Boolean {
+            val x = a.lowercase().replace('ё', 'е'); val y = b.lowercase().replace('ё', 'е')
+            val stem = (minOf(x.length, y.length) - 2).coerceAtLeast(3)
+            return x == y || (x.length >= 4 && y.length >= 4 && x.take(stem) == y.take(stem))
+        }
+        val hit = topics.mapNotNull { (id, title) ->
+            val tw = Regex("[\\p{L}\\d]+").findAll(title).map { it.value }.toList()
+            if (tw.isEmpty() || tw.size > words.size || !tw.indices.all { same(tw[it], words[it].value) }) null else Triple(id, tw.size, words[tw.size - 1].range.last + 1)
+        }.maxByOrNull { it.second } ?: return null
+        val said = rest.substring(hit.third).trim().trimStart(':', ',', '—', '–', '-', '.', ' ')
+            .replace(Regex("^(?:добавь|добавить|запиши|записать)\\s+", RegexOption.IGNORE_CASE), "").trim()
+        return if (said.isBlank()) null else hit.first to said
     }
 
     /**
