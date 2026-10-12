@@ -1,48 +1,45 @@
 package ru.anjeib.margin.voice
 
-import android.app.ActivityManager
 import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
 
 /**
  * Speech on the phone comes by itself: after the first start, over Wi-Fi, with the battery and storage fine,
- * the model is fetched in the background (resuming where it stopped). Nothing to find in the settings —
- * dictation simply keeps working when the network or the cloud doesn't.
+ * the model (GigaAM v3, ~230 MB) is fetched in the background, resuming where it stopped; then once a week the same worker
+ * asks Margin's door whether a newer, checked version is out and fetches it (LocalSpeech.ensure). Nothing to find in
+ * the settings — dictation simply keeps working when the network or the cloud doesn't.
  */
 class ModelWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
-        if (!LocalWhisper.supported) return Result.success()
-        if (LocalWhisper.ready(applicationContext)) return Result.success()
-        LocalWhisper.download(applicationContext, pick(applicationContext))
-        return if (LocalWhisper.state.value is LocalWhisper.State.Ready) Result.success() else Result.retry()
+        if (!LocalSpeech.supported) return Result.success()
+        LocalSpeech.ensure(applicationContext)
+        return if (LocalSpeech.state.value is LocalSpeech.State.Ready) Result.success() else Result.retry()
     }
 
     companion object {
-        /** The accurate model (190 MB, good Russian) when the phone has the memory for it; the light one (60 MB) otherwise. */
-        fun pick(ctx: Context): LocalWhisper.Model {
-            val mi = ActivityManager.MemoryInfo()
-            ctx.getSystemService(ActivityManager::class.java)?.getMemoryInfo(mi)
-            return if (mi.totalMem >= 3_500_000_000L) LocalWhisper.Model.Small else LocalWhisper.Model.Base
-        }
+        private fun constraints() = Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED)
+            .setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build()
 
         fun schedule(ctx: Context) {
-            if (!LocalWhisper.supported || LocalWhisper.ready(ctx)) return
-            WorkManager.getInstance(ctx).enqueueUniqueWork(
-                "speech-model", ExistingWorkPolicy.KEEP,
-                OneTimeWorkRequestBuilder<ModelWorker>()
-                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED)
-                        .setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build())
-                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
-                    .build(),
-            )
+            if (!LocalSpeech.supported) return
+            val wm = WorkManager.getInstance(ctx)
+            // The weekly look for a newer model (and the first download, if the one-off below couldn't finish).
+            wm.enqueueUniquePeriodicWork("speech-model-update", ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<ModelWorker>(7, TimeUnit.DAYS).setConstraints(constraints()).build())
+            if (LocalSpeech.ready(ctx)) return
+            wm.enqueueUniqueWork("speech-model", ExistingWorkPolicy.KEEP,
+                OneTimeWorkRequestBuilder<ModelWorker>().setConstraints(constraints())
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES).build())
         }
     }
 }

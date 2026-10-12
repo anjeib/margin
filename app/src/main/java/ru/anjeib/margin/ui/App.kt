@@ -491,7 +491,34 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
                 style = Type.small.copy(color = c.graphite, fontSize = 12.sp, fontFeatureSettings = "tnum"),
                 modifier = Modifier.padding(start = 26.dp, top = 10.dp)
                     .combinedClickable(onClick = {}, onLongClick = onBuildLongPress))
+            // Owner, 12 окт: how far the speech model has come, then «Готово» — next to the build, where things about the app live.
+            speechStatus()?.let { (line, retry) ->
+                val ctx = LocalContext.current
+                val scope = rememberCoroutineScope()
+                Text(s.speechModel + " · " + line, style = Type.small.copy(color = c.graphite, fontSize = 12.sp, fontFeatureSettings = "tnum"),
+                    modifier = Modifier.padding(start = 26.dp, top = 4.dp)
+                        .then(if (retry) Modifier.clickable { scope.launch { ru.anjeib.margin.voice.LocalSpeech.ensure(ctx) } } else Modifier))
+            }
         }
+    }
+}
+
+/**
+ * Where speech on the phone stands: «45%», «Готово», «скачается по Wi-Fi» or «не скачалось — повторить» (true — a tap
+ * fetches it now). Null where it doesn't apply: a phone it can't run on, or English, which the model doesn't read.
+ */
+@Composable
+internal fun speechStatus(): Pair<String, Boolean>? {
+    val L = ru.anjeib.margin.voice.LocalSpeech
+    if (!L.supported || ru.anjeib.margin.i18n.L.lang != ru.anjeib.margin.i18n.Lang.Ru) return null
+    val s = M.s
+    val update = L.updating.collectAsState().value
+    return when (val st = L.state.collectAsState().value) {
+        // A newer model on its way while this one keeps reading.
+        is ru.anjeib.margin.voice.LocalSpeech.State.Ready -> (update?.let { s.speechUpdating((it * 100).toInt()) } ?: s.speechReady) to false
+        is ru.anjeib.margin.voice.LocalSpeech.State.Downloading -> "${(st.progress * 100).toInt()}%" to false
+        is ru.anjeib.margin.voice.LocalSpeech.State.Failed -> s.speechFailed to true
+        is ru.anjeib.margin.voice.LocalSpeech.State.Missing -> s.speechWaitsWifi to true
     }
 }
 

@@ -31,7 +31,6 @@ android {
         versionName = "0.41"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
-        externalNativeBuild { cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_static") } }
         // No keys in what people install: the AI goes through Margin's own door in Yandex Cloud (server/proxy),
         // let in by an invite code. Only the developer's debug build still carries keys from secrets.properties.
         buildConfigField("String", "OPENROUTER_KEY", "\"\"")
@@ -83,13 +82,6 @@ android {
             matchingFallbacks += listOf("release")
         }
     }
-    ndkVersion = "27.3.13750724"
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.31.6"
-        }
-    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -98,6 +90,8 @@ android {
         jvmTarget = "17"
     }
     testOptions { unitTests.isReturnDefaultValues = true }
+    // The speech engine (sherpa-onnx, ~24 MB) is packed compressed: a smaller download from RuStore, unpacked once on install.
+    packaging { jniLibs { useLegacyPackaging = true } }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -105,6 +99,9 @@ android {
 }
 
 dependencies {
+    // Speech on the phone (GigaAM v3): sherpa-onnx with onnxruntime linked in, from its GitHub release (not in git —
+    // fetch it as CLAUDE.md says into third_party/sherpa-onnx); only arm64-v8a is packed (ndk.abiFilters).
+    implementation(files("../third_party/sherpa-onnx/sherpa-onnx-static-link-onnxruntime-1.13.8.aar"))
     val bom = platform("androidx.compose:compose-bom:2025.06.00")
     implementation(bom)
     implementation("androidx.compose.ui:ui")

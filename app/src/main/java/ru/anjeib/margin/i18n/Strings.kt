@@ -563,8 +563,6 @@ interface Strings {
     val calendarRead: String
     val calendarHint: String
     val offlineSection: String
-    val whisperBase: String
-    val whisperSmall: String
     val backupSection: String
     val googleBackupHint: String
     val googleBackup: String
@@ -586,6 +584,12 @@ interface Strings {
     fun remindPerson(name: String): String
     fun nudgeText(what: String): String
     fun whisperDownloading(p: Int): String
+    /** Speech on the phone, in the menu and the settings: «Распознавание речи · 45%» → «· Готово». */
+    val speechModel: String
+    val speechReady: String
+    val speechWaitsWifi: String
+    val speechFailed: String
+    fun speechUpdating(p: Int): String
 
     // errors
     val errNoKey: String
@@ -1069,8 +1073,8 @@ object Ru : Strings {
     override val whereDataTitle = "Где ваши данные"
     override val whereDataText = "Записи хранятся на этом телефоне — в памяти приложения, других копий у Margin нет.\n\n" +
         "Резервная копия: если включена, раз в день уходит в ваш аккаунт Google (Google Диск) и доступна только вам.\n\n" +
-        "Фразы: простые Margin разбирает на телефоне, они никуда не уходят. Сложные, когда есть интернет, отправляются в Yandex AI Studio (серверы в России) вместе с нужной частью записей: связанными делами и именами. Яндекс эти запросы не сохраняет.\n\n" +
-        "Голос: в Yandex SpeechKit, а без сети — на телефоне (Whisper). С переключателем «Распознавать речь на телефоне» голос не уходит в интернет никогда.\n\n" +
+        "Фразы: простые Margin разбирает на телефоне, они никуда не уходят. Сложные, когда есть интернет, отправляются в Cloud.ru (серверы в России) вместе с нужной частью записей: связанными делами и именами. Их читает модель GigaChat на серверах Cloud.ru — третьим лицам запросы не передаются, на них модель не дообучают. Если Cloud.ru не отвечает, запрос уходит в Yandex AI Studio (тоже в России), который его не сохраняет.\n\n" +
+        "Голос: распознаётся на телефоне (модель GigaAM) и в интернет не уходит. Пока модель не скачалась — в Cloud.ru; с переключателем «Распознавать речь на телефоне» не уходит и тогда.\n\n" +
         "Журналы ошибок уходят разработчику только письмом, которое вы отправляете сами; ваших записей в них нет.\n\n" +
         "На экране блокировки напоминания показываются без текста дел."
     override val widgetFree = "На сегодня дел нет"
@@ -1421,8 +1425,6 @@ object Ru : Strings {
     override val calendarRead = "Учитывать календарь телефона"
     override val calendarHint = "ИИ видит встречи и не ставит дела поверх них"
     override val offlineSection = "ОФЛАЙН-РАСПОЗНАВАНИЕ"
-    override val whisperBase = "Базовая · 60 МБ · быстрее"
-    override val whisperSmall = "Точная · 190 МБ · лучше русский"
     override val backupSection = "РЕЗЕРВНАЯ КОПИЯ"
     override val googleBackupHint = "Раз в день дела, темы, идеи и настройки сохраняются в ваш аккаунт Google (Google Диск) и вернутся на новом телефоне."
     override val googleBackup = "Копия в аккаунте Google"
@@ -1522,6 +1524,11 @@ object Ru : Strings {
     override fun remindPerson(name: String) = "Напомнить " + name.dative()
     override fun nudgeText(what: String) = "Привет! Как там «$what»?"
     override fun whisperDownloading(p: Int) = "Загрузка… $p%"
+    override val speechModel = "Распознавание речи"
+    override val speechReady = "Готово"
+    override val speechWaitsWifi = "скачается по Wi-Fi"
+    override val speechFailed = "не скачалось — повторить"
+    override fun speechUpdating(p: Int) = "Готово · обновление $p%"
     override val errNoKey = "Добавьте ключ OpenRouter в настройках"
     override val errWeird = "Непонятный ответ OpenRouter"
     override val errNet = "Нет связи с интернетом"
@@ -1923,8 +1930,8 @@ object En : Strings {
     override val whereDataTitle = "Where your data is"
     override val whereDataText = "Your records live on this phone, in the app's own storage — Margin keeps no other copy.\n\n" +
         "Backup: when on, once a day to your Google account (Google Drive), visible only to you.\n\n" +
-        "Reading phrases: simple ones are read on the phone and go nowhere. Harder ones, when online, go to Yandex AI Studio (servers in Russia) with the part of your records they need — related to-dos and names. Yandex does not store these requests.\n\n" +
-        "Voice: Yandex SpeechKit, and on the phone (Whisper) when offline. With «Recognize speech on the phone» on, your voice never leaves the phone.\n\n" +
+        "Reading phrases: simple ones are read on the phone and go nowhere. Harder ones, when online, go to Cloud.ru (servers in Russia) with the part of your records they need — related to-dos and names. They are read by GigaChat on Cloud.ru's own servers: not passed to third parties, not used to train the model. If Cloud.ru doesn't answer, the request goes to Yandex AI Studio (also in Russia), which does not store it.\n\n" +
+        "Voice: recognized on the phone (the GigaAM model) for Russian — it never leaves the phone. Until the model is downloaded, and for English, in Cloud.ru; with «Recognize speech on the phone» on, not even then.\n\n" +
         "Error logs reach the developer only in an e-mail you send yourself; your records are not in them.\n\n" +
         "On the lock screen reminders show without the to-do's words."
     override val widgetFree = "Nothing for today"
@@ -2275,8 +2282,6 @@ object En : Strings {
     override val calendarRead = "Use the phone calendar"
     override val calendarHint = "AI sees meetings and plans around them"
     override val offlineSection = "OFFLINE RECOGNITION"
-    override val whisperBase = "Base · 60 MB · faster"
-    override val whisperSmall = "Accurate · 190 MB · better quality"
     override val backupSection = "BACKUP"
     override val googleBackupHint = "Once a day to-dos, topics, ideas and settings are saved to your Google account (Google Drive) and come back on a new phone."
     override val googleBackup = "Copy to your Google account"
@@ -2376,6 +2381,11 @@ object En : Strings {
     override fun remindPerson(name: String) = "Nudge $name"
     override fun nudgeText(what: String) = "Hi! How is “$what” going?"
     override fun whisperDownloading(p: Int) = "Downloading… $p%"
+    override val speechModel = "Speech recognition"
+    override val speechReady = "Ready"
+    override val speechWaitsWifi = "downloads over Wi-Fi"
+    override val speechFailed = "failed — retry"
+    override fun speechUpdating(p: Int) = "Ready · updating $p%"
     override val errNoKey = "Add your OpenRouter key in settings"
     override val errWeird = "Unexpected response from OpenRouter"
     override val errNet = "No internet connection"

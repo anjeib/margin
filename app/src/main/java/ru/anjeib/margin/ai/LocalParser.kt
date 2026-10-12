@@ -148,7 +148,8 @@ object LocalParser {
               wait: Boolean = false, promise: Boolean = false,
               /** The hour now — a weekday or a repeat whose hour has already passed today starts next time. */
               now: LocalTime? = LocalTime.now().takeIf { today == LocalDate.now() }): Result {
-        val text = text0.trim()
+        // Times and days said in words («в пятнадцать», «двадцатого октября») read as digits — dictation writes them so.
+        val text = SpokenNumbers.normalize(text0.trim())
         if (text.isEmpty()) return Result(emptyList(), true)
         val names = Names(d)
         var sure = true

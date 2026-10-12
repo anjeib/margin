@@ -10,6 +10,7 @@ two providers, one door.
 ?op=models  GET   the code check (free)
 ?op=stt     POST  16 kHz mono LPCM; &lang=ru-RU → {"result": "…"} as SpeechKit answered
 ?op=ocr     POST  Yandex Vision body (base64 JPEG in «content») → {"result": {"textAnnotation": {"fullText": "…"}}}
+?op=speech  GET   which speech model the phones should have (no code needed): version + files with sizes and SHA-256
 
 Runs as a container (Cloud.ru Container Apps): python:3.12-alpine, nothing but the standard library.
 """
@@ -37,6 +38,20 @@ YC_FOLDER = os.environ.get("YC_FOLDER", "")
 CODES = {c for c in re.split(r"[\s,;]+", os.environ.get("MARGIN_CODES", "")) if c}
 BLOCKED = {c for c in re.split(r"[\s,;]+", os.environ.get("BLOCKED_DEVICES", "")) if c}
 MAX_BODY = 3_000_000
+
+# The speech model the phones read Russian with (GigaAM v3, sherpa-onnx). A new one is published here only after it was
+# measured on Margin's own phrases (scratchpad benchmark → AsrParseTest); phones fetch it by themselves over Wi-Fi.
+# SPEECH_MANIFEST (JSON) overrides it without a new image.
+_HF = "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-transducer-punct-giga-am-v3-russian-2025-12-16/resolve/main/"
+SPEECH = json.loads(os.environ.get("SPEECH_MANIFEST") or "null") or {
+    "version": "gigaam-v3-rnnt-punct-2025-12-16",
+    "files": [
+        {"name": "tokens.txt", "url": _HF + "tokens.txt", "size": 13354, "sha256": "39abae20e692998290c574e606f11a9edef2902a1995463fcff63d1490cf22b7"},
+        {"name": "decoder.onnx", "url": _HF + "decoder.onnx", "size": 4600132, "sha256": "38fc7475443ea2a26f63211ca350f73ac50fff824ab7a3876ee2bd610c53bbc4"},
+        {"name": "joiner.onnx", "url": _HF + "joiner.onnx", "size": 2712896, "sha256": "602ff7017a93311aad34df1437c8d7f49911353c13d6eae7a6ee7b041339465c"},
+        {"name": "encoder.int8.onnx", "url": _HF + "encoder.int8.onnx", "size": 224570820, "sha256": "369f35a71bf288d3b8e0391fabd8dba5f2314088d440bca474056b7b4b6e66bf"},
+    ],
+}
 
 
 def call(url, body, headers, timeout, method="POST"):
@@ -188,6 +203,8 @@ class Door(http.server.BaseHTTPRequestHandler):
         query = dict(urllib.parse.parse_qsl(url.query))
         if url.path in ("/healthz", "/health"):
             return self.answer(200, '{"ok":true}')
+        if query.get("op") == "speech":  # public: only which model files to fetch, nothing of anyone's
+            return self.answer(200, json.dumps(SPEECH))
         code = self.headers.get("X-Margin-Code", "")
         if code not in CODES:
             return self.answer(401, '{"error":"invite"}')

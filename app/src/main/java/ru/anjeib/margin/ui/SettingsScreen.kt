@@ -72,7 +72,7 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
 
     LaunchedEffect(Unit) { if (settings.apiKey.isNotBlank()) vm.checkKey() }
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val whisper by ru.anjeib.margin.voice.LocalWhisper.state.collectAsState()
+    val whisper by ru.anjeib.margin.voice.LocalSpeech.state.collectAsState()
     val calPerm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
         vm.updateSettings { it.copy(calendar = ok) }; vm.refreshCalendar()
     }
@@ -81,19 +81,21 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         Text(s.settings, style = Type.display.copy(color = c.ink), modifier = Modifier.padding(top = 14.dp, bottom = 18.dp))
 
         Group(s.voiceSection) {
-            // One switch for people: their voice stays on the phone, or goes to the cloud (faster, more accurate).
-            // The model itself comes by itself over Wi-Fi (ModelWorker) — nothing to download or delete here; the developer section can swap it.
-            if (ru.anjeib.margin.voice.LocalWhisper.supported) {
+            // Russian speech is read on the phone (GigaAM) whenever its model is here; the switch keeps the voice there even before
+            // that — nothing goes to the cloud. The model comes by itself over Wi-Fi (ModelWorker); nothing to download or delete here.
+            if (ru.anjeib.margin.voice.LocalSpeech.supported) {
                 ToggleRow(s.onDevice, s.onDeviceHint, settings.whisperAlways) { v ->
                     // Asked for in so many words: fetch it now, whatever the network.
-                    if (v && whisper !is ru.anjeib.margin.voice.LocalWhisper.State.Ready && whisper !is ru.anjeib.margin.voice.LocalWhisper.State.Downloading)
-                        vm.downloadWhisper(ru.anjeib.margin.voice.ModelWorker.pick(ctx))
+                    if (v && whisper !is ru.anjeib.margin.voice.LocalSpeech.State.Ready && whisper !is ru.anjeib.margin.voice.LocalSpeech.State.Downloading)
+                        vm.downloadSpeech()
                     vm.updateSettings { it.copy(whisperAlways = v) }
                 }
+                // The model's way here: a percent while it downloads, then «Готово»; a tap fetches it now when it waits or failed.
+                speechStatus()?.let { (line, retry) -> Divider(); ValueRow(s.speechModel, null, line, chevron = retry) { if (retry) vm.downloadSpeech() } }
                 val st = whisper
-                if (settings.whisperAlways && st !is ru.anjeib.margin.voice.LocalWhisper.State.Ready) {
+                if (settings.whisperAlways && st !is ru.anjeib.margin.voice.LocalSpeech.State.Ready) {
                     Text(
-                        listOfNotNull((st as? ru.anjeib.margin.voice.LocalWhisper.State.Downloading)?.let { s.whisperDownloading((it.progress * 100).toInt()) }, s.whisperComing).joinToString(" "),
+                        s.whisperComing, // the percent is on the row below
                         style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                     )
@@ -256,11 +258,16 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             Divider()
             if (settings.provider == "yandex") ValueRow(s.voiceModel, null, "Yandex SpeechKit", chevron = false) {}
             else ValueRow(s.voiceModel, null, settings.voiceModel) { picker = "voice"; vm.loadModels() }
-            if (ru.anjeib.margin.voice.LocalWhisper.supported) {
+            if (ru.anjeib.margin.voice.LocalSpeech.supported) {
                 Divider()
+                // The developer's look at the model on the phone: what it is, how far its download is; a tap fetches it now.
                 val st = whisper
-                val other = if ((st as? ru.anjeib.margin.voice.LocalWhisper.State.Ready)?.model == ru.anjeib.margin.voice.LocalWhisper.Model.Small) ru.anjeib.margin.voice.LocalWhisper.Model.Base else ru.anjeib.margin.voice.LocalWhisper.Model.Small
-                ValueRow(s.onDeviceModel, null, if (other == ru.anjeib.margin.voice.LocalWhisper.Model.Small) s.whisperSmall else s.whisperBase) { vm.downloadWhisper(other) }
+                ValueRow(s.onDeviceModel, null, when (st) {
+                    is ru.anjeib.margin.voice.LocalSpeech.State.Ready -> "GigaAM v3"
+                    is ru.anjeib.margin.voice.LocalSpeech.State.Downloading -> s.whisperDownloading((st.progress * 100).toInt())
+                    is ru.anjeib.margin.voice.LocalSpeech.State.Failed -> st.message.take(30)
+                    else -> "↓ ${ru.anjeib.margin.voice.LocalSpeech.MB} MB"
+                }) { vm.downloadSpeech() }
             }
         }
         }

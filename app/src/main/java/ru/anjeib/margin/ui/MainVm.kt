@@ -129,7 +129,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         }
         refreshCalendar()
         Processor.schedule(ctx)
-        ru.anjeib.margin.voice.LocalWhisper.refresh(ctx)
+        ru.anjeib.margin.voice.LocalSpeech.refresh(ctx)
         ru.anjeib.margin.voice.ModelWorker.schedule(ctx)
         // Back online → let the queue worker run right away.
         runCatching {
@@ -953,14 +953,16 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     private fun transcribeNow(audio: Attachment, onText: (String) -> Unit) {
         val s = settings.value
-        val local = ru.anjeib.margin.voice.LocalWhisper
-        val canLocal = local.ready(ctx)
-        val cloud = Processor.online(ctx) && Processor.ready(s)
-        val useLocal = canLocal && (s.whisperAlways || !cloud)
-        if (!useLocal && !cloud) {
+        val local = ru.anjeib.margin.voice.LocalSpeech
+        val russian = L.lang == ru.anjeib.margin.i18n.Lang.Ru
+        // GigaAM on the phone reads Russian better than the cloud did and in a fraction of a second, without the network:
+        // it is the first choice whenever it is here. The cloud — for English, or while the model is still on its way.
+        val canLocal = russian && local.ready(ctx)
+        val cloud = Processor.online(ctx) && Processor.ready(s) && !s.whisperAlways
+        if (!canLocal && !cloud) {
             _toast.value = when {
-                local.state.value is ru.anjeib.margin.voice.LocalWhisper.State.Downloading -> L.s.whisperLoading
-                local.supported -> L.s.whisperOfferOffline
+                local.state.value is ru.anjeib.margin.voice.LocalSpeech.State.Downloading -> L.s.whisperLoading
+                russian && local.supported -> L.s.whisperOfferOffline
                 else -> whyOff()
             }
             return
@@ -970,16 +972,11 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             try {
                 val d = data.value
                 val hints = (d.persons.map { it.name } + d.projects).distinct().take(40)
-                val lang = if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) "ru" else "en"
-                suspend fun onPhone(): String = Files.file(ctx, audio)?.let { local.transcribe(ctx, it, lang, hints) } ?: ""
-                val text = if (useLocal) onPhone() else try {
+                val text = if (canLocal) Files.file(ctx, audio)?.let { local.transcribe(ctx, it, "ru") } ?: "" else {
                     val bytes = withContext(Dispatchers.IO) { Files.file(ctx, audio)?.readBytes() } ?: return@launch
                     val r = ru.anjeib.margin.ai.Llm.transcribe(s, bytes, hints)
                     prefs.addSpend(r.rub)
                     r.content
-                } catch (e: AiException) {
-                    // The cloud didn't answer: the recording is here, the phone reads it — nothing to say again.
-                    if (e.message == L.s.errNet && canLocal) onPhone() else throw e
                 }
                 if (text.isNotBlank()) onText(text)
             } catch (e: Exception) {
@@ -990,8 +987,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun downloadWhisper(m: ru.anjeib.margin.voice.LocalWhisper.Model) {
-        viewModelScope.launch { ru.anjeib.margin.voice.LocalWhisper.download(ctx, m) }
+    fun downloadSpeech() {
+        viewModelScope.launch { ru.anjeib.margin.voice.LocalSpeech.ensure(ctx) }
     }
 
     // ---------------- tasks ----------------
