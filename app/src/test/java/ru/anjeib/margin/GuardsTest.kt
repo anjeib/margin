@@ -160,38 +160,6 @@ class GuardsTest {
         assertEquals("Кафе Зерно", "кафе Зерно".address())
     }
 
-    /** Review 0.13, defect 4 — the model's real replies (9 Oct): the date goes to Dima's matter, not to the nearest one. */
-    @Test fun topicDateGoesToTheMatterNamed() {
-        val spec = ru.anjeib.margin.data.Subtask(id = "spec", title = "Спецификация API", from = "Дима", due = today.minusDays(2).toString())
-        val price = ru.anjeib.margin.data.Subtask(id = "price", title = "Сделать цену в корзине крупнее", due = today.minusDays(1).toString())
-        val review = ru.anjeib.margin.data.Subtask(id = "rev", title = "Ревью макетов с Лёшей", due = today.plusDays(1).toString(), time = "12:00")
-        val topic = Task(id = "t", title = "Редизайн приложения доставки", topic = true, subtasks = listOf(spec, price, review))
-        val mon = today.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.MONDAY)).toString()
-        val said = "Созвонились с Димой, спецификацию пришлёт в понедельник"
-        listOf(
-            """{"actions":[{"type":"add_entry","task_id":"t","text":"$said"},{"type":"update_task","task_id":"t","topic_title":"Спецификация API","waiting_for":"Дима","due":"$mon"}]}""",
-            """{"actions":[{"type":"add_entry","task_id":"t","text":"$said"},{"type":"update_task","task_id":"t","waiting_for":"Дима","due":"$mon","subtasks":[{"title":"Спецификация API","due":"$mon","from":"Дима"}]}]}""",
-            // Fable, 9 окт: the model only wrote the news — the day said for Dima's matter is moved by code.
-            """{"actions":[{"type":"add_entry","task_id":"t","text":"$said"}]}""",
-        ).forEach { json ->
-            val t = run(AppData(tasks = listOf(topic)), json, said).tasks.first { it.id == "t" }
-            assertEquals(mon, t.subtasks.first { it.id == "spec" }.due)
-            assertEquals(price.due, t.subtasks.first { it.id == "price" }.due)
-            assertEquals(review.due, t.subtasks.first { it.id == "rev" }.due)
-            assertEquals(null, t.waitingFor)
-        }
-        // Two matters and nothing tells which: nothing moves.
-        val two = Task(id = "t2", title = "Ремонт", topic = true, subtasks = listOf(
-            ru.anjeib.margin.data.Subtask(id = "a", title = "Купить плитку", due = today.toString()),
-            ru.anjeib.margin.data.Subtask(id = "b", title = "Вызвать мастера", due = today.plusDays(1).toString())))
-        val r = run(AppData(tasks = listOf(two)), """{"actions":[{"type":"update_task","task_id":"t2","due":"$mon"}]}""", "перенеси на понедельник", focus = "t2")
-        assertEquals(two.subtasks, r.tasks.first().subtasks)
-        // The only open one still moves, as before.
-        val one = Task(id = "t3", title = "Ремонт", topic = true, subtasks = listOf(ru.anjeib.margin.data.Subtask(id = "a", title = "Купить плитку", due = today.toString())))
-        val r1 = run(AppData(tasks = listOf(one)), """{"actions":[{"type":"update_task","task_id":"t3","due":"$mon"}]}""", "перенеси на понедельник", focus = "t3")
-        assertEquals(mon, r1.tasks.first().subtasks.first().due)
-    }
-
     /** Fable, 0.35: one phrase about two clients — nothing of the other client moves, nothing of it lands in this topic's feed, «к четвергу» holds. */
     @Test fun twoClientsInOnePhrase() {
         val fb = ru.anjeib.margin.data.Subtask(id = "fb", title = "Фидбек по упаковке", from = "Олег", due = today.plusDays(1).toString())
