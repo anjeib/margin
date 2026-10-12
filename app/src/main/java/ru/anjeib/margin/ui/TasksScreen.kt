@@ -211,6 +211,9 @@ fun TaskList(
     var allPromises by rememberSaveable { mutableStateOf(false) }
     var undatedOpen by rememberSaveable { mutableStateOf(ui.getBoolean("undatedOpen", true)) }
     var overviewTab by rememberSaveable { mutableStateOf("all") }
+    // «+ тема»: a topic by its name at once — a project to fill (owner, 12 окт).
+    var askTopic by remember { mutableStateOf(false) }
+    if (askTopic) TextDialog(s.newTopicTitle, "", s.newTopicHint, onDismiss = { askTopic = false }) { v -> askTopic = false; vm.newTopic(v)?.let(onOpen) }
     // «Поля и панели» (v8): the rule runs behind the whole list; rows sit on panels right of it, «когда» on the margin.
     val pad = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
     Box(Modifier.fillMaxSize().marginRule(c.accent.copy(alpha = 0.85f), over = true)) {
@@ -341,8 +344,8 @@ fun TaskList(
                     .let { l -> l.filter { it.anchor != null }.sortedWith(compareBy({ it.anchor }, { it.time ?: "99" })) + l.filter { it.anchor == null }.sortedByDescending { it.createdAt } }
                     else emptyList()
                 if (topics.isEmpty() && ideas.isEmpty() && deals.isEmpty()) item("o-none") { Margined { Empty(s.emptyAll, s.emptyHint) } }
-                if (topics.isNotEmpty()) {
-                    item("ot-head") { SectionHead(s.topicsBadge, count = topics.size) }
+                if (topics.isNotEmpty() || (owe == null && overviewTab == "topics")) {
+                    item("ot-head") { SectionHead(s.topicsBadge, count = topics.size.takeIf { it > 0 }, action = s.newTopicLink to { askTopic = true }) }
                     topics.forEachIndexed { i, t ->
                         item("ot" + t.id) { Box(Modifier.animateItem()) { TopicPaperRow(t, seatOf(i, topics.size), onOpen = { onOpen(t.id) }, onArchive = { vm.archiveTopic(t.id) }) } }
                     }

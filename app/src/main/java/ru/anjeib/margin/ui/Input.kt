@@ -119,6 +119,13 @@ fun SmartComposer(
     /** «Поля»: the field right of the rule. [edge] — how far the caller already moved it from the screen's edge. */
     ruled: Boolean = true,
     edge: Dp = 14.dp,
+    /**
+     * Owner, 12 окт: in a topic or a matter one writes on the page itself. Then the words live in [pageText] — the page's
+     * writing line edits them — and down here stay only «+», the microphone and «send»: dictation lands on the page, is read
+     * there, and goes when sent. [onWrite] — a tap on the empty bar: take me to the line.
+     */
+    pageText: androidx.compose.runtime.MutableState<String>? = null,
+    onWrite: (() -> Unit)? = null,
 ) {
     val c = M.c
     val s = M.s
@@ -126,7 +133,8 @@ fun SmartComposer(
     val scope = rememberCoroutineScope()
     val settings by vm.settings.collectAsState()
     val working by vm.working.collectAsState()
-    var text by rememberSaveable { mutableStateOf("") }
+    val ownText = rememberSaveable { mutableStateOf("") }
+    var text by (pageText ?: ownText)
     // The text as the user last left it in the field, and where their cursor was.
     var typedText by remember { mutableStateOf("") }
     var typedSel by remember { mutableStateOf(androidx.compose.ui.text.TextRange(0)) }
@@ -182,7 +190,8 @@ fun SmartComposer(
         }
         Files.delete(ctx, audio)
         val full = (text.trimEnd() + " " + t).trim()
-        if (settings.voiceSendNow) { onSend(tagged(full), files.toList()); text = ""; files.clear() } else text = full
+        // On a page the dictated words are shown there first — sent when the user has seen them.
+        if (settings.voiceSendNow && pageText == null) { onSend(tagged(full), files.toList()); text = ""; files.clear() } else { text = full; onWrite?.invoke() }
     }
 
     fun startRecording() {
@@ -363,6 +372,23 @@ fun SmartComposer(
                     return@Row
                 }
                 attach()
+                if (pageText != null) {
+                    // The words are on the page: here only a quiet pointer to it, or what is happening.
+                    Box(Modifier.weight(1f).heightIn(min = FieldH - 2.dp).clickable(enabled = onWrite != null) { onWrite?.invoke() }.padding(vertical = 9.dp, horizontal = 2.dp),
+                        contentAlignment = Alignment.CenterStart) {
+                        Text(if (transcribing) s.transcribing else if (text.isBlank()) hint else s.pageReady, style = Type.body.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (!busy) {
+                        if (transcribing) Box(Modifier.size(FieldH - 2.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
+                        } else FieldButton(label = s.a11yMic, onClick = ::mic) { MicGlyph(c.accent, 21.dp) }
+                    }
+                    FieldButton(filled = true, enabled = canSend, busy = busy, label = s.a11ySend, onClick = ::send) {
+                        if (busy) CircularProgressIndicator(color = M.c.onAccent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
+                        else SendGlyph(M.c.onAccent, 15.dp)
+                    }
+                    return@Row
+                }
                 Box(Modifier.weight(1f).heightIn(min = FieldH - 2.dp).padding(vertical = 9.dp, horizontal = 2.dp), contentAlignment = Alignment.CenterStart) {
                     if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = Type.body.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // Words put in from outside (shared, dictated, a mode's prefill) get the cursor after them, not before

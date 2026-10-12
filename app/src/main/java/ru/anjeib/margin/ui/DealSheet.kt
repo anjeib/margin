@@ -76,6 +76,8 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
     // «+ дело», «+ место», «+ контакты» turn the field below into that one thing — typed or said, no little windows.
     var mode by remember(qid) { mutableStateOf<String?>(null) }
     var modeTick by remember { mutableStateOf(0) }
+    val pageDraft = remember(qid) { mutableStateOf("") }
+    var writeTick by remember { mutableStateOf(0) }
     fun fill(what: String) { mode = what; modeTick++ }
     val busy by vm.busy.collectAsState()
     val data by vm.data.collectAsState()
@@ -154,6 +156,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 }
                 val born = topic.events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at ?: topic.createdAt
                 WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
+                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 },
                     onEdit = { id, t -> vm.editComment(ref, id, t) }, onAdd = { t, at -> vm.addComment(ref, t, at) })
                 // Their day has come: «напомнить» here too, the same as on a simple matter (one behaviour for every wait).
                 if (q.from != null && !q.done && due?.isAfter(LocalDate.now()) == false) Margined(Modifier.padding(top = 16.dp)) {
@@ -169,19 +172,27 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
             // Changes in words go to the topic, said about this matter; «+ дело» puts a matter under it.
             val scopeKey = MainVm.key(Scope.InTask(topic.id))
             val modeLabel = when (mode) { "step" -> s.stepOne; "place" -> s.fieldPlace; "people" -> s.fieldPeople; else -> null }
-            Column(Modifier.fieldRule().padding(horizontal = 14.dp).padding(bottom = 10.dp)) { SmartComposer(
-                vm, if (mode == "step") s.stepHint else modeLabel?.let { s.fillHint(it) } ?: s.addOrChange, busy == scopeKey,
+            val notice by vm.notice.collectAsState()
+            Column(Modifier.fieldRule().padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
+              // What became of the words (or that they wait for the cloud) — said here too, not only in the topic.
+              notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> Box(Modifier.padding(start = FieldLead)) { NoticeLine(nt, vm) } }
+              SmartComposer(
+                vm, if (mode == "step") s.stepHint else modeLabel?.let { s.fillHint(it) } ?: s.writeOnPage, busy == scopeKey,
                 onSend = { t, f ->
-                    when (mode) {
-                        "step" -> if (t.isNotBlank()) vm.addChildDeal(topic.id, q.id, t)
-                        "place" -> vm.setDealPlace(topic.id, q.id, t)
-                        "people" -> vm.addDealPeople(topic.id, q.id, t)
+                    when {
+                        mode == "step" -> if (t.isNotBlank()) vm.addChildDeal(topic.id, q.id, t)
+                        mode == "place" -> vm.setDealPlace(topic.id, q.id, t)
+                        mode == "people" -> vm.addDealPeople(topic.id, q.id, t)
+                        // Words on the page: a request is done, anything else is a comment on this matter.
+                        f.isEmpty() && !vm.isRequest(t) -> vm.addComment(ref, t.trim(), ru.anjeib.margin.data.nowStamp())
                         else -> vm.send(s.aboutDeal(q.title, t), scope = Scope.InTask(topic.id), files = f)
                     }
                     mode = null
                 },
                 modeLabel = modeLabel, onModeClose = { mode = null }, focusKey = modeTick.takeIf { it > 0 }?.toLong(),
-            ) }
+                pageText = pageDraft.takeIf { modeLabel == null }, onWrite = { writeTick++ }, slash = true,
+              )
+            }
         }
     }
     when (dialog) {

@@ -39,4 +39,20 @@ class CommandsTest {
         assertEquals("19:00", Commands.time("в 7 вечера"))
         assertNull(Commands.time("после обеда"))
     }
+
+    @Test fun aTopicByItsName() {
+        assertEquals("Правки к приложению", Commands.newTopic("Сделай тему Правки к приложению"))
+        assertEquals("Ремонт", Commands.newTopic("новый проект ремонт"))
+        assertEquals("Переезд", Commands.newTopic("Тема: Переезд"))
+        assertEquals("Отпуск", Commands.newTopic("создай новую тему «Отпуск»"))
+        assertNull(Commands.newTopic("обсудить тему отпуска с Машей"))
+        assertNull(Commands.newTopic("Купить молоко"))
+    }
+
+    @Test fun aRequestOrAComment() {
+        listOf("перенеси на пятницу", "/жду @Маша смету", "место: Ленина 5", "добавь шаг купить плитку", "переименуй в Созвон с Олегом")
+            .forEach { org.junit.Assert.assertTrue(it, Commands.isRequest(it)) }
+        listOf("проверить тексты", "Олег сказал, что смету пришлёт позже", "не забыть паспорт")
+            .forEach { org.junit.Assert.assertFalse(it, Commands.isRequest(it)) }
+    }
 }

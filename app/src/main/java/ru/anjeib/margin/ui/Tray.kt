@@ -193,7 +193,8 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
     val c = M.c
     val s = M.s
     val after = p.preview.data
-    var created = 0; var changed = 0; var done = 0; var notes = 0; var people = 0; var appended = false; var topics = 0
+    var created = 0
+    var newTopics = 0; var changed = 0; var done = 0; var notes = 0; var people = 0; var appended = false; var topics = 0
     val lines = buildList {
         p.preview.touchedTasks.forEach { id ->
             val t = after.tasks.find { it.id == id } ?: return@forEach
@@ -226,7 +227,8 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
                     t.place?.takeIf { it != old.place },
                     (t.subtasks.size - old.subtasks.size).takeIf { it > 0 }?.let { s.stepsCount(it) },
                 ).ifEmpty { listOfNotNull(t.whenLabel()) } }
-                else -> { created++; listOfNotNull(
+                // A topic started by its name («Сделай тему …», «/тема …») is said to be a topic, not a matter.
+                else -> { if (t.topic && !t.thought) newTopics++ else created++; listOfNotNull(
                     t.waitingFor?.let { s.promiseToYou(it) } ?: t.promisedTo?.let { s.promiseFromYou(it) }, t.whenLabel()?.lowercase(), t.place, t.repeat?.label(),
                     t.people.filterNot { it.equals(t.waitingFor, true) || it.equals(t.promisedTo, true) }.takeIf { it.isNotEmpty() }?.joinToString(", "), if (n > 0) s.stepsCount(n) else null,
                 ) }
@@ -252,6 +254,7 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
     }
     val kind = listOfNotNull(
         when { created == 1 -> s.kindTask; created > 1 -> s.kindTasks(created); else -> null },
+        if (newTopics > 0) s.tagTopic else null,
         if (changed > 0 && created == 0) s.kindChanged else null,
         if (topics > 0 && created == 0) s.kindTopic else null,
         if (done > 0 && created == 0 && changed == 0) s.markedDone.lowercase() else null,

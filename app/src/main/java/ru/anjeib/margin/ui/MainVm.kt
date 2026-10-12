@@ -255,7 +255,21 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         else sendNow(text, smart, label, scope, files, asQuestion, movedHere)
     }
 
+    /** «+ тема» in the Overview: an empty topic by its name, as a project to fill — its id, to open it at once. */
+    fun newTopic(name: String): String? {
+        val title = name.trim().trim('«', '»', '"').takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercaseChar() } ?: return null
+        val t = Task(title = title, topic = true, history = listOf(ru.anjeib.margin.data.Change(kind = "created", by = "you")))
+        store.update { it.copy(tasks = it.tasks + t) }
+        land(listOf(t.id))
+        return t.id
+    }
+
+    /** Words from a matter's page: is this a request to act on, or the user's comment? */
+    fun isRequest(text: String) = Commands.isRequest(text)
+
     private fun sendNow(text: String, smart: Boolean, label: String?, scope: Scope, files: List<Attachment>, asQuestion: Boolean, movedHere: Boolean) {
+        // «Сделай тему Правки к приложению» — a topic now, by its name, on the phone (as «/тема Правки к приложению»).
+        if (!smart && scope == Scope.Main) Commands.newTopic(text)?.let { name -> return sendNow("/" + L.s.tagTopic + " " + name, false, label ?: text, scope, files, asQuestion, movedHere) }
         // «/дело», «/тема», «/идея», «/работа», «/личное» — said by the user, so they decide; the AI only fills in the rest.
         val tg = parseTags(if (scope == Scope.Main && !smart) onPickedDay(text) else text)
         lastSaid = tg.text to text
@@ -437,7 +451,10 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                     "place" -> listOf(o("type" to "update_task", "task_id" to id, "place" to c.value))
                     "people" -> listOf(o("type" to "update_task", "task_id" to id, "people" to (task.people + Commands.items(c.value)).distinct()))
                     "project" -> listOf(o("type" to "update_task", "task_id" to id, "project" to c.value))
-                    "entry" -> listOf(o("type" to "add_entry", "task_id" to id, "text" to c.value))
+                    // «Добавь заметку …», «запись: …» inside a topic or a matter: the words go on its page, as written.
+                    "entry", "note" -> listOf(o("type" to "add_entry", "task_id" to id, "text" to c.value))
+                    // «Добавь дело …» there: a matter of this topic.
+                    "task" -> listOf(o("type" to "add_subtasks", "task_id" to id, "subtasks" to Commands.items(c.value).map { o("title" to it) }))
                     "time" -> Commands.time(c.value)?.let { listOf(o("type" to "update_task", "task_id" to id, "time" to it)) } ?: return false
                     // «подзадача 2 …»: by the number shown in the card.
                     "sub_edit", "sub_delete", "sub_done" -> {
@@ -1095,7 +1112,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     /** The line under the field while typing: what the phone understood, and whether the AI will refine it. */
-    fun previewOf(text: String): String? {
+    fun previewOf(text0: String): String? {
+        val text = Commands.newTopic(text0)?.let { "/" + L.s.tagTopic + " " + it } ?: text0
         // Typing has begun: find out now whether the cloud answers — by the time the words are sent, it's known.
         if (text.isNotBlank() && Processor.ready(settings.value) && ru.anjeib.margin.ai.Cloud.network(ctx)) ru.anjeib.margin.ai.Cloud.warm(settings.value)
         val tg = parseTags(text)

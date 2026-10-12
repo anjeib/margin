@@ -56,6 +56,36 @@ object Commands {
     /** «Исправить: перенеси созвон на пятницу» — change what exists, never make anything new. */
     private val fix = Regex("^(?:исправ\\p{L}*|поправ\\p{L}*|fix|correct)\\s*[:—–\\-]?\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
 
+    /**
+     * «Сделай тему Правки к приложению», «новый проект Ремонт», «Тема: Переезд» → the name of a topic to start right away
+     * (owner, 12 окт: a topic as a project, from the first word — not a matter called «Сделай тему…»).
+     */
+    fun newTopic(text: String): String? {
+        val t = text.trim()
+        val verb = "(?:сдела\\p{L}*|созда\\p{L}*|завед\\p{L}*|заве(?:сти|ди)|откр\\p{L}*|нач(?:ни|ать|нём|нем)|добав\\p{L}*|make|create|start|add|open)"
+        val what = "(?:тем[уаы]|проект(?:а)?|topic|project)"
+        val name = listOf(
+            Regex("^$verb\\s+(?:нов(?:ую|ый|ая)\\s+|a\\s+new\\s+|new\\s+)?$what\\s*[:—–\\-]?\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)),
+            Regex("^нов(?:ая|ый|ую)\\s+$what\\s*[:—–\\-]?\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)),
+            Regex("^new\\s+$what\\s*[:—–\\-]?\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)),
+            Regex("^(?:тема|проект|topic|project)\\s*:\\s*(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)),
+        ).firstNotNullOfOrNull { it.find(t)?.groupValues?.get(1) } ?: return null
+        val clean = name.trim().trim('«', '»', '"', '“', '”', '.', ' ')
+        return clean.takeIf { it.length >= 2 }?.replaceFirstChar { it.uppercaseChar() }
+    }
+
+    /**
+     * Words sent from a matter's own page: a request — a mark, a command («место: …», «добавь шаг …»),
+     * a change («перенеси на пятницу», «переименуй в …») — is acted on; anything else is the user's comment.
+     */
+    fun isRequest(text: String): Boolean {
+        val t = text.trim()
+        return Regex("(?:^|\\s)[/#@]\\S").containsMatchIn(t) || parse(t) != null || numbered(t) != null || changeVerb.containsMatchIn(t)
+    }
+    private val changeVerb = Regex("^(?:перенес\\p{L}*|перенос\\p{L}*|сдвин\\p{L}*|передвин\\p{L}*|отлож\\p{L}*|измен\\p{L}*|помен\\p{L}*|переимен\\p{L}*|" +
+        "исправ\\p{L}*|убер\\p{L}*|удал\\p{L}*|отмет\\p{L}*|закр\\p{L}*|назнач\\p{L}*|постав\\p{L}*|напомн\\p{L}*|" +
+        "move|postpone|change|rename|remind|delete|remove|mark|set)(?=\\s|$)", RegexOption.IGNORE_CASE)
+
     /** «Подзадача», «Место», «Исправить» before a colon are commands, not the name of a matter. */
     fun isCommandWord(word: String): Boolean = parse("$word: x") != null
 

@@ -154,7 +154,12 @@ object Topics {
             // The second event: the task becomes a topic. What it said to do becomes its first question,
             // settled at once when the same words said it was done («Созвонились…»).
             val doneNow = n.done
-            val first = if (o.subtasks.isEmpty()) Subtask(
+            // Owner, 12 окт: a matter with no day, no hour and nobody owing that grows by new matters was the name
+            // of a project, not a step of it — it names the topic and is not repeated inside it. One with a day or a wait,
+            // or that only got a record, stays its first matter (so nothing to do is lost).
+            val justAName = o.due == null && o.start == null && o.time == null && o.waitingFor == null && o.promisedTo == null &&
+                added.isNotEmpty() && !doneNow
+            val first = if (o.subtasks.isEmpty() && !justAName) Subtask(
                 title = o.title, due = o.due ?: o.start, time = o.time, from = o.waitingFor,
                 done = doneNow, doneAt = if (doneNow) LocalDate.now().toString() else null,
             ) else null

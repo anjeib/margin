@@ -40,6 +40,7 @@ data class LaneItem(val id: String, val at: String, val text: String)
  */
 @Composable
 fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifier, after: String? = null, label: String? = null,
+                draft: androidx.compose.runtime.MutableState<String>? = null, focusKey: Any? = null,
                 onEdit: (String, String) -> Unit, onAdd: (String, String) -> Unit) {
     val c = M.c
     val text = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp)
@@ -61,6 +62,14 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
                 }
             }
         }
+        // The page's writing line is the bar's words ([draft]): «send» down there decides what they become.
+        if (draft != null) {
+            val add by rememberUpdatedState(onAdd)
+            // Leaving the page with words not sent keeps them as a piece rather than losing them.
+            DisposableEffect(Unit) { onDispose { if (draft.value.isNotBlank()) { add(draft.value.trim(), nowStamp()); draft.value = "" } } }
+            PageLine(draft, if (items.isEmpty()) M.s.laneHint else "", focusKey, after = items.lastOrNull()?.at ?: after)
+            return@Column
+        }
         var draft by remember { mutableStateOf("") }
         var started by remember { mutableStateOf<String?>(null) }
         var focused by remember { mutableStateOf(false) }
@@ -79,6 +88,35 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
                     textStyle = text, cursorBrush = SolidColor(c.link),
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).focusRequester(focus).onFocusChanged { f -> if (focused && !f.isFocused) commit(); focused = f.isFocused })
             }
+        }
+    }
+}
+
+/**
+ * The page's own writing line (owner, 12 окт): no field and no frame — the rest of the page is written on. Its words are
+ * [text], shared with the bar below (microphone, «send»): dictated words appear here, are looked over, and go when sent.
+ * «/», «#», «@» at the end open the same window of marks as the main field (the bar shows it).
+ */
+@Composable
+fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, focusKey: Any?, modifier: Modifier = Modifier, after: String? = null) {
+    val c = M.c
+    val style = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp)
+    var t by text
+    // What the user typed keeps their cursor; words put in from outside (dictation) get it after them.
+    var typed by remember { mutableStateOf("") }
+    var sel by remember { mutableStateOf(androidx.compose.ui.text.TextRange(0)) }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(focusKey) { if (focusKey != null) { kotlinx.coroutines.delay(150); runCatching { focus.requestFocus() } } }
+    val now = nowStamp()
+    Margined(modifier, margin = { if (t.isNotBlank()) Box(Modifier.padding(top = 9.dp)) { Stamp(now, sameDay = after?.take(10) == now.take(10)) } }) {
+        Box(Modifier.fillMaxWidth().heightIn(min = 96.dp).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {
+            runCatching { focus.requestFocus() } }) {
+            // The quiet word stays until something is written — a sheet may hand the line its focus by itself.
+            if (t.isEmpty() && hint.isNotEmpty()) Text(hint, style = Type.italic.copy(color = c.faint, fontSize = 16.sp, lineHeight = 23.sp), modifier = Modifier.padding(vertical = 8.dp))
+            val value = if (typed == t) androidx.compose.ui.text.input.TextFieldValue(t, sel) else androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(t.length))
+            BasicTextField(value, { v -> val next = continueList(t, v.text); t = next; typed = next; sel = if (next == v.text) v.selection else androidx.compose.ui.text.TextRange(next.length) },
+                textStyle = style, cursorBrush = SolidColor(c.link),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).focusRequester(focus))
         }
     }
 }

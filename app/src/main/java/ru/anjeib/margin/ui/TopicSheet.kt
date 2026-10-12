@@ -209,6 +209,9 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     var addUnder by remember(task.id) { mutableStateOf<Pair<String, String>?>(null) }
     var editNote by remember { mutableStateOf<Entry?>(null) }
     var focusTick by remember { mutableStateOf(0) }
+    // The topic's page is written on at its end (owner, 12 окт); the bar below holds «+», the microphone and «send».
+    val pageDraft = remember(task.id) { mutableStateOf("") }
+    var writeTick by remember { mutableStateOf(0) }
     val busy by vm.busy.collectAsState()
     val notice by vm.notice.collectAsState()
     val working by vm.working.collectAsState()
@@ -317,7 +320,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             run {
                 androidx.compose.animation.Crossfade(materialsMode, animationSpec = tween(240), label = "materials") { m ->
                     if (m) MaterialsFeed(task, onView = { viewing = it })
-                    else FeedPage(task, feed, feedState, hl, seenAtOpen, working, selected, vm, FeedActions(
+                    else FeedPage(task, feed, feedState, hl, seenAtOpen, working, selected, vm, pageDraft.takeIf { addUnder == null }, writeTick.takeIf { it > 0 },
+                        if (dealsOnly) s.newQuestionHint else s.writeInTopic, FeedActions(
                         select = { k -> selected = if (k.isBlank() || selected == k) null else k },
                         addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
                         editDeal = { editQ = it }, dateDeal = { dateQ = it }, editNote = { editNote = it }, view = { viewing = it }, timeDeal = { timeQ = it },
@@ -340,12 +344,15 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> Box(Modifier.padding(start = FieldLead)) { NoticeLine(nt, vm) } }
             val under = addUnder
             SmartComposer(
-                vm, if (under != null) "«" + under.second.take(40) + "»" else if (dealsOnly) s.newQuestionHint else s.writeInTopic, busy == scopeKey,
+                vm, if (under != null) "«" + under.second.take(40) + "»" else s.writeOnPage, busy == scopeKey,
                 onSend = { t, f ->
                     if (under != null) { vm.addChildDeal(task.id, under.first, t); addUnder = null }
                     else vm.send(t, scope = Scope.InTask(task.id), files = f, asQuestion = dealsOnly)
                 },
                 modeLabel = under?.let { s.underLine }, onModeClose = { addUnder = null }, focusKey = focusTick.takeIf { it > 0 }, slash = true,
+                // A tap on the bar (or words just dictated): to the end of the page, the cursor in its line.
+                pageText = pageDraft.takeIf { under == null && !materialsMode },
+                onWrite = { scope.launch { feedState.layoutInfo.totalItemsCount.takeIf { it > 0 }?.let { feedState.animateScrollToItem(it - 1) }; writeTick++ } },
             )
         }
     }
@@ -463,7 +470,8 @@ private class FeedActions(
 
 @Composable
 private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.foundation.lazy.LazyListState, hl: String?, seen: Set<String>, working: Set<String>,
-                     selected: String?, vm: MainVm, act: FeedActions, onArchive: () -> Unit, onSource: () -> Unit) {
+                     selected: String?, vm: MainVm, draft: androidx.compose.runtime.MutableState<String>?, writeKey: Any?, writeHint: String,
+                     act: FeedActions, onArchive: () -> Unit, onSource: () -> Unit) {
     val c = M.c
     val s = M.s
     // New lines arrive one after another, in the order they were written.
@@ -510,6 +518,8 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
                 }
             }
         }
+        // The page goes on below the last day: write here, the bar sends it (as the old field did: records, matters, marks).
+        if (draft != null) item("write") { PageLine(draft, writeHint, writeKey, Modifier.padding(top = 10.dp), after = feed.lastOrNull()?.at) }
     }
 }
 

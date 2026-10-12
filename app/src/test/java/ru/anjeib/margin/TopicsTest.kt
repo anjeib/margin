@@ -197,4 +197,22 @@ class TopicsTest {
         assertEquals(listOf<String>(), w.still.map { it.id })
         assertEquals(listOf("z"), d.weekReview(sun.plusDays(7)).still.map { it.id })
     }
+
+    // Owner, 12 окт: «Сделай тему Правки к приложению» became a matter; a step written in it made a topic that held
+    // the same matter again. An undated name growing by steps names the topic only.
+    @Test fun aNameGrowingBySteps() {
+        val name = Task(title = "Правки к приложению")
+        val d0 = AppData(tasks = listOf(name))
+        val d = step(d0, "проверить тексты", name.id, o("type" to "add_subtasks", "task_id" to name.id, "subtasks" to listOf(o("title" to "Проверить тексты"))))
+        val t = d.tasks.single { it.id == name.id }
+        assertTrue(t.topic)
+        assertEquals(listOf("Проверить тексты"), t.subtasks.map { it.title })
+    }
+
+    @Test fun aDatedMatterStaysTheFirstStep() {
+        val call = Task(title = "Позвонить в банк", due = today.plusDays(1).toString())
+        val d0 = AppData(tasks = listOf(call))
+        val d = step(d0, "уточнить лимит", call.id, o("type" to "add_subtasks", "task_id" to call.id, "subtasks" to listOf(o("title" to "Уточнить лимит"))))
+        assertEquals(listOf("Позвонить в банк", "Уточнить лимит"), d.tasks.single { it.id == call.id }.subtasks.map { it.title })
+    }
 }

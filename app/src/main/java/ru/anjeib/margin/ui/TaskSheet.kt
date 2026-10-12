@@ -116,6 +116,9 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     var mode by remember(task.id) { mutableStateOf<String?>(null) }
     var fill by remember(task.id) { mutableStateOf<Fill?>(null) }
     var modeTick by remember { mutableStateOf(0) }
+    // The page is written on (owner, 12 окт): these are its words, the bar below sends them.
+    val pageDraft = remember(task.id) { mutableStateOf("") }
+    var writeTick by remember { mutableStateOf(0) }
     fun fill(what: String) { mode = what; fill = null; modeTick++ }
     var menu by remember { mutableStateOf(false) }
     var subMenu by remember { mutableStateOf<Subtask?>(null) }
@@ -234,6 +237,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     }
                 }
                 WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
+                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 },
                     onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
                     onAdd = { t, at -> vm.addComment(task.id, t, at); savedAt = System.currentTimeMillis() })
                 // Where it came from — below the shared part of every matter's card, quietly.
@@ -354,7 +358,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 }
                 val modeLabel = fill?.label() ?: when (mode) { "step" -> s.stepOne; "place" -> s.fieldPlace; "people" -> s.fieldPeople; else -> null }
                 SmartComposer(
-                    vm, if (mode == "step") s.stepHint else modeLabel?.let { s.fillHint(it) } ?: s.addOrChange, busy == scopeKey,
+                    vm, if (mode == "step") s.stepHint else modeLabel?.let { s.fillHint(it) } ?: s.writeOnPage, busy == scopeKey,
                     onSend = { t, f ->
                         val m = mode
                         val fl = fill
@@ -362,11 +366,15 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             fl != null -> { if (t.isNotBlank()) vm.fillBlock("task:${task.id}", fl, t); f.forEach { a -> vm.insertAttachment("task:${task.id}", fl.entryId, a) }; if (fl.kind != "items") fill = null }
                             m == "step" -> { vm.addStep(task.id, t); mode = null }
                             m != null -> { vm.sendAs(m, t, Scope.InTask(task.id), f); mode = null }
+                            // Words on the page: a request («перенеси на пятницу», a mark) is done; anything else is a comment.
+                            f.isEmpty() && !vm.isRequest(t) -> vm.addComment(task.id, t.trim(), ru.anjeib.margin.data.nowStamp())
                             else -> vm.send(t, scope = Scope.InTask(task.id), files = f)
                         }
                     },
                     prefill = fill?.prefill, onPrefillUsed = {},
                     modeLabel = modeLabel, onModeClose = { mode = null; fill = null }, focusKey = modeTick.takeIf { it > 0 },
+                    // A mode (a step, a place…) is a one-line answer in the bar; otherwise the words are on the page.
+                    pageText = pageDraft.takeIf { modeLabel == null }, onWrite = { writeTick++ }, slash = true,
                 )
             }
         }
