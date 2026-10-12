@@ -1,11 +1,11 @@
 #!/bin/bash
 # Builds Margin's door (server/cloudru/app.py) into an image and pushes it to Cloud.ru Artifact Registry — no Docker needed:
-# crane appends the code as a layer to python:3.12-alpine. Usage: server/cloudru/deploy.sh <tag>   (e.g. 3)
-# Then in the console: Container Apps → margin-door → «Создать ревизию на основе выбранной» → image with this tag
-# (or nothing, if «Автоматическое развертывание» is on). Registry login: CR_REGISTRY / CR_KEY_ID / CR_KEY_SECRET in secrets.properties.
+# crane appends the code as a layer to python:3.12-alpine. Usage: server/cloudru/deploy.sh [tag]   (default «v.1»)
+# The container deploys «v.1» by itself («Автоматическое развертывание», owner, 12 окт); another tag needs a new revision
+# in the console. Registry login: CR_REGISTRY / CR_KEY_ID / CR_KEY_SECRET in secrets.properties.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-TAG=${1:?tag}
+TAG=${1:-v.1}
 g() { grep "^$1=" secrets.properties | cut -d= -f2- | tr -d '\r '; }
 REG=$(g CR_REGISTRY)
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
