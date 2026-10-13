@@ -65,7 +65,7 @@ fun questionRef(id: String): Pair<String, String>? =
     if (id.startsWith("q:")) id.removePrefix("q:").split(':').takeIf { it.size == 2 }?.let { it[0] to it[1] } else null
 
 fun Task.questionRow(q: Subtask) = Task(
-    id = "q:$id:${q.id}", title = q.title, due = q.due, time = q.time, waitingFor = q.from, comments = q.comments,
+    id = "q:$id:${q.id}", title = q.title, due = q.due, start = q.start, time = q.time, waitingFor = q.from, promisedTo = q.promisedTo, dropped = q.dropped, comments = q.comments,
     people = (listOfNotNull(q.assignee) + q.people).distinct(), place = q.place, repeat = q.repeat, project = project, sphere = sphere, topicId = id, topicTitle = title,
     // The day the matter itself appeared, not the topic — «лежит с 3 окт».
     createdAt = events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at?.take(10) ?: createdAt,
@@ -160,13 +160,13 @@ object Topics {
             val justAName = o.due == null && o.start == null && o.time == null && o.waitingFor == null && o.promisedTo == null &&
                 added.isNotEmpty() && !doneNow
             val first = if (o.subtasks.isEmpty() && !justAName) Subtask(
-                title = o.title, due = o.due ?: o.start, time = o.time, from = o.waitingFor,
+                title = o.title, due = o.due ?: o.start, start = o.start?.takeIf { o.due != null }, time = o.time, from = o.waitingFor, promisedTo = o.promisedTo,
                 done = doneNow, doneAt = if (doneNow) LocalDate.now().toString() else null,
             ) else null
             val bornAt = o.history.firstOrNull { it.kind == "created" }?.at ?: (o.createdAt + "T00:00")
             t = n.copy(
                 topic = true, done = false, doneAt = null, start = null, due = null, time = null, remindAt = null, dayPart = null,
-                waitingFor = null, subtasks = listOfNotNull(first) + n.subtasks,
+                waitingFor = null, promisedTo = null, subtasks = listOfNotNull(first) + n.subtasks,
             )
             first?.let {
                 evs += TopicEvent(at = bornAt, kind = if (it.isWait) "wait" else "q", ref = it.id)

@@ -127,11 +127,12 @@ fun cardDay(d: java.time.LocalDate, today: java.time.LocalDate = java.time.Local
  * hour under it; each line a tap — the day, the hour. Without a day — a quiet «без даты».
  */
 @Composable
-fun CardWhen(due: java.time.LocalDate?, hour: String?, late: Boolean, onDay: () -> Unit, onHour: (() -> Unit)?) {
+fun CardWhen(due: java.time.LocalDate?, hour: String?, late: Boolean, onDay: () -> Unit, onHour: (() -> Unit)?, from: java.time.LocalDate? = null) {
     val c = M.c
     val s = M.s
     androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(top = 4.dp)) {
-        val day = due?.let { if (late) s.sinceWord + " " + it.dayMonthShort() else dayWord(it) } ?: s.noDateShort
+        // A window is said as one: «9–11 окт», not its last day (owner, 13 окт).
+        val day = due?.let { if (late) s.sinceWord + " " + it.dayMonthShort() else if (from != null && from.isBefore(it)) spanWord(from, it) else dayWord(it) } ?: s.noDateShort
         MarginNote(day, late = late, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = s.dateWord, onClick = onDay).padding(vertical = 4.dp))
         if (onHour != null || hour != null) MarginNote(hour ?: s.addTime, late = late && hour != null,
             modifier = Modifier.clip(RoundedCornerShape(6.dp)).then(if (onHour != null) Modifier.clickable(onClickLabel = s.fieldTime, onClick = onHour) else Modifier).padding(vertical = 4.dp))

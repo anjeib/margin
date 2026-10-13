@@ -55,6 +55,14 @@ fun dayWord(d: LocalDate, today: LocalDate = LocalDate.now()): String = when (d)
 }
 
 /**
+ * A window for the narrow margin, said as one (owner, 13 окт): «9–11 окт», «13–31 окт»; across months two lines «28 сен –\n3 окт».
+ */
+fun spanWord(a: LocalDate, b: LocalDate, today: LocalDate = LocalDate.now()): String {
+    val yr = if (b.year != today.year) " ${b.year}" else ""
+    return if (a.year == b.year && a.month == b.month) "${a.dayOfMonth}–${b.dayMonthShort()}$yr" else "${a.dayMonthShort()} –\n${b.dayMonthShort()}$yr"
+}
+
+/**
  * «Когда» of a matter for the margin: late — «с 8 окт» in terracotta; under a day ([underDay]) — only its hour;
  * elsewhere — its day in words and the hour under it.
  */
@@ -64,9 +72,11 @@ fun whenNote(t: Task, today: LocalDate, underDay: Boolean): Pair<String?, Boolea
     val start = t.startDate
     if (!t.done && due != null && due.isBefore(today)) return (s.sinceWord + " " + due.dayMonthShort()) to true
     val hour = t.time ?: t.dayPart?.let { s.dayPart(it) }
+    // A window standing on today is not due today: its span says so (owner, 13 окт).
+    if (underDay && start != null && due != null && start.isBefore(due) && !due.isBefore(today)) return listOfNotNull(spanWord(start, due, today), hour).joinToString("\n") to false
     if (underDay) return hour to false
     val d = due ?: start ?: return hour to false
-    val day = if (start != null && due != null && start != due) s.until(dayWord(due, today)) else dayWord(d, today)
+    val day = if (start != null && due != null && start.isBefore(due)) spanWord(start, due, today) else dayWord(d, today)
     return listOfNotNull(day, hour).joinToString("\n") to false
 }
 

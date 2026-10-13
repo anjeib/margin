@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.anjeib.margin.ui.openWindow
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
@@ -64,7 +65,7 @@ class TodayWidget : GlanceAppWidget() {
         L.lang = resolveLang(Prefs.get(context).settings.value.lang)
         val data = Store.get(context).data.value
         val today = LocalDate.now()
-        val due = data.listTasks().filter { !it.done && (it.dueDate ?: it.startDate)?.let { d -> !d.isAfter(today) } == true }
+        val due = data.listTasks().filter { !it.done && ((it.dueDate ?: it.startDate)?.let { d -> !d.isAfter(today) } == true || it.openWindow(today)) }
             .sortedWith(compareBy({ (it.dueDate ?: it.startDate)?.isBefore(today) != true }, { it.time ?: "99" }))
         val s = L.s
         val locale = if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) Locale.forLanguageTag("ru") else Locale.ENGLISH

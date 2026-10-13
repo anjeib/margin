@@ -275,16 +275,28 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         fun cap(s: String) = s.trim().replaceFirstChar { it.uppercaseChar() }
         val t = text.trim()
         if (!inTopic) Commands.intoTopic(t, data.value.tasks.filter { it.topic && !it.done }.map { it.id to it.title })?.let { (id, said) ->
-            val (kind, rest) = LocalParser.lead(said)
-            return listOfNotNull("#[$id]", kind?.let { "/" + if (it == "idea") L.s.tagIdea else L.s.tagDeal }) to cap(rest)
+            val (m, rest) = LocalParser.marks(said)
+            return listOf("#[$id]") + m.map(::markToken) to cap(rest)
         }
         if (!inTopic) Commands.newTopic(t)?.let { return listOf("/" + L.s.tagTopic) to cap(it) }
         Commands.parse(t)?.takeIf { it.what == "task" || it.what == "note" }?.takeIf { it.value.isNotBlank() }?.let { c ->
             return listOf("/" + if (c.what == "note") L.s.tagIdea else L.s.tagDeal) to cap(c.value)
         }
-        val (kind, rest) = LocalParser.lead(t)
-        if (kind != null && rest.isNotBlank()) return listOf("/" + if (kind == "idea") L.s.tagIdea else L.s.tagDeal) to cap(rest)
+        val (m, rest) = LocalParser.marks(t)
+        if (m.isNotEmpty() && rest.isNotBlank()) return m.map(::markToken) to cap(rest)
         return emptyList<String>() to text
+    }
+
+    /** «idea» → «/идея»: a mark as the field writes it. */
+    private fun markToken(k: String) = "/" + when (k) { "idea" -> L.s.tagIdea; "task" -> L.s.tagDeal; "work" -> L.s.tagWork; else -> L.s.tagPersonal }
+
+    /**
+     * Words that say what it is, typed or dictated in any form and even misheard («В идеи посмотреть кино», «в идее…», «слеш
+     * дело…», «по работе…»), count as the marks themselves (owner, 13 окт): the same as «/идея Посмотреть кино».
+     */
+    fun withSaidMarks(text: String): String {
+        val (m, rest) = runCatching { marksOf(text) }.getOrNull() ?: return text
+        return if (m.isEmpty()) text else (m.joinToString(" ") + " " + rest).trim()
     }
 
     /**
@@ -347,7 +359,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             return sendNow("/" + L.s.tagDeal + " " + c.value, false, label ?: text, scope, files, asQuestion, movedHere)
         }
         // «/дело», «/тема», «/идея», «/работа», «/личное» — said by the user, so they decide; the AI only fills in the rest.
-        val tg = parseTags(if (scope == Scope.Main && !smart) onPickedDay(text) else text)
+        val tg = parseTags(if (scope == Scope.Main && !smart) onPickedDay(withSaidMarks(text)) else text)
         lastSaid = tg.text to text
         val t = tg.text
         val tagKind = tg.kind
@@ -597,6 +609,9 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     data class Clip(val owner: String, val entryId: String, val attId: String?, val preview: String, val cut: Boolean)
     private val _clip = MutableStateFlow<Clip?>(null)
     val clip: StateFlow<Clip?> = _clip
+
+    /** The line of marks («/дело /тема /идея») the bar offers, shown over the page's writing line while a page is written on. */
+    val pageMarks = androidx.compose.runtime.mutableStateOf<(@androidx.compose.runtime.Composable () -> Unit)?>(null)
 
     private fun clipOf(owner: String, entryId: String, attId: String?, cut: Boolean): Clip? {
         val e = data.value.entriesOf(owner).find { it.id == entryId } ?: return null
@@ -1187,7 +1202,29 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun addComment(ref: String, text: String, at: String) = store.update { it.addComment(ref, text, at) }
     fun editComment(ref: String, id: String, text: String) = store.update { it.editComment(ref, id, text) }
 
-    fun setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null) = store.update { it.setQuestionDue(taskId, subId, due, time) }
+    fun setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null, start: String? = null) = store.update { it.setQuestionDue(taskId, subId, due, time, start) }
+
+    /** «Не буду делать» on a topic's matter, with a moment to take it back. */
+    fun dropDeal(topicId: String, subId: String) {
+        val before = data.value
+        store.update { it.dropQuestion(topicId, subId) }
+        offerUndo(before, L.s.droppedDone)
+    }
+
+    fun setDealPromised(topicId: String, subId: String, who: String?) = store.update { it.setDealPromised(topicId, subId, who) }
+
+    /** «В идеи» on a topic's matter: it leaves the topic and becomes an idea of its own, its comments its records. */
+    fun dealToIdea(topicId: String, subId: String): String? {
+        val before = data.value
+        val topic = before.tasks.find { it.id == topicId } ?: return null
+        fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it) + flat(it.children) }
+        val q = flat(topic.subtasks).find { it.id == subId } ?: return null
+        val idea = Task(title = q.title, topic = true, thought = true, sphere = topic.sphere, entries = q.comments.map { Entry(at = it.at, text = it.text) },
+            history = listOf(ru.anjeib.margin.data.Change(kind = "created", by = "you")))
+        store.update { d -> d.removeDeal(topicId, subId).purgeDeal(topicId, subId).let { it.copy(tasks = it.tasks + idea) } }
+        offerUndo(before, L.s.madeNote)
+        return idea.id
+    }
 
     /** A topic's matter, the same «+ …» as a simple one: repeat, place, people — set by hand, no AI. */
     fun setDealRepeat(topicId: String, subId: String, r: ru.anjeib.margin.data.Repeat?) = store.update { it.setDealRepeat(topicId, subId, r) }
@@ -1263,7 +1300,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val text = Commands.newTopic(text0)?.let { "/" + L.s.tagTopic + " " + it } ?: text0
         // Typing has begun: find out now whether the cloud answers — by the time the words are sent, it's known.
         if (text.isNotBlank() && Processor.ready(settings.value) && ru.anjeib.margin.ai.Cloud.network(ctx)) ru.anjeib.margin.ai.Cloud.warm(settings.value)
-        val tg = parseTags(text)
+        val tg = parseTags(withSaidMarks(text))
         val t = tg.text
         val kind = tg.kind
         if (t.isBlank() || Commands.parse(t) != null) return null

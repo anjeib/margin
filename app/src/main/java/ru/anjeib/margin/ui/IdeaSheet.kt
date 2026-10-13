@@ -65,12 +65,14 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
     ) {
         val half = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.5f).dp
         Column(Modifier.fillMaxWidth().heightIn(min = half).imePadding().navigationBarsPadding()) {
-        Column(Modifier.weight(1f, fill = false).fillMaxWidth().screenRule().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+        val scroll = rememberScrollState()
+        Column(Modifier.weight(1f, fill = false).fillMaxWidth().screenRule().verticalScroll(scroll).padding(bottom = 24.dp)) {
             // The same card as a matter (owner's call, 10 окт): ⋯ for the idea as a whole, its bulb and title in serif;
             // under a line — what was written in it, each piece with its day and hour.
             Margined {
                 CardMenu { close ->
-                    SoftMenuItem(if (task.sphere == "work") s.makePersonal else s.makeWork) { close(); vm.setSphere(task.id, nextSphere(task.sphere)) }
+                    SoftMenuItem(s.spherePersonal, selected = task.sphere != "work") { close(); vm.setSphere(task.id, "personal") }
+                    SoftMenuItem(s.sphereWork, selected = task.sphere == "work") { close(); vm.setSphere(task.id, "work") }
                     SoftMenuItem(s.delete, danger = true) { close(); vm.removeMatter(task.id); onClose() }
                 }
             }
@@ -80,8 +82,9 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
                 draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "task:${task.id}",
                 onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
                 onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
-            // Files, matters and all the rest of it — on the full page.
-            Margined(Modifier.padding(top = 14.dp)) { Voice(s.openWhole + "  ›", link = true, onClick = { commitTitle(); onOpenFull() }) }
+            // Files, matters and all the rest of it — on the full page; offered only when the card doesn't show it all (owner, 13 окт).
+            val hidden = task.entries.any { it.attachments.isNotEmpty() || it.text.isBlank() } || task.subtasks.isNotEmpty()
+            if (hidden || scroll.maxValue > 0) Margined(Modifier.padding(top = 14.dp)) { Voice(s.openWhole + "  ›", link = true, onClick = { commitTitle(); onOpenFull() }) }
             Margined { CreatedLine(born) }
         }
         Column(Modifier.fillMaxWidth().fieldRule().padding(horizontal = 14.dp).padding(bottom = 10.dp)) {

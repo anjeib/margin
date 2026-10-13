@@ -22,8 +22,14 @@ data class Subtask(
     /** In a topic a step is a «вопрос»: it can have its own day and hour. */
     val due: String? = null,
     val time: String? = null,
+    /** A soft window «с 9 по 11 окт», «до конца месяца»: [start]..[due], the same as a simple matter's (owner, 13 окт). */
+    val start: String? = null,
     /** Someone else owes it («ждём от Игоря: приказ»): closed as «получено», not «решено». */
     val from: String? = null,
+    /** The user promised it to someone («обещали Лёше»), as on a simple matter. */
+    val promisedTo: String? = null,
+    /** «Не буду делать»: closed without being done. */
+    val dropped: Boolean = false,
     val doneAt: String? = null,
     /** v2 feed: the line it was added under with «+» — another matter of the topic or one of its records (shown indented). */
     val parent: String? = null,

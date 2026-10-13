@@ -45,4 +45,51 @@ class ListsTest {
         assertEquals("task" to "купить хлеб", LocalParser.lead("дело купить хлеб"))
         assertEquals(null to "Купить хлеб", LocalParser.lead("Купить хлеб"))
     }
+
+    // Owner, 13 окт: the keyword said any way, even misheard, is the mark itself.
+    @Test fun keywordsSaidAnyWay() {
+        assertEquals(listOf("idea") to "посмотреть кино", LocalParser.marks("В идеи посмотреть кино"))
+        assertEquals(listOf("idea") to "посмотреть кино", LocalParser.marks("В идее посмотреть кино"))
+        assertEquals(listOf("idea") to "посмотреть кино", LocalParser.marks("В заметки посмотреть кино"))
+        assertEquals(listOf("idea") to "посмотреть кино", LocalParser.marks("слеш идея посмотреть кино"))
+        assertEquals(listOf("idea") to "посмотреть кино", LocalParser.marks("/ идея посмотреть кино"))
+        assertEquals(listOf("task") to "купить хлеб", LocalParser.marks("в дела купить хлеб"))
+        assertEquals(listOf("work", "task") to "отчёт", LocalParser.marks("по работе, дело: отчёт"))
+        assertEquals(listOf("personal") to "купить подарок", LocalParser.marks("личное: купить подарок"))
+        assertEquals(emptyList<String>() to "Работа над сайтом", LocalParser.marks("Работа над сайтом"))
+        assertEquals(emptyList<String>() to "Идеальный день", LocalParser.marks("Идеальный день"))
+        assertEquals(emptyList<String>() to "Дело в том, что Дима занят", LocalParser.marks("Дело в том, что Дима занят"))
+        assertEquals("idea", LocalParser.parse("В идеи посмотреть кино", ru.anjeib.margin.data.AppData()).items.single().kind)
+    }
+
+    // Owner, 13 окт: a period is a window start..due, not its last day.
+    @Test fun periodsAreWindows() {
+        val d = ru.anjeib.margin.data.AppData()
+        val thu = java.time.LocalDate.of(2026, 10, 8)
+        fun w(t: String) = LocalParser.parse(t, d, today = thu).items.single().let { it.start?.toString() to it.due?.toString() }
+        assertEquals("2026-10-09" to "2026-10-11", w("с 9 по 11 октября сдать отчёт"))
+        assertEquals("2026-10-09" to "2026-10-11", w("9–11 октября сдать отчёт"))
+        assertEquals("2026-10-28" to "2026-11-03", w("с 28 октября по 3 ноября отпуск"))
+        assertEquals("2026-10-08" to "2026-10-31", w("до конца месяца сдать отчёт"))
+        assertEquals("2026-10-08" to "2026-10-11", w("на этой неделе позвонить в банк"))
+        assertEquals("2026-10-12" to "2026-10-18", w("на следующей неделе позвонить в банк"))
+        assertEquals("2026-10-08" to "2026-10-22", w("в течение двух недель подготовить смету"))
+        assertEquals("2026-11-01" to "2026-11-30", w("в ноябре поменять резину"))
+        assertEquals("2026-10-12" to "2026-10-14", w("с понедельника по среду ремонт"))
+        assertEquals("2026-10-09" to "2026-10-11", w("с 9 по 11 сдать отчёт"))
+        // Hours stay hours.
+        assertEquals(null to "2026-10-08", LocalParser.parse("с 9 до 11 уборка", d, today = thu).items.single().let { it.start?.toString() to it.due?.toString() })
+    }
+
+    // Owner, 13 окт: a window stands on every day of it from today on — «Сегодня» and the calendar — until done.
+    @Test fun windowStandsOnToday() {
+        val thu = java.time.LocalDate.of(2026, 10, 8)
+        val t = ru.anjeib.margin.data.Task(title = "Смета", start = "2026-10-05", due = "2026-10-31")
+        val d = ru.anjeib.margin.data.AppData(tasks = listOf(t))
+        assertEquals(listOf("Смета"), ru.anjeib.margin.ui.dayPlan(d, thu, thu, emptyList()).deals.map { it.title })
+        assertEquals(listOf("Смета"), ru.anjeib.margin.ui.dayPlan(d, thu.plusDays(1), thu, emptyList()).deals.map { it.title })
+        assertEquals(emptyList<String>(), ru.anjeib.margin.ui.dayPlan(d, java.time.LocalDate.of(2026, 11, 1), thu, emptyList()).deals.map { it.title })
+        assertEquals(emptyList<String>(), ru.anjeib.margin.ui.dayPlan(d, thu.minusDays(1), thu, emptyList()).deals.map { it.title })
+        assertEquals(listOf("Смета"), ru.anjeib.margin.ui.dayPlan(d, java.time.LocalDate.of(2026, 10, 31), thu, emptyList()).deals.map { it.title })
+    }
 }

@@ -190,7 +190,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             SoftMenuItem(s.wontDo) { close(); commitTitle(); vm.dropTask(task.id); onClose() }
                         }
                         SoftMenuItem(s.toNote) { close(); commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }
-                        SoftMenuItem(if (task.sphere == "work") s.makePersonal else s.makeWork) { close(); vm.setSphere(task.id, nextSphere(task.sphere)) }
+                        SoftMenuItem(s.spherePersonal, selected = task.sphere != "work") { close(); vm.setSphere(task.id, "personal") }
+                        SoftMenuItem(s.sphereWork, selected = task.sphere == "work") { close(); vm.setSphere(task.id, "work") }
                         SoftMenuItem(s.delete, danger = true) { close(); dialog = "delete" }
                     }
                 }
@@ -214,7 +215,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     remind?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) { dialog = "time" }) }
                 }
                 CardHead(title, { title = it }, task.done, onToggle = { vm.toggleTask(task.id) },
-                    margin = if (task.slots.isEmpty()) ({ CardWhen(due, task.time, late, onDay = { dialog = "dates" }, onHour = if (due != null) ({ dialog = "time" }) else null) }) else null,
+                    margin = if (task.slots.isEmpty()) ({ CardWhen(due, task.time, late, onDay = { dialog = "dates" }, onHour = if (due != null) ({ dialog = "time" }) else null, from = task.startDate.takeIf { task.dueDate != null }) }) else null,
                     meta = meta,
                     mark = if (!task.done && (task.waitingFor != null || task.promisedTo != null)) ({
                         Box(Modifier.clip(CircleShape).clickable { vm.toggleTask(task.id) }) { PromiseMark(incoming = task.waitingFor != null, size = 32.dp) }
@@ -558,7 +559,7 @@ fun NoticeLine(nt: Notice, vm: MainVm) {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun DatesDialog(task: Task, onDismiss: () -> Unit, onSave: (String?, String?) -> Unit) {
+internal fun DatesDialog(task: Task, onDismiss: () -> Unit, onSave: (String?, String?) -> Unit) {
     val c = M.c
     val s = M.s
     fun LocalDate.ms() = atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()

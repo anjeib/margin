@@ -458,7 +458,8 @@ object Assistant {
                     val title = a.str("title")?.trim()?.trimEnd('.')?.cap() ?: continue
                     // Inside a topic a «new task» is its next question, unless the user asked for a separate one.
                     if (strict && focus != null && !newTaskCue.containsMatchIn(low) && d.tasks.any { it.id == focus }) {
-                        val q = Subtask(title = title, due = a.date("due") ?: a.date("start"), time = a.time("time"), slots = a.slots(),
+                        val q = Subtask(title = title, due = a.date("due") ?: a.date("start"), start = a.date("start")?.takeIf { a.date("due") != null }, time = a.time("time"), slots = a.slots(),
+                            promisedTo = a.str("promised_to")?.let { who(it) }?.takeIf { it.lowercase() !in me },
                             from = a.str("waiting_for")?.let { who(it) }?.takeIf { it.lowercase() !in me })
                         d = d.copy(tasks = d.tasks.map { if (it.id == focus) it.copy(subtasks = it.subtasks + q, done = false) else it })
                         // The words themselves belong in the feed even when the model forgot them.

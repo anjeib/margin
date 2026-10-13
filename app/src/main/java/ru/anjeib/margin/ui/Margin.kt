@@ -398,6 +398,20 @@ fun SphereBadge(sphere: String?, modifier: Modifier = Modifier, onClick: (() -> 
     }
 }
 
+/** The sphere chip that offers both at once — «Личное» and «Работа» — instead of switching round (owner, 13 окт). */
+@Composable
+fun SpherePick(sphere: String?, modifier: Modifier = Modifier, onPick: (String) -> Unit) {
+    val s = M.s
+    var open by remember { androidx.compose.runtime.mutableStateOf(false) }
+    Box(modifier) {
+        SphereBadge(sphere) { open = true }
+        SoftMenu(open, { open = false }) {
+            SoftMenuItem(s.spherePersonal, selected = sphere == "personal") { open = false; onPick("personal") }
+            SoftMenuItem(s.sphereWork, selected = sphere == "work") { open = false; onPick("work") }
+        }
+    }
+}
+
 /** personal → work → personal: one tap switches. */
 fun nextSphere(cur: String?) = if (cur == "personal") "work" else "personal"
 

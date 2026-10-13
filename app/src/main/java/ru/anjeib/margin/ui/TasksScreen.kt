@@ -521,6 +521,12 @@ data class DayPlan(val date: LocalDate, val deals: List<Task>, val steps: List<T
     val quiet get() = empty && done.isEmpty() && feed.isEmpty()
 }
 
+/** [day] lies inside the window, before its last day: start ≤ day < due (the last day has the matter anyway). */
+fun Task.openWindow(day: LocalDate): Boolean {
+    val s = startDate ?: return false; val d = dueDate ?: return false
+    return s.isBefore(d) && !day.isBefore(s) && day.isBefore(d)
+}
+
 /** The day a thing belongs to on the timeline: late ones gather on today. */
 private fun dayOf(due: LocalDate?, start: LocalDate?, today: LocalDate): LocalDate? {
     val d = due ?: start ?: return null
@@ -545,7 +551,9 @@ fun dayNotes(data: AppData, date: LocalDate): List<DayNote> {
 
 fun dayPlan(data: AppData, date: LocalDate, today: LocalDate, events: List<CalEvent>): DayPlan {
     // v2: a topic shows on a day only through its matters for that day — ordinary rows, grouped under one link to the topic.
-    val deals = data.listTasks().filter { !it.done && dayOf(it.dueDate, it.startDate, today) == date }
+    // A window («9–11 окт», «до конца месяца») stands on every day of it until done — «Сегодня» and the calendar alike
+    // (owner, 13 окт); days already gone are not filled back.
+    val deals = data.listTasks().filter { !it.done && (dayOf(it.dueDate, it.startDate, today) == date || (!date.isBefore(today) && it.openWindow(date))) }
         // A past day's leftovers first; today's passed hours keep their place in the day's order.
         .sortedWith(compareBy({ it.dueDate?.isBefore(today) != true }, { it.time ?: "99" }, { it.title }))
     val steps = emptyList<TopicStep>()

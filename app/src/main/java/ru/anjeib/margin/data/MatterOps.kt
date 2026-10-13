@@ -160,8 +160,18 @@ fun AppData.setDealPlace(topicId: String, subId: String, place: String?) = editD
 fun AppData.addDealPeople(topicId: String, subId: String, names: List<String>) =
     editDeal(topicId, subId) { q -> q.copy(people = (q.people + names.map { it.trim() }.filter { it.isNotEmpty() && it != q.assignee }).distinct()) }
 
-fun AppData.setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null) = editTask(taskId) { t ->
-    t.copy(subtasks = t.subtasks.mapTree(subId) { it.copy(due = due, time = if (due == null) null else time ?: it.time) })
+fun AppData.setQuestionDue(taskId: String, subId: String, due: String?, time: String? = null, start: String? = null) = editTask(taskId) { t ->
+    t.copy(subtasks = t.subtasks.mapTree(subId) { it.copy(due = due, start = start?.takeIf { s -> due != null && s < due }, time = if (due == null) null else time ?: it.time) })
+}
+
+/** «Не буду делать» for a topic's matter: closed, not done. */
+fun AppData.dropQuestion(taskId: String, subId: String, today: LocalDate = LocalDate.now()) = editTask(taskId) { t ->
+    t.copy(subtasks = t.subtasks.mapTree(subId) { it.copy(done = true, dropped = true, doneAt = today.toString()) })
+}
+
+/** «Обещали …» on a topic's matter; blank — no promise. */
+fun AppData.setDealPromised(taskId: String, subId: String, who: String?) = editTask(taskId) { t ->
+    t.copy(subtasks = t.subtasks.mapTree(subId) { it.copy(promisedTo = who?.trim()?.takeIf { w -> w.isNotEmpty() }?.properName()) })
 }
 
 /** «Решено · в архив»: the topic with its materials leaves the lists; news in it brings it back. */
@@ -251,7 +261,14 @@ fun AppData.deleteTaskEntry(taskId: String, entryId: String) = editTask(taskId) 
 /** «Отложить» to a chosen day: a task moves there whole (a range keeps its length); one of its days or a topic's matter — just that. */
 fun AppData.postponeTo(id: String, day: LocalDate, today: LocalDate = LocalDate.now()): AppData {
     slotRef(id)?.let { (base, sid) -> return moveSlot(base, sid, day.toString(), null, false) }
-    questionRef(id)?.let { (tid, qid) -> return setQuestionDue(tid, qid, day.toString()) }
+    questionRef(id)?.let { (tid, qid) ->
+        // A window moves whole: «9–11 окт» put off to the 12th is «12–14 окт».
+        val q = tasks.find { it.id == tid }?.subtasks?.flatMap { listOf(it) + it.children }?.find { it.id == qid }
+        val st = q?.start?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        val du = q?.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        if (st != null && du != null) { val shift = ChronoUnit.DAYS.between(du, day); return setQuestionDue(tid, qid, day.toString(), start = st.plusDays(shift).toString()) }
+        return setQuestionDue(tid, qid, day.toString())
+    }
     val t = tasks.find { it.id == id } ?: return this
     val base = t.dueDate ?: t.startDate ?: today
     val shift = ChronoUnit.DAYS.between(base, day)
@@ -356,7 +373,7 @@ fun AppData.intoTopic(ref: String, topicId: String): AppData {
         })
     }
     val t = tasks.find { it.id == ref && !it.topic } ?: return this
-    val sub = Subtask(title = t.title, done = t.done, due = t.due, time = t.time, from = t.waitingFor, doneAt = t.doneAt, slots = t.slots,
+    val sub = Subtask(title = t.title, done = t.done, due = t.due, start = t.start?.takeIf { t.due != null }, time = t.time, from = t.waitingFor, promisedTo = t.promisedTo, dropped = t.dropped, doneAt = t.doneAt, slots = t.slots,
         comments = t.comments, repeat = t.repeat, place = t.place, people = t.people.filter { it != t.waitingFor })
     val stamp = nowStamp()
     return copy(tasks = tasks.filterNot { it.id == ref }.map { x ->

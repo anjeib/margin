@@ -85,7 +85,11 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
     val busy by vm.busy.collectAsState()
     val data by vm.data.collectAsState()
     val ctxOpen = androidx.compose.ui.platform.LocalContext.current
-    fun commit() { if (title.isNotBlank() && title.trim() != q.title) vm.renameSubtask(topic.id, q.id, title.trim()) }
+    // The same quiet «✓ Сохранено» by the handle as a simple matter's card.
+    var savedAt by remember { mutableStateOf(0L) }
+    fun saved() { savedAt = System.currentTimeMillis() }
+    LaunchedEffect(savedAt) { if (savedAt > 0) { kotlinx.coroutines.delay(1600); savedAt = 0 } }
+    fun commit() { if (title.isNotBlank() && title.trim() != q.title) { vm.renameSubtask(topic.id, q.id, title.trim()); saved() } }
     DisposableEffect(qid) { onDispose { commit() } }
 
     ModalBottomSheet(
@@ -93,7 +97,15 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = c.bg,
         scrimColor = c.scrim,
-        dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 2.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) },
+        dragHandle = {
+            Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp)) {
+                Box(Modifier.align(Alignment.Center).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline))
+                androidx.compose.animation.AnimatedVisibility(savedAt > 0, Modifier.align(Alignment.CenterEnd).padding(end = 18.dp),
+                    enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+                    Text("✓ " + s.savedTick, style = Type.small.copy(color = c.ok, fontSize = 12.5.sp))
+                }
+            }
+        },
     ) {
         // One design for every matter (owner's choice, 9 окт): the topic above, the title, the day, who owes it,
         // «+ …» for what is not set, the comments written right here — and a small field below for changes in words.
@@ -106,9 +118,11 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 // The same card as a simple matter (owner's call, 10 окт), with its topic above the title.
                 val row = topic.questionRow(q)
                 val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                val start = q.start?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                val window = start != null && due != null && start != due
                 val today = LocalDate.now()
                 val late = !q.done && due != null && due.isBefore(today)
-                val people = row.people.filter { it != q.from }
+                val people = row.people.filter { it != q.from && it != q.promisedTo }
                 val rowActs = LocalRowActions.current
                 var more by remember(qid) { mutableStateOf(false) }
                 var postponing by remember(qid) { mutableStateOf(false) }
@@ -117,8 +131,13 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 Margined {
                     // Its topic — a way back to it — at the left of the top line, ⋯ at the right.
                     CardMenu(context = if (onOpenTopic != null) ({ TopicLink(topic.title) { commit(); onOpenTopic() } }) else null) { close ->
-                        if (!q.done) SoftMenuItem(s.postponeMenu) { close(); postponing = true }
-                        rowActs?.let { r -> if (!q.done) SoftMenuItem(s.toOtherTopic) { close(); commit(); onClose(); r.toTopic(ref) } }
+                        // The same as a simple matter's ⋯ (owner, 13 окт); the sphere is the topic's own.
+                        if (!q.done) {
+                            SoftMenuItem(s.postponeMenu) { close(); postponing = true }
+                            rowActs?.let { r -> SoftMenuItem(s.toOtherTopic) { close(); commit(); onClose(); r.toTopic(ref) } }
+                            SoftMenuItem(s.wontDo) { close(); commit(); vm.dropDeal(topic.id, q.id); onClose() }
+                        }
+                        SoftMenuItem(s.toNote) { close(); commit(); vm.dealToIdea(topic.id, q.id); onClose() }
                         SoftMenuItem(s.delete, danger = true) { close(); vm.removeDeal(topic.id, q.id); onClose() }
                     }
                 }
@@ -127,7 +146,9 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                     if (next != null) vm.toggleSlot(ref, next.id) else vm.toggleQuestion(topic.id, q.id)
                 }
                 val meta = buildList {
+                    if (window) row.whenLabel()?.substringBefore(" · ${q.time}")?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) { dialog = "date" }) }
                     q.from?.let { add(MetaItem(Meta.promise(s.promiseToYouParts(it)), Meta.quiet()) { dialog = "waiting" }) }
+                    q.promisedTo?.let { add(MetaItem(Meta.promise(s.promiseFromYouParts(it)), Meta.quiet()) { dialog = "promised" }) }
                     people.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { person(p) }) }
                     q.place?.let { add(MetaItem(Meta.plain(it), Meta.link(), onLong = { fill("place") }) {
                         runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(it)))) }
@@ -135,9 +156,9 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                     q.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
                 }
                 CardHead(title, { title = it }, q.done, onToggle = ::tick,
-                    margin = if (q.slots.isEmpty()) ({ CardWhen(due, q.time, late, onDay = { dialog = "date" }, onHour = if (due != null) ({ dialog = "time" }) else null) }) else null,
+                    margin = if (q.slots.isEmpty()) ({ CardWhen(due, q.time, late, onDay = { dialog = "date" }, onHour = if (due != null) ({ dialog = "time" }) else null, from = start) }) else null,
                     meta = meta,
-                    mark = if (q.from != null && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = true, size = 32.dp) } }) else null)
+                    mark = if ((q.from != null || q.promisedTo != null) && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = q.from != null, size = 32.dp) } }) else null)
                 if (q.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(q.slots, onToggle = { vm.toggleSlot(ref, it) }, onRemove = { vm.removeSlot(ref, it) }) }
                 Margined(Modifier.padding(top = 10.dp)) {
                     Column {
@@ -151,6 +172,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                         androidx.compose.animation.AnimatedVisibility(more) {
                             ActionBar(listOfNotNull(
                                 Action(s.actWait, q.from != null, { dialog = "waiting" }) { ArrowGlyph(it, 20.dp, incoming = true) },
+                                Action(s.actPromised, q.promisedTo != null, { dialog = "promised" }) { ArrowGlyph(it, 20.dp) },
                                 if (!q.done && q.repeat == null) Action(s.actDay, false, { dialog = "day" }) { CalendarGlyph(it, 20.dp) } else null,
                                 if (!q.done) Action(s.actStep, false, { fill("step") }) { TopicGlyph(it, 20.dp) } else null,
                             ), Modifier.padding(top = 2.dp), slots = 5)
@@ -160,7 +182,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 val born = topic.events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at ?: topic.createdAt
                 WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
                     draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "comment:$ref",
-                    onEdit = { id, t -> vm.editComment(ref, id, t) }, onAdd = { t, at -> vm.addComment(ref, t, at) })
+                    onEdit = { id, t -> vm.editComment(ref, id, t); saved() }, onAdd = { t, at -> vm.addComment(ref, t, at); saved() })
                 // Their day has come: «напомнить» here too, the same as on a simple matter (one behaviour for every wait).
                 if (q.from != null && !q.done && due?.isAfter(LocalDate.now()) == false) Margined(Modifier.padding(top = 16.dp)) {
                     Panel {
@@ -179,6 +201,14 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
             Column(Modifier.fieldRule().padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
               // What became of the words (or that they wait for the cloud) — said here too, not only in the topic.
               notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> Box(Modifier.padding(start = FieldLead)) { NoticeLine(nt, vm) } }
+              // A name here that isn't a contact was tapped: the same quiet offer as on a simple matter.
+              val offer by vm.contactOffer.collectAsState()
+              offer?.let { n ->
+                  Row(Modifier.fillMaxWidth().padding(start = FieldLead, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                      Text(s.notAContact(n), style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
+                      QuietLink(s.addContact) { vm.keepContact(n) }
+                  }
+              }
               SmartComposer(
                 vm, if (mode == "step") s.stepHint else modeLabel?.let { s.fillHint(it) } ?: s.writeOnPage, busy == scopeKey,
                 onSend = { t, f ->
@@ -201,10 +231,15 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
         }
     }
     when (dialog) {
-        "date" -> QuestionDateDialog(q, onDismiss = { dialog = null }) { d -> vm.setQuestionDue(topic.id, q.id, d); dialog = null }
+        // The same choice as a simple matter's: a day, or a window «с 9 по 11 окт».
+        "date" -> DatesDialog(topic.questionRow(q), onDismiss = { dialog = null }) { st, du -> vm.setQuestionDue(topic.id, q.id, du ?: st, start = st.takeIf { du != null }); saved(); dialog = null }
         "time" -> TimeDialog(q.time, onDismiss = { dialog = null }) { tm -> vm.setTime(ref, tm); dialog = null }
         "day" -> OneDayDialog(onDismiss = { dialog = null }) { d -> vm.addSlot(ref, d.toString()); dialog = null }
         "repeat" -> RepeatDialog(topic.questionRow(q), onDismiss = { dialog = null }) { r -> vm.setDealRepeat(topic.id, q.id, r); dialog = null }
-        "waiting" -> TextDialog(s.waiting, q.from.orEmpty(), s.sideHint, onDismiss = { dialog = null }) { v -> vm.setDealFrom(topic.id, q.id, v); dialog = null }
+        // One matter, one direction: setting a side takes the other one off, as on a simple matter.
+        "waiting" -> TextDialog(s.waiting, q.from.orEmpty(), s.sideHint, onDismiss = { dialog = null }) { v ->
+            vm.setDealFrom(topic.id, q.id, v); if (v.isNotBlank()) vm.setDealPromised(topic.id, q.id, null); saved(); dialog = null }
+        "promised" -> TextDialog(s.promisedQ, q.promisedTo.orEmpty(), s.sideHint, onDismiss = { dialog = null }) { v ->
+            vm.setDealPromised(topic.id, q.id, v); if (v.isNotBlank()) vm.setDealFrom(topic.id, q.id, null); saved(); dialog = null }
     }
 }

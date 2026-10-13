@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -128,14 +129,14 @@ fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, 
     }
     LaunchedEffect(focusKey) { if (focusKey != null) { kotlinx.coroutines.delay(150); runCatching { focus.requestFocus() } } }
     val now = nowStamp()
-    // On the margin: the hour once writing begins, and «+» — a photo or a file lands right here, under these words (owner, 13 окт).
+    // On the margin only the hour once writing begins — it is the dates' place; «+» stands just right of the rule, at the
+    // start of the line, so a photo or a file lands right here, under these words (owner, 13 окт).
     Margined(modifier, margin = {
-        Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
-            if (t.isNotBlank() || !files.isNullOrEmpty()) Box(Modifier.padding(top = 9.dp)) { Stamp(now, sameDay = after?.take(10) == now.take(10)) }
-            if (vm != null && files != null) AttachPlus(vm, size = 36.dp, tint = M.c.faint) { files += it }
-        }
+        if (t.isNotBlank() || !files.isNullOrEmpty()) Box(Modifier.padding(top = 9.dp)) { Stamp(now, sameDay = after?.take(10) == now.take(10)) }
     }) {
-        Box(Modifier.fillMaxWidth().heightIn(min = 96.dp).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {
+      androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.Top) {
+        if (vm != null && files != null) Box(Modifier.offset(x = (-10).dp).padding(top = 1.dp)) { AttachPlus(vm, size = 36.dp, tint = M.c.graphite) { files += it } }
+        Box(Modifier.weight(1f).heightIn(min = 96.dp).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {
             runCatching { focus.requestFocus() } }) {
             // The quiet word stays until something is written — a sheet may hand the line its focus by itself.
             if (t.isEmpty() && hint.isNotEmpty() && (pasteTo == null || vm?.clip?.collectAsState()?.value == null)) Text(hint, style = Type.italic.copy(color = c.faint, fontSize = 16.sp, lineHeight = 23.sp), modifier = Modifier.padding(vertical = 8.dp))
@@ -151,8 +152,10 @@ fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, 
                     Text("×", style = Type.body.copy(color = c.graphite, fontSize = 18.sp),
                         modifier = Modifier.clip(androidx.compose.foundation.shape.CircleShape).clickable { vm.clearClip() }.padding(horizontal = 10.dp, vertical = 4.dp))
                 }
-                BasicTextField(value, { v -> val next = continueList(value, v); t = next.text; typed = next.text; sel = next.selection },
-                    textStyle = style, cursorBrush = SolidColor(c.link),
+                // «/» typed here: the choices stand right over these words.
+                vm?.pageMarks?.value?.invoke()
+                BasicTextField(value, { v -> val next = continueList(value, MarkLook.eraseWhole(value, v)); t = next.text; typed = next.text; sel = next.selection },
+                    textStyle = style, cursorBrush = SolidColor(c.link), visualTransformation = rememberMarkLook(vm),
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).focusRequester(focus))
                 // What «+» added, before it is sent: right where it will be.
                 if (!files.isNullOrEmpty()) androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(bottom = 8.dp),
@@ -162,6 +165,7 @@ fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, 
                 }
             }
         }
+      }
     }
 }
 

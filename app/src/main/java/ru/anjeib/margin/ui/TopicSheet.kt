@@ -324,7 +324,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                     val since = runCatching { LocalDate.parse(task.createdAt) }.getOrNull()?.dayMonthYear()
                     val sinceText = since?.let { if (task.thought && task.subtasks.isEmpty()) s.thoughtSince(it) else s.topicSince(it) }
                     Voice(listOfNotNull(sinceText, total.takeIf { it > 0 }?.let { s.progressSolved(doneCount, it) }).joinToString("  ·  "), Modifier.weight(1f))
-                    SphereBadge(task.sphere, Modifier.padding(start = 8.dp)) { vm.setSphere(task.id, nextSphere(task.sphere)) }
+                    SpherePick(task.sphere, Modifier.padding(start = 8.dp)) { vm.setSphere(task.id, it) }
                 }
                 val files = task.materials().size
                 val tab = when { dealsOnly -> "deals"; saidOnly -> "said"; materialsMode -> "files"; else -> "all" }

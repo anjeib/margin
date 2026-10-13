@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -145,9 +146,11 @@ fun SmartComposer(
     // The text as the user last left it in the field, and where their cursor was.
     var typedText by remember { mutableStateOf("") }
     var typedSel by remember { mutableStateOf(androidx.compose.ui.text.TextRange(0)) }
-    // Chosen marks ride in front of the words when they are sent: «/дело #[topic] @[Маша] Отправить счёт».
-    var tags by rememberSaveable { mutableStateOf(listOf<String>()) }
-    fun tagged(t: String) = (tags.joinToString(" ") + " " + t).trim().also { tags = emptyList() }
+    // Owner, 13 окт: chosen marks live in the words themselves («/идея Посмотреть кино»), shown there as a soft petrol word
+    // (MarkLook) and erased whole; nothing rides separately over the field.
+    fun tagged(t: String) = t.trim()
+    // After «/дело» is picked the line offers where it belongs (работа / личное) — one more tap, not a hunt.
+    var sphereNext by remember { mutableStateOf<String?>(null) }
     val ownFiles = remember { mutableStateListOf<Attachment>() }
     val files = pageFiles ?: ownFiles
     var recorder by remember { mutableStateOf<WavRecorder?>(null) }
@@ -181,10 +184,9 @@ fun SmartComposer(
             return
         }
         Files.delete(ctx, audio)
-        // What it is and where it goes, said in words, becomes marks over the field — not words in it (owner, 13 окт).
+        // What it is and where it goes, said in words, becomes marks in the field — shown as marks, not as words (owner, 13 окт).
         val (marks, words) = if (slash && text.isBlank()) vm.marksOf(t) else emptyList<String>() to t
-        if (marks.isNotEmpty()) tags = (tags + marks).distinct()
-        val full = (text.trimEnd() + " " + words).trim()
+        val full = (marks.joinToString(" ") + " " + text.trimEnd() + " " + words).replace(Regex("\\s{2,}"), " ").trim()
         // On a page the dictated words are shown there first — sent when the user has seen them.
         if (settings.voiceSendNow && pageText == null) { onSend(tagged(full), files.toList()); text = ""; files.clear() } else { text = full; onWrite?.invoke() }
     }
@@ -218,88 +220,87 @@ fun SmartComposer(
     val lead = if (ruled) MarginW - edge + FieldInset else 0.dp
     Column(modifier.fillMaxWidth()) {
       Column(Modifier.padding(start = lead)) {
-        // «/…», «#…», «@…» at the end of the words: a small window of choices, one over another.
+        // «/…», «#…», «@…» at the end of the words: a line of choices right over the field, words without a box (owner, 13 окт).
         val trigger = if (slash && modeLabel == null) Regex("(?:^|\\s)([/#@])([\\p{L}\\d_-]*)$").find(text) else null
-        val sign = trigger?.groupValues?.get(1)
         val query = trigger?.groupValues?.get(2)?.lowercase()?.replace('ё', 'е')
         val kinds = listOf(s.tagDeal, s.tagTopic, s.tagIdea)
         val spheres = listOf(s.tagWork, s.tagPersonal)
         // «/готово» and «/запись» still work when typed, but are not offered — words say the same (owner's call, 10 окт).
         val actions = listOf(s.tagWait, s.tagPromise)
+        // Just picked a kind: where it belongs is offered next, until the user types on.
+        LaunchedEffect(text) { if (sphereNext != null && text != sphereNext) sphereNext = null }
+        val sign = trigger?.groupValues?.get(1) ?: if (sphereNext != null && text == sphereNext) "+" else null
         val d = vm.data.collectAsState().value
-        // One choice: (the mark it adds, what the window shows, its group, a small sign before it).
+        // One choice: (the mark it adds, what the line shows, its group, a small sign before it).
         data class Pick(val token: String, val label: String, val group: String, val dot: Color? = null, val topic: Boolean = false)
+        fun sphereDot(w: String) = if (w == s.tagWork) c.link else c.ok
         val offer: List<Pick> = when (sign) {
-            "/" -> (kinds.map { Pick("/$it", "/$it", "kind") } + spheres.map { Pick("/$it", "/$it", "sphere", if (it == s.tagWork) c.link else c.ok) } +
-                actions.map { Pick("/$it", "/$it", "action") }).filter { it.label.drop(1).startsWith(query.orEmpty()) }
+            // Only what it is at first; the rest is there when its first letters are typed (owner, 13 окт).
+            "/" -> if (query.isNullOrEmpty()) kinds.map { Pick("/$it", "/$it", "kind") }
+                else (kinds.map { Pick("/$it", "/$it", "kind") } + spheres.map { Pick("/$it", "/$it", "sphere", sphereDot(it)) } +
+                    actions.map { Pick("/$it", "/$it", "action") }).filter { it.label.drop(1).startsWith(query) }
+            "+" -> spheres.map { Pick("/$it", "/$it", "sphere", sphereDot(it)) }
             "#" -> d.tasks.filter { it.topic && !it.done }.sortedByDescending { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.createdAt) }
-                .filter { query.isNullOrEmpty() || it.title.lowercase().replace('ё', 'е').contains(query) }.take(6).map { Pick("#[${it.id}]", it.title, "topic", topic = true) }
+                .filter { query.isNullOrEmpty() || it.title.lowercase().replace('ё', 'е').contains(query) }.take(8).map { Pick("#[${it.id}]", it.title, "topic", topic = true) }
             "@" -> d.persons.filter { !it.archived && !it.draft }.filter { query.isNullOrEmpty() || it.name.lowercase().replace('ё', 'е').startsWith(query) || it.name.lowercase().replace('ё', 'е').contains(" $query") }
-                .take(6).map { Pick("@[${it.name}]", it.name, "person", if (it.org) c.graphite else null) } +
+                .take(8).map { Pick("@[${it.name}]", it.name, "person", if (it.org) c.graphite else null) } +
                 (if (!query.isNullOrBlank() && d.persons.none { it.name.equals(query, true) }) listOf(Pick("@[" + query.replaceFirstChar { it.uppercase() } + "]", "+ " + query.replaceFirstChar { it.uppercase() }, "person")) else emptyList())
             else -> emptyList()
         }
-        // The window floats over the screen: a tap anywhere outside closes it (the typed sign goes with it).
-        fun closeWindow() { text = text.replace(Regex("(?:^|\\s)[/#@][\\p{L}\\d_-]*$"), "").trimEnd().let { if (it.isEmpty()) "" else "$it " } }
-        if (offer.isNotEmpty()) Box(Modifier.height(0.dp)) { androidx.compose.ui.window.Popup(alignment = Alignment.BottomStart,
-            onDismissRequest = { closeWindow() },
-            properties = androidx.compose.ui.window.PopupProperties(focusable = false, dismissOnClickOutside = true)) {
-            androidx.compose.material3.Surface(Modifier.padding(start = 6.dp, bottom = 8.dp).widthIn(min = 196.dp, max = 300.dp), shape = RoundedCornerShape(16.dp), color = c.card,
-                shadowElevation = 8.dp, border = androidx.compose.foundation.BorderStroke(1.dp, c.hairline)) {
-                Column(Modifier.padding(vertical = 6.dp)) {
-                    Text(when (sign) { "#" -> s.hashWhat; "@" -> s.atWhat; else -> s.slashWhat }, style = Type.small.copy(color = c.graphite, fontSize = 12.sp),
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 2.dp))
-                    offer.forEachIndexed { i, p ->
-                        if (i > 0 && p.group != offer[i - 1].group) Hairline(Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
-                        Row(Modifier.fillMaxWidth().clickable {
-                            // One of each kind of mark: a new choice replaces the old one of its group.
-                            fun groupOf(t: String) = when {
-                                t.startsWith("#") -> "topic"; t.startsWith("@") -> "person"
-                                t.drop(1) in kinds -> "kind"; t.drop(1) in spheres -> "sphere"; else -> "action"
-                            }
-                            // A chosen one again — taken off; «/» keeps its window open to choose more (kind, sphere, who owes).
-                            tags = if (p.token in tags) tags - p.token else tags.filterNot { groupOf(it) == p.group && p.group != "person" } + p.token
-                            text = text.replace(Regex("(?:^|\\s)[/#@][\\p{L}\\d_-]*$"), "").trimEnd().let { if (it.isEmpty()) "" else "$it " } + if (sign == "/") "/" else ""
-                        }.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                            when {
-                                p.topic -> { TopicGlyph(c.link, 13.dp); Spacer(Modifier.width(9.dp)) }
-                                p.dot != null -> { Box(Modifier.size(7.dp).clip(androidx.compose.foundation.shape.CircleShape).background(p.dot)); Spacer(Modifier.width(9.dp)) }
-                            }
-                            val on = p.token in tags
-                            Text(p.label, style = Type.body.copy(color = if (on) c.link else c.ink, fontSize = 15.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false))
-                            if (on) { Spacer(Modifier.width(10.dp)); Text("✓", style = Type.body.copy(color = c.link, fontSize = 15.sp)) }
+        fun groupOf(t: String) = when {
+            t.startsWith("#") -> "topic"; t.startsWith("@") -> "person"
+            t.drop(1).lowercase() in kinds -> "kind"; t.drop(1).lowercase() in spheres -> "sphere"; else -> "action"
+        }
+        val present = remember(text) { MarkLook.tokens(text) }
+        fun pick(p: Pick) {
+            // One of each kind of mark: a new choice replaces the old one of its group; a chosen one again — taken off.
+            var t = text.replace(Regex("(?:^|\\s)[/#@][\\p{L}\\d_-]*$"), "")
+            val again = present.any { it.equals(p.token, true) }
+            present.filter { it.equals(p.token, true) || (groupOf(it) == p.group && p.group != "person") }.forEach { old ->
+                t = t.replace(Regex("(?:^|(?<=\\s))" + Regex.escape(old) + "(?:\\s|$)"), "")
+            }
+            t = t.replace(Regex("\\s{2,}"), " ").trimEnd()
+            text = if (again) (if (t.isEmpty()) "" else "$t ") else (if (t.isEmpty()) "" else "$t ") + p.token + " "
+            sphereNext = if (!again && p.group == "kind" && p.token != "/" + s.tagTopic && present.none { groupOf(it) == "sphere" }) text else null
+            onWrite?.invoke()
+        }
+        // The line of choices: words, no box. In the main field it stands over the field; on a page — over the page's own
+        // writing line, where the words are (owner, 13 окт).
+        val line: @Composable (List<Pick>, Modifier) -> Unit = { shown, mod ->
+            Row(mod.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                shown.forEach { p ->
+                    val on = present.any { it.equals(p.token, true) }
+                    Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable { pick(p) }.padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        when {
+                            p.topic -> { TopicGlyph(c.link, 12.dp); Spacer(Modifier.width(6.dp)) }
+                            p.dot != null -> { Box(Modifier.size(6.dp).clip(CircleShape).background(p.dot)); Spacer(Modifier.width(6.dp)) }
                         }
+                        Text(p.label, style = Type.body.copy(color = if (on) c.graphite else c.link, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp))
+                        if (on) { Spacer(Modifier.width(5.dp)); TickGlyph(c.graphite, 13.dp) }
                     }
                 }
             }
-        } }
+        }
+        if (pageText != null) {
+            SideEffect { vm.pageMarks.value = if (offer.isNotEmpty()) ({ line(offer, Modifier.offset(x = (-10).dp)) }) else null }
+            androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.pageMarks.value = null } }
+        } else androidx.compose.animation.AnimatedVisibility(offer.isNotEmpty(), enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(140)),
+            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(100))) {
+            var shown by remember { mutableStateOf(offer) }
+            if (offer.isNotEmpty()) shown = offer
+            // No box: the words stand on the page's own paper, faded in under them so the page behind doesn't fight them.
+            line(shown, Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.bg.copy(alpha = 0f), c.bg.copy(alpha = 0.92f), c.bg)))
+                .padding(start = 6.dp, end = 8.dp, top = 6.dp, bottom = 4.dp))
+        }
         // The live reading: «дело · завтра 15:00 · Маша · работа» — what will be made, before it is sent.
-        val read = preview?.takeIf { text.isNotBlank() && offer.isEmpty() }?.invoke((tags.joinToString(" ") + " " + text).trim())
+        val read = preview?.takeIf { text.isNotBlank() && offer.isEmpty() }?.invoke(text.trim())
         androidx.compose.animation.AnimatedVisibility(read != null, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.expandVertically(),
             exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)) + androidx.compose.animation.shrinkVertically()) {
             var last by remember { mutableStateOf("") }
             if (read != null) last = read
             Text(last, style = Type.small.copy(color = c.link, fontSize = 13.sp), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 18.dp, end = 12.dp, bottom = 6.dp))
-        }
-        if (tags.isNotEmpty()) Row(Modifier.padding(start = 6.dp, bottom = 6.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            tags.forEach { tag ->
-                Row(Modifier.clip(RoundedCornerShape(50)).background(c.linkSoft).clickable { tags = tags - tag }.padding(start = 11.dp, end = 7.dp, top = 4.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    // «дело», «≡ Ремонт ванной», «@Маша».
-                    val shown = when {
-                        tag.startsWith("#[") -> vm.data.value.tasks.find { it.id == tag.drop(2).dropLast(1) }?.title ?: tag
-                        tag.startsWith("@[") -> "@" + tag.drop(2).dropLast(1)
-                        else -> tag.removePrefix("/")
-                    }
-                    if (tag.startsWith("#")) { TopicGlyph(c.link, 11.dp); Spacer(Modifier.width(5.dp)) }
-                    Text(shown, style = Type.small.copy(color = c.link, fontSize = 13.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 180.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Rounded.Close, s.dismiss, tint = c.link, modifier = Modifier.size(13.dp))
-                }
-            }
         }
         if (modeLabel != null) Row(Modifier.padding(start = 6.dp, bottom = 6.dp).clip(RoundedCornerShape(50)).background(c.linkSoft)
             .clickable(onClick = onModeClose).padding(start = 12.dp, end = 8.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -400,10 +401,11 @@ fun SmartComposer(
                         else androidx.compose.ui.text.input.TextFieldValue(text, androidx.compose.ui.text.TextRange(text.length))
                     BasicTextField(
                         value = value, onValueChange = { v ->
-                            val next = continueList(value, v)
+                            val next = continueList(value, MarkLook.eraseWhole(value, v))
                             text = next.text; typedText = next.text; typedSel = next.selection
                         },
                         textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link), maxLines = 6,
+                        visualTransformation = rememberMarkLook(vm),
                         modifier = Modifier.fillMaxWidth().focusRequester(focus),
                     )
                 }
@@ -607,4 +609,112 @@ fun attachmentsSummary(list: List<Attachment>): String? {
         list.count { it.kind == "contact" }.takeIf { it > 0 }?.let { s.nContacts(it) },
     )
     return "📎 " + parts.joinToString(" · ")
+}
+
+
+/**
+ * Marks written into the words («/идея», «#[id]», «@[Маша]») drawn as marks: a soft petrol word — «идея», «≡ Ремонт», «@Маша» —
+ * right in the line (owner, 13 окт), and erased as one piece.
+ */
+object MarkLook {
+    val rx = Regex("(?<![\\p{L}\\d/])(/(?:дело|тема|идея|работа|личное|жду|обеща[лю]\\p{L}*|готово|запись|todo|topic|idea|work|personal|wait|promised|done|note)|#\\[[^\\]]+]|@\\[[^\\]]+])(?![\\p{L}\\d])", RegexOption.IGNORE_CASE)
+
+    fun tokens(text: String): List<String> = rx.findAll(text).map { it.value }.toList()
+
+    /** A single character taken out of a mark takes the whole mark with it (and the space after it). */
+    // The keyboard still holds the mark it was erasing: a held «⌫» sends a few more deletions against its stale copy, and
+    // they come back as a scrap of the mark («/д»). For a moment after a mark is erased, such scraps are dropped.
+    private var erased: Triple<String, String, Long>? = null
+
+    // Under quick deletions the field hands in the value of its last drawing, not the last one it was given: the last answer
+    // (and when) is the truer «before».
+    private var lastOut: Pair<androidx.compose.ui.text.input.TextFieldValue, Long>? = null
+
+    fun eraseWhole(old0: androidx.compose.ui.text.input.TextFieldValue, new: androidx.compose.ui.text.input.TextFieldValue): androidx.compose.ui.text.input.TextFieldValue {
+        val t0 = System.currentTimeMillis()
+        val old = lastOut?.takeIf { (v, at) -> t0 - at < 300 && v.text != old0.text }?.first ?: old0
+        return erase(old, new).also { lastOut = it to t0 }
+    }
+
+    private fun erase(old: androidx.compose.ui.text.input.TextFieldValue, new: androidx.compose.ui.text.input.TextFieldValue): androidx.compose.ui.text.input.TextFieldValue {
+        erased?.let { (left, mark, at) ->
+            val now = System.currentTimeMillis()
+            // Not «old == left»: under quick deletions [old] itself may be one of those scraps.
+            if (now - at < 1000 && new.text != left) {
+                val from = (0 until minOf(left.length, new.text.length)).firstOrNull { left[it] != new.text[it] } ?: minOf(left.length, new.text.length)
+                val tail = left.length - from
+                val put = if (new.text.length >= tail) new.text.substring(from, new.text.length - tail) else ""
+                if (new.text.length - tail >= from && new.text.endsWith(left.substring(from)) && put.isNotEmpty() && mark.startsWith(put.lowercase())) {
+                    erased = Triple(left, mark, now)
+                    return androidx.compose.ui.text.input.TextFieldValue(left, androidx.compose.ui.text.TextRange(from.coerceAtMost(left.length)))
+                }
+            }
+        }
+        if (new.text.length != old.text.length - 1) return new
+        val at = (0 until new.text.length).firstOrNull { old.text[it] != new.text[it] } ?: new.text.length
+        if (old.text.removeRange(at, at + 1) != new.text) return new
+        val m = rx.findAll(old.text).firstOrNull { at in it.range } ?: return new
+        val end = if (m.range.last + 1 < old.text.length && old.text[m.range.last + 1] == ' ') m.range.last + 2 else m.range.last + 1
+        val t = old.text.removeRange(m.range.first, end)
+        erased = Triple(t, m.value.lowercase(), System.currentTimeMillis())
+        return androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(m.range.first.coerceAtMost(t.length)))
+    }
+}
+
+/** The field's look for marks: each one a petrol word on soft petrol; [vm] names a topic's id by its title. */
+@Composable
+fun rememberMarkLook(vm: MainVm?): androidx.compose.ui.text.input.VisualTransformation {
+    val c = M.c
+    val ink = c.link
+    val ground = c.linkSoft
+    return remember(ink, ground, vm) {
+        androidx.compose.ui.text.input.VisualTransformation { src ->
+            val raw = src.text
+            val hits = MarkLook.rx.findAll(raw).toList()
+            if (hits.isEmpty()) return@VisualTransformation androidx.compose.ui.text.input.TransformedText(src, androidx.compose.ui.text.input.OffsetMapping.Identity)
+            // (where the mark is in the words, where it is in what is shown)
+            val origStarts = IntArray(hits.size); val origEnds = IntArray(hits.size); val outStarts = IntArray(hits.size); val outEnds = IntArray(hits.size)
+            val out = androidx.compose.ui.text.buildAnnotatedString {
+                var pos = 0
+                hits.forEachIndexed { i, m ->
+                    append(raw.substring(pos, m.range.first))
+                    val v = m.value
+                    val label = when {
+                        v.startsWith("#[") -> "≡ " + (vm?.data?.value?.tasks?.find { it.id == v.drop(2).dropLast(1) }?.title ?: v.drop(2).dropLast(1))
+                        v.startsWith("@[") -> "@" + v.drop(2).dropLast(1)
+                        else -> v.drop(1).lowercase()
+                    }
+                    origStarts[i] = m.range.first; origEnds[i] = m.range.last + 1
+                    outStarts[i] = length
+                    pushStyle(androidx.compose.ui.text.SpanStyle(color = ink, background = ground, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
+                    append("\u2009$label\u2009")
+                    pop()
+                    outEnds[i] = length
+                    pos = m.range.last + 1
+                }
+                append(raw.substring(pos))
+            }
+            val map = object : androidx.compose.ui.text.input.OffsetMapping {
+                override fun originalToTransformed(offset: Int): Int {
+                    var shift = 0
+                    for (i in hits.indices) {
+                        if (offset <= origStarts[i]) return offset + shift
+                        if (offset < origEnds[i]) return outEnds[i]
+                        shift = outEnds[i] - origEnds[i]
+                    }
+                    return (offset + shift).coerceIn(0, out.length)
+                }
+                override fun transformedToOriginal(offset: Int): Int {
+                    var shift = 0
+                    for (i in hits.indices) {
+                        if (offset <= outStarts[i]) return offset - shift
+                        if (offset < outEnds[i]) return origEnds[i]
+                        shift = outEnds[i] - origEnds[i]
+                    }
+                    return (offset - shift).coerceIn(0, raw.length)
+                }
+            }
+            androidx.compose.ui.text.input.TransformedText(out, map)
+        }
+    }
 }
