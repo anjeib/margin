@@ -276,15 +276,30 @@ fun TaskList(
                         }
                     }
                 }
-                // Ideas written today: each by its bulb — the bulb says «идея», no badge over them.
-                val ideasToday = data.tasks.filter { t -> t.thought && !t.done && (t.createdAt == today.toString() || t.entries.any { it.at.startsWith(today.toString()) }) }
-                if (ideasToday.isNotEmpty()) {
-                    item("i-head") { SectionHead(s.thoughtsToday) }
-                    ideasToday.forEachIndexed { i, t ->
-                        item("i" + t.id) {
-                            PaperRow(seatOf(i, ideasToday.size), mark = { IdeaMark(26.dp) }, modifier = Modifier.animateItem().landing(t.id in landed, 0), onClick = { onOpen(t.id) }) {
-                                RowTitle(t.title.ifBlank { s.untitled }, maxLines = 2)
-                                t.entries.size.takeIf { it > 0 }?.let { RowSub(s.nEntries(it)) }
+                // Owner, 13 окт: whatever was written today shows on «Сегодня», even when it isn't for today — a new topic,
+                // a matter for another day (its day on the margin), an idea. What the sections above already hold isn't repeated.
+                val todayStr = today.toString()
+                val topicsToday = data.tasks.filter { t -> t.topic && !t.thought && !t.done && !t.sample && (t.createdAt == todayStr || t.entries.any { it.at.startsWith(todayStr) }) }
+                val laterToday = data.tasks.filter { t -> !t.topic && !t.done && !t.sample && t.createdAt == todayStr && t.anchor?.isAfter(today) == true }
+                    .sortedWith(compareBy({ it.anchor }, { it.time ?: "99" }))
+                val ideasToday = data.tasks.filter { t -> t.thought && !t.done && (t.createdAt == todayStr || t.entries.any { it.at.startsWith(todayStr) }) }
+                val written = topicsToday.map { "t" to it } + laterToday.map { "d" to it } + ideasToday.map { "i" to it }
+                if (written.isNotEmpty()) {
+                    item("i-head") { SectionHead(s.writtenToday) }
+                    written.forEachIndexed { i, (kind, t) ->
+                        item("w" + t.id) {
+                            val seat = seatOf(i, written.size)
+                            Box(Modifier.animateItem().landing(t.id in landed, 0)) {
+                                when (kind) {
+                                    "t" -> TopicPaperRow(t, seat, onOpen = { onOpen(t.id) })
+                                    "d" -> MatterRow(t, seat, today, whenNote(t, today, underDay = false), onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) },
+                                        onTime = { timeFor = t.id }, onLater = { postponing = t.id }, lit = t.id in landed, onOpenTopic = onOpen)
+                                    // Ideas each by its bulb — the bulb says «идея», no badge over them.
+                                    else -> PaperRow(seat, mark = { IdeaMark(26.dp) }, onClick = { onOpen(t.id) }) {
+                                        RowTitle(t.title.ifBlank { s.untitled }, maxLines = 2)
+                                        t.entries.size.takeIf { it > 0 }?.let { RowSub(s.nEntries(it)) }
+                                    }
+                                }
                             }
                         }
                     }

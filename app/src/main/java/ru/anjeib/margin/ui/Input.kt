@@ -126,6 +126,8 @@ fun SmartComposer(
      */
     pageText: androidx.compose.runtime.MutableState<String>? = null,
     onWrite: (() -> Unit)? = null,
+    /** On a page, the photos and files picked with the page's own «+» (they show there, under the words). */
+    pageFiles: androidx.compose.runtime.snapshots.SnapshotStateList<Attachment>? = null,
 ) {
     val c = M.c
     val s = M.s
@@ -141,11 +143,10 @@ fun SmartComposer(
     // Chosen marks ride in front of the words when they are sent: «/дело #[topic] @[Маша] Отправить счёт».
     var tags by rememberSaveable { mutableStateOf(listOf<String>()) }
     fun tagged(t: String) = (tags.joinToString(" ") + " " + t).trim().also { tags = emptyList() }
-    val files = remember { mutableStateListOf<Attachment>() }
-    var menu by remember { mutableStateOf(false) }
+    val ownFiles = remember { mutableStateListOf<Attachment>() }
+    val files = pageFiles ?: ownFiles
     var recorder by remember { mutableStateOf<WavRecorder?>(null) }
     var level by remember { mutableFloatStateOf(0f) }
-    var cameraFile by remember { mutableStateOf<File?>(null) }
     val transcribing = "voice" in working
 
     // Text put in for a mode (a caption to edit) leaves with the mode, unless the user changed it into something else.
@@ -161,20 +162,6 @@ fun SmartComposer(
     }
     LaunchedEffect(text, files.size, recorder) { onTyping(text.isNotEmpty() || files.isNotEmpty() || recorder != null) }
 
-    fun add(a: Attachment?) { if (a != null) files += a }
-    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(6)) { uris ->
-        uris.forEach { u -> scope.launch { add(Files.import(ctx, u)) } }
-    }
-    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val f = cameraFile
-        if (ok && f != null && f.length() > 0) add(Files.fromCamera(f)) else f?.delete()
-    }
-    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u: Uri? ->
-        if (u != null) scope.launch { add(Files.import(ctx, u)) }
-    }
-    val pickContact = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        r.data?.data?.let { u -> Files.readContact(ctx, u)?.let { add(vm.contactAttachment(it)) } }
-    }
     val systemVoice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { text = (text.trimEnd() + " " + it).trim() }
     }
@@ -189,7 +176,10 @@ fun SmartComposer(
             return
         }
         Files.delete(ctx, audio)
-        val full = (text.trimEnd() + " " + t).trim()
+        // What it is and where it goes, said in words, becomes marks over the field — not words in it (owner, 13 окт).
+        val (marks, words) = if (slash && text.isBlank()) vm.marksOf(t) else emptyList<String>() to t
+        if (marks.isNotEmpty()) tags = (tags + marks).distinct()
+        val full = (text.trimEnd() + " " + words).trim()
         // On a page the dictated words are shown there first — sent when the user has seen them.
         if (settings.voiceSendNow && pageText == null) { onSend(tagged(full), files.toList()); text = ""; files.clear() } else { text = full; onWrite?.invoke() }
     }
@@ -312,7 +302,8 @@ fun SmartComposer(
             Spacer(Modifier.width(6.dp))
             Icon(Icons.Rounded.Close, s.dismiss, tint = c.link, modifier = Modifier.size(14.dp))
         }
-        if (files.isNotEmpty()) {
+        // On a page the picked files show there, under the words; here only for the field itself.
+        if (files.isNotEmpty() && pageFiles == null) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 files.toList().forEach { a -> AttachmentChip(a, onRemove = { files.remove(a); if (a.file != null) Files.delete(ctx, a) }) }
             }
@@ -321,26 +312,23 @@ fun SmartComposer(
         val rec = recorder
         val canSend = (text.isNotBlank() || files.isNotEmpty() || sendEmpty) && !busy
         fun send() { onSend(tagged(text), files.toList()); text = ""; files.clear() }
-        val attach: @Composable () -> Unit = {
-            Box {
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.a11yAttach, role = androidx.compose.ui.semantics.Role.Button) { menu = true }
-                    .semantics { contentDescription = s.a11yAttach }, contentAlignment = Alignment.Center) {
-                    PlusGlyph(c.graphite, 18.dp)
+        val attach: @Composable () -> Unit = { AttachPlus(vm) { files += it } }
+        // Owner, 13 окт: on a page the bar holds only the microphone and «send» — no field, no words; «+» lives on the page.
+        if (pageText != null && rec == null) {
+            Row(Modifier.fillMaxWidth().padding(start = if (ruled) MarginW - edge + FieldInset else 0.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                if (transcribing) Text(s.transcribing, style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f).padding(start = 6.dp))
+                else Spacer(Modifier.weight(1f))
+                if (!busy) {
+                    if (transcribing) Box(Modifier.size(FieldH - 2.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
+                    } else FieldButton(label = s.a11yMic, onClick = ::mic) { MicGlyph(c.accent, 21.dp) }
                 }
-                SoftMenu(menu, { menu = false }) {
-                    MenuItem(Icons.Outlined.PhotoLibrary, s.attachPhoto) { menu = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
-                    MenuItem(Icons.Outlined.PhotoCamera, s.attachCamera) {
-                        menu = false
-                        val (f, uri) = Files.newPhotoFile(ctx); cameraFile = f
-                        runCatching { takePhoto.launch(uri) }
-                    }
-                    MenuItem(Icons.Outlined.AttachFile, s.attachFile) { menu = false; pickFile.launch(arrayOf("*/*")) }
-                    MenuItem(Icons.Outlined.PersonOutline, s.attachContact) {
-                        menu = false
-                        runCatching { pickContact.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)) }
-                    }
+                FieldButton(filled = true, enabled = canSend, busy = busy, label = s.a11ySend, onClick = ::send) {
+                    if (busy) CircularProgressIndicator(color = M.c.onAccent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
+                    else SendGlyph(M.c.onAccent, 15.dp)
                 }
             }
+            return@Column
         }
         // A light line, a little taller than the words, a hairline around it.
         val shape = RoundedCornerShape(FieldH / 2)
@@ -372,23 +360,6 @@ fun SmartComposer(
                     return@Row
                 }
                 attach()
-                if (pageText != null) {
-                    // The words are on the page: here only a quiet pointer to it, or what is happening.
-                    Box(Modifier.weight(1f).heightIn(min = FieldH - 2.dp).clickable(enabled = onWrite != null) { onWrite?.invoke() }.padding(vertical = 9.dp, horizontal = 2.dp),
-                        contentAlignment = Alignment.CenterStart) {
-                        Text(if (transcribing) s.transcribing else if (text.isBlank()) hint else s.pageReady, style = Type.body.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    if (!busy) {
-                        if (transcribing) Box(Modifier.size(FieldH - 2.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
-                        } else FieldButton(label = s.a11yMic, onClick = ::mic) { MicGlyph(c.accent, 21.dp) }
-                    }
-                    FieldButton(filled = true, enabled = canSend, busy = busy, label = s.a11ySend, onClick = ::send) {
-                        if (busy) CircularProgressIndicator(color = M.c.onAccent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
-                        else SendGlyph(M.c.onAccent, 15.dp)
-                    }
-                    return@Row
-                }
                 Box(Modifier.weight(1f).heightIn(min = FieldH - 2.dp).padding(vertical = 9.dp, horizontal = 2.dp), contentAlignment = Alignment.CenterStart) {
                     if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = Type.body.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // Words put in from outside (shared, dictated, a mode's prefill) get the cursor after them, not before
@@ -397,9 +368,8 @@ fun SmartComposer(
                         else androidx.compose.ui.text.input.TextFieldValue(text, androidx.compose.ui.text.TextRange(text.length))
                     BasicTextField(
                         value = value, onValueChange = { v ->
-                            val next = continueList(text, v.text)
-                            text = next; typedText = next
-                            typedSel = if (next == v.text) v.selection else androidx.compose.ui.text.TextRange(next.length)
+                            val next = continueList(value, v)
+                            text = next.text; typedText = next.text; typedSel = next.selection
                         },
                         textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link), maxLines = 6,
                         modifier = Modifier.fillMaxWidth().focusRequester(focus),
@@ -415,6 +385,52 @@ fun SmartComposer(
                     if (busy) CircularProgressIndicator(color = M.c.onAccent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
                     else SendGlyph(M.c.onAccent, 15.dp)
                 }
+            }
+        }
+    }
+}
+
+/**
+ * «+»: a photo or a video from the gallery, the camera, a file, a contact — each handed to [onAdd]. In the main field it
+ * sits at the field's start; on a page (owner, 13 окт) on the margin of the writing line, so what is added lands right there.
+ */
+@Composable
+fun AttachPlus(vm: MainVm, size: Dp = 40.dp, tint: Color = M.c.graphite, onAdd: (Attachment) -> Unit) {
+    val s = M.s
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var menu by remember { mutableStateOf(false) }
+    var cameraFile by remember { mutableStateOf<File?>(null) }
+    fun add(a: Attachment?) { if (a != null) onAdd(a) }
+    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(6)) { uris ->
+        uris.forEach { u -> scope.launch { add(Files.import(ctx, u)) } }
+    }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val f = cameraFile
+        if (ok && f != null && f.length() > 0) add(Files.fromCamera(f)) else f?.delete()
+    }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u: Uri? ->
+        if (u != null) scope.launch { add(Files.import(ctx, u)) }
+    }
+    val pickContact = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        r.data?.data?.let { u -> Files.readContact(ctx, u)?.let { add(vm.contactAttachment(it)) } }
+    }
+    Box {
+        Box(Modifier.size(size).clip(CircleShape).clickable(onClickLabel = s.a11yAttach, role = androidx.compose.ui.semantics.Role.Button) { menu = true }
+            .semantics { contentDescription = s.a11yAttach }, contentAlignment = Alignment.Center) {
+            PlusGlyph(tint, 18.dp)
+        }
+        SoftMenu(menu, { menu = false }) {
+            MenuItem(Icons.Outlined.PhotoLibrary, s.attachPhoto) { menu = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+            MenuItem(Icons.Outlined.PhotoCamera, s.attachCamera) {
+                menu = false
+                val (f, uri) = Files.newPhotoFile(ctx); cameraFile = f
+                runCatching { takePhoto.launch(uri) }
+            }
+            MenuItem(Icons.Outlined.AttachFile, s.attachFile) { menu = false; pickFile.launch(arrayOf("*/*")) }
+            MenuItem(Icons.Outlined.PersonOutline, s.attachContact) {
+                menu = false
+                runCatching { pickContact.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)) }
             }
         }
     }

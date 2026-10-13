@@ -50,6 +50,10 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
     }
     DisposableEffect(task.id) { onDispose { commitTitle() } }
     val owner = "task:${task.id}"
+    // Written on the card itself (owner, 13 окт); the bar under it — the microphone and «send», «+» on the page.
+    val pageDraft = remember(task.id) { mutableStateOf("") }
+    val pageFiles = remember(task.id) { androidx.compose.runtime.mutableStateListOf<ru.anjeib.margin.data.Attachment>() }
+    var writeTick by remember { mutableStateOf(0) }
     ModalBottomSheet(
         onDismissRequest = { commitTitle(); onClose() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -58,7 +62,8 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
         dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 2.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) },
     ) {
         val half = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.5f).dp
-        Column(Modifier.fillMaxWidth().heightIn(min = half).imePadding().navigationBarsPadding().screenRule().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+        Column(Modifier.fillMaxWidth().heightIn(min = half).imePadding().navigationBarsPadding()) {
+        Column(Modifier.weight(1f, fill = false).fillMaxWidth().screenRule().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             // The same card as a matter (owner's call, 10 окт): ⋯ for the idea as a whole, its bulb and title in serif;
             // under a line — what was written in it, each piece with its day and hour.
             Margined {
@@ -70,11 +75,19 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
             CardHead(title, { title = it }, false, onToggle = {}, margin = null, meta = emptyList(), mark = { IdeaMark(28.dp) })
             val born = task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
             WrittenLane(task.entries.filter { it.text.isNotBlank() }.map { LaneItem(it.id, it.at, it.text) }, s.ideaHint, Modifier.padding(top = 10.dp), after = null, label = s.records,
+                draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, pasteTo = "task:${task.id}",
                 onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
                 onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
             // Files, matters and all the rest of it — on the full page.
             Margined(Modifier.padding(top = 14.dp)) { Voice(s.openWhole + "  ›", link = true, onClick = { commitTitle(); onOpenFull() }) }
             Margined { CreatedLine(born) }
+        }
+        Column(Modifier.fillMaxWidth().fieldRule().padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
+            SmartComposer(vm, s.writeOnPage, false, onSend = { t, f ->
+                // An idea's words stay words: a record with its photos and files, nothing parsed out of them.
+                if (t.isNotBlank() || f.isNotEmpty()) vm.insertEntry(owner, null, Entry(text = t.trim(), attachments = f))
+            }, pageText = pageDraft, onWrite = { writeTick++ }, pageFiles = pageFiles, slash = false)
+        }
         }
     }
 }

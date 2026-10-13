@@ -264,6 +264,27 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         return t.id
     }
 
+    /**
+     * After dictation (owner, 13 окт): the words that say what it is and where it goes become marks over the field and leave
+     * the text — «в тему Ремонт ванной купить плитку» → [#Ремонт ванной] «Купить плитку», «Идея. Блог о дизайне» → [идея] «Блог о
+     * дизайне», «тема переезд» → [тема] «Переезд». Returns the marks (as the field keeps them) and what is left.
+     */
+    fun marksOf(text: String, inTopic: Boolean = false): Pair<List<String>, String> {
+        fun cap(s: String) = s.trim().replaceFirstChar { it.uppercaseChar() }
+        val t = text.trim()
+        if (!inTopic) Commands.intoTopic(t, data.value.tasks.filter { it.topic && !it.done }.map { it.id to it.title })?.let { (id, said) ->
+            val (kind, rest) = LocalParser.lead(said)
+            return listOfNotNull("#[$id]", kind?.let { "/" + if (it == "idea") L.s.tagIdea else L.s.tagDeal }) to cap(rest)
+        }
+        if (!inTopic) Commands.newTopic(t)?.let { return listOf("/" + L.s.tagTopic) to cap(it) }
+        Commands.parse(t)?.takeIf { it.what == "task" || it.what == "note" }?.takeIf { it.value.isNotBlank() }?.let { c ->
+            return listOf("/" + if (c.what == "note") L.s.tagIdea else L.s.tagDeal) to cap(c.value)
+        }
+        val (kind, rest) = LocalParser.lead(t)
+        if (kind != null && rest.isNotBlank()) return listOf("/" + if (kind == "idea") L.s.tagIdea else L.s.tagDeal) to cap(rest)
+        return emptyList<String>() to text
+    }
+
     /** Words from a matter's page: is this a request to act on, or the user's comment? */
     fun isRequest(text: String) = Commands.isRequest(text)
 
@@ -518,6 +539,66 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private fun updateAttachment(owner: String, entryId: String, attId: String, f: (Attachment) -> Attachment) = store.update { it.editAttachment(owner, entryId, attId, f) }
 
     fun setCaption(owner: String, entryId: String, attId: String, text: String) = store.update { it.setCaption(owner, entryId, attId, text) }
+
+    // ---------------- «Скопировать», «Переместить» → «Вставить сюда» (owner, 13 окт) ----------------
+
+    /**
+     * What was copied or is being moved: a record (with its photos and files) or one photo/file of it ([attId]).
+     * Pasted on any page with «Вставить сюда»; a move leaves its old place only then.
+     */
+    data class Clip(val owner: String, val entryId: String, val attId: String?, val preview: String, val cut: Boolean)
+    private val _clip = MutableStateFlow<Clip?>(null)
+    val clip: StateFlow<Clip?> = _clip
+
+    private fun clipOf(owner: String, entryId: String, attId: String?, cut: Boolean): Clip? {
+        val e = data.value.entriesOf(owner).find { it.id == entryId } ?: return null
+        val preview = if (attId != null) e.attachments.find { it.id == attId }?.let { it.caption ?: it.name.ifBlank { it.kind } } ?: return null
+            else e.text.ifBlank { e.attachments.firstOrNull()?.let { it.caption ?: it.name } ?: "" }
+        return Clip(owner, entryId, attId, preview.lineSequence().first().take(40), cut)
+    }
+
+    fun copyRecord(owner: String, entryId: String, attId: String? = null) {
+        val c = clipOf(owner, entryId, attId, cut = false) ?: return
+        // The words go to the phone's clipboard too — to paste anywhere, in Margin or not.
+        if (attId == null) data.value.entriesOf(owner).find { it.id == entryId }?.text?.takeIf { it.isNotBlank() }?.let { t ->
+            ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("Margin", t))
+        }
+        _clip.value = c
+        _toast.value = L.s.copiedHint
+    }
+
+    fun moveRecord(owner: String, entryId: String, attId: String? = null) {
+        _clip.value = clipOf(owner, entryId, attId, cut = true) ?: return
+        _toast.value = L.s.movingHint
+    }
+
+    fun clearClip() { _clip.value = null }
+
+    /**
+     * «Вставить сюда»: into a topic's or an idea's feed («task:<id>»), a matter's comments («comment:<ref>», words only),
+     * or a simple matter («deal:<id>»: words become a comment, with files — a record). A moved one leaves where it was.
+     */
+    fun pasteInto(target: String) {
+        val c = _clip.value ?: return
+        val src = data.value.entriesOf(c.owner).find { it.id == c.entryId } ?: run { _clip.value = null; return }
+        val atts = if (c.attId != null) src.attachments.filter { it.id == c.attId } else src.attachments
+        val text = if (c.attId != null) "" else src.text
+        val files = if (c.cut) atts else atts.map { Files.duplicate(ctx, it) }
+        val asComment = target.startsWith("comment:") || (target.startsWith("deal:") && files.isEmpty())
+        when {
+            asComment -> { if (text.isBlank()) { _toast.value = L.s.pasteNoFilesHere; return }; addComment(target.substringAfter(':'), text, nowStamp()) }
+            else -> store.update { it.insertEntry("task:" + target.substringAfter(':'), null,
+                Entry(at = if (c.cut) src.at else nowStamp(), text = text, attachments = files, items = if (c.attId == null) src.items else emptyList())) }
+        }
+        if (c.cut) store.update { d -> if (c.attId != null) d.dropAttachment(c.owner, c.entryId, c.attId) else d.removeEntry(c.owner, c.entryId) }
+        _clip.value = null
+    }
+
+    /** «Удалить» on a photo or a file: it goes, with its file; a record left empty goes too. */
+    fun removeAttachment(owner: String, entryId: String, attId: String) {
+        data.value.entriesOf(owner).find { it.id == entryId }?.attachments?.find { it.id == attId }?.let { Files.delete(ctx, it) }
+        store.update { it.dropAttachment(owner, entryId, attId) }
+    }
 
     /** A text block after [afterId]: a written thought in the middle of the stream. */
     fun insertText(owner: String, afterId: String?, text: String) {
@@ -777,7 +858,16 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         if (ids.isEmpty()) return
         _landed.value = ids.toSet()
         viewModelScope.launch { kotlinx.coroutines.delay(1800); if (_landed.value == ids.toSet()) _landed.value = emptySet() }
+        // Owner, 13 окт: something that went to another day — the calendar up top shows that day for a moment, a tap opens it there.
+        val today = LocalDate.now()
+        data.value.tasks.filter { it.id in ids }.mapNotNull { it.anchor }.filter { it.isAfter(today) }.minOrNull()?.let { day ->
+            _landedDay.value = day
+            viewModelScope.launch { kotlinx.coroutines.delay(4000); if (_landedDay.value == day) _landedDay.value = null }
+        }
     }
+    private val _landedDay = MutableStateFlow<LocalDate?>(null)
+    /** The day something just went to, when it isn't today — the calendar up top shows it for a moment. */
+    val landedDay: StateFlow<LocalDate?> = _landedDay
 
     /** «в отдельную заметку»: what the AI appended to an existing note becomes a note of its own. */
     fun pendingAsNewNote() {

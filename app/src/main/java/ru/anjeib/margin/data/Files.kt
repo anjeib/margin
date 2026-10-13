@@ -145,6 +145,15 @@ object Files {
 
     fun delete(ctx: Context, a: Attachment) { file(ctx, a)?.delete() }
 
+    /** «Скопировать» a photo or a file: its own copy of the file, so deleting one never takes the other with it. */
+    fun duplicate(ctx: Context, a: Attachment): Attachment {
+        val src = file(ctx, a) ?: return a.copy(id = newId())
+        val id = newId()
+        val name = id + src.name.substringAfter('.', "").let { if (it.isEmpty()) "" else ".$it" }
+        runCatching { src.copyTo(File(dir(ctx), name), overwrite = true) }
+        return a.copy(id = id, file = name)
+    }
+
     /** «Переслать»: the file itself through the share sheet. */
     fun shareIntent(ctx: Context, a: Attachment): Intent? {
         val f = file(ctx, a) ?: return null

@@ -10,6 +10,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -204,7 +206,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     }
                 }
                 TopBar(screen, view, shown, onMenu = { scope.launch { drawer.open() } }, onTab = { i -> view = listOf(Views.TODAY, Views.WEEK, Views.ALL)[i] },
-                    onSearch = { searching = true }, filter = feedFilter, onFilter = { feedFilter = it })
+                    onSearch = { searching = true }, filter = feedFilter, onFilter = { feedFilter = it },
+                    landedDay = vm.landedDay.collectAsState().value, onLandedDay = { vm.calendarOpenOn.value = it })
                 // v2: no section row — almost everything happens in «Дела»; materials and contacts live in the side menu.
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     val pad = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
@@ -430,7 +433,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
 }
 
 @Composable
-private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Unit, onTab: (Int) -> Unit, onSearch: () -> Unit, filter: String = "all", onFilter: (String) -> Unit = {}) {
+private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Unit, onTab: (Int) -> Unit, onSearch: () -> Unit, filter: String = "all", onFilter: (String) -> Unit = {},
+                   /** A day something just went to: the calendar shows its number, a tap opens it there. */
+                   landedDay: java.time.LocalDate? = null, onLandedDay: (java.time.LocalDate) -> Unit = {}) {
     val s = M.s
     val c = M.c
     var filterMenu by remember { mutableStateOf(false) }
@@ -452,7 +457,19 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = label, onClick = onClick).semantics { contentDescription = label },
                     contentAlignment = Alignment.Center) { glyph() }
             if (screen == TASKS && !away) {
-                tool(s.calendarTitle, { onTab(1) }) { Icon(Icons.Outlined.CalendarMonth, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
+                tool(s.calendarTitle, { landedDay?.let(onLandedDay); onTab(1) }) {
+                    // Something just went to another day: the icon makes way for that day's number in a terracotta ring, breathing a moment.
+                    androidx.compose.animation.Crossfade(landedDay, label = "landedDay") { day ->
+                        if (day == null) Icon(Icons.Outlined.CalendarMonth, null, tint = c.ink, modifier = Modifier.size(22.dp))
+                        else {
+                            val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "pulse")
+                            val k by pulse.animateFloat(1f, 1.15f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse), label = "k")
+                            Box(Modifier.size(30.dp).graphicsLayer { scaleX = k; scaleY = k }.clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
+                                Text(day.dayOfMonth.toString(), style = Type.small.copy(color = c.onAccent, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
+                            }
+                        }
+                    }
+                }
                 tool(s.overviewWord, { onTab(2) }) { Icon(Icons.Outlined.GridView, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
             }
             if (screen == TASKS || screen == PEOPLE) tool(s.search, onSearch) { Icon(Icons.Outlined.Search, null, tint = c.ink, modifier = Modifier.size(22.dp)) }

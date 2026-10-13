@@ -67,6 +67,9 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.outlined.MoreHoriz
@@ -209,8 +212,10 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     var addUnder by remember(task.id) { mutableStateOf<Pair<String, String>?>(null) }
     var editNote by remember { mutableStateOf<Entry?>(null) }
     var focusTick by remember { mutableStateOf(0) }
+    var titleTick by remember { mutableStateOf(0) }
     // The topic's page is written on at its end (owner, 12 окт); the bar below holds «+», the microphone and «send».
     val pageDraft = remember(task.id) { mutableStateOf("") }
+    val pageFiles = remember(task.id) { androidx.compose.runtime.mutableStateListOf<Attachment>() }
     var writeTick by remember { mutableStateOf(0) }
     val busy by vm.busy.collectAsState()
     val notice by vm.notice.collectAsState()
@@ -272,7 +277,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) { Icon(Icons.Outlined.MoreHoriz, s.moreActions, tint = c.graphite) }
                 // An open topic goes to the archive (it keeps everything); deleting is for one already there.
                 SoftMenu(menu, { menu = false }) {
-                    SoftMenuItem(s.rename) { menu = false; dialog = "rename" }
+                    SoftMenuItem(s.rename) { menu = false; titleTick++ }
                     // «что сделано и что ждём» as plain text — for a client, a colleague, a note to self.
                     SoftMenuItem(s.sharePdf) { menu = false; shareTopic(ctx, task) }
                     if (!task.done) SoftMenuItem(s.toArchive) { menu = false; dialog = "archive" }
@@ -284,13 +289,31 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             }
         }
         val open = task.subtasks.count { !it.done }
+        var titleV by remember(task.id) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(task.title)) }
+        var titleHad by remember { mutableStateOf(false) }
+        val titleFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+        // A new name from elsewhere (the assistant, a sync) shows unless the user is typing one.
+        LaunchedEffect(task.title) { if (!titleHad && titleV.text != task.title) titleV = androidx.compose.ui.text.input.TextFieldValue(task.title) }
+        LaunchedEffect(titleTick) { if (titleTick > 0) { kotlinx.coroutines.delay(120); runCatching { titleFocus.requestFocus() }; titleV = titleV.copy(selection = androidx.compose.ui.text.TextRange(titleV.text.length)) } }
+        fun saveTitle() {
+            val cur = vm.data.value.tasks.find { it.id == task.id } ?: return
+            val t = titleV.text.trim()
+            if (t.isBlank()) titleV = androidx.compose.ui.text.input.TextFieldValue(cur.title)
+            else if (t != cur.title) vm.saveTask(cur.copy(title = t.sentence()))
+        }
         // Scrolled into the feed, the header folds to one line — the title — and gives the feed the screen; back at the start it opens again.
         val folded by remember { androidx.compose.runtime.derivedStateOf { feedState.firstVisibleItemIndex > 0 || feedState.firstVisibleItemScrollOffset > 60 } }
         Margined {
             Column(Modifier.animateContentSize(tween(220))) {
-                Text(task.title, style = if (folded) Type.cardTitle.copy(color = c.ink, fontSize = 19.sp, lineHeight = 24.sp) else Type.display.copy(color = c.ink, fontSize = 32.sp, lineHeight = 38.sp),
-                    maxLines = if (folded) 1 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(bottom = if (folded) 8.dp else 0.dp).clip(RoundedCornerShape(8.dp)).clickable { dialog = "rename" })
+                // The name is written right here (owner, 13 окт): a tap puts the cursor in it, «Готово» or leaving keeps it.
+                if (folded) Text(task.title, style = Type.cardTitle.copy(color = c.ink, fontSize = 19.sp, lineHeight = 24.sp),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 8.dp))
+                else androidx.compose.foundation.text.BasicTextField(titleV, { titleV = it.copy(text = it.text.replace("\n", " ")) },
+                    textStyle = Type.display.copy(color = c.ink, fontSize = 32.sp, lineHeight = 38.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { saveTitle(); focusManager.clearFocus() }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(titleFocus).onFocusChanged { f -> if (f.isFocused) titleHad = true else if (titleHad) { titleHad = false; saveTitle() } })
                 if (!folded) {
                 // v8: under the title one line in Margin's voice — since when, how far — and the sphere as a chip;
                 // then words as tabs, the same as in «Обзор»: everything, the matters, the records, the files.
@@ -320,7 +343,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             run {
                 androidx.compose.animation.Crossfade(materialsMode, animationSpec = tween(240), label = "materials") { m ->
                     if (m) MaterialsFeed(task, onView = { viewing = it })
-                    else FeedPage(task, feed, feedState, hl, seenAtOpen, working, selected, vm, pageDraft.takeIf { addUnder == null }, writeTick.takeIf { it > 0 },
+                    else FeedPage(task, feed, feedState, hl, seenAtOpen, working, selected, vm, pageDraft.takeIf { addUnder == null }, pageFiles, writeTick.takeIf { it > 0 },
                         if (dealsOnly) s.newQuestionHint else s.writeInTopic, FeedActions(
                         select = { k -> selected = if (k.isBlank() || selected == k) null else k },
                         addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
@@ -351,7 +374,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 },
                 modeLabel = under?.let { s.underLine }, onModeClose = { addUnder = null }, focusKey = focusTick.takeIf { it > 0 }, slash = true,
                 // A tap on the bar (or words just dictated): to the end of the page, the cursor in its line.
-                pageText = pageDraft.takeIf { under == null && !materialsMode },
+                pageText = pageDraft.takeIf { under == null && !materialsMode }, pageFiles = pageFiles.takeIf { under == null && !materialsMode },
                 onWrite = { scope.launch { feedState.layoutInfo.totalItemsCount.takeIf { it > 0 }?.let { feedState.animateScrollToItem(it - 1) }; writeTick++ } },
             )
         }
@@ -470,7 +493,8 @@ private class FeedActions(
 
 @Composable
 private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.foundation.lazy.LazyListState, hl: String?, seen: Set<String>, working: Set<String>,
-                     selected: String?, vm: MainVm, draft: androidx.compose.runtime.MutableState<String>?, writeKey: Any?, writeHint: String,
+                     selected: String?, vm: MainVm, draft: androidx.compose.runtime.MutableState<String>?,
+                     files: androidx.compose.runtime.snapshots.SnapshotStateList<Attachment>, writeKey: Any?, writeHint: String,
                      act: FeedActions, onArchive: () -> Unit, onSource: () -> Unit) {
     val c = M.c
     val s = M.s
@@ -519,7 +543,7 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
             }
         }
         // The page goes on below the last day: write here, the bar sends it (as the old field did: records, matters, marks).
-        if (draft != null) item("write") { PageLine(draft, writeHint, writeKey, Modifier.padding(top = 10.dp), after = feed.lastOrNull()?.at) }
+        if (draft != null) item("write") { PageLine(draft, writeHint, writeKey, Modifier.padding(top = 10.dp), after = feed.lastOrNull()?.at, vm = vm, files = files, pasteTo = "task:${task.id}") }
     }
 }
 
@@ -567,9 +591,11 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin:
     // A tap puts the cursor right into the record — edited on the page, not in a window.
     var editing by remember(e.id) { mutableStateOf(false) }
     var hadFocus by remember(e.id) { mutableStateOf(false) }
-    var draft by remember(e.id, e.text) { mutableStateOf(e.text) }
+    var draftValue by remember(e.id, e.text) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(e.text, androidx.compose.ui.text.TextRange(e.text.length))) }
+    val draft = draftValue.text
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
-    fun save() { if (draft.isNotBlank() && draft.trim() != e.text.trim()) vm.editEntryText("task:${task.id}", e.id, draft.trim()) }
+    // Reads the field as it is now (also when the page closes), not as it was when this line was first drawn.
+    fun save() { val d = draftValue.text; if (d.isNotBlank() && d.trim() != e.text.trim()) vm.editEntryText("task:${task.id}", e.id, d.trim()) }
     LaunchedEffect(editing) { if (editing) runCatching { focus.requestFocus() } }
     LaunchedEffect(draft) { if (editing && draft != e.text) { kotlinx.coroutines.delay(900); save() } }
     androidx.compose.runtime.DisposableEffect(e.id) { onDispose { save() } }
@@ -581,7 +607,7 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin:
                 .combinedClickable(onClick = { if (removed) menu = true else editing = true }, onLongClick = { if (removed) menu = true else tools = true }).padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
-                        if (editing) androidx.compose.foundation.text.BasicTextField(draft, { draft = it },
+                        if (editing) androidx.compose.foundation.text.BasicTextField(draftValue, { draftValue = continueList(draftValue, it) },
                             textStyle = Type.body.copy(color = c.ink, fontSize = 15.5.sp, lineHeight = 22.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
                             modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { f ->
                                 // The field reports «not focused» as it appears: leave editing only once the cursor has been in it.
@@ -596,18 +622,18 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin:
                         } }
                     }
                     if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 3.dp))
-                    // Long press: a small bubble — a matter under the record, edit, remove.
+                    // Long press (owner, 13 окт): copy, move, delete — a tap already edits it in place.
                     Box {
                         SoftMenu(tools, { tools = false }) {
-                            ToolItem(Icons.Rounded.Add, s.underLine) { tools = false; act.addUnder(e.id, e.text.ifBlank { e.attachments.firstOrNull()?.let { attachmentLabel(it) }?.ifBlank { null } ?: "…" }) }
-                            ToolItem(Icons.Outlined.Build, s.edit) { tools = false; editing = true }
+                            ToolItem(Icons.Outlined.ContentCopy, s.copyWord) { tools = false; vm.copyRecord("task:${task.id}", e.id) }
+                            ToolItem(Icons.AutoMirrored.Outlined.DriveFileMove, s.moveWord) { tools = false; vm.moveRecord("task:${task.id}", e.id) }
                             ToolItem(Icons.Rounded.Remove, s.delete, danger = true) { tools = false; vm.removeRecord(task.id, e.id) }
                         }
                     }
                 }
                 if (e.attachments.isNotEmpty() && !removed) {
                     Spacer(Modifier.height(10.dp))
-                    MaterialRow(e.attachments, fresh, working, act.view)
+                    MaterialRow(e.attachments, fresh, working, act.view, owner = "task:${task.id}", entryId = e.id, vm = vm)
                 }
             }
             RemovedMenu(menu, { menu = false }, onRestore = { vm.restoreRecord(task.id, e.id) }, onPurge = { vm.purgeRecord(task.id, e.id) })
@@ -712,26 +738,68 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
 }
 
 /** Photos and files of one record. A new photo comes into focus; one being read gets a passing scan line. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MaterialRow(list: List<Attachment>, fresh: Boolean, working: Set<String>, onView: (Attachment) -> Unit) {
+private fun MaterialRow(list: List<Attachment>, fresh: Boolean, working: Set<String>, onView: (Attachment) -> Unit,
+                        owner: String? = null, entryId: String? = null, vm: MainVm? = null) {
     val c = M.c
+    val s = M.s
     val motion = motionOn()
+    // Long press on a photo or a file (owner, 13 окт): its caption, copy, move, delete.
+    var menuFor by remember { mutableStateOf<String?>(null) }
+    var captionFor by remember { mutableStateOf<String?>(null) }
+    @Composable fun menu(a: Attachment) {
+        if (vm == null || owner == null || entryId == null) return
+        SoftMenu(menuFor == a.id, { menuFor = null }) {
+            ToolItem(Icons.Outlined.Edit, s.captionWord) { menuFor = null; captionFor = a.id }
+            ToolItem(Icons.Outlined.ContentCopy, s.copyWord) { menuFor = null; vm.copyRecord(owner, entryId, a.id) }
+            ToolItem(Icons.AutoMirrored.Outlined.DriveFileMove, s.moveWord) { menuFor = null; vm.moveRecord(owner, entryId, a.id) }
+            ToolItem(Icons.Rounded.Remove, s.delete, danger = true) { menuFor = null; vm.removeAttachment(owner, entryId, a.id) }
+        }
+    }
+    /** The caption, written right under the photo or the file — a tap on it edits it too. */
+    @Composable fun caption(a: Attachment, width: androidx.compose.ui.unit.Dp?) {
+        val editingIt = captionFor == a.id
+        if (!editingIt) {
+            a.caption?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp).then(if (vm != null) Modifier.clickable { captionFor = a.id } else Modifier)) }
+            return
+        }
+        var v by remember(a.id) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(a.caption.orEmpty(), androidx.compose.ui.text.TextRange(a.caption.orEmpty().length))) }
+        val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+        var had by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+        fun done() { if (owner != null && entryId != null && v.text.trim() != a.caption.orEmpty()) vm?.setCaption(owner, entryId, a.id, v.text); captionFor = null }
+        Box(Modifier.padding(top = 4.dp).then(if (width != null) Modifier.width(width) else Modifier.width(160.dp))) {
+            if (v.text.isEmpty()) Text(s.captionWord + "…", style = Type.small.copy(color = c.faint, fontSize = 12.5.sp))
+            androidx.compose.foundation.text.BasicTextField(v, { v = it }, textStyle = Type.small.copy(color = c.ink, fontSize = 12.5.sp),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { done() }),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { f -> if (f.isFocused) had = true else if (had) done() })
+        }
+    }
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         list.forEach { a ->
-            if (a.kind == "photo" || a.kind == "video") Column(Modifier.width(132.dp).clickable { onView(a) }) {
+            if (a.kind == "photo" || a.kind == "video") Column(Modifier.width(132.dp).combinedClickable(onClick = { onView(a) }, onLongClick = { if (vm != null) menuFor = a.id })) {
                 val sharp = remember(a.id) { Animatable(if (fresh && motion) 0f else 1f) }
                 LaunchedEffect(a.id) { sharp.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) }
                 Box(Modifier.size(132.dp, 100.dp).clip(RoundedCornerShape(12.dp))) {
                     Box(Modifier.blur((14 * (1f - sharp.value)).dp).graphicsLayer { alpha = 0.4f + 0.6f * sharp.value }) { Thumb(a, 132.dp) }
                     if ("ocr:${a.id}" in working) ScanLine()
                 }
-                a.caption?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp)) }
+                caption(a, 132.dp)
+                Box { menu(a) }
             }
-            else Row(Modifier.clip(RoundedCornerShape(10.dp)).background(c.chip).clickable { onView(a) }.padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(attachmentLabel(a), style = Type.small.copy(color = c.ink, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            else Column {
+                Row(Modifier.clip(RoundedCornerShape(10.dp)).background(c.chip).combinedClickable(onClick = { onView(a) }, onLongClick = { if (vm != null) menuFor = a.id })
+                    .padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(attachmentLabel(a), style = Type.small.copy(color = c.ink, fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                caption(a, null)
+                Box { menu(a) }
             }
         }
     }

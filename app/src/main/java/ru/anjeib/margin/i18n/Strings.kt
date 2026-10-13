@@ -586,6 +586,16 @@ interface Strings {
     fun whisperDownloading(p: Int): String
     /** Speech on the phone, in the menu and the settings: «Распознавание речи · 45%» → «· Готово». */
     val speechModel: String
+    /** Records, photos and files: «Скопировать», «Переместить» → «Вставить сюда» (owner, 13 окт). */
+    val copyWord: String
+    /** «Сегодня»: everything written today that isn't for today (owner, 13 окт). */
+    val writtenToday: String
+    val begunThatDay: String
+    val moveWord: String
+    val pasteHere: String
+    val copiedHint: String
+    val movingHint: String
+    val pasteNoFilesHere: String
     val speechReady: String
     val speechWaitsWifi: String
     val speechFailed: String
@@ -1525,6 +1535,14 @@ object Ru : Strings {
     override fun nudgeText(what: String) = "Привет! Как там «$what»?"
     override fun whisperDownloading(p: Int) = "Загрузка… $p%"
     override val speechModel = "Распознавание речи"
+    override val copyWord = "Скопировать"
+    override val writtenToday = "Записано сегодня"
+    override val begunThatDay = "Начато в этот день"
+    override val moveWord = "Переместить"
+    override val pasteHere = "Вставить сюда"
+    override val copiedHint = "Скопировано. Откройте нужную страницу и нажмите «Вставить сюда»"
+    override val movingHint = "Откройте нужную страницу и нажмите «Вставить сюда» — отсюда уберётся"
+    override val pasteNoFilesHere = "Сюда вставляется только текст"
     override val speechReady = "Готово"
     override val speechWaitsWifi = "скачается по Wi-Fi"
     override val speechFailed = "не скачалось — повторить"
@@ -2382,6 +2400,14 @@ object En : Strings {
     override fun nudgeText(what: String) = "Hi! How is “$what” going?"
     override fun whisperDownloading(p: Int) = "Downloading… $p%"
     override val speechModel = "Speech recognition"
+    override val copyWord = "Copy"
+    override val writtenToday = "Written today"
+    override val begunThatDay = "Begun that day"
+    override val moveWord = "Move"
+    override val pasteHere = "Paste here"
+    override val copiedHint = "Copied. Open the page you need and tap «Paste here»"
+    override val movingHint = "Open the page you need and tap «Paste here» — it leaves this one"
+    override val pasteNoFilesHere = "Only text can be pasted here"
     override val speechReady = "Ready"
     override val speechWaitsWifi = "downloads over Wi-Fi"
     override val speechFailed = "failed — retry"

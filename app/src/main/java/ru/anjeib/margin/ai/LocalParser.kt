@@ -534,6 +534,17 @@ object LocalParser {
      * Names written as they are: a contact's own spelling («жэк», «Мтс» → «ЖЭК», «МТС»), and a surname after a known first
      * name («с Иваном петровым» → «с Иваном Петровым») — dictation and quick typing leave them small.
      */
+    /**
+     * The word that says what it is, at the start: «Идея. Блог о дизайне» → ("idea", "Блог о дизайне"), «дело купить хлеб» →
+     * ("task", "купить хлеб"); (null, text) when there is none. For the marks shown after dictation (owner, 13 окт).
+     */
+    fun lead(text: String): Pair<String?, String> {
+        val t = text.trim().replace(Regex("^\\s*(идея|мысль|заметка|дело|задача)\\s*[.!]\\s+", RegexOption.IGNORE_CASE), "$1: ")
+        Regex("^\\s*$IDEA", RegexOption.IGNORE_CASE).find(t)?.takeIf { it.value.isNotBlank() }?.let { return "idea" to t.substring(it.range.last + 1).trim() }
+        Regex("^\\s*$TASK", RegexOption.IGNORE_CASE).find(t)?.takeIf { it.value.isNotBlank() }?.let { return "task" to t.substring(it.range.last + 1).trim() }
+        return null to text
+    }
+
     internal fun String.properNames(contacts: List<String>, people: List<String>): String {
         var t = this
         contacts.flatMap { it.split(Regex("\\s+")) }.filter { w -> w.length >= 2 && w.drop(1).any { it.isUpperCase() } }.distinct().forEach { w ->

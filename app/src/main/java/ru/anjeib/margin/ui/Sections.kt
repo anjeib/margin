@@ -168,6 +168,18 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
         }
         if (plan.quiet) item("day-free") { Margined { Voice(if (day == today) s.freeDay else s.freeWord.replaceFirstChar { it.uppercase() }) } }
         else dayPanel(plan, today, "c" + day, emptySet(), onOpenTask, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it })
+        // Topics and ideas begun that day (owner, 13 окт): a day in the calendar shows what was started on it, not only what is due.
+        val begun = data.tasks.filter { t -> t.topic && !t.sample && t.createdAt == day.toString() }
+        if (begun.isNotEmpty()) {
+            item("day-begun") { SectionHead(s.begunThatDay, top = 16.dp) }
+            begun.forEachIndexed { i, t ->
+                item("b" + t.id) {
+                    val seat = seatOf(i, begun.size)
+                    if (t.thought) PaperRow(seat, mark = { IdeaMark(26.dp) }, onClick = { onOpenTask(t.id) }) { RowTitle(t.title.ifBlank { s.untitled }, maxLines = 2) }
+                    else TopicPaperRow(t, seat, onOpen = { onOpenTask(t.id) })
+                }
+            }
+        }
     }
     androidx.compose.animation.AnimatedVisibility(folded, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(200)),
         exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(200))) {

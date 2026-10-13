@@ -1,6 +1,7 @@
 package ru.anjeib.margin.ui
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
@@ -16,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +43,8 @@ data class LaneItem(val id: String, val at: String, val text: String)
 @Composable
 fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifier, after: String? = null, label: String? = null,
                 draft: androidx.compose.runtime.MutableState<String>? = null, focusKey: Any? = null,
+                vm: MainVm? = null, files: androidx.compose.runtime.snapshots.SnapshotStateList<ru.anjeib.margin.data.Attachment>? = null,
+                pasteTo: String? = null,
                 onEdit: (String, String) -> Unit, onAdd: (String, String) -> Unit) {
     val c = M.c
     val text = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp)
@@ -52,13 +56,15 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
         items.forEachIndexed { i, item ->
             val above = if (i == 0) after else items[i - 1].at
             androidx.compose.runtime.key(item.id) {
-                var t by remember(item.id) { mutableStateOf(item.text) }
+                // Edited in place, a list in it going on by itself (continueList).
+                var tv by remember(item.id) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(item.text)) }
+                val t = tv.text
                 val edit by rememberUpdatedState(onEdit)
                 // Saved a moment after typing stops, and on leaving the page whatever is left.
                 LaunchedEffect(t) { if (t != item.text) { kotlinx.coroutines.delay(800); edit(item.id, t) } }
-                DisposableEffect(item.id) { onDispose { if (t.trim() != item.text.trim()) edit(item.id, t) } }
+                DisposableEffect(item.id) { onDispose { if (tv.text.trim() != item.text.trim()) edit(item.id, tv.text) } }
                 Margined(margin = { Box(Modifier.padding(top = 9.dp)) { Stamp(item.at, sameDay = above?.take(10) == item.at.take(10)) } }) {
-                    BasicTextField(t, { t = it }, textStyle = text, cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                    BasicTextField(tv, { tv = continueList(tv, it) }, textStyle = text, cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
                 }
             }
         }
@@ -67,7 +73,7 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
             val add by rememberUpdatedState(onAdd)
             // Leaving the page with words not sent keeps them as a piece rather than losing them.
             DisposableEffect(Unit) { onDispose { if (draft.value.isNotBlank()) { add(draft.value.trim(), nowStamp()); draft.value = "" } } }
-            PageLine(draft, if (items.isEmpty()) M.s.laneHint else "", focusKey, after = items.lastOrNull()?.at ?: after)
+            PageLine(draft, if (items.isEmpty()) M.s.laneHint else "", focusKey, after = items.lastOrNull()?.at ?: after, vm = vm, files = files, pasteTo = pasteTo)
             return@Column
         }
         var draft by remember { mutableStateOf("") }
@@ -98,7 +104,10 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
  * «/», «#», «@» at the end open the same window of marks as the main field (the bar shows it).
  */
 @Composable
-fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, focusKey: Any?, modifier: Modifier = Modifier, after: String? = null) {
+fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, focusKey: Any?, modifier: Modifier = Modifier, after: String? = null,
+             vm: MainVm? = null, files: androidx.compose.runtime.snapshots.SnapshotStateList<ru.anjeib.margin.data.Attachment>? = null,
+             /** Where «Вставить сюда» puts what was copied or is being moved: «task:<id>», «deal:<id>», «comment:<ref>». */
+             pasteTo: String? = null) {
     val c = M.c
     val style = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp)
     var t by text
@@ -108,15 +117,39 @@ fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, 
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(focusKey) { if (focusKey != null) { kotlinx.coroutines.delay(150); runCatching { focus.requestFocus() } } }
     val now = nowStamp()
-    Margined(modifier, margin = { if (t.isNotBlank()) Box(Modifier.padding(top = 9.dp)) { Stamp(now, sameDay = after?.take(10) == now.take(10)) } }) {
+    // On the margin: the hour once writing begins, and «+» — a photo or a file lands right here, under these words (owner, 13 окт).
+    Margined(modifier, margin = {
+        Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+            if (t.isNotBlank() || !files.isNullOrEmpty()) Box(Modifier.padding(top = 9.dp)) { Stamp(now, sameDay = after?.take(10) == now.take(10)) }
+            if (vm != null && files != null) AttachPlus(vm, size = 36.dp, tint = M.c.faint) { files += it }
+        }
+    }) {
         Box(Modifier.fillMaxWidth().heightIn(min = 96.dp).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {
             runCatching { focus.requestFocus() } }) {
             // The quiet word stays until something is written — a sheet may hand the line its focus by itself.
-            if (t.isEmpty() && hint.isNotEmpty()) Text(hint, style = Type.italic.copy(color = c.faint, fontSize = 16.sp, lineHeight = 23.sp), modifier = Modifier.padding(vertical = 8.dp))
+            if (t.isEmpty() && hint.isNotEmpty() && (pasteTo == null || vm?.clip?.collectAsState()?.value == null)) Text(hint, style = Type.italic.copy(color = c.faint, fontSize = 16.sp, lineHeight = 23.sp), modifier = Modifier.padding(vertical = 8.dp))
             val value = if (typed == t) androidx.compose.ui.text.input.TextFieldValue(t, sel) else androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(t.length))
-            BasicTextField(value, { v -> val next = continueList(t, v.text); t = next; typed = next; sel = if (next == v.text) v.selection else androidx.compose.ui.text.TextRange(next.length) },
-                textStyle = style, cursorBrush = SolidColor(c.link),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).focusRequester(focus))
+            Column {
+                // Something copied or being moved (owner, 13 окт): one quiet line offers to put it here.
+                val clip = vm?.clip?.collectAsState()?.value
+                if (clip != null && pasteTo != null) androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(top = 6.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text("↓ " + M.s.pasteHere + (if (clip.preview.isNotBlank()) " · «" + clip.preview + "»" else ""),
+                        style = Type.body.copy(color = c.link, fontSize = 15.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).clickable { vm.pasteInto(pasteTo) }.padding(vertical = 6.dp))
+                    Text("×", style = Type.body.copy(color = c.graphite, fontSize = 18.sp),
+                        modifier = Modifier.clip(androidx.compose.foundation.shape.CircleShape).clickable { vm.clearClip() }.padding(horizontal = 10.dp, vertical = 4.dp))
+                }
+                BasicTextField(value, { v -> val next = continueList(value, v); t = next.text; typed = next.text; sel = next.selection },
+                    textStyle = style, cursorBrush = SolidColor(c.link),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).focusRequester(focus))
+                // What «+» added, before it is sent: right where it will be.
+                if (!files.isNullOrEmpty()) androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(bottom = 8.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                    val ctx = androidx.compose.ui.platform.LocalContext.current
+                    files.toList().forEach { a -> AttachmentChip(a, onRemove = { files.remove(a); if (a.file != null) ru.anjeib.margin.data.Files.delete(ctx, a) }) }
+                }
+            }
         }
     }
 }

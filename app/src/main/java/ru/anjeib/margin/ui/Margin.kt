@@ -407,7 +407,7 @@ fun SubTabs(options: List<Pair<String, String>>, selected: String, onSelect: (St
     TextTabs(options, selected, onSelect, modifier)
 
 /** A line that starts a list: «1.», «2)», «-», «–», «—», «•», «*». */
-val listMarker = Regex("^\\s*(\\d{1,2}[.)]|[-–—•*])\\s+")
+val listMarker = Regex("^\\s*(\\d{1,3}[.)]|[a-zа-я][.)]|[-–—•*·])\\s+")
 
 /**
  * Text that knows lists: lines starting with «1.» or «-» / «•» are set as a list — the mark in its own column,
@@ -431,14 +431,44 @@ fun ListAwareText(text: String, style: androidx.compose.ui.text.TextStyle, modif
 }
 
 /** While typing: Enter after a list line starts the next one («2.» after «1.», «•» after «•»); Enter on an empty item ends the list. */
-fun continueList(old: String, new: String): String {
-    if (new.length != old.length + 1 || !new.endsWith("\n") || new.dropLast(1) != old) return new
-    val last = old.substringAfterLast('\n')
-    val m = listMarker.find(last) ?: return new
+fun continueList(old: String, new: String): String = continueList(
+    androidx.compose.ui.text.input.TextFieldValue(old, androidx.compose.ui.text.TextRange(old.length)),
+    androidx.compose.ui.text.input.TextFieldValue(new, androidx.compose.ui.text.TextRange(new.length))).text
+
+/** The next marker after [mark]: «3.» → «4.», «б)» → «в)», «c.» → «d.»; «—», «•» stay. */
+private fun nextMark(mark: String): String {
+    val end = mark.last()
+    val body = mark.dropLast(1)
+    body.toIntOrNull()?.let { return (it + 1).toString() + end }
+    if (mark.length == 2 && end in ".)") {
+        val ru = "абвгдежзиклмнопрстуфхцчшщэюя"
+        val i = ru.indexOf(body[0]); if (i >= 0 && i + 1 < ru.length) return "${ru[i + 1]}$end"
+        if (body[0] in 'a'..'y') return "${body[0] + 1}$end"
+    }
+    return mark
+}
+
+/**
+ * A list goes on by itself (owner, 13 окт): Enter after a line that starts with a marker — «1.», «1)», «а)», «a.», «—», «•» —
+ * starts the next line with the next one, wherever the cursor was; Enter on a line that holds only a marker ends the list.
+ */
+fun continueList(old: androidx.compose.ui.text.input.TextFieldValue, new: androidx.compose.ui.text.input.TextFieldValue): androidx.compose.ui.text.input.TextFieldValue {
+    val o = old.text; val n = new.text
+    if (n.length != o.length + 1) return new
+    val p = new.selection.start - 1
+    if (p < 0 || p >= n.length || n[p] != '\n' || n.removeRange(p, p + 1) != o) return new
+    val lineStart = n.lastIndexOf('\n', p - 1) + 1
+    val line = n.substring(lineStart, p)
+    val m = listMarker.find(line) ?: return new
+    if (line.substring(m.range.last + 1).isBlank()) {
+        // Only the marker on that line: the list ends — the marker and the new line go.
+        val t = n.removeRange(lineStart, p + 1)
+        return androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(lineStart))
+    }
     val mark = m.groupValues[1]
-    if (last.substring(m.range.last + 1).isBlank()) return old.dropLast(last.length).trimEnd('\n') + "\n"
-    val next = if (mark.first().isDigit()) (mark.dropLast(1).toInt() + 1).toString() + mark.last() else mark
-    return new + m.value.substringBefore(mark) + next + " "
+    val insert = m.value.substringBefore(mark) + nextMark(mark) + " "
+    val t = n.substring(0, p + 1) + insert + n.substring(p + 1)
+    return androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(p + 1 + insert.length))
 }
 
 /** Hours and dates on the margin of lists — the same everywhere: today stays ink in lists of things (not a timeline). */

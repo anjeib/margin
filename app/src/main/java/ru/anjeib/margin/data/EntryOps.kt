@@ -43,6 +43,14 @@ fun AppData.editAttachment(owner: String, entryId: String, attId: String, f: (At
     l.map { e -> if (e.id != entryId) e else e.copy(attachments = e.attachments.map { if (it.id == attId) f(it) else it }) }
 }
 
+/** One photo or file out of its block; a block left with nothing in it goes too. The file itself is the caller's business. */
+fun AppData.dropAttachment(owner: String, entryId: String, attId: String) = editEntries(owner) { l ->
+    l.mapNotNull { e ->
+        if (e.id != entryId) e
+        else e.copy(attachments = e.attachments.filterNot { it.id == attId }).takeIf { it.text.isNotBlank() || it.attachments.isNotEmpty() || it.items.isNotEmpty() }
+    }
+}
+
 fun AppData.setCaption(owner: String, entryId: String, attId: String, text: String) =
     editAttachment(owner, entryId, attId) { it.copy(caption = text.trim().ifBlank { null }?.sentence()) }
 
