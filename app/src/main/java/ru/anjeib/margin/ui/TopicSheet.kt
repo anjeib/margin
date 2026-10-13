@@ -216,6 +216,9 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     // The topic's page is written on at its end (owner, 12 окт); the bar below holds «+», the microphone and «send».
     val pageDraft = remember(task.id) { mutableStateOf("") }
     val pageFiles = remember(task.id) { androidx.compose.runtime.mutableStateListOf<Attachment>() }
+    // What is written on the page is kept by itself — keyboard hidden or the topic closed (owner, 13 окт: no «send»).
+    val pageSend = remember(task.id) { PageSend() }
+    androidx.compose.runtime.DisposableEffect(task.id) { onDispose { pageSend.send() } }
     var writeTick by remember { mutableStateOf(0) }
     val busy by vm.busy.collectAsState()
     val notice by vm.notice.collectAsState()
@@ -344,7 +347,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 androidx.compose.animation.Crossfade(materialsMode, animationSpec = tween(240), label = "materials") { m ->
                     if (m) MaterialsFeed(task, onView = { viewing = it })
                     else FeedPage(task, feed, feedState, hl, seenAtOpen, working, selected, vm, pageDraft.takeIf { addUnder == null }, pageFiles, writeTick.takeIf { it > 0 },
-                        if (dealsOnly) s.newQuestionHint else s.writeInTopic, FeedActions(
+                        if (dealsOnly) s.newQuestionHint else s.writeInTopic, { pageSend.send() }, FeedActions(
                         select = { k -> selected = if (k.isBlank() || selected == k) null else k },
                         addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
                         editDeal = { editQ = it }, dateDeal = { dateQ = it }, editNote = { editNote = it }, view = { viewing = it }, timeDeal = { timeQ = it },
@@ -374,7 +377,10 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 },
                 modeLabel = under?.let { s.underLine }, onModeClose = { addUnder = null }, focusKey = focusTick.takeIf { it > 0 }, slash = true,
                 // A tap on the bar (or words just dictated): to the end of the page, the cursor in its line.
-                pageText = pageDraft.takeIf { under == null && !materialsMode }, pageFiles = pageFiles.takeIf { under == null && !materialsMode },
+                pageText = pageDraft.takeIf { under == null && !materialsMode }, pageFiles = pageFiles.takeIf { under == null && !materialsMode }, pageSend = pageSend,
+                // What the phone reads in the words being written, quietly over the microphone: «дело · пт 16 окт · ждём от Марины».
+                // In a topic plain words become a record, so only a reading with something in it (a day, a person, a wait) is said.
+                preview = { vm.previewOf(it)?.takeIf { p -> p.contains("·") } },
                 onWrite = { scope.launch { feedState.layoutInfo.totalItemsCount.takeIf { it > 0 }?.let { feedState.animateScrollToItem(it - 1) }; writeTick++ } },
             )
         }
@@ -494,7 +500,7 @@ private class FeedActions(
 @Composable
 private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.foundation.lazy.LazyListState, hl: String?, seen: Set<String>, working: Set<String>,
                      selected: String?, vm: MainVm, draft: androidx.compose.runtime.MutableState<String>?,
-                     files: androidx.compose.runtime.snapshots.SnapshotStateList<Attachment>, writeKey: Any?, writeHint: String,
+                     files: androidx.compose.runtime.snapshots.SnapshotStateList<Attachment>, writeKey: Any?, writeHint: String, onKeep: () -> Unit,
                      act: FeedActions, onArchive: () -> Unit, onSource: () -> Unit) {
     val c = M.c
     val s = M.s
@@ -543,7 +549,7 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
             }
         }
         // The page goes on below the last day: write here, the bar sends it (as the old field did: records, matters, marks).
-        if (draft != null) item("write") { PageLine(draft, writeHint, writeKey, Modifier.padding(top = 10.dp), after = feed.lastOrNull()?.at, vm = vm, files = files, pasteTo = "task:${task.id}") }
+        if (draft != null) item("write") { PageLine(draft, writeHint, writeKey, Modifier.padding(top = 10.dp), after = feed.lastOrNull()?.at, vm = vm, files = files, pasteTo = "task:${task.id}", onKeep = onKeep) }
     }
 }
 

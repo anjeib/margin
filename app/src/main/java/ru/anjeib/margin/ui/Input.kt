@@ -68,6 +68,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.SideEffect
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.SolidColor
@@ -128,6 +131,8 @@ fun SmartComposer(
     onWrite: (() -> Unit)? = null,
     /** On a page, the photos and files picked with the page's own «+» (they show there, under the words). */
     pageFiles: androidx.compose.runtime.snapshots.SnapshotStateList<Attachment>? = null,
+    /** On a page there is no «send»: the page asks for what is written to be kept (keyboard hidden, page left) through this. */
+    pageSend: PageSend? = null,
 ) {
     val c = M.c
     val s = M.s
@@ -313,19 +318,46 @@ fun SmartComposer(
         val canSend = (text.isNotBlank() || files.isNotEmpty() || sendEmpty) && !busy
         fun send() { onSend(tagged(text), files.toList()); text = ""; files.clear() }
         val attach: @Composable () -> Unit = { AttachPlus(vm) { files += it } }
-        // Owner, 13 окт: on a page the bar holds only the microphone and «send» — no field, no words; «+» lives on the page.
-        if (pageText != null && rec == null) {
-            Row(Modifier.fillMaxWidth().padding(start = if (ruled) MarginW - edge + FieldInset else 0.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                if (transcribing) Text(s.transcribing, style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f).padding(start = 6.dp))
-                else Spacer(Modifier.weight(1f))
-                if (!busy) {
-                    if (transcribing) Box(Modifier.size(FieldH - 2.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
-                    } else FieldButton(label = s.a11yMic, onClick = ::mic) { MicGlyph(c.accent, 21.dp) }
+        // Owner, 13 окт: on a page the bar holds only the microphone — no field, no «send». Held down it records and on release
+        // the words appear on the page, at the cursor, to be looked over; a short tap starts, a second one stops. What is written
+        // is kept by itself (PageSend: keyboard hidden, page left).
+        if (pageText != null) {
+            SideEffect { pageSend?.send = { if (text.isNotBlank() || files.isNotEmpty()) send() } }
+            fun finish() {
+                val r = recorder ?: return
+                recorder = null
+                val audio = r.stop()
+                if (audio != null) vm.transcribe(audio) { gotSpeech(it, audio) }
+            }
+            Row(Modifier.fillMaxWidth().padding(start = if (ruled) MarginW - edge + FieldInset else 0.dp), verticalAlignment = Alignment.CenterVertically) {
+                when {
+                    rec != null -> {
+                        Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.Close, s.cancel, tint = c.graphite, modifier = Modifier.size(18.dp))
+                        }
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
+                        Spacer(Modifier.width(10.dp))
+                        LevelBars(level, Modifier.weight(1f))
+                    }
+                    transcribing -> Text(s.transcribing, style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f).padding(start = 6.dp))
+                    else -> Spacer(Modifier.weight(1f))
                 }
-                FieldButton(filled = true, enabled = canSend, busy = busy, label = s.a11ySend, onClick = ::send) {
-                    if (busy) CircularProgressIndicator(color = M.c.onAccent, strokeWidth = 1.5.dp, modifier = Modifier.size(14.dp))
-                    else SendGlyph(M.c.onAccent, 15.dp)
+                if (transcribing) Box(Modifier.size(FieldH + 6.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(18.dp))
+                } else Box(Modifier.size(FieldH + 6.dp).clip(CircleShape).background(if (rec != null) c.accent else Color.Transparent)
+                    .semantics { contentDescription = s.a11yMic }
+                    .pointerInput(Unit) {
+                        detectTapGestures(onPress = {
+                            val wasRecording = recorder != null
+                            if (wasRecording) { finish(); return@detectTapGestures }
+                            mic()
+                            val t0 = System.currentTimeMillis()
+                            tryAwaitRelease()
+                            // Held: released means done. A short tap leaves it recording until the next tap.
+                            if (System.currentTimeMillis() - t0 > 450) finish()
+                        })
+                    }, contentAlignment = Alignment.Center) {
+                    MicGlyph(if (rec != null) M.c.onAccent else c.accent, 24.dp)
                 }
             }
             return@Column
@@ -435,6 +467,9 @@ fun AttachPlus(vm: MainVm, size: Dp = 40.dp, tint: Color = M.c.graphite, onAdd: 
         }
     }
 }
+
+/** A page's way to keep what is written on it without a «send» button: the bar fills [send] in, the page calls it. */
+class PageSend { var send: () -> Unit = {} }
 
 /** Height of the field: one line of words and a little air. */
 private val FieldH = 42.dp

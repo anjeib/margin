@@ -119,6 +119,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     // The page is written on (owner, 12 окт): these are its words, the bar below sends them.
     val pageDraft = remember(task.id) { mutableStateOf("") }
     val pageFiles = remember(task.id) { androidx.compose.runtime.mutableStateListOf<ru.anjeib.margin.data.Attachment>() }
+    val pageSend = remember(task.id) { PageSend() }
+    androidx.compose.runtime.DisposableEffect(task.id) { onDispose { pageSend.send() } }
     var writeTick by remember { mutableStateOf(0) }
     fun fill(what: String) { mode = what; fill = null; modeTick++ }
     var menu by remember { mutableStateOf(false) }
@@ -238,7 +240,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     }
                 }
                 WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
-                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, pasteTo = "deal:${task.id}",
+                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "deal:${task.id}",
                     onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
                     onAdd = { t, at -> vm.addComment(task.id, t, at); savedAt = System.currentTimeMillis() })
                 // Where it came from — below the shared part of every matter's card, quietly.
@@ -375,7 +377,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     prefill = fill?.prefill, onPrefillUsed = {},
                     modeLabel = modeLabel, onModeClose = { mode = null; fill = null }, focusKey = modeTick.takeIf { it > 0 },
                     // A mode (a step, a place…) is a one-line answer in the bar; otherwise the words are on the page.
-                    pageText = pageDraft.takeIf { modeLabel == null }, onWrite = { writeTick++ }, slash = true, pageFiles = pageFiles.takeIf { modeLabel == null },
+                    pageText = pageDraft.takeIf { modeLabel == null }, onWrite = { writeTick++ }, slash = true, pageSend = pageSend, pageFiles = pageFiles.takeIf { modeLabel == null },
                 )
             }
         }

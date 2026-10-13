@@ -53,6 +53,8 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
     // Written on the card itself (owner, 13 окт); the bar under it — the microphone and «send», «+» on the page.
     val pageDraft = remember(task.id) { mutableStateOf("") }
     val pageFiles = remember(task.id) { androidx.compose.runtime.mutableStateListOf<ru.anjeib.margin.data.Attachment>() }
+    val pageSend = remember(task.id) { PageSend() }
+    androidx.compose.runtime.DisposableEffect(task.id) { onDispose { pageSend.send() } }
     var writeTick by remember { mutableStateOf(0) }
     ModalBottomSheet(
         onDismissRequest = { commitTitle(); onClose() },
@@ -75,7 +77,7 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
             CardHead(title, { title = it }, false, onToggle = {}, margin = null, meta = emptyList(), mark = { IdeaMark(28.dp) })
             val born = task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
             WrittenLane(task.entries.filter { it.text.isNotBlank() }.map { LaneItem(it.id, it.at, it.text) }, s.ideaHint, Modifier.padding(top = 10.dp), after = null, label = s.records,
-                draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, pasteTo = "task:${task.id}",
+                draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "task:${task.id}",
                 onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
                 onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
             // Files, matters and all the rest of it — on the full page.
@@ -86,7 +88,7 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
             SmartComposer(vm, s.writeOnPage, false, onSend = { t, f ->
                 // An idea's words stay words: a record with its photos and files, nothing parsed out of them.
                 if (t.isNotBlank() || f.isNotEmpty()) vm.insertEntry(owner, null, Entry(text = t.trim(), attachments = f))
-            }, pageText = pageDraft, onWrite = { writeTick++ }, pageFiles = pageFiles, slash = false)
+            }, pageText = pageDraft, onWrite = { writeTick++ }, pageSend = pageSend, pageFiles = pageFiles, slash = false)
         }
         }
     }

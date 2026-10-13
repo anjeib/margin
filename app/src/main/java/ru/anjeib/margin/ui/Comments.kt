@@ -2,6 +2,7 @@ package ru.anjeib.margin.ui
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
@@ -44,7 +45,7 @@ data class LaneItem(val id: String, val at: String, val text: String)
 fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifier, after: String? = null, label: String? = null,
                 draft: androidx.compose.runtime.MutableState<String>? = null, focusKey: Any? = null,
                 vm: MainVm? = null, files: androidx.compose.runtime.snapshots.SnapshotStateList<ru.anjeib.margin.data.Attachment>? = null,
-                pasteTo: String? = null,
+                pasteTo: String? = null, onKeep: (() -> Unit)? = null,
                 onEdit: (String, String) -> Unit, onAdd: (String, String) -> Unit) {
     val c = M.c
     val text = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp)
@@ -71,9 +72,9 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
         // The page's writing line is the bar's words ([draft]): «send» down there decides what they become.
         if (draft != null) {
             val add by rememberUpdatedState(onAdd)
-            // Leaving the page with words not sent keeps them as a piece rather than losing them.
-            DisposableEffect(Unit) { onDispose { if (draft.value.isNotBlank()) { add(draft.value.trim(), nowStamp()); draft.value = "" } } }
-            PageLine(draft, if (items.isEmpty()) M.s.laneHint else "", focusKey, after = items.lastOrNull()?.at ?: after, vm = vm, files = files, pasteTo = pasteTo)
+            // Leaving the page with words not kept keeps them as a piece rather than losing them (when the page has no keeper of its own).
+            DisposableEffect(Unit) { onDispose { if (onKeep == null && draft.value.isNotBlank()) { add(draft.value.trim(), nowStamp()); draft.value = "" } } }
+            PageLine(draft, if (items.isEmpty()) M.s.laneHint else "", focusKey, after = items.lastOrNull()?.at ?: after, vm = vm, files = files, pasteTo = pasteTo, onKeep = onKeep)
             return@Column
         }
         var draft by remember { mutableStateOf("") }
@@ -107,7 +108,9 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
 fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, focusKey: Any?, modifier: Modifier = Modifier, after: String? = null,
              vm: MainVm? = null, files: androidx.compose.runtime.snapshots.SnapshotStateList<ru.anjeib.margin.data.Attachment>? = null,
              /** Where «Вставить сюда» puts what was copied or is being moved: «task:<id>», «deal:<id>», «comment:<ref>». */
-             pasteTo: String? = null) {
+             pasteTo: String? = null,
+             /** Keeps what is written (there is no «send»): called when the keyboard goes away after writing. */
+             onKeep: (() -> Unit)? = null) {
     val c = M.c
     val style = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp)
     var t by text
@@ -115,6 +118,14 @@ fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, 
     var typed by remember { mutableStateOf("") }
     var sel by remember { mutableStateOf(androidx.compose.ui.text.TextRange(0)) }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    // Owner, 13 окт: no «send» — writing done (the keyboard hidden) keeps it.
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    val ime = androidx.compose.foundation.layout.WindowInsets.isImeVisible
+    var hadIme by remember { mutableStateOf(false) }
+    LaunchedEffect(ime) {
+        if (ime) hadIme = true
+        else if (hadIme) { hadIme = false; if (text.value.isNotBlank() || !files.isNullOrEmpty()) onKeep?.invoke() }
+    }
     LaunchedEffect(focusKey) { if (focusKey != null) { kotlinx.coroutines.delay(150); runCatching { focus.requestFocus() } } }
     val now = nowStamp()
     // On the margin: the hour once writing begins, and «+» — a photo or a file lands right here, under these words (owner, 13 окт).

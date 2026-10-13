@@ -78,6 +78,8 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
     var modeTick by remember { mutableStateOf(0) }
     val pageDraft = remember(qid) { mutableStateOf("") }
     val pageFiles = remember(qid) { androidx.compose.runtime.mutableStateListOf<ru.anjeib.margin.data.Attachment>() }
+    val pageSend = remember(qid) { PageSend() }
+    androidx.compose.runtime.DisposableEffect(qid) { onDispose { pageSend.send() } }
     var writeTick by remember { mutableStateOf(0) }
     fun fill(what: String) { mode = what; modeTick++ }
     val busy by vm.busy.collectAsState()
@@ -157,7 +159,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 }
                 val born = topic.events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at ?: topic.createdAt
                 WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
-                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, pasteTo = "comment:$ref",
+                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "comment:$ref",
                     onEdit = { id, t -> vm.editComment(ref, id, t) }, onAdd = { t, at -> vm.addComment(ref, t, at) })
                 // Their day has come: «напомнить» here too, the same as on a simple matter (one behaviour for every wait).
                 if (q.from != null && !q.done && due?.isAfter(LocalDate.now()) == false) Margined(Modifier.padding(top = 16.dp)) {
@@ -193,7 +195,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                     mode = null
                 },
                 modeLabel = modeLabel, onModeClose = { mode = null }, focusKey = modeTick.takeIf { it > 0 }?.toLong(),
-                pageText = pageDraft.takeIf { modeLabel == null }, onWrite = { writeTick++ }, slash = true, pageFiles = pageFiles.takeIf { modeLabel == null },
+                pageText = pageDraft.takeIf { modeLabel == null }, onWrite = { writeTick++ }, slash = true, pageSend = pageSend, pageFiles = pageFiles.takeIf { modeLabel == null },
               )
             }
         }
