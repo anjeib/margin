@@ -154,6 +154,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         cloudJob?.cancel()
         if (!on) return
         watchCloud()
+        // «Телефон»: whatever waited in «Входящие» for the AI is read on the phone now.
+        if (settings.value.parseMode == "local" && data.value.queue.isNotEmpty()) sortForwarded()
         val F = ru.anjeib.margin.ai.Forward
         F.load(ctx)
         forwardJob = viewModelScope.launch {
@@ -184,7 +186,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** Sorts what came in right here, and says what it became under the field instead of a notification. */
     private fun sortForwarded() {
-        if (!Processor.ready(settings.value) || !Processor.online(ctx)) return
+        if (settings.value.parseMode != "local" && (!Processor.ready(settings.value) || !Processor.online(ctx))) return
         viewModelScope.launch {
             val lines = runCatching { Processor.drain(ctx) }.getOrDefault(emptyList())
             if (lines.isNotEmpty()) _notice.value = Notice("main", lines.joinToString("\n"), null)
@@ -285,6 +287,48 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         return emptyList<String>() to text
     }
 
+    /**
+     * «Телефон» and the phone found nothing to make: a review or a question gets an honest word; in a topic or a matter the
+     * words become a record; elsewhere a matter titled by them — never lost, never sent anywhere.
+     */
+    private fun keepOnPhone(t: String, scope: Scope, files: List<Attachment>, userId: String?, source: String, smart: Boolean, movedHere: Boolean) {
+        fun o(vararg p: Pair<String, String>) = kotlinx.serialization.json.JsonObject(p.associate { (k, v) -> k to kotlinx.serialization.json.JsonPrimitive(v) })
+        if (smart || LocalParser.parse(t, data.value).why == "question") {
+            if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = L.s.askLocal)) else _toast.value = L.s.askLocal
+            return
+        }
+        val plan = when (scope) {
+            is Scope.InTask -> AiPlan(null, listOf(o("type" to "add_entry", "task_id" to scope.taskId, "text" to t)), null, local = true)
+            Scope.Notes -> AiPlan(null, listOf(o("type" to "create_note", "text" to t)), null, local = true)
+            else -> AiPlan(null, listOf(o("type" to "create_task", "title" to t.sentence())), null, local = true)
+        }
+        if (scope == Scope.Main) propose(plan, files, userId, false, source) else applyScoped(plan, scope, files, source, movedHere)
+    }
+
+    private val moveCue = Regex("^(?:перенес\\p{L}*|перенос\\p{L}*|сдвин\\p{L}*|передвин\\p{L}*|отлож\\p{L}*|поставь|move|postpone)\\s+(?=(?:на|в|к|to|on)\\s)", RegexOption.IGNORE_CASE)
+
+    /**
+     * «перенеси на пятницу», «сдвинь на завтра в 15», «отложи на неделю» said on a matter's page: the phone reads the day and
+     * the hour, the matter (or the topic's only open one) moves, with undo. False when the words aren't that.
+     */
+    fun changeDay(taskId: String, text: String, subId: String? = null): Boolean {
+        val m = moveCue.find(text.trim()) ?: return false
+        // «отложи на неделю», «на два дня» — a move by so long is «через …».
+        val rest = text.trim().substring(m.range.last + 1).replace(Regex("^на\\s+(?=(?:\\d+|два|две|три|пару)?\\s*(?:недел|месяц|дн|день|час))", RegexOption.IGNORE_CASE), "через ")
+        val item = LocalParser.parse(rest, data.value).items.singleOrNull() ?: return false
+        if (item.due == null && item.time == null) return false
+        val before = data.value
+        val task = before.tasks.find { it.id == taskId } ?: return false
+        if (task.topic) {
+            // A topic moves the matter whose page this is, or its only open one; with several, the words don't say which.
+            val q = (if (subId != null) ru.anjeib.margin.ai.Assistant.flatSubs(task.subtasks).find { it.id == subId } else task.subtasks.filter { !it.done }.singleOrNull()) ?: return false
+            store.update { it.setQuestionDue(taskId, q.id, item.due?.toString() ?: q.due, item.time ?: q.time) }
+        } else store.update { it.editTask(taskId) { t -> t.copy(due = item.due?.toString() ?: t.due, start = if (item.due != null) null else t.start, time = item.time ?: t.time) } }
+        offerUndo(before, L.s.movedTo(listOfNotNull(item.due?.let { it.dowShort().lowercase() + " " + it.dayMonthShort() }, item.time).joinToString(" ")))
+        land(listOf(taskId))
+        return true
+    }
+
     /** Words from a matter's page: is this a request to act on, or the user's comment? */
     fun isRequest(text: String) = Commands.isRequest(text)
 
@@ -350,6 +394,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         }
         // Said in so many words («добавь подзадачу …», «место: …») — done here, no AI, works offline too.
         if (cmd != null && runCommand(cmd, scope, files, userId)) return
+        // «перенеси на пятницу», «на завтра в 15» on a matter's page — its day changes, read on the phone.
+        if (!smart && scope is Scope.InTask && changeDay(scope.taskId, t)) return
         // Read on the phone: always offline or without a key, in «Телефон» mode, in «Авто» when the phone is sure,
         // and whenever the marks said it outright (#, @, /жду, /обещал, /дело…) — then they are what counts.
         var phone: LocalParser.Result? = null
@@ -364,7 +410,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             val offline = !Processor.online(ctx) || !Processor.ready(s)
             // A question is for the assistant only: without it, say so rather than file the question as a matter.
             if (local.why == "question" && offline) {
-                val why = if (Processor.ready(s) && ru.anjeib.margin.ai.Cloud.network(ctx)) L.s.askCloudOff else L.s.askOffline
+                val why = if (s.parseMode == "local") L.s.askLocal else if (Processor.ready(s) && ru.anjeib.margin.ai.Cloud.network(ctx)) L.s.askCloudOff else L.s.askOffline
                 if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = why)) else _toast.value = why
                 return
             }
@@ -381,6 +427,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 return
             }
         }
+        // Without the AI («Телефон»): nothing is left unsaid — what the phone couldn't sort is kept as written.
+        if (s.parseMode == "local") { keepOnPhone(t, scope, files, userId, source, smart, movedHere); return }
         if (!Processor.ready(s)) {
             if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = L.s.noKey, error = true)) else _toast.value = L.s.noKey
             return
@@ -641,6 +689,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** «Распознать» in the photo viewer: the text is kept on the photo itself (searchable, seen by the AI) and shown under it. */
     fun recognize(a: Attachment) {
         val s = settings.value
+        if (s.parseMode == "local") { _toast.value = L.s.ocrLocal; return }
         if (!Processor.ready(s)) { _toast.value = L.s.noKey; return }
         if (!Processor.online(ctx)) { _toast.value = whyOff(); return }
         viewModelScope.launch {

@@ -18,7 +18,9 @@ object Llm {
     fun yandex(s: Settings) = s.provider == "yandex"
     fun door(s: Settings) = Yandex.Door(s.yaKey, s.yaFolder, s.invite, s.device)
     /** With a key (developer builds) or, in what people install, with an invite code for Margin's own door. */
-    fun ready(s: Settings) = if (yandex(s)) (s.yaKey.isNotBlank() && s.yaFolder.isNotBlank()) || door(s).proxy else s.apiKey.isNotBlank()
+    /** The AI may be asked: «Телефон» (the default since 13 окт) asks it nothing — Margin reads everything on the phone. */
+    fun ready(s: Settings) = s.parseMode != "local" &&
+        if (yandex(s)) (s.yaKey.isNotBlank() && s.yaFolder.isNotBlank()) || door(s).proxy else s.apiKey.isNotBlank()
 
     /** Which Yandex model answers: smart requests and complex phrases → DeepSeek, the rest per mode. */
     fun yaModel(s: Settings, smart: Boolean, complex: Boolean) = when {

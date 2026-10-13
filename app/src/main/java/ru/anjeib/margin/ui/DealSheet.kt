@@ -184,6 +184,8 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                         mode == "step" -> if (t.isNotBlank()) vm.addChildDeal(topic.id, q.id, t)
                         mode == "place" -> vm.setDealPlace(topic.id, q.id, t)
                         mode == "people" -> vm.addDealPeople(topic.id, q.id, t)
+                        // «перенеси на пятницу» — this matter's day, read on the phone.
+                        f.isEmpty() && vm.changeDay(topic.id, t, q.id) -> {}
                         // Words on the page: a request is done, anything else is a comment on this matter.
                         f.isEmpty() && !vm.isRequest(t) -> vm.addComment(ref, t.trim(), ru.anjeib.margin.data.nowStamp())
                         else -> vm.send(s.aboutDeal(q.title, t), scope = Scope.InTask(topic.id), files = f)

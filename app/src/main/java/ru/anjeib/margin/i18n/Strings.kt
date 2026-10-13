@@ -590,6 +590,9 @@ interface Strings {
     val copyWord: String
     /** «Сегодня»: everything written today that isn't for today (owner, 13 окт). */
     val writtenToday: String
+    /** «Телефон» (no cloud AI): what only the AI does, said plainly. */
+    val askLocal: String
+    val ocrLocal: String
     val begunThatDay: String
     val moveWord: String
     val pasteHere: String
@@ -1537,6 +1540,8 @@ object Ru : Strings {
     override val speechModel = "Распознавание речи"
     override val copyWord = "Скопировать"
     override val writtenToday = "Записано сегодня"
+    override val askLocal = "Без ИИ помощник на вопросы не отвечает — загляните в «Обзор» или поиск. ИИ включается в Настройках → «Разбор текста»."
+    override val ocrLocal = "Текст с фото читает только ИИ, а он сейчас выключен (Настройки → «Разбор текста»)."
     override val begunThatDay = "Начато в этот день"
     override val moveWord = "Переместить"
     override val pasteHere = "Вставить сюда"
@@ -2402,6 +2407,8 @@ object En : Strings {
     override val speechModel = "Speech recognition"
     override val copyWord = "Copy"
     override val writtenToday = "Written today"
+    override val askLocal = "Without the AI the assistant doesn't answer questions — see «Overview» or search. The AI is turned on in Settings → «Reading your words»."
+    override val ocrLocal = "Only the AI reads text on photos, and it is off now (Settings → «Reading your words»)."
     override val begunThatDay = "Begun that day"
     override val moveWord = "Move"
     override val pasteHere = "Paste here"

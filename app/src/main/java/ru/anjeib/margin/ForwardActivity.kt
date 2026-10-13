@@ -94,7 +94,7 @@ class ForwardActivity : ComponentActivity() {
                         Processor.enqueue(this, q)
                         currentFocus?.let { v -> getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.hideSoftInputFromWindow(v.windowToken, 0) }
                         // Online: read it here and show what it became. Offline: it waits in «Входящие», as before.
-                        if (!Processor.ready(prefs.settings.value) || !Processor.online(this)) {
+                        if (prefs.settings.value.parseMode != "local" && (!Processor.ready(prefs.settings.value) || !Processor.online(this))) {
                             Toast.makeText(this, strings.forwardDone, Toast.LENGTH_SHORT).show(); finish()
                         } else {
                             sorting.value = true

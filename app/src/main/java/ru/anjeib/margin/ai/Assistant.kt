@@ -1000,6 +1000,8 @@ object Assistant {
 
     private fun String.cap() = sentence()
     private fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it) + flat(it.children) }
+    /** A topic's matters at every depth. */
+    fun flatSubs(l: List<Subtask>): List<Subtask> = flat(l)
 
     /** Keeps start <= due and drops a start equal to due. */
     private fun Task.normalized(): Task {

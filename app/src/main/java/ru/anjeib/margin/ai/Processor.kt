@@ -16,6 +16,7 @@ import ru.anjeib.margin.data.Files
 import ru.anjeib.margin.data.Note
 import ru.anjeib.margin.data.Prefs
 import ru.anjeib.margin.data.Queued
+import ru.anjeib.margin.data.sentence
 import ru.anjeib.margin.data.Store
 import ru.anjeib.margin.data.nowStamp
 import ru.anjeib.margin.i18n.L
@@ -97,12 +98,47 @@ object Processor {
 
     fun schedule(ctx: Context) {
         if (Store.get(ctx).data.value.queue.isEmpty()) return
+        // Read on the phone («Телефон»): no network to wait for.
+        val local = Prefs.get(ctx).settings.value.parseMode == "local"
         WorkManager.getInstance(ctx).enqueueUniqueWork(
             "queue", ExistingWorkPolicy.KEEP,
             OneTimeWorkRequestBuilder<QueueWorker>()
-                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(if (local) NetworkType.NOT_REQUIRED else NetworkType.CONNECTED).build())
                 .build(),
         )
+    }
+
+    private val theyWill = Regex("(?<![\\p{L}])(?:пришлю|пришлём|отправлю|скину|сделаю|сделаем|подготовлю|вышлю|передам|верну|отвечу|позвоню|наберу|напишу|принесу|привезу|оплачу|согласую|проверю|посмотрю)(?![\\p{L}])", RegexOption.IGNORE_CASE)
+    private val theyAsk = Regex("(?<![\\p{L}])(?:скинь|скиньте|пришли|пришлите|отправь|отправьте|сделай|сделайте|подготовь|подготовьте|позвони|позвоните|напиши|напишите|посмотри|посмотрите|проверь|проверьте|оплати|оплатите|согласуй|верни|верните|передай|передайте|не\\s+забудь)(?![\\p{L}])", RegexOption.IGNORE_CASE)
+    private val smallTalk = Regex("^(?:привет\\p{L}*|здравствуй\\p{L}*|добр\\p{L}+\\s+(?:утро|день|вечер)|спасибо\\p{L}*|пока|ок|окей|хорошо|отлично|договорились|супер|да|нет)[!.,)\\s]*$", RegexOption.IGNORE_CASE)
+
+    /**
+     * «Телефон»: a queued phrase or a forwarded message read on the phone. Someone else's words are read sentence by sentence:
+     * what the writer says they'll do («правки пришлю в среду») is waited for from them; what they ask of the user
+     * («скинь до пятницы презентацию») is the user's matter promised to them; greetings and thanks are left out.
+     */
+    fun localPlan(q0: Queued, d: AppData, scope: Scope): AiPlan {
+        // «Марина Петрова: Привет! …» shared as plain text — the name in front is who wrote it.
+        val named = if (q0.via != null && q0.from == null) Regex("^([А-ЯЁA-Z][\\p{L}-]+(?:\\s+[А-ЯЁA-Z][\\p{L}-]+)?)\\s*:\\s+(.+)$", RegexOption.DOT_MATCHES_ALL).find(q0.text.trim()) else null
+        val q = named?.let { q0.copy(from = it.groupValues[1], text = it.groupValues[2]) } ?: q0
+        val from = q.from
+        if (q.via == null || from == null) {
+            val r = LocalParser.parse(q.text, d)
+            return if (r.items.isNotEmpty()) LocalParser.plan(r, scope, source = q.text)
+            else AiPlan(null, listOf(kotlinx.serialization.json.JsonObject(mapOf("type" to kotlinx.serialization.json.JsonPrimitive("create_task"),
+                "title" to kotlinx.serialization.json.JsonPrimitive(q.text.trim().sentence())))), null, local = true)
+        }
+        val items = q.text.split(Regex("(?<=[.!?])\\s+|\\n+")).map { it.trim() }.filter { it.isNotBlank() && !smallTalk.matches(it) }
+            .flatMap { part ->
+                val sentence = part.replace(Regex("^(?:а|и|но|ещё|еще|кстати)[,\\s]+(?:ты\\s+|вы\\s+)?", RegexOption.IGNORE_CASE), "").replace(Regex(",?\\s*пожалуйста,?", RegexOption.IGNORE_CASE), "").trim()
+                when {
+                    theyWill.containsMatchIn(sentence) -> LocalParser.parse(sentence, d, people = listOf(from), waitFor = from, wait = true).items
+                    theyAsk.containsMatchIn(sentence) -> LocalParser.parse(sentence, d, people = listOf(from), promiseTo = from, promise = true).items
+                    else -> emptyList()
+                }
+            }
+        if (items.isEmpty()) return AiPlan(null, emptyList(), null, local = true)
+        return LocalParser.plan(LocalParser.Result(items, true), scope, source = Forward.source(q))
     }
 
     /** Sorts everything typed offline or forwarded in, oldest first. Returns one line per item: what it became. */
@@ -124,7 +160,8 @@ object Processor {
         while (true) {
             val q = store.data.value.queue.firstOrNull() ?: break
             val s = prefs.settings.value
-            if (!Llm.ready(s)) break
+            val local = s.parseMode == "local"
+            if (!local && !Llm.ready(s)) break
             val scope = scopeFrom(q.scope)
             val before = store.data.value
             val images = q.files.filter { it.kind == "photo" }.take(3).mapNotNull { Files.imageDataUrl(ctx, it) }
@@ -132,7 +169,7 @@ object Processor {
             val forwarded = q.via != null
             val said = if (forwarded) Forward.prompt(q) else q.text
             val source = if (forwarded) Forward.source(q) else q.text
-            val (plan, cost) = askPlan(s, Assistant.systemPrompt(before, s.copy(askWhenUnclear = false), scope, query = q.text + " " + (q.from ?: "") + " " + (q.comment ?: "")),
+            val (plan, cost) = if (local) localPlan(q, before, scope) to 0.0 else askPlan(s, Assistant.systemPrompt(before, s.copy(askWhenUnclear = false), scope, query = q.text + " " + (q.from ?: "") + " " + (q.comment ?: "")),
                 listOf("user" to Assistant.userMessage(said)), complex = forwarded || Assistant.isComplex(q.text, scope), images = images)
             prefs.addSpend(cost)
             val current = store.data.value
