@@ -279,7 +279,8 @@ fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib
             }
             Row(Modifier.fillMaxWidth()) {
                 (1..7).forEach { d ->
-                    Text(java.time.DayOfWeek.of(d).getDisplayName(TextStyle.SHORT, loc).lowercase(), style = Type.italic.copy(color = c.graphite, fontSize = 12.sp, lineHeight = 14.sp),
+                    // Owner, 14 окт: weekends in pale terracotta, as a printed planner marks them.
+                    Text(java.time.DayOfWeek.of(d).getDisplayName(TextStyle.SHORT, loc).lowercase(), style = Type.italic.copy(color = if (d >= 6) weekendInk else c.graphite, fontSize = 12.sp, lineHeight = 14.sp),
                         modifier = Modifier.weight(1f).padding(bottom = 1.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
             }
@@ -301,7 +302,8 @@ fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib
                                 Column(Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(if (sel) c.link else Color.Transparent)
                                     .then(if (d == today && !sel) Modifier.border(1.dp, c.link, RoundedCornerShape(8.dp)) else Modifier)
                                     .clickable { onPick(d) }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    Text("$n", style = Type.body.copy(color = when { sel -> c.bg; past -> c.graphite; else -> c.ink }, fontSize = 14.sp, lineHeight = 16.sp,
+                                    val weekend = d.dayOfWeek.value >= 6
+                                    Text("$n", style = Type.body.copy(color = when { sel -> c.bg; weekend -> if (past) weekendInk.copy(alpha = 0.5f) else weekendInk; past -> c.graphite; else -> c.ink }, fontSize = 14.sp, lineHeight = 16.sp,
                                         fontWeight = if (sel || d == today) FontWeight.SemiBold else FontWeight.Normal))
                                     Row(Modifier.height(5.dp).padding(top = 1.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                         val dot = when { sel -> c.bg; past -> c.ok; late -> c.ink; else -> c.link }

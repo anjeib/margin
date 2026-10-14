@@ -127,7 +127,7 @@ val TabsW = 25.dp
 private val EdgeW = 11.dp
 
 /** One tab of the planner's index: a word (a weekday) or a glyph; [on] — terracotta, the page open at it. */
-class IndexTab(val label: String, val on: Boolean, val mark: Boolean = false, val accentWord: Boolean = false,
+class IndexTab(val label: String, val on: Boolean, val mark: Boolean = false, val accentWord: Boolean = false, val weekend: Boolean = false,
                val glyph: (@Composable (Color) -> Unit)? = null,
                /** A section, not a day: open, it is petrol — the colour of a choice; terracotta is only «the page's day» (Fable, 14 окт). */
                val petrol: Boolean = false, val onClick: () -> Unit)
@@ -150,7 +150,7 @@ fun PlannerIndex(days: List<IndexTab>, tools: List<IndexTab>) {
             .semanticsLabel(t.label)) {
             if (t.on) Box(Modifier.padding(vertical = 3.dp).fillMaxSize().clip(androidx.compose.foundation.shape.RoundedCornerShape(topEnd = 7.dp, bottomEnd = 7.dp))
                 .background(if (t.petrol) c.link else c.accent))
-            val ink = if (t.on) c.onAccent else if (t.accentWord) c.accentText else c.ink.copy(alpha = 0.78f)
+            val ink = if (t.on) c.onAccent else if (t.accentWord) c.accentText else if (t.weekend) weekendInk else c.ink.copy(alpha = 0.78f)
             Box(Modifier.size(TabsW, h), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 if (t.glyph != null) t.glyph.invoke(if (t.on) c.onAccent else c.graphite)
                 else androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
@@ -180,7 +180,7 @@ fun weekTabs(open: java.time.LocalDate?, base: java.time.LocalDate, today: java.
     val monday = base.minusDays(base.dayOfWeek.value - 1L)
     return (0L until 7L).map { i ->
         val d = monday.plusDays(i)
-        IndexTab(d.dowShort().replaceFirstChar { it.uppercase() }, on = d == open, mark = busy(d), accentWord = d == today, petrol = petrol) { onPick(d) }
+        IndexTab(d.dowShort().replaceFirstChar { it.uppercase() }, on = d == open, mark = busy(d), accentWord = d == today, weekend = d.dayOfWeek.value >= 6, petrol = petrol) { onPick(d) }
     }
 }
 
@@ -365,6 +365,9 @@ const val PENCIL = "pencil"
 inline fun androidx.compose.ui.text.AnnotatedString.Builder.pencil(block: androidx.compose.ui.text.AnnotatedString.Builder.() -> Unit) {
     pushStringAnnotation(PENCIL, "1"); block(); pop()
 }
+
+/** Saturday and Sunday in pale terracotta (owner, 14 окт) — a tone lighter than anything late. */
+val weekendInk: Color @Composable get() = M.c.accent.copy(alpha = if (M.c.dark) 0.7f else 0.62f)
 
 /** The pencil's colour: our terracotta (owner, 14 окт) — the mark of «late» as before, now as a stroke under the words. */
 val pencilInk: Color @Composable get() = M.c.accent.copy(alpha = 0.9f)
