@@ -336,7 +336,8 @@ fun SmartComposer(
         val rec = recorder
         val canSend = (text.isNotBlank() || files.isNotEmpty() || sendEmpty) && !busy
         fun send() { onSend(tagged(text), files.toList()); text = ""; files.clear() }
-        val attach: @Composable () -> Unit = { AttachPlus(vm) { files += it } }
+        // Owner, 14 окт: files are a paperclip everywhere — «+» means marks.
+        val attach: @Composable () -> Unit = { AttachPlus(vm, glyph = { ClipGlyph(c.graphite, 19.dp) }) { files += it } }
         // Owner, 13 окт: on a page the bar holds only the microphone — no field, no «send». Held down it records and on release
         // the words appear on the page, at the cursor, to be looked over; a short tap starts, a second one stops. What is written
         // is kept by itself (PageSend: keyboard hidden, page left).
@@ -390,8 +391,10 @@ fun SmartComposer(
             Row(
                 // v8: the field floats a little over the page — a soft shadow, the one raised thing besides menus.
                 Modifier.weight(1f).padding(start = if (ruled) FieldInset else 0.dp).heightIn(min = FieldH)
-                    .shadow(6.dp, shape, ambientColor = c.ink.copy(alpha = 0.10f), spotColor = c.ink.copy(alpha = 0.14f)).clip(shape).background(c.card)
-                    .border(1.dp, c.hairline, shape).padding(start = 2.dp, end = 5.dp),
+                    // The planner: a printed field on the page — no shadow, the paper itself, a hairline round it.
+                    .then(if (planner) Modifier else Modifier.shadow(6.dp, shape, ambientColor = c.ink.copy(alpha = 0.10f), spotColor = c.ink.copy(alpha = 0.14f)))
+                    .clip(shape).background(if (planner) androidx.compose.ui.graphics.lerp(c.bg, c.card, 0.45f) else c.card)
+                    .border(1.dp, if (planner) c.graphite.copy(alpha = 0.3f) else c.hairline, shape).padding(start = 2.dp, end = 5.dp),
                 // Long text grows upwards; the buttons stay where the thumb is.
                 verticalAlignment = Alignment.Bottom,
             ) {
@@ -414,7 +417,7 @@ fun SmartComposer(
                 }
                 attach()
                 Box(Modifier.weight(1f).heightIn(min = FieldH - 2.dp).padding(vertical = 9.dp, horizontal = 2.dp), contentAlignment = Alignment.CenterStart) {
-                    if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = Type.body.copy(color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = Type.body.copy(fontFamily = rowFamily, color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // Words put in from outside (shared, dictated, a mode's prefill) get the cursor after them, not before
                     // (Fable, 0.35); what the user types keeps the cursor where they put it.
                     val value = if (typedText == text) androidx.compose.ui.text.input.TextFieldValue(text, typedSel)
@@ -424,7 +427,7 @@ fun SmartComposer(
                             val next = continueList(value, MarkLook.eraseWhole(value, v))
                             text = next.text; typedText = next.text; typedSel = next.selection
                         },
-                        textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link), maxLines = 6,
+                        textStyle = Type.body.copy(fontFamily = rowFamily, color = c.ink), cursorBrush = SolidColor(c.link), maxLines = 6,
                         visualTransformation = rememberMarkLook(vm),
                         modifier = Modifier.fillMaxWidth().focusRequester(focus),
                     )
@@ -494,7 +497,7 @@ fun AttachPlus(vm: MainVm, size: Dp = 40.dp, tint: Color = M.c.graphite, glyph: 
 class PageSend { var send: () -> Unit = {} }
 
 /** Height of the field: one line of words and a little air. */
-private val FieldH = 42.dp
+private val FieldH: Dp @Composable get() = if (planner) 37.dp else 42.dp
 /** The field keeps this much clear of the rule; its words then line up with the page's text. */
 private val FieldInset = 4.dp
 
@@ -504,7 +507,7 @@ private fun FieldButton(filled: Boolean = false, enabled: Boolean = true, busy: 
     // A drawn glyph says nothing to TalkBack: the button carries its name and role itself.
     Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable(enabled = enabled, onClickLabel = label, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
         .then(if (label != null) Modifier.semantics { contentDescription = label } else Modifier), contentAlignment = Alignment.Center) {
-        if (filled) Box(Modifier.size(30.dp).clip(CircleShape).background(if (enabled || busy) M.c.accent else M.c.accent.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) { content() }
+        if (filled) Box(Modifier.size(if (planner) 29.dp else 30.dp).clip(CircleShape).background(if (enabled || busy) M.c.accent else M.c.accent.copy(alpha = if (planner) 0.7f else 0.35f)), contentAlignment = Alignment.Center) { content() }
         else content()
     }
 }

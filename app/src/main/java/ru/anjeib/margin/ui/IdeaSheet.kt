@@ -67,7 +67,8 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
         val half = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.5f).dp
         Column(Modifier.fillMaxWidth().heightIn(min = half).imePadding().navigationBarsPadding()) {
         val scroll = rememberScrollState()
-        Column(Modifier.weight(1f, fill = false).fillMaxWidth().screenRule().verticalScroll(scroll).padding(bottom = 24.dp)) {
+            val pageLines = rememberPageLines()
+        Column(Modifier.weight(1f, fill = false).fillMaxWidth().ruledPage(pageLines).screenRule().verticalScroll(scroll).padding(bottom = 24.dp)) {
             // The same card as a matter (owner's call, 10 окт): ⋯ for the idea as a whole, its bulb and title in serif;
             // under a line — what was written in it, each piece with its day and hour.
             // Owner, 14 окт: the same card as a matter — no ⋯, the sphere under the title, its tools in a row, a paperclip below.
@@ -90,6 +91,7 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
             val hidden = task.entries.any { it.attachments.isNotEmpty() || it.text.isBlank() } || task.subtasks.isNotEmpty()
             if (hidden || scroll.maxValue > 0) Margined(Modifier.padding(top = 14.dp)) { Voice(s.openWhole + "  ›", link = true, onClick = { commitTitle(); onOpenFull() }) }
             Margined { CreatedLine(born) }
+            PageEnd(pageLines)
         }
         Column(Modifier.fillMaxWidth().fieldRule().padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
             SmartComposer(vm, s.writeOnPage, false, onSend = { t, f ->

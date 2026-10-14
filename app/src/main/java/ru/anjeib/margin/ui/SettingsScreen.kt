@@ -201,6 +201,10 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                 }) { Text(s.privacyPolicy, color = c.link) }
             })
         if (settings.devMode) {
+        // Owner, 14 окт: the page's look, to choose by eye — as before · ruled · + the sheet's edge · + grain.
+        Group("Страница") {
+            Segmented(listOf("Было", "Линии", "Край", "Бумага", "Планер"), vm.paperStyle.value) { vm.setPaper(it) }
+        }
         Group(s.devSection) {
             val ya = settings.provider == "yandex"
             Segmented(listOf("Яндекс", "OpenRouter"), if (ya) 0 else 1) { i -> vm.updateSettings { it.copy(provider = if (i == 0) "yandex" else "openrouter") }; vm.checkKey() }

@@ -129,7 +129,7 @@ fun CheckCircle(done: Boolean, size: Dp = 24.dp, onLong: (() -> Unit)? = null, i
         contentAlignment = Alignment.Center,
     ) {
         // v8: a thin ring that reads as something to tap; done — it fills with petrol and a tick comes up on it.
-        val ring = androidx.compose.ui.graphics.lerp(c.graphite.copy(alpha = 0.7f), c.link, p)
+        val ring = androidx.compose.ui.graphics.lerp(if (planner) c.ink.copy(alpha = 0.62f) else c.graphite.copy(alpha = 0.7f), c.link, p)
         val tick = c.bg
         androidx.compose.foundation.Canvas(Modifier.size(d)) {
             val w = this.size.width; val h = this.size.height
@@ -163,7 +163,7 @@ fun Pill(
             .then(if (!filled && !accent) Modifier.border(1.dp, c.hairline, RoundedCornerShape(50)) else Modifier)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 14.dp, vertical = 8.dp),
-    ) { Text(text, style = Type.small.copy(color = fg, fontSize = 14.sp)) }
+    ) { Text(text, style = Type.small.copy(fontFamily = rowFamily, color = fg, fontSize = 14.sp)) }
 }
 
 /** Projects are stored as typed by the model (lowercase); Russian names read better with a capital: «Садовая», «Дента+». */
@@ -277,7 +277,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         androidx.compose.ui.text.Placeholder(13.sp, 13.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {
         ClipGlyph(c.graphite, 13.dp)
     })
-    if (text.isNotEmpty()) Text(text, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
+    if (text.isNotEmpty()) Text(text, style = Type.small.copy(fontFamily = rowFamily, color = c.graphite, fontSize = subSize), maxLines = 2, overflow = TextOverflow.Ellipsis,
         inlineContent = inline, modifier = Modifier.padding(top = 3.dp))
 }
 

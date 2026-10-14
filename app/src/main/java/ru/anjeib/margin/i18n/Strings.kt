@@ -816,6 +816,9 @@ interface Strings {
     val actDay: String
     val actStep: String
     val actPostpone: String
+    val backToToday: String
+    val contentsTitle: String
+    val aboutApp: String
     val actToTopic: String
     val actToIdea: String
     val actWontDo: String
@@ -1773,6 +1776,9 @@ object Ru : Strings {
     override val actDay = "+ день"
     override val actStep = "+ дело"
     override val actPostpone = "Позже"
+    override val backToToday = "к сегодняшнему дню ›"
+    override val contentsTitle = "Содержание"
+    override val aboutApp = "О приложении"
     override val actToTopic = "В тему"
     override val actToIdea = "В идеи"
     override val actWontDo = "Не буду"
@@ -2645,6 +2651,9 @@ object En : Strings {
     override val actDay = "+ day"
     override val actStep = "+ to-do"
     override val actPostpone = "Later"
+    override val backToToday = "back to today ›"
+    override val contentsTitle = "Contents"
+    override val aboutApp = "About the app"
     override val actToTopic = "To topic"
     override val actToIdea = "To ideas"
     override val actWontDo = "Won't do"

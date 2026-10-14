@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.layout
@@ -72,12 +73,15 @@ fun seatOf(i: Int, n: Int): Seat = when {
 
 private val PanelR = 16.dp
 
-fun Seat.shape(): Shape = when (this) {
-    Seat.Single -> RoundedCornerShape(PanelR)
-    Seat.First -> RoundedCornerShape(topStart = PanelR, topEnd = PanelR)
+fun Seat.shape(r: Dp = PanelR): Shape = when (this) {
+    Seat.Single -> RoundedCornerShape(r)
+    Seat.First -> RoundedCornerShape(topStart = r, topEnd = r)
     Seat.Middle -> RoundedCornerShape(0.dp)
-    Seat.Last -> RoundedCornerShape(bottomStart = PanelR, bottomEnd = PanelR)
+    Seat.Last -> RoundedCornerShape(bottomStart = r, bottomEnd = r)
 }
+
+/** The planner's panels: a printed box, its corners rounded less (design/v9). */
+private val PlannerR = 10.dp
 
 /** How far a panel reaches left of the words' line, into the gap by the rule. */
 val PanelBleed = 6.dp
@@ -98,11 +102,32 @@ fun Modifier.bleed(d: Dp): Modifier = this.layout { m, c ->
 fun PanelPiece(seat: Seat, modifier: Modifier = Modifier, bleed: Boolean = true, dividerStart: Dp = MarkCol + 12.dp, content: @Composable ColumnScope.() -> Unit) {
     val c = M.c
     CompositionLocalProvider(LocalRowGround provides c.card) {
-        Column(modifier.then(if (bleed) Modifier.bleed(PanelBleed) else Modifier).fillMaxWidth().clip(seat.shape()).background(c.card)) {
-            if (seat == Seat.Middle || seat == Seat.Last) Box(Modifier.padding(start = dividerStart).fillMaxWidth().height(1.dp).background(c.hairline))
+        val outline = if (planner) c.graphite.copy(alpha = 0.28f) else null
+        // The planner's panels are the page's own paper behind a printed hairline — barely lighter, never a card on top.
+        val ground = if (outline != null) androidx.compose.ui.graphics.lerp(c.bg, c.card, 0.45f) else c.card
+        Column(modifier.then(if (bleed) Modifier.bleed(if (outline != null) 2.dp else PanelBleed) else Modifier).fillMaxWidth()
+            .clip(seat.shape(if (outline != null) PlannerR else PanelR)).background(ground)
+            .then(if (outline != null) Modifier.panelOutline(seat, outline) else Modifier)) {
+            if (seat == Seat.Middle || seat == Seat.Last) Box(Modifier.padding(start = if (outline != null) 8.dp else dividerStart, end = if (outline != null) 4.dp else 0.dp)
+                .fillMaxWidth().height(1.dp).background(if (outline != null) c.graphite.copy(alpha = 0.2f) else c.hairline))
             content()
         }
     }
+}
+
+/**
+ * The planner's hairline around a panel, drawn piece by piece: each piece draws its sides, and its top or bottom only when
+ * it is the panel's first or last — the outline reads as one, with no lines between rows.
+ */
+private fun Modifier.panelOutline(seat: Seat, color: Color): Modifier = drawWithContent {
+    drawContent()
+    val w = 1.dp.toPx(); val r = PlannerR.toPx()
+    val first = seat == Seat.Single || seat == Seat.First
+    val last = seat == Seat.Single || seat == Seat.Last
+    val top = if (first) w / 2 else -r * 2
+    val bottom = if (last) size.height - w / 2 else size.height + r * 2
+    drawRoundRect(color, androidx.compose.ui.geometry.Offset(w / 2, top), androidx.compose.ui.geometry.Size(size.width - w, bottom - top),
+        androidx.compose.ui.geometry.CornerRadius(r, r), style = androidx.compose.ui.graphics.drawscope.Stroke(w))
 }
 
 /** A whole panel at once, for short lists that are not lazy. */
@@ -110,7 +135,8 @@ fun PanelPiece(seat: Seat, modifier: Modifier = Modifier, bleed: Boolean = true,
 fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = M.c
     CompositionLocalProvider(LocalRowGround provides c.card) {
-        Column(modifier.bleed(PanelBleed).fillMaxWidth().clip(RoundedCornerShape(PanelR)).background(c.card), content = content)
+        Column(modifier.bleed(PanelBleed).fillMaxWidth().clip(RoundedCornerShape(PanelR)).background(c.card)
+            .then(if (planner) Modifier.panelOutline(Seat.Single, c.graphite.copy(alpha = 0.28f)) else Modifier), content = content)
     }
 }
 
@@ -159,10 +185,11 @@ fun RowBody(
     ) {
         // Owner, 14 окт: the mark stands on the middle of the first line of words, and its larger touch area
         // (the circle's 37 dp) doesn't make the row taller — every row is as tall as its words.
-        Box(Modifier.width(MarkCol).height(26.dp), contentAlignment = Alignment.Center) {
+        // The planner (design/v9) sets the mark a little further in and the words closer to it.
+        Box(Modifier.width(if (planner) 46.dp else MarkCol).height(if (planner) 22.dp else 26.dp), contentAlignment = Alignment.Center) {
             Box(Modifier.wrapContentSize(unbounded = true)) { mark?.invoke() }
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(if (planner) 10.dp else 12.dp))
         Column(Modifier.weight(1f).padding(top = 2.dp), content = content)
         if (trailing != null) { Spacer(Modifier.width(8.dp)); Box(Modifier.padding(top = 2.dp)) { trailing() } }
     }
@@ -190,20 +217,20 @@ fun PaperRow(
 @Composable
 fun RowTitle(text: String, faded: Boolean = false, maxLines: Int = 3) {
     val c = M.c
-    Text(text, style = Type.body.copy(color = if (faded) c.graphite else c.ink, fontSize = 16.sp, lineHeight = 22.sp), maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+    Text(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable
 fun RowTitle(text: AnnotatedString, faded: Boolean = false, maxLines: Int = 3) {
     val c = M.c
-    Text(text, style = Type.body.copy(color = if (faded) c.graphite else c.ink, fontSize = 16.sp, lineHeight = 22.sp), maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+    Text(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis)
 }
 
 /** The one quiet line under a row's words. */
 @Composable
 fun RowSub(text: String, link: Boolean = false, late: Boolean = false, maxLines: Int = 1) {
     val c = M.c
-    Text(text, style = Type.small.copy(color = when { late -> c.accentText; link -> c.link; else -> c.graphite }, fontSize = 13.5.sp),
+    Text(text, style = Type.small.copy(fontFamily = rowFamily, color = when { late -> c.accentText; link -> c.link; else -> c.graphite }, fontSize = subSize),
         maxLines = maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
 }
 
@@ -219,9 +246,15 @@ fun SectionHead(
     top: Dp = 22.dp,
 ) {
     val c = M.c
-    Margined(modifier.padding(top = top, bottom = 8.dp)) {
+    Margined(modifier.padding(top = if (planner) top - 4.dp else top, bottom = if (planner) 5.dp else 8.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 24.dp).clip(RoundedCornerShape(6.dp))
             .then(if (onFold != null) Modifier.clickable(onClick = onFold) else Modifier), verticalAlignment = Alignment.CenterVertically) {
+            if (planner) {
+                // «ОБЕЩАНИЯ ———»: a printed heading, wider letters, a rule running to the edge.
+                Text(label.uppercase() + (count?.let { "  ·  $it" } ?: ""), style = Type.label.copy(fontFamily = Book, fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal, color = c.ink.copy(alpha = 0.92f), letterSpacing = 2.9.sp))
+                Box(Modifier.weight(1f).padding(start = 9.dp, end = if (action != null || open != null) 8.dp else 0.dp).height(0.8.dp).background(c.ink.copy(alpha = 0.45f)))
+            } else
             Text(label.uppercase() + (count?.let { "  ·  $it" } ?: ""), style = Type.label.copy(color = c.graphite, letterSpacing = 1.5.sp), modifier = Modifier.weight(1f))
             action?.let { (text, act) ->
                 Text(text, style = Type.small.copy(color = c.link, fontSize = 13.5.sp, fontWeight = FontWeight.Medium),
@@ -239,7 +272,7 @@ fun SectionHead(
 @Composable
 fun Voice(text: AnnotatedString, modifier: Modifier = Modifier, link: Boolean = false, onClick: (() -> Unit)? = null) {
     val c = M.c
-    Text(text, style = Type.italic.copy(color = if (link) c.link else c.graphite, fontSize = 16.sp, lineHeight = 22.sp),
+    Text(text, style = Type.italic.copy(color = if (link) c.link else c.graphite, fontSize = if (planner) 18.5.sp else 16.sp, lineHeight = if (planner) 23.sp else 22.sp),
         modifier = modifier.clip(RoundedCornerShape(6.dp)).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(vertical = if (onClick != null) 6.dp else 0.dp))
 }

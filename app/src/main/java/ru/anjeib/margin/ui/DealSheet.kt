@@ -117,7 +117,8 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
         val maxH = ((screen * 0.92f).dp - ime).coerceAtLeast(200.dp)
         Column(Modifier.fillMaxWidth().heightIn(max = maxH).imePadding().navigationBarsPadding()) {
             // At least half the screen with the field right under it — the same as a simple matter's card.
-            Column(Modifier.weight(1f, fill = false).heightIn(min = ((screen * 0.6f).dp - 76.dp).coerceAtLeast(120.dp)).screenRule().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
+            val pageLines = rememberPageLines()
+            Column(Modifier.weight(1f, fill = false).heightIn(min = ((screen * 0.6f).dp - 76.dp).coerceAtLeast(120.dp)).ruledPage(pageLines).screenRule().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
                 // The same card as a simple matter (owner's call, 10 окт), with its topic above the title.
                 val row = topic.questionRow(q)
                 val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
@@ -190,6 +191,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                     }
                 }
                 Margined { CreatedLine(born) }
+                PageEnd(pageLines)
             }
             // Changes in words go to the topic, said about this matter; «+ дело» puts a matter under it.
             val scopeKey = MainVm.key(Scope.InTask(topic.id))

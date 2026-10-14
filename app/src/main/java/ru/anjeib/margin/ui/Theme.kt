@@ -108,19 +108,36 @@ private fun inter(w: Int) = Font(
     variationSettings = FontVariation.Settings(FontVariation.weight(w)),
 )
 
-val Serif = FontFamily(playfair(400), playfair(500), playfair(600), playfair(400, true), playfair(500, true))
+/**
+ * «Планер» (owner, 14 окт, design/v9/v9-2-planner.png): the whole page set in one Times-like book face — Tinos (OFL), metric
+ * twin of Times, with a full Cyrillic. [PlannerType] is on while that page is chosen; [Serif] and [Book] follow it.
+ */
+val Tinos = FontFamily(
+    Font(R.font.tinos_regular, FontWeight.Normal), Font(R.font.tinos_italic, FontWeight.Normal, FontStyle.Italic),
+    Font(R.font.tinos_bold, FontWeight.Bold), Font(R.font.tinos_bolditalic, FontWeight.Bold, FontStyle.Italic),
+)
+val PlannerType = androidx.compose.runtime.mutableStateOf(false)
+
+/** The rows' book face on the planner page. */
+val Book: FontFamily get() = Tinos
+
+private val Playfair = FontFamily(playfair(400), playfair(500), playfair(600), playfair(400, true), playfair(500, true))
+/** Headings and Margin's italic voice: Playfair — or, on the planner page, the same book face as everything else. */
+val Serif: FontFamily get() = if (PlannerType.value) Tinos else Playfair
 val Sans = FontFamily(inter(400), inter(500), inter(600))
 
 object Type {
-    val display = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 40.sp, lineHeight = 46.sp, letterSpacing = (-0.5).sp)
-    val title = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 26.sp, lineHeight = 32.sp)
-    val cardTitle = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 19.sp, lineHeight = 25.sp)
+    // The planner's headings (design/v9): the regular cut, the ink spread a little as letterpress leaves it.
+    val display get() = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500),
+        shadow = if (PlannerType.value) androidx.compose.ui.graphics.Shadow(Color(0xFF1A1A1A).copy(alpha = 0.55f), androidx.compose.ui.geometry.Offset(0f, 0.6f), 1.6f) else null, fontSize = 40.sp, lineHeight = 46.sp, letterSpacing = (-0.5).sp)
+    val title get() = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 26.sp, lineHeight = 32.sp)
+    val cardTitle get() = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 19.sp, lineHeight = 25.sp)
     val body = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 16.sp, lineHeight = 23.sp)
     val task = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 16.5.sp, lineHeight = 22.sp)
     val small = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 13.5.sp, lineHeight = 18.sp)
     val label = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 11.5.sp, letterSpacing = 1.2.sp)
     val tab = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 17.sp)
-    val italic = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontSize = 15.sp, lineHeight = 21.sp)
+    val italic get() = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontSize = 15.sp, lineHeight = 21.sp)
 }
 
 val LocalPalette = staticCompositionLocalOf { LightPalette }

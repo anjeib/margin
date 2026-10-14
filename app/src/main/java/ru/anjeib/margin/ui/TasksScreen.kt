@@ -166,6 +166,8 @@ fun TaskList(
     /** A phrase into the main field, not sent («Попробуйте» on an empty Today). */
     onTry: (String) -> Unit = {},
     contentPadding: PaddingValues,
+    /** The day this page shows (the planner's tabs; null — today): a page keeps its own day while it is being turned. */
+    pageDay: LocalDate? = vm.pageDay.collectAsState().value,
 ) {
     val landed by vm.landed.collectAsState()
     val c = M.c
@@ -217,10 +219,32 @@ fun TaskList(
     if (askTopic) TextDialog(s.newTopicTitle, "", s.newTopicHint, onDismiss = { askTopic = false }) { v -> askTopic = false; vm.newTopic(v)?.let(onOpen) }
     // «Поля и панели» (v8): the rule runs behind the whole list; rows sit on panels right of it, «когда» on the margin.
     val pad = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
-    Box(Modifier.fillMaxSize().marginRule(c.accent.copy(alpha = 0.85f), over = true)) {
+    val pageLines = rememberPageLines()
+    Box(Modifier.fillMaxSize().ruledPage(pageLines).marginRule(c.accent.copy(alpha = 0.85f), over = true)) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = pad) {
         when {
             view == Views.TODAY -> {
+                // The planner's tabs turned the page to another day: that day alone — its name, its summary, its matters.
+                val other = pageDay?.takeIf { it != today }
+                if (other != null) {
+                    val p = dayPlan(data, other, today, events)
+                    item("o-head") {
+                        Margined(Modifier.padding(top = 8.dp), margin = { MarginDay(other.dayOfMonth, other.dayMonthShort().substringAfter(' ')) }) {
+                            Column {
+                                BasicText(other.dowFull(), style = Type.display.copy(color = c.ink), maxLines = 1,
+                                    autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 50.sp else 40.sp, stepSize = 1.sp))
+                                Voice(daySummary(p, other), Modifier.padding(top = 2.dp))
+                                Voice(s.backToToday, Modifier.padding(top = 6.dp), link = true, onClick = { vm.pageDay.value = null })
+                            }
+                        }
+                    }
+                    if (!p.quiet) {
+                        item("o-sec") { SectionHead(dayWord(other, today), count = (p.deals.size + p.events.size).takeIf { it > 0 }) }
+                        dayPanel(p, today, "o", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it })
+                    }
+                    item("page-end-o") { PageEnd(pageLines) }
+                    return@LazyColumn
+                }
                 val plan = dayPlan(data, today, today, events)
                 val tomorrowPlan = dayPlan(data, today.plusDays(1), today, events)
                 // Who owes what: late, within three days, or without a day — gathered here, still in their days below.
@@ -236,7 +260,7 @@ fun TaskList(
                     Margined(Modifier.padding(top = 8.dp), margin = { MarginDay(today.dayOfMonth, today.dayMonthShort().substringAfter(' ')) }) {
                         Column {
                             BasicText(today.dowFull(), style = Type.display.copy(color = c.ink), maxLines = 1,
-                                autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 40.sp, stepSize = 1.sp))
+                                autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 50.sp else 40.sp, stepSize = 1.sp))
                             val away by vm.away.collectAsState()
                             Voice(daySummary(plan, today, away), Modifier.padding(top = 2.dp))
                             TodayHints(plan, data, ui, onRemoveSamples = { vm.removeSamples() })
@@ -258,9 +282,10 @@ fun TaskList(
                 // Several own matters left from past days: one tap puts them all on today (others' promises keep their dates).
                 val ownLate = plan.deals.count { it.dueDate?.isBefore(today) == true && it.waitingFor == null && it.promisedTo == null }
                 val dayCount = plan.deals.size + plan.events.size
-                item("t-head") { SectionHead(s.today, count = dayCount.takeIf { it > 0 }, action = if (ownLate >= 2) s.allToToday to { vm.moveOverdue() } else null) }
-                if (plan.deals.isEmpty() && plan.events.isEmpty() && plan.done.isEmpty()) item("t-free") { Margined { Voice(s.freeDay) } }
-                else dayPanel(plan, today, "t", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
+                // Owner, 14 окт: an empty day says «Свободный день» once — under its name; no empty «Сегодня» repeating it.
+                val dayEmpty = plan.deals.isEmpty() && plan.events.isEmpty() && plan.done.isEmpty()
+                if (!dayEmpty) item("t-head") { SectionHead(s.today, count = dayCount.takeIf { it > 0 }, action = if (ownLate >= 2) s.allToToday to { vm.moveOverdue() } else null) }
+                if (!dayEmpty) dayPanel(plan, today, "t", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                     doneOpen = isOpen("s-done-today"), onDoneFold = { toggle("s-done-today") })
                 if (undated.isNotEmpty()) {
                     item("u-head") {
@@ -312,7 +337,7 @@ fun TaskList(
                     item("w-head") { SectionHead(s.weekTitle, action = s.dismiss.lowercase() to { weekSeen = wk; ui.edit().putString("weekSeen", wk).apply() }) }
                     item("week") { Margined { WeekCard(data.weekReview(today), data.inboxNote()?.entries?.size ?: 0, onOpen, onOpenInbox) } }
                 }
-                if (data.tasks.isEmpty() && data.queue.isEmpty()) item("try") { TryLine(onTry) }
+                // Owner, 14 окт: no examples on a clean page — not even phrases to try (the tour shows how to write).
                 // Shared or saved without a place: one line while there is something to put away (the week's panel says it too).
                 val unplaced = data.inboxNote()?.entries?.size ?: 0
                 if (unplaced > 0 && !weekShown) item("inbox") { VoiceLink(s.inboxLine(unplaced), onOpenInbox) }
@@ -396,6 +421,7 @@ fun TaskList(
                 }
             }
         }
+        item("page-end") { PageEnd(pageLines) }
     }
     }
 }

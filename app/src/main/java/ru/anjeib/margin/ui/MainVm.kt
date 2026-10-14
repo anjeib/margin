@@ -612,6 +612,14 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** The line of marks («/дело /тема /идея») the bar offers, shown over the page's writing line while a page is written on. */
     val pageMarks = androidx.compose.runtime.mutableStateOf<(@androidx.compose.runtime.Composable () -> Unit)?>(null)
+    /** The page's look (Page.kt, LocalPaper): 0 as before … 3 ruling, sheet edge and grain — chosen in the developer section. */
+    val paperStyle = androidx.compose.runtime.mutableStateOf(ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).getInt("paper", 0)
+        .also { PlannerType.value = it >= 4 })
+    fun setPaper(v: Int) { paperStyle.value = v; PlannerType.value = v >= 4; ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).edit().putInt("paper", v).apply() }
+
+    /** The planner's day tabs: the day the main page shows (null — today). */
+    val pageDay = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)
+
     /** The card page's «+»: each tap opens (or closes) the line of marks over its writing line. */
     val markPicker = androidx.compose.runtime.mutableStateOf(0)
 

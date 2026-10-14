@@ -140,7 +140,7 @@ fun MatterRow(
                     onClick = onOpen, onLong = { view.confirmTick(); quick = true },
                 ) {
                     StrikeText(t.title + (if (t.dropped) " · " + s.droppedMark else ""),
-                        Type.body.copy(fontSize = 16.sp, lineHeight = 22.sp, color = if (t.done || ticking || faded) c.graphite else c.ink),
+                        Type.body.copy(fontFamily = rowFamily, fontSize = rowSize, lineHeight = rowLine, color = if (t.done || ticking || faded) c.graphite else c.ink),
                         strike.value, c.faint, maxLines = 3)
                     if (!t.done) {
                         val days = t.dayOf()?.let { (i, n) -> s.dayOfDays(i, n) }
@@ -181,7 +181,7 @@ fun EventPaperRow(e: CalEvent, seat: Seat) {
 fun DonePaperRow(t: Task, seat: Seat, onToggle: () -> Unit, onOpen: () -> Unit) {
     val c = M.c
     PaperRow(seat, mark = { CheckCircle(true, size = 21.dp, onToggle = onToggle) }, onClick = onOpen) {
-        StrikeText(t.title, Type.body.copy(fontSize = 16.sp, lineHeight = 22.sp, color = c.graphite), 1f, c.faint, maxLines = 2)
+        StrikeText(t.title, Type.body.copy(fontFamily = rowFamily, fontSize = rowSize, lineHeight = rowLine, color = c.graphite), 1f, c.faint, maxLines = 2)
         t.topicTitle?.let { RowSub("≡ $it") }
     }
 }
@@ -223,10 +223,10 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
             Text(buildAnnotatedString {
                 val (a, name, b) = if (incoming) s.promiseToYouParts(who) else s.promiseFromYouParts(who)
                 append(a); withStyle(SpanStyle(color = c.link)) { append(name) }; append(b)
-            }, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))
+            }, style = Type.small.copy(fontFamily = rowFamily, color = c.graphite, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))
             if (nudge) {
-                Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))
-                Text(s.remindLink, style = Type.small.copy(color = c.link, fontSize = 13.5.sp, fontWeight = FontWeight.Medium),
+                Text("  ·  ", style = Type.small.copy(fontFamily = rowFamily, color = c.graphite, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))
+                Text(s.remindLink, style = Type.small.copy(fontFamily = rowFamily, color = c.link, fontSize = subSize, fontWeight = FontWeight.Medium),
                     modifier = Modifier.padding(top = 3.dp).clip(RoundedCornerShape(6.dp)).clickable { remindAbout(ctx, data, t) })
             }
         }

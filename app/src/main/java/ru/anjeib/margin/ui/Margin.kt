@@ -117,8 +117,11 @@ fun dateStyle(size: androidx.compose.ui.unit.TextUnit = 13.sp, late: Boolean = f
 fun MarginDay(day: Int, month: String) {
     val c = M.c
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(day.toString(), style = Type.display.copy(color = c.ink, fontSize = 40.sp, lineHeight = 42.sp))
-        Text(month, style = Type.small.copy(color = c.graphite, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp))
+        // On the planner page the day number is pressed into the paper: a pale edge under it, as letterpress leaves.
+        Text(day.toString(), style = Type.display.copy(color = c.ink, fontSize = 40.sp, lineHeight = 42.sp, fontWeight = if (planner) FontWeight(600) else null,
+            shadow = if (planner && !c.dark) androidx.compose.ui.graphics.Shadow(Color.White.copy(alpha = 0.9f), androidx.compose.ui.geometry.Offset(0f, 2.5f), 0f) else null))
+        Text(if (planner) month.uppercase() else month, style = if (planner) Type.small.copy(fontFamily = Book, color = c.ink.copy(alpha = 0.8f), fontSize = 12.sp,
+            fontWeight = FontWeight.Medium, letterSpacing = 2.4.sp) else Type.small.copy(color = c.graphite, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp))
     }
 }
 

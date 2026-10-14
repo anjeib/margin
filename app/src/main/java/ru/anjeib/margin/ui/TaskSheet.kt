@@ -175,7 +175,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
         Column(Modifier.fillMaxWidth().heightIn(max = (maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
             // «Поля»: the rule down the card, the day and hour on the margin, everything else right of it.
             // At least half the screen with the field right under it; a longer card grows, the field stays below.
-            Column(Modifier.weight(1f, fill = false).heightIn(min = (half - 76.dp).coerceAtLeast(120.dp)).screenRule().verticalScroll(rememberScrollState())) {
+            val pageLines = rememberPageLines()
+            Column(Modifier.weight(1f, fill = false).heightIn(min = (half - 76.dp).coerceAtLeast(120.dp)).ruledPage(pageLines).screenRule().verticalScroll(rememberScrollState())) {
                 // The card (owner's call, 10 окт): ⋯ for the matter as a whole; the title with its bagel in the sphere's colour;
                 // «когда» as a plaque; three tools (place, people, repeat) and ⋯ for the rest; then the comments.
                 val ctxOpen = androidx.compose.ui.platform.LocalContext.current
@@ -341,6 +342,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     }
                 }
                 Margined { CreatedLine(task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt) }
+                PageEnd(pageLines)
                 Spacer(Modifier.height(8.dp))
             }
 
