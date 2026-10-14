@@ -165,8 +165,9 @@ fun PlannerIndex(days: List<IndexTab>, tools: List<IndexTab>) {
         }
     }
     androidx.compose.foundation.layout.Column {
-        days.forEachIndexed { i, t -> tab(t, 43.dp, i == 0) }
-        Box(Modifier.size(TabsW, 1.dp).background(line))
+        // The week may step aside (the month is open), but the tools below stay where the thumb knows them (owner, 14 окт).
+        if (days.isNotEmpty()) days.forEachIndexed { i, t -> tab(t, 43.dp, i == 0) } else Spacer(Modifier.height(43.dp * 7))
+        Box(Modifier.size(TabsW, 1.dp).background(if (days.isNotEmpty()) line else Color.Transparent))
         Spacer(Modifier.height(18.dp))
         tools.forEachIndexed { i, t -> tab(t, 44.dp, i == 0) }
     }

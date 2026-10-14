@@ -276,7 +276,8 @@ fun TaskList(
                             BasicText(today.dowFull(), style = Type.display.copy(color = c.ink), maxLines = 1, modifier = Modifier.weight(1f),
                                 autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 44.sp else 40.sp, stepSize = 1.sp))
                             // Owner, 14 окт: the calendar right by the day too, under «MARGIN» — the month unfolds above.
-                            Box(Modifier.size(40.dp).clip(CircleShape).background(if (monthOpen) c.linkSoft else Color.Transparent)
+                            // With the month open the tab on the right folds it; the icon by the day steps aside (owner, 14 окт).
+                            if (!monthOpen) Box(Modifier.size(40.dp).clip(CircleShape).background(if (monthOpen) c.linkSoft else Color.Transparent)
                                 .clickable(onClickLabel = s.calendarTitle) { vm.monthOpen.value = !monthOpen }
                                 .semantics { contentDescription = s.calendarTitle }, contentAlignment = Alignment.Center) {
                                 CalendarGlyph(if (monthOpen) c.link else c.ink.copy(alpha = 0.7f), 21.dp)

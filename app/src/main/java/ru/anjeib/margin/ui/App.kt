@@ -232,7 +232,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             val open = (pageDay ?: todayNow).takeIf { onDiary && view == Views.TODAY }
             fun toDiary(v: String) { contents = false; screen = TASKS; view = v; searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null }
             PlannerIndex(
-                weekTabs(open, pageDay ?: todayNow, todayNow, busy = { d -> rows.any { it.dueDate == d } }, petrol = onCalendar) { d ->
+                                // With the month unfolded its own row of weekdays is enough — the week tabs step aside (owner, 14 окт).
+                if (onCalendar) emptyList() else weekTabs(open, pageDay ?: todayNow, todayNow, busy = { d -> rows.any { it.dueDate == d } }, petrol = onCalendar) { d ->
                     vm.pageDay.value = d.takeIf { it != todayNow }; toDiary(Views.TODAY) },
                 listOf(
                     IndexTab(petrol = true, label = s.quickToday, on = onDiary && view == Views.TODAY && pageDay == null && !monthOpen,
