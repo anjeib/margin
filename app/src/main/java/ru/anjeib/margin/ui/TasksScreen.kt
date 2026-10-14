@@ -272,8 +272,16 @@ fun TaskList(
                 item("head") {
                     Margined(Modifier.padding(top = 8.dp), margin = { MarginDay(today.dayOfMonth, today.dayMonthShort().substringAfter(' ')) }) {
                         Column {
-                            BasicText(today.dowFull(), style = Type.display.copy(color = c.ink), maxLines = 1,
+                          Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                            BasicText(today.dowFull(), style = Type.display.copy(color = c.ink), maxLines = 1, modifier = Modifier.weight(1f),
                                 autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 44.sp else 40.sp, stepSize = 1.sp))
+                            // Owner, 14 окт: the calendar right by the day too, under «MARGIN» — the month unfolds above.
+                            Box(Modifier.size(40.dp).clip(CircleShape).background(if (monthOpen) c.linkSoft else Color.Transparent)
+                                .clickable(onClickLabel = s.calendarTitle) { vm.monthOpen.value = !monthOpen }
+                                .semantics { contentDescription = s.calendarTitle }, contentAlignment = Alignment.Center) {
+                                CalendarGlyph(if (monthOpen) c.link else c.ink.copy(alpha = 0.7f), 21.dp)
+                            }
+                          }
                             val away by vm.away.collectAsState()
                             // «2 просрочены» leads to them (ChatGPT's review, owner, 14 окт): the list turns to today's matters, the late ones light up.
                             val lateIds = plan.deals.filter { it.dueDate?.isBefore(today) == true }.map { it.id }
@@ -417,8 +425,11 @@ fun TaskList(
                     .filter { when (owe) { "wait" -> it.waitingFor != null; "promise" -> it.promisedTo != null; else -> true } }
                     .let { l -> l.filter { it.anchor != null }.sortedWith(compareBy({ it.anchor }, { it.time ?: "99" })) + l.filter { it.anchor == null }.sortedByDescending { it.createdAt } }
                     else emptyList()
-                if (topics.isEmpty() && ideas.isEmpty() && deals.isEmpty()) item("o-none") { Margined { Empty(s.emptyAll, s.emptyHint) } }
-                if (topics.isNotEmpty() || (owe == null && tab == "topics")) {
+                if (topics.isEmpty() && ideas.isEmpty() && deals.isEmpty()) item("o-none") {
+                    // Owner, 14 окт: one plain line, no examples — the field below starts a topic.
+                    Margined(Modifier.padding(top = 18.dp)) { Voice(if (topicsOnly) s.topicsEmpty else s.emptyAll) }
+                }
+                if (topics.isNotEmpty() || (owe == null && tab == "topics" && !topicsOnly)) {
                     item("ot-head") { SectionHead(s.topicsBadge, count = topics.size.takeIf { it > 0 }, action = s.newTopicLink to { askTopic = true }) }
                     topics.forEachIndexed { i, t ->
                         item("ot" + t.id) { Box(Modifier.animateItem()) { TopicPaperRow(t, seatOf(i, topics.size), onOpen = { onOpen(t.id) }, onArchive = { vm.archiveTopic(t.id) }) } }

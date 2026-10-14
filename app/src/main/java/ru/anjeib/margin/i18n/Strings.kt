@@ -819,6 +819,8 @@ interface Strings {
     val backToToday: String
     val contentsTitle: String
     val diaryTitle: String
+    val topicsEmpty: String
+    val topicsHint: String
     val diarySub: String
     val diaryHint: String
     val diaryEmpty: String
@@ -1184,7 +1186,7 @@ object Ru : Strings {
     override val people = "КОНТАКТЫ"
     override val allTasks = "Все дела"
 
-    override val composerHint = "Дело, запись или заметка…"
+    override val composerHint = "Дело или заметка…"
     override val noteHint = "Новая заметка…"
     override val chipNext = "Что дальше?"
     override val chipPlanDay = "План на день"
@@ -1792,6 +1794,8 @@ object Ru : Strings {
     override val backToToday = "к сегодняшнему дню ›"
     override val contentsTitle = "Содержание"
     override val diaryTitle = "Заметки"
+    override val topicsEmpty = "Тем пока нет. Начните новую тему со списком дел."
+    override val topicsHint = "Новая тема…"
     override val diarySub = "дневник: мысли, итоги, заметки из ленты"
     override val diaryHint = "Запись в дневник…"
     override val diaryEmpty = "Дневник пока пуст"
@@ -2680,6 +2684,8 @@ object En : Strings {
     override val backToToday = "back to today ›"
     override val contentsTitle = "Contents"
     override val diaryTitle = "Notes"
+    override val topicsEmpty = "No topics yet. Start a new topic with a list of to-dos."
+    override val topicsHint = "A new topic…"
     override val diarySub = "a diary: thoughts, outcomes, notes from the feed"
     override val diaryHint = "Write in the diary… @ for people, places, to-dos"
     override val diaryEmpty = "The diary is empty"

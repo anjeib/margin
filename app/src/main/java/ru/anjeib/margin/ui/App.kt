@@ -334,7 +334,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     }
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(20.dp).background(Brush.verticalGradient(listOf(Color.Transparent, c.bg))).fieldRule())
                 }
-                if ((screen == TASKS || screen == NOTES) && !contents) Column(
+                if ((screen == TASKS || screen == NOTES || screen == TOPICS) && !contents) Column(
                     // The planner (design/v9): the field wide on the page, the margin's line ending just under it, the frame's rule below.
                     // A band of tinted paper with a double rule over it (owner, 14 окт): the place to write is unmistakable on a full page.
                     if (planner) Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)
@@ -393,9 +393,10 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     val calDay by vm.calendarDay.collectAsState()
                     SmartComposer(
                         vm,
-                        hint = if (screen == NOTES) s.notesHint else if (screen == TASKS && view == Views.NOTES && !contents) s.diaryHint else calDay?.takeIf { screen == TASKS }?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
+                        hint = if (screen == TOPICS) s.topicsHint else if (screen == NOTES) s.notesHint else if (screen == TASKS && view == Views.NOTES && !contents) s.diaryHint else calDay?.takeIf { screen == TASKS }?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
                         busy = busy == (if (screen == NOTES) "notes" else "main"),
-                        onSend = { t, f -> if (screen == TASKS && view == Views.NOTES) vm.addDiaryNote(t, f) else vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f) },
+                        // «Темы»: the words start a topic — its name, and a list under it becomes its matters.
+                        onSend = { t, f -> if (screen == TOPICS) vm.send("/" + s.tagTopic + " " + t, files = f) else if (screen == TASKS && view == Views.NOTES) vm.addDiaryNote(t, f) else vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f) },
                         prefill = prefill, onPrefillUsed = { prefill = null },
                         onTyping = { typing = it }, slash = screen != NOTES && view != Views.NOTES, preview = if (view == Views.NOTES) null else ({ vm.previewOf(it) }),
                         mentions = screen == TASKS && view == Views.NOTES,
@@ -731,12 +732,12 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
         PageHead(s.contentsTitle, null)
         Spacer(Modifier.height(8.dp))
         line(s.feedTitle, "", screen == TASKS) { onGo(TASKS, Views.TODAY) }
-        line(s.diaryTitle, data.tasks.count { it.thought && it.subtasks.isEmpty() && !it.done }.takeIf { it > 0 }?.toString() ?: "", false) { onGo(TASKS, Views.NOTES) }
-        line(s.topicsPage, data.tasks.count { it.topic && !it.done && !(it.thought && it.subtasks.isEmpty()) }.takeIf { it > 0 }?.toString() ?: "", screen == TOPICS) { onGo(TOPICS, null) }
-        line(s.inboxNote, data.inboxCount().takeIf { it > 0 }?.toString() ?: "", screen == INBOX) { onGo(INBOX, null) }
-        line(s.materialsTitle, data.tasks.sumOf { t -> t.entries.sumOf { e -> e.attachments.size } }.takeIf { it > 0 }?.toString() ?: "", screen == MATERIALS) { onGo(MATERIALS, null) }
-        line(s.peopleTitle, data.persons.count { !it.archived && !it.draft }.takeIf { it > 0 }?.toString() ?: "", screen == PEOPLE) { onGo(PEOPLE, null) }
-        line(s.archiveTitle, (data.notes.count { it.archived } + data.persons.count { it.archived } + data.tasks.count { it.topic && it.done }).takeIf { it > 0 }?.toString() ?: "", screen == ARCHIVE) { onGo(ARCHIVE, null) }
+        line(s.diaryTitle, "", false) { onGo(TASKS, Views.NOTES) }
+        line(s.topicsPage, "", screen == TOPICS) { onGo(TOPICS, null) }
+        line(s.inboxNote, "", screen == INBOX) { onGo(INBOX, null) }
+        line(s.materialsTitle, "", screen == MATERIALS) { onGo(MATERIALS, null) }
+        line(s.peopleTitle, "", screen == PEOPLE) { onGo(PEOPLE, null) }
+        line(s.archiveTitle, "", screen == ARCHIVE) { onGo(ARCHIVE, null) }
         Spacer(Modifier.height(18.dp))
         SectionHead(s.aboutApp, top = 6.dp)
         line(s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
