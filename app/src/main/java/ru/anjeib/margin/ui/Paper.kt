@@ -373,11 +373,14 @@ fun MoreActions(items: List<Action>, modifier: Modifier = Modifier) {
     Column(modifier) { items.chunked(5).forEach { row -> ActionBar(row, Modifier.padding(top = 2.dp), slots = 5) } }
 }
 
-/** A promise's arrow on its soft petrol round — the mark of «ждём» (←) and «обещал» (→). */
+/**
+ * The mark of «ждём» (←) and «обещал» (→): the open hand, bare on the page in the ink of the other marks (owner, 14 окт:
+ * no round under it, not petrol) — the same weight as the circle of a matter beside it.
+ */
 @Composable
 fun PromiseMark(incoming: Boolean, size: Dp = 30.dp) {
     val c = M.c
-    Box(Modifier.size(size).clip(CircleShape).background(c.linkSoft), contentAlignment = Alignment.Center) { HandGlyph(c.link, size * 0.82f, incoming = incoming) }
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) { HandGlyph(c.ink.copy(alpha = 0.62f), size * 0.9f, incoming = incoming) }
 }
 
 /** A row of words alone (no mark): a help group, a setting, a note — the words from the panel's own edge. */
