@@ -41,6 +41,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.drawText
@@ -192,8 +194,7 @@ fun Modifier.plannerFrame(ink: Color, mark: Color, label: androidx.compose.ui.te
     // the rules
     val labelEnd = r - 19f * dp
     val labelStart = label?.let { labelEnd - it.size.width } ?: labelEnd
-    drawLine(ink, Offset(l + 3f * dp, top), Offset(label?.let { labelStart - 13f * dp } ?: (r - 8f * dp), top), hair)
-    drawLine(ink, Offset(l + 3.5f * dp, bottom), Offset(r - 12f * dp, bottom), hair)
+    // Owner, 14 окт: no rules between them — only the corner hooks and «MARGIN» frame the page.
     fun seg(x0: Float, y0: Float, x1: Float, y1: Float) = drawLine(mark, Offset(x0, y0), Offset(x1, y1), heavy, cap = androidx.compose.ui.graphics.StrokeCap.Square)
     // top left «┘»: an upright crossing the rule's line, an arm out to the left at its foot
     seg(l, top - 5.5f * dp, l, top + 5f * dp); seg(l - arm, top + 5f * dp, l, top + 5f * dp)
@@ -262,11 +263,14 @@ private fun PlannerSheet(modifier: Modifier, tabs: (@Composable () -> Unit)?, fr
                 style = androidx.compose.ui.graphics.drawscope.Stroke(0.7.dp.toPx()))
         }
     }) {
+        val dens = androidx.compose.ui.platform.LocalDensity.current
+        val edgeTop = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(dens).toFloat()
+        val edgeBottom = androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(dens).toFloat()
         Box(Modifier.fillMaxSize().padding(end = EdgeW).clip(androidx.compose.foundation.shape.RoundedCornerShape(topEnd = r, bottomEnd = r)).background(c.bg)) {
             Box(Modifier.fillMaxSize().padding(end = if (tabs != null) TabsW else 0.dp).drawBehind {
                 if (tabs == null) return@drawBehind
-                // The sheet's own edge, where the tabs begin.
-                drawLine(c.graphite.copy(alpha = 0.3f), Offset(size.width - 0.5.dp.toPx(), 0f), Offset(size.width - 0.5.dp.toPx(), size.height), 1.dp.toPx())
+                // The sheet's own edge, where the tabs begin — from the top hook down to the bottom one, not through the status bar.
+                drawLine(c.graphite.copy(alpha = 0.3f), Offset(size.width - 0.5.dp.toPx(), edgeTop + 14.dp.toPx()), Offset(size.width - 0.5.dp.toPx(), size.height - edgeBottom - 10.dp.toPx()), 1.dp.toPx())
             }, content = content)
             if (tabs != null) Box(Modifier.align(androidx.compose.ui.Alignment.TopEnd).statusBarsPadding().padding(top = 25.dp)) { tabs() }
             Box(Modifier.fillMaxSize().drawBehind {
