@@ -388,9 +388,13 @@ fun SmartComposer(
         // A light line, a little taller than the words, a hairline around it.
         val shape = RoundedCornerShape(FieldH / 2)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-            // The planner (owner, 14 окт; design/v9/v9-field-*.png): a printed «графа» — «запись» on the margin, the words on a ruled line.
+            // The planner (owner, 14 окт; design/v9/v9-field-*.png): a printed «графа», the words on a ruled line, and on its margin
+            // the hour now — the margin is only for «когда», and that is the hour the entry will get (owner: no «запись» there).
             if (ruled && planner) Box(Modifier.width(MarginW - edge).heightIn(min = FieldH), contentAlignment = Alignment.CenterEnd) {
-                Text(s.fieldLabel, style = Type.italic.copy(color = c.ink.copy(alpha = 0.75f), fontSize = 15.sp), modifier = Modifier.padding(end = 10.dp))
+                val now by androidx.compose.runtime.produceState(java.time.LocalTime.now()) {
+                    while (true) { value = java.time.LocalTime.now(); kotlinx.coroutines.delay(((60 - value.second) * 1000L).coerceAtLeast(1000L)) }
+                }
+                Text("%02d:%02d".format(now.hour, now.minute), style = Type.italic.copy(color = c.ink.copy(alpha = 0.75f), fontSize = 15.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = 10.dp))
             } else if (ruled) Spacer(Modifier.width(MarginW - edge))
             Row(
                 // v8: the field floats a little over the page — a soft shadow, the one raised thing besides menus.

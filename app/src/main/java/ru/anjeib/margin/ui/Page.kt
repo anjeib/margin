@@ -363,8 +363,10 @@ fun PlannerPager(page: Int, onPage: (Int) -> Unit, content: @Composable (Int) ->
         if (state.currentPage != page && !state.isScrollInProgress) { if (motion) state.animateScrollToPage(page, animationSpec = androidx.compose.animation.core.tween(560, easing = androidx.compose.animation.core.FastOutSlowInEasing)) else state.scrollToPage(page) }
     }
     // A swipe settled on a page: the diary is open there.
+    val curPage by androidx.compose.runtime.rememberUpdatedState(page)
+    val tell by androidx.compose.runtime.rememberUpdatedState(onPage)
     androidx.compose.runtime.LaunchedEffect(state) {
-        androidx.compose.runtime.snapshotFlow { state.settledPage }.collect { if (it != page) onPage(it) }
+        androidx.compose.runtime.snapshotFlow { state.settledPage }.collect { if (it != curPage) tell(it) }
     }
     androidx.compose.foundation.pager.HorizontalPager(state, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { p ->
         // How far this page is turned: 0 — open; 0..1 — going over the spine (it is the one on the left); -1..0 — lying under.

@@ -968,8 +968,8 @@ object Ru : Strings {
         )),
         HelpSection("Списки", "Начните строку с «1.», «1)», «-» или «•» — Enter продолжит список, Enter на пустом пункте закончит. Список, отправленный с главного экрана, станет несколькими делами; в записи темы останется просто списком."),
         HelpSection("Жесты", "", pairs = listOf(
-            "смахнуть дело вправо" to "сделано",
-            "смахнуть дело влево" to "отложить: завтра, через неделю или своя дата",
+            "кружок у дела" to "сделано",
+            "смахнуть страницу" to "листать: Содержание · Сегодня · Обзор",
             "нажатие на дело" to "его карточка (в любом месте строки)",
             "долгое нажатие на дело" to "меню: Отложить…, Время, В тему…, Удалить",
             "долгое нажатие в теме" to "меню строки",
@@ -1008,8 +1008,8 @@ object Ru : Strings {
     override val tourTopicWho = "Сергей"
     override val tourGesturesTitle = "Нажмите на дело"
     override val tourGesturesText = "Откроется его карточка."
-    override val tourSwipeDone = "→ вправо — сделано"
-    override val tourSwipeLater = "← влево — на когда отложить"
+    override val tourSwipeDone = "○ кружок — сделано"
+    override val tourSwipeLater = "удержать — отложить, время, в тему"
     override val tourHold = "удержать — меню"
     override val tourOpened = "В приложении откроется карточка этого дела"
     override fun pageOf(n: Int, of: Int) = "$n из $of"
@@ -1889,8 +1889,8 @@ object En : Strings {
     override val tourTopicWho = "Sergey"
     override val tourGesturesTitle = "Tap to open"
     override val tourGesturesText = "A tap on a to-do opens its card."
-    override val tourSwipeDone = "→ right — done"
-    override val tourSwipeLater = "← left — put off to…"
+    override val tourSwipeDone = "○ the circle — done"
+    override val tourSwipeLater = "hold — later, time, to a topic"
     override val tourHold = "hold — menu"
     override val tourOpened = "In the app, this to-do's card opens"
     override fun pageOf(n: Int, of: Int) = "$n of $of"

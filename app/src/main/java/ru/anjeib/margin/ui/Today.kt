@@ -111,7 +111,7 @@ fun MatterRow(
     val tomorrowAct = LocalTomorrow.current
     val promise = !t.done && (t.waitingFor != null || t.promisedTo != null)
     val body: @Composable () -> Unit = {
-        PanelPiece(seat, bleed = !swipe) {
+        PanelPiece(seat, bleed = !swipe || planner) {
             Box {
                 SoftMenu(quick, { quick = false }) {
                     // Everything a row can do, the swipes included — not everyone finds a gesture.
@@ -153,7 +153,8 @@ fun MatterRow(
         }
     }
     Margined(modifier, margin = note.first?.let { m -> { RowMargin(m, note.second) } }) {
-        if (swipe) SwipeTask(t, onDone = onToggle, onLater = onLater ?: {}, modifier = Modifier.bleed(PanelBleed), shape = seat.shape(), content = body)
+        // Owner, 14 окт: no swipes on rows — on the planner a swipe turns the page; done is the circle, the rest is in the long press.
+        if (swipe && !planner) SwipeTask(t, onDone = onToggle, onLater = onLater ?: {}, modifier = Modifier.bleed(PanelBleed), shape = seat.shape(), content = body)
         else body()
     }
 }
