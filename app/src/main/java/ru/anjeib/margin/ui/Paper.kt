@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.draw.drawBehind
+
 import androidx.compose.foundation.layout.wrapContentWidth
 
 import androidx.compose.foundation.layout.wrapContentSize
@@ -160,8 +162,13 @@ val RowTop = 13.dp
 fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modifier: Modifier = Modifier) {
     val c = M.c
     // Owner, 10 окт: «красиво, но мелко и бледно» — larger and in ink (a touch softer than the words), medium italic.
-    PencilText(AnnotatedString(text), style = Type.italic.copy(color = when { link -> c.link; else -> c.ink.copy(alpha = 0.8f) }, fontSize = if (planner) 14.5.sp else 15.5.sp, lineHeight = 19.sp,
-        fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End), modifier = modifier, whole = late)
+    // Owner, 14 окт: the margin's dates and hours more telling — in full ink, a size up, pressed into the paper like the day's
+    // number (a pale edge under each letter, as letterpress leaves).
+    PencilText(AnnotatedString(text), style = Type.italic.copy(color = when { link -> c.link; else -> if (planner) c.ink else c.ink.copy(alpha = 0.8f) },
+        fontSize = if (planner) 15.5.sp else 15.5.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End,
+        shadow = if (planner && !c.dark) androidx.compose.ui.graphics.Shadow(Color.White.copy(alpha = 0.9f), androidx.compose.ui.geometry.Offset(0f, 1.6f), 0f) else null),
+        // …and set on a small label of the same card as the tabs on the right, so the margin reads as the book's own index.
+        modifier = if (planner && !late) modifier.marginLabel() else modifier, whole = late)
 }
 
 /** The margin of a panel row: the note on the line of the row's first words. */
@@ -418,4 +425,16 @@ fun SearchField(value: String, onValue: (String) -> Unit, hint: String, modifier
         androidx.compose.foundation.text.BasicTextField(value, onValue, singleLine = true, textStyle = Type.body.copy(color = c.ink),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link), modifier = Modifier.fillMaxWidth())
     }
+}
+
+/** The card of the planner's tabs under a note on the margin: a small rounded label a shade darker than the paper. */
+@Composable
+fun Modifier.marginLabel(): Modifier {
+    val c = M.c
+    val card = if (c.dark) androidx.compose.ui.graphics.lerp(c.bg, Color.White, 0.07f) else androidx.compose.ui.graphics.lerp(c.bg, Color(0xFF6E5A40), 0.08f)
+    return this.then(androidx.compose.ui.Modifier.drawBehind {
+        val padX = 5.dp.toPx(); val padY = 1.dp.toPx()
+        drawRoundRect(card, androidx.compose.ui.geometry.Offset(-padX, -padY), androidx.compose.ui.geometry.Size(size.width + padX * 2, size.height + padY * 2),
+            androidx.compose.ui.geometry.CornerRadius(5.dp.toPx(), 5.dp.toPx()))
+    })
 }

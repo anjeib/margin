@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.input.pointer.pointerInput
+
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -192,8 +196,10 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     BackHandler(find.open && !searching) { closeFind() }
     // Turned to another day with the tabs: back is today's page.
     BackHandler(!drawer.isOpen && vm.pageDay.collectAsState().value != null && screen == TASKS && view == Views.TODAY) { vm.pageDay.value = null }
+    val plannerLook = planner
     BackHandler(!drawer.isOpen && openNote == null && openPerson == null && !searching && (screen != TASKS || view != Views.TODAY)) {
-        if (screen != TASKS) screen = TASKS else view = Views.TODAY
+        // A section goes back to the contents it was opened from (owner, 14 окт); «Темы» and «Заметки» — to «Сегодня».
+        if (screen != TASKS) { val section = screen != TOPICS; screen = TASKS; if (plannerLook && section) contents = true else view = Views.TODAY } else view = Views.TODAY
     }
 
     // «В тему…» and «Удалить» from a matter's long press or card — one picker for every screen.
@@ -360,7 +366,12 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             else -> page(PageKey(TOPICS, view, null))
                         }
                     }
-                    else if (planner) PageTurn(pageKey, order = { it.order() }) { k -> page(k) }
+                    // A section (settings, inbox, materials, contacts, archive, help) goes back to the contents with a swipe to the right
+                    // (owner, 14 окт: one couldn't tell how to leave it).
+                    else if (planner) Box(Modifier.fillMaxSize().pointerInput(screen) {
+                        var dx = 0f
+                        detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = { if (dx > 90.dp.toPx()) { screen = TASKS; contents = true } }) { _, d -> dx += d }
+                    }) { PageTurn(pageKey, order = { it.order() }) { k -> page(k) } }
                     else Crossfade(screen, animationSpec = tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "screen") { sc ->
                         when (sc) {
                             TASKS -> Crossfade(view, animationSpec = tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "view") { v ->
@@ -377,6 +388,12 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         }
                     }
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(20.dp).background(Brush.verticalGradient(listOf(Color.Transparent, c.bg))).fieldRule())
+                    // The way out, on the margin at the top as on every card (owner, 14 окт): from the contents — to «Сегодня»;
+                    // from a section — back to the contents it was opened from.
+                    if (planner && (contents || (screen != TASKS && screen != TOPICS))) Box(Modifier.align(Alignment.TopStart).width(MarginW).padding(top = 4.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.backWord) { if (contents) contents = false else { screen = TASKS; contents = true } },
+                            contentAlignment = Alignment.Center) { BackGlyph(c.ink.copy(alpha = 0.8f), 21.dp) }
+                    }
                 }
                 if ((screen == TASKS || screen == NOTES || screen == TOPICS) && !contents && !find.open) Column(
                     // The planner (design/v9): the field wide on the page, the margin's line ending just under it, the frame's rule below.

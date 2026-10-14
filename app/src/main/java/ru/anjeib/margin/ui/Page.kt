@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -123,7 +124,7 @@ val subInk: Color @Composable get() = if (planner) androidx.compose.ui.graphics.
 val subSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 13.5.sp else 13.5.sp
 
 /** Width of the planner's index tabs, and of the page edges and cover beyond them. */
-val TabsW = 25.dp
+val TabsW = 30.dp
 private val EdgeW = 11.dp
 
 /** One tab of the planner's index: a word (a weekday) or a glyph; [on] — terracotta, the page open at it. */
@@ -142,14 +143,27 @@ class IndexTab(val label: String, val on: Boolean, val mark: Boolean = false, va
 fun PlannerIndex(days: List<IndexTab>, tools: List<IndexTab>) {
     val c = M.c
     val line = c.graphite.copy(alpha = 0.22f)
+    // Owner, 14 окт: not a strip cut off the page — tabs of card a shade darker than the paper, each its own piece with a
+    // rounded outer edge, a hair apart, the page's edge casting a soft shadow onto them; the open one coloured and a little out.
+    val tabPaper = if (c.dark) androidx.compose.ui.graphics.lerp(c.bg, Color.White, 0.07f) else androidx.compose.ui.graphics.lerp(c.bg, Color(0xFF6E5A40), 0.10f)
+    val pageShade = Color.Black.copy(alpha = if (c.dark) 0.35f else 0.10f)
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp)
     @Composable fun tab(t: IndexTab, h: androidx.compose.ui.unit.Dp, first: Boolean) {
         Box(Modifier.size(TabsW + 3.dp, h)
-            .drawBehind { if (!first) drawLine(line, Offset(0f, 0f), Offset(TabsW.toPx(), 0f), 1.dp.toPx()) }
             .clickable(onClickLabel = t.label, onClick = t.onClick, indication = null,
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() })
             .semanticsLabel(t.label)) {
-            if (t.on) Box(Modifier.padding(vertical = 3.dp).fillMaxSize().clip(androidx.compose.foundation.shape.RoundedCornerShape(topEnd = 7.dp, bottomEnd = 7.dp))
-                .background(if (t.petrol) c.link else c.accent))
+            // Owner, 14 окт: no grey card — the page's own paper, set apart by a soft shadow along its outline.
+            Box(Modifier.padding(vertical = 2.dp).size(if (t.on) TabsW + 3.dp else TabsW, h - 4.dp)
+                .shadow(if (t.on) 3.dp else 2.dp, shape, ambientColor = Color(0xFF3A2E22).copy(alpha = 0.35f), spotColor = Color(0xFF3A2E22).copy(alpha = 0.45f))
+                .clip(shape)
+                .background(if (t.on) (if (t.petrol) c.link else c.accent) else c.bg)
+                .drawWithContent {
+                    drawContent()
+                    // The page lies over the tabs: its edge's shadow on each of them.
+                    drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(pageShade, Color.Transparent), startX = 0f, endX = 7.dp.toPx()),
+                        size = androidx.compose.ui.geometry.Size(7.dp.toPx(), size.height))
+                })
             val ink = if (t.on) c.onAccent else if (t.accentWord) c.accentText else if (t.weekend) weekendInk else c.ink.copy(alpha = 0.78f)
             Box(Modifier.size(TabsW, h), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 if (t.glyph != null) t.glyph.invoke(if (t.on) c.onAccent else c.graphite)
@@ -167,7 +181,6 @@ fun PlannerIndex(days: List<IndexTab>, tools: List<IndexTab>) {
     androidx.compose.foundation.layout.Column {
         // The week may step aside (the month is open), but the tools below stay where the thumb knows them (owner, 14 окт).
         if (days.isNotEmpty()) days.forEachIndexed { i, t -> tab(t, 43.dp, i == 0) } else Spacer(Modifier.height(43.dp * 7))
-        Box(Modifier.size(TabsW, 1.dp).background(if (days.isNotEmpty()) line else Color.Transparent))
         Spacer(Modifier.height(18.dp))
         tools.forEachIndexed { i, t -> tab(t, 44.dp, i == 0) }
     }
