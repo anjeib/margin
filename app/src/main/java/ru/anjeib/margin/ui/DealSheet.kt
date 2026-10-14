@@ -165,8 +165,8 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                         ))
                         androidx.compose.animation.AnimatedVisibility(more) {
                             MoreActions(listOfNotNull(
-                                Action(s.actWait, q.from != null, { dialog = "waiting" }) { ArrowGlyph(it, 20.dp, incoming = true) },
-                                Action(s.actPromised, q.promisedTo != null, { dialog = "promised" }) { ArrowGlyph(it, 20.dp) },
+                                Action(s.actWait, q.from != null, { dialog = "waiting" }) { HandGlyph(it, 23.dp, incoming = true) },
+                                Action(s.actPromised, q.promisedTo != null, { dialog = "promised" }) { HandGlyph(it, 23.dp) },
                                 if (!q.done && q.repeat == null) Action(s.actDay, false, { dialog = "day" }) { CalendarGlyph(it, 20.dp) } else null,
                                 if (!q.done) Action(s.actStep, false, { fill("step") }) { PlusGlyph(it, 18.dp) } else null,
                                 if (!q.done) Action(s.actPostpone, false, { postponing = true }) { ClockGlyph(it, 22.dp) } else null,

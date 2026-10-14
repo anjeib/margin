@@ -384,8 +384,8 @@ fun TaskList(
                             // Owner, 14 окт: the filters as drawn marks — ждём ←, обещали →, работа, личное.
                             Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 fun owe(k: String) { monthOwe = if (monthOwe == k) null else k; if (monthOwe != null) overviewTab = "deals" }
-                                IconChip(s.a11yWaiting.replaceFirstChar { it.uppercase() }, monthOwe == "wait", { owe("wait") }) { ArrowGlyph(it, 18.dp, incoming = true) }
-                                IconChip(s.a11yPromised.replaceFirstChar { it.uppercase() }, monthOwe == "promise", { owe("promise") }) { ArrowGlyph(it, 18.dp) }
+                                IconChip(s.a11yWaiting.replaceFirstChar { it.uppercase() }, monthOwe == "wait", { owe("wait") }) { HandGlyph(it, 23.dp, incoming = true) }
+                                IconChip(s.a11yPromised.replaceFirstChar { it.uppercase() }, monthOwe == "promise", { owe("promise") }) { HandGlyph(it, 23.dp) }
                                 Spacer(Modifier.width(6.dp))
                                 IconChip(s.sphereWork, monthSphere == "work", { monthSphere = if (monthSphere == "work") null else "work" }) { WorkGlyph(it, 20.dp) }
                                 IconChip(s.spherePersonal, monthSphere == "personal", { monthSphere = if (monthSphere == "personal") null else "personal" }) { HomeGlyph(it, 20.dp) }

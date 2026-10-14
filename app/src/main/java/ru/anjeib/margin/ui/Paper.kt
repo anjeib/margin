@@ -377,7 +377,7 @@ fun MoreActions(items: List<Action>, modifier: Modifier = Modifier) {
 @Composable
 fun PromiseMark(incoming: Boolean, size: Dp = 30.dp) {
     val c = M.c
-    Box(Modifier.size(size).clip(CircleShape).background(c.linkSoft), contentAlignment = Alignment.Center) { ArrowGlyph(c.link, size * 0.5f, incoming = incoming) }
+    Box(Modifier.size(size).clip(CircleShape).background(c.linkSoft), contentAlignment = Alignment.Center) { HandGlyph(c.link, size * 0.82f, incoming = incoming) }
 }
 
 /** A row of words alone (no mark): a help group, a setting, a note — the words from the panel's own edge. */

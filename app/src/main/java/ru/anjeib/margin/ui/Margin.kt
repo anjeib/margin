@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.foundation.layout.PaddingValues
 
 import android.os.Build
@@ -641,5 +642,37 @@ fun TodayGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
         val a = Math.toRadians(i * 45.0); val cx = w * 0.5f; val cy = h * 0.5f
         drawLine(color, Offset(cx + (w * 0.29f * kotlin.math.cos(a)).toFloat(), cy + (h * 0.29f * kotlin.math.sin(a)).toFloat()),
             Offset(cx + (w * 0.4f * kotlin.math.cos(a)).toFloat(), cy + (h * 0.4f * kotlin.math.sin(a)).toFloat()), strokeWidth = 1.3.dp.toPx(), cap = StrokeCap.Round)
+    }
+}
+
+/**
+ * A promise as an open hand held out sideways (owner, 14 окт: instead of the arrows): fingers together pointing the way the
+ * thing goes, the thumb up — → we promised (our hand gives), ← we wait (the hand turned to us, to receive).
+ */
+@Composable
+fun HandGlyph(color: Color, size: Dp = 20.dp, incoming: Boolean = false) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    scale(scaleX = if (incoming) -1f else 1f, scaleY = 1f) {
+        val hand = Path().apply {
+            // the back of the hand, from the sleeve up to the thumb
+            moveTo(w * 0.20f, h * 0.40f)
+            cubicTo(w * 0.28f, h * 0.38f, w * 0.34f, h * 0.38f, w * 0.40f, h * 0.38f)
+            // the thumb, up and forward, round at the tip
+            cubicTo(w * 0.40f, h * 0.28f, w * 0.44f, h * 0.16f, w * 0.51f, h * 0.17f)
+            cubicTo(w * 0.58f, h * 0.18f, w * 0.57f, h * 0.30f, w * 0.55f, h * 0.36f)
+            // the fingers held together, gently out to their tips
+            cubicTo(w * 0.66f, h * 0.36f, w * 0.78f, h * 0.38f, w * 0.86f, h * 0.40f)
+            cubicTo(w * 0.95f, h * 0.43f, w * 0.94f, h * 0.58f, w * 0.85f, h * 0.58f)
+            // the open palm under them, curving back down to the wrist
+            cubicTo(w * 0.72f, h * 0.60f, w * 0.60f, h * 0.62f, w * 0.52f, h * 0.64f)
+            cubicTo(w * 0.42f, h * 0.68f, w * 0.30f, h * 0.70f, w * 0.20f, h * 0.70f)
+        }
+        drawPath(hand, color, style = stroke(1.4.dp))
+        // the sleeve: two short uprights
+        drawLine(color, Offset(w * 0.20f, h * 0.36f), Offset(w * 0.20f, h * 0.74f), strokeWidth = 1.4.dp.toPx(), cap = StrokeCap.Round)
+        drawLine(color, Offset(w * 0.10f, h * 0.36f), Offset(w * 0.10f, h * 0.74f), strokeWidth = 1.4.dp.toPx(), cap = StrokeCap.Round)
+        // the lines between the fingers
+        drawLine(color, Offset(w * 0.60f, h * 0.45f), Offset(w * 0.84f, h * 0.46f), strokeWidth = 1.dp.toPx(), cap = StrokeCap.Round)
+        drawLine(color, Offset(w * 0.60f, h * 0.52f), Offset(w * 0.82f, h * 0.52f), strokeWidth = 1.dp.toPx(), cap = StrokeCap.Round)
     }
 }

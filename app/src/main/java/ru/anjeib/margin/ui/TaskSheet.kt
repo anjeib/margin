@@ -224,8 +224,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         ))
                         androidx.compose.animation.AnimatedVisibility(more) {
                             MoreActions(listOfNotNull(
-                                Action(s.actWait, task.waitingFor != null, { dialog = "waiting" }) { ArrowGlyph(it, 20.dp, incoming = true) },
-                                Action(s.actPromised, task.promisedTo != null, { dialog = "promised" }) { ArrowGlyph(it, 20.dp) },
+                                Action(s.actWait, task.waitingFor != null, { dialog = "waiting" }) { HandGlyph(it, 23.dp, incoming = true) },
+                                Action(s.actPromised, task.promisedTo != null, { dialog = "promised" }) { HandGlyph(it, 23.dp) },
                                 if (!task.done && task.repeat == null) Action(s.actDay, false, { dialog = "day" }) { CalendarGlyph(it, 20.dp) } else null,
                                 if (!task.done) Action(s.actStep, false, { fill("step") }) { PlusGlyph(it, 18.dp) } else null,
                                 if (!task.done) Action(s.actPostpone, false, { postponing = true }) { ClockGlyph(it, 22.dp) } else null,
