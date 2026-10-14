@@ -193,7 +193,7 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
 /** Rows of the tour as they stand on «Сегодня»: the rule, «когда» on its margin, the matters on a panel — a picture, not controls. */
 @Composable
 private fun TourRows(list: List<ru.anjeib.margin.data.Task>, today: java.time.LocalDate) {
-    Column(Modifier.fillMaxWidth().marginRule(M.c.accent.copy(alpha = 0.85f), over = true)) {
+    Column(Modifier.fillMaxWidth().marginRule(M.c.sea, over = true)) {
         list.forEachIndexed { i, t -> MatterRow(t, seatOf(i, list.size), today, whenNote(t, today, underDay = false), {}, {}, {}, null, swipe = false) }
     }
 }

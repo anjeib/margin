@@ -76,9 +76,9 @@ fun CardMargin(day: LocalDate?, hour: String? = null, late: Boolean = false, pre
         if (day == null) MarginNote(s.noDateShort, modifier = Modifier.clip(RoundedCornerShape(6.dp)).then(if (onDay != null) Modifier.clickable(onClickLabel = s.dateWord, onClick = onDay) else Modifier).padding(vertical = 4.dp))
         else Box(Modifier.clip(RoundedCornerShape(6.dp)).then(if (onDay != null) Modifier.clickable(onClickLabel = s.dateWord, onClick = onDay) else Modifier)
             // Late: a highlighter stroke across the number (owner, 14 окт: along the line, as everywhere — not up the whole date).
-            .drawBehind { if (late) markerBand(2.dp.toPx(), size.width - 2.dp.toPx(), 14.dp.toPx(), 40.dp.toPx(), ink, day.hashCode()) }
+            .then(if (planner) Modifier else Modifier.drawBehind { if (late) markerBand(2.dp.toPx(), size.width - 2.dp.toPx(), 14.dp.toPx(), 40.dp.toPx(), ink, day.hashCode()) })
             .padding(horizontal = 2.dp)) {
-            MarginDay(day.dayOfMonth, day.dayMonthShort().substringAfter(' '))
+            MarginDay(day.dayOfMonth, day.dayMonthShort().substringAfter(' '), late = late)
         }
         val quiet = hour ?: under
         if (quiet != null || onHour != null) MarginNote(quiet ?: s.addTime,

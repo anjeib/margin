@@ -227,7 +227,8 @@ fun TaskList(
     // «Поля и панели» (v8): the rule runs behind the whole list; rows sit on panels right of it, «когда» on the margin.
     val pad = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
     val pageLines = rememberPageLines()
-    Box(Modifier.fillMaxSize().ruledPage(pageLines).marginRule(c.accent.copy(alpha = 0.85f), over = true)) {
+    val plannerLook = planner
+    Box(Modifier.fillMaxSize().ruledPage(pageLines).marginRule(c.sea, over = true)) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val listScope = androidx.compose.runtime.rememberCoroutineScope()
     // The month unfolds at the very top: the page goes up to show it.
@@ -254,17 +255,21 @@ fun TaskList(
                 if (other != null) {
                     val p = dayPlan(data, other, today, events)
                     item("o-head") {
-                        Margined(Modifier.padding(top = 8.dp), margin = { MarginDay(other.dayOfMonth, other.dayMonthShort().substringAfter(' ')) }) {
+                        if (plannerLook) PageToolsRow(calendar = true)
+                        Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp), margin = { MarginDay(other.dayOfMonth, other.dayMonthShort().substringAfter(' ')) }) {
                             Column {
-                                BasicText(other.dowFull(), style = Type.display.copy(color = c.ink), maxLines = 1,
-                                    autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 44.sp else 40.sp, stepSize = 1.sp))
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                                    BasicText(other.dowFull(), style = Type.pageTitle.copy(color = c.ink), maxLines = 1, modifier = Modifier.weight(1f),
+                                        autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 52.sp else 40.sp, stepSize = 1.sp))
+                                }
                                 Voice(daySummary(p, other), Modifier.padding(top = 2.dp))
                                 Voice(s.backToToday, Modifier.padding(top = 6.dp), link = true, onClick = { vm.pageDay.value = null })
                             }
                         }
+                        if (planner) DoubleRule(Modifier.padding(top = 16.dp, bottom = 4.dp))
                     }
                     if (!p.quiet) {
-                        item("o-sec") { SectionHead(dayTalk(other, today), count = (p.deals.size + p.events.size).takeIf { it > 0 }) }
+                        item("o-sec") { SectionHead(dayTalk(other, today), rule = false, count = (p.deals.size + p.events.size).takeIf { it > 0 }) }
                         dayPanel(p, today, "o", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it })
                     }
                     item("page-end-o") { PageEnd(pageLines) }
@@ -282,14 +287,15 @@ fun TaskList(
                 val undated = (tasks.filter { !it.done && it.dueDate == null && it.startDate == null } + data.undatedTopicMatters())
                     .sortedByDescending { it.createdAt }
                 item("head") {
-                    Margined(Modifier.padding(top = 8.dp), margin = { MarginDay(today.dayOfMonth, today.dayMonthShort().substringAfter(' ')) }) {
+                    if (plannerLook) PageToolsRow(calendar = true)
+                    Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp), margin = { MarginDay(today.dayOfMonth, today.dayMonthShort().substringAfter(' ')) }) {
                         Column {
                           Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                            BasicText(today.dowFull(), style = Type.display.copy(color = c.ink), maxLines = 1, modifier = Modifier.weight(1f),
-                                autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 44.sp else 40.sp, stepSize = 1.sp))
+                            BasicText(today.dowFull(), style = Type.pageTitle.copy(color = c.ink), maxLines = 1, modifier = Modifier.weight(1f),
+                                autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 52.sp else 40.sp, stepSize = 1.sp))
                             // Owner, 14 окт: the calendar right by the day too, under «MARGIN» — the month unfolds above.
                             // With the month open the tab on the right folds it; the icon by the day steps aside (owner, 14 окт).
-                            if (!monthOpen) Box(Modifier.size(40.dp).clip(CircleShape).background(if (monthOpen) c.linkSoft else Color.Transparent)
+                            if (!planner && !monthOpen) Box(Modifier.size(40.dp).clip(CircleShape).background(if (monthOpen) c.linkSoft else Color.Transparent)
                                 .clickable(onClickLabel = s.calendarTitle) { vm.monthOpen.value = !monthOpen }
                                 .semantics { contentDescription = s.calendarTitle }, contentAlignment = Alignment.Center) {
                                 CalendarGlyph(if (monthOpen) c.link else c.ink.copy(alpha = 0.7f), 21.dp)
@@ -304,14 +310,14 @@ fun TaskList(
                                 listScope.launch { listState.animateScrollToItem(i) }
                                 vm.lightUp(lateIds)
                             }))
-                            TodayHints(plan, data, ui, onRemoveSamples = { vm.removeSamples() })
                         }
                     }
+                    if (planner) DoubleRule(Modifier.padding(top = 16.dp, bottom = 4.dp))
                 }
                 if (promises.isNotEmpty()) {
                     val shownP = if (allPromises) promises else promises.take(3)
                     item("p-head") {
-                        SectionHead(s.promisesTitle, top = 16.dp,
+                        SectionHead(s.promisesTitle, top = 16.dp, rule = false,
                             action = if (promises.size > 3) (if (allPromises) s.collapse else s.more(promises.size - 3)) to { allPromises = !allPromises } else null)
                     }
                     shownP.forEachIndexed { i, t ->
@@ -324,12 +330,11 @@ fun TaskList(
                 fun base(id: String) = ru.anjeib.margin.data.slotRef(id)?.first ?: id
                 val above = promises.map { base(it.id) }.toSet()
                 val dayPlanShown = plan.copy(deals = plan.deals.filter { base(it.id) !in above })
-                // Several own matters left from past days: one tap puts them all on today (others' promises keep their dates).
-                val ownLate = dayPlanShown.deals.count { it.dueDate?.isBefore(today) == true && it.waitingFor == null && it.promisedTo == null }
+                // Owner, 15 окт: no «всё на сегодня» by the section's name — a late matter is moved by itself (long press · «Отложить…»).
                 val dayCount = dayPlanShown.deals.size + dayPlanShown.events.size
                 // Owner, 14 окт: an empty day says «Свободный день» once — under its name; no empty «Сегодня» repeating it.
                 val dayEmpty = dayPlanShown.deals.isEmpty() && dayPlanShown.events.isEmpty() && dayPlanShown.done.isEmpty()
-                if (!dayEmpty) item("t-head") { SectionHead(s.today, count = dayCount.takeIf { it > 0 }, action = if (ownLate >= 2) s.allToToday to { vm.moveOverdue() } else null) }
+                if (!dayEmpty) item("t-head") { SectionHead(s.today, count = dayCount.takeIf { it > 0 }, rule = promises.isNotEmpty()) }
                 if (!dayEmpty) dayPanel(dayPlanShown, today, "t", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                     doneOpen = isOpen("s-done-today"), onDoneFold = { toggle("s-done-today") })
                 if (undated.isNotEmpty()) {
@@ -340,10 +345,11 @@ fun TaskList(
                     fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
                     if (undatedOpen) undated.forEachIndexed { i, t ->
                         item("u" + t.id) {
-                            MatterRow(t, seatOf(i, undated.size), today, null to false, modifier = Modifier.animateItem(),
+                            val since = born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() }
+                            MatterRow(t, seatOf(i, undated.size), today, (if (planner) since else null) to false, modifier = Modifier.animateItem(),
                                 onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) }, onTime = { timeFor = t.id }, onLater = { postponing = t.id },
                                 faded = born(t)?.isBefore(today.minusDays(7)) == true, lit = t.id in landed, onOpenTopic = onOpen,
-                                extra = born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() })
+                                extra = since.takeIf { !planner })
                         }
                     }
                 }
@@ -421,9 +427,13 @@ fun TaskList(
                 fun bare(t: Task) = t.thought && t.subtasks.isEmpty()
                 fun sOk(t: Task) = monthSphere == null || (if (monthSphere == "work") t.sphere == "work" else t.sphere != "work")
                 item("o-head") {
-                    Margined(Modifier.padding(top = 8.dp)) {
+                    if (plannerLook) PageToolsRow()
+                    Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp)) {
                         Column {
-                            Text(if (topicsOnly) s.topicsPage else s.overviewWord, style = Type.display.copy(color = c.ink))
+                            Row(verticalAlignment = Alignment.Top) {
+                                Text(if (topicsOnly) s.topicsPage else s.overviewWord, style = Type.pageTitle.copy(color = c.ink), modifier = Modifier.weight(1f))
+                                if (!plannerLook) PageToolIcons()
+                            }
                             if (topicsOnly) Voice(s.topicsSub, Modifier.padding(top = 2.dp))
                             else TextTabs(listOf("all" to s.allTab, "topics" to s.topicsBadge, "deals" to s.dealsBadge, "ideas" to s.thoughts), overviewTab,
                                 { overviewTab = it; if (it != "deals" && it != "all") monthOwe = null }, Modifier.padding(top = 10.dp))
@@ -440,6 +450,7 @@ fun TaskList(
                             }
                         }
                     }
+                    if (planner) DoubleRule(Modifier.padding(top = 18.dp, bottom = 6.dp))
                 }
                 val data2 = if (monthSphere == null) data else data.copy(tasks = data.tasks.filter { sOk(it) })
                 val owe = if (topicsOnly) null else monthOwe
@@ -460,7 +471,8 @@ fun TaskList(
                 }
                 if (topics.isNotEmpty() || (owe == null && tab == "topics" && !topicsOnly)) {
                     // Owner, 14 окт: no «+ тема» here — a new topic is written in the field below («Новая тема…»).
-                    item("ot-head") { SectionHead(s.topicsBadge, count = topics.size.takeIf { it > 0 }) }
+                    // On the page «Темы» its one list needs no second «Темы» over it.
+                    if (!topicsOnly || !plannerLook) item("ot-head") { SectionHead(s.topicsBadge, count = topics.size.takeIf { it > 0 }) }
                     topics.forEachIndexed { i, t ->
                         item("ot" + t.id) { Box(Modifier.animateItem()) { TopicPaperRow(t, seatOf(i, topics.size), onOpen = { onOpen(t.id) }, onArchive = { vm.archiveTopic(t.id) }) } }
                     }
@@ -730,16 +742,6 @@ private fun WeekCard(w: ru.anjeib.margin.data.WeekReview, inbox: Int, onOpen: (S
  * One quiet line under the day's name while the samples are there, the way out in the words themselves:
  * «Ниже — примеры · убрать». The swipes are told in the tour, not here (owner, 11 окт: four lines of italics before the first matter).
  */
-@Composable
-private fun TodayHints(plan: DayPlan, data: AppData, ui: android.content.SharedPreferences, onRemoveSamples: () -> Unit) {
-    val c = M.c
-    val s = M.s
-    if (data.tasks.any { it.sample }) Text(buildAnnotatedString {
-        append(s.samplesShort + "  ·  ")
-        withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("samples", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = c.link))) { onRemoveSamples() }) { append(s.removeSamplesShort) }
-    }, style = Type.italic.copy(color = c.graphite, fontSize = 14.5.sp, lineHeight = 20.sp), modifier = Modifier.padding(top = 4.dp))
-}
-
 /**
  * «В тему…»: where a matter goes — the topic it most likely belongs to first (by its words and people), then the topics
  * written in lately. A tap moves it there; «Отменить» brings it back.

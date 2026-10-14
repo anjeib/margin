@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -92,7 +93,7 @@ fun Modifier.marginRule(color: Color, fraction: Float = 1f, top: Dp = 0.dp, over
     if (over) drawContent()
     val x = MarginW.toPx()
     val y0 = top.toPx()
-    drawLine(color, Offset(x, y0), Offset(x, y0 + (size.height - y0) * fraction.coerceIn(0f, 1f)), strokeWidth = 1.2.dp.toPx())
+    drawLine(color, Offset(x, y0), Offset(x, y0 + (size.height - y0) * fraction.coerceIn(0f, 1f)), strokeWidth = 1.dp.toPx())
     if (!over) drawContent()
 }
 
@@ -116,14 +117,25 @@ fun dateStyle(size: androidx.compose.ui.unit.TextUnit = 13.sp, late: Boolean = f
 
 /** The day on the margin: a big serif number and the month under it. */
 @Composable
-fun MarginDay(day: Int, month: String) {
+fun MarginDay(day: Int, month: String, /** Past its day: the figures in terracotta (owner, 15 окт). */ late: Boolean = false) {
     val c = M.c
+    if (planner) {
+        // «Полоса набора» (owner, 15 окт): the number large in Literata's display cut, set to the rule; the month under it in wide caps.
+        Column(horizontalAlignment = Alignment.End) {
+            Text(day.toString(), style = androidx.compose.ui.text.TextStyle(fontFamily = Cormorant, fontWeight = FontWeight(500),
+                fontSize = 72.sp, lineHeight = 52.sp, fontFeatureSettings = "lnum",
+                letterSpacing = (-2).sp, color = if (late) c.accentText else c.ink, platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(androidx.compose.ui.text.style.LineHeightStyle.Alignment.Bottom, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both)),
+                softWrap = false, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+            // Literata's figures sit high in their line box: the month is pulled up under them.
+            Text(month.uppercase(), style = Type.small.copy(color = c.ink, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 3.4.sp),
+                modifier = Modifier.offset(x = 2.dp, y = (-12).dp))
+        }
+        return
+    }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // On the planner page the day number is pressed into the paper: a pale edge under it, as letterpress leaves.
-        Text(day.toString(), style = Type.display.copy(color = c.ink, fontSize = 40.sp, lineHeight = 42.sp, fontWeight = if (planner) FontWeight(600) else null,
-            shadow = if (planner && !c.dark) androidx.compose.ui.graphics.Shadow(Color.White.copy(alpha = 0.9f), androidx.compose.ui.geometry.Offset(0f, 2.5f), 0f) else null))
-        Text(if (planner) month.uppercase() else month, style = if (planner) Type.small.copy(fontFamily = Book, color = c.ink.copy(alpha = 0.8f), fontSize = 12.sp,
-            fontWeight = FontWeight.Medium, letterSpacing = 2.4.sp) else Type.small.copy(color = c.graphite, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp))
+        Text(day.toString(), style = Type.display.copy(color = c.ink, fontSize = 40.sp, lineHeight = 42.sp))
+        Text(month, style = Type.small.copy(color = c.graphite, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp))
     }
 }
 
@@ -203,10 +215,14 @@ fun Modifier.arrive(fresh: Boolean, index: Int = 0): Modifier {
 
 /** Words with a line drawn through them as [strike] goes 0→1 — like a pen, not a switch. */
 @Composable
-fun StrikeText(text: String, style: androidx.compose.ui.text.TextStyle, strike: Float, lineColor: Color, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) {
+fun StrikeText(text: String, style: androidx.compose.ui.text.TextStyle, strike: Float, lineColor: Color, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE,
+               /** Late: a highlighter over the words (owner, 14 окт). */
+               marked: Boolean = false) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val marker = pencilInk
     Text(text, style = style, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, onTextLayout = { layout = it },
         modifier = modifier.foundMarks(text) { layout }.drawWithContent {
+            if (marked && strike <= 0f) layout?.let { l -> for (i in 0 until l.lineCount) markerBand(l.getLineLeft(i), l.getLineRight(i), l.getLineTop(i), l.getLineBottom(i), marker, text.hashCode() + i) }
             drawContent()
             val l = layout ?: return@drawWithContent
             if (strike <= 0f) return@drawWithContent
@@ -350,10 +366,27 @@ fun PaddingValues.vertical() = PaddingValues(top = calculateTopPadding(), bottom
 @Composable
 fun PageHead(title: String, subtitle: String? = null, modifier: Modifier = Modifier, trailing: (@Composable () -> Unit)? = null) {
     val c = M.c
+    if (planner) {
+        Column(modifier.fillMaxWidth().padding(top = if (trailing != null) 0.dp else 8.dp)) {
+            if (trailing != null) Row(Modifier.fillMaxWidth().padding(end = 6.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) { trailing() }
+            Margined {
+                Row(verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f)) {
+                        // A long name («Содержание» by three icons) steps its size down instead of being cut.
+                        androidx.compose.foundation.text.BasicText(title, style = Type.pageTitle.copy(color = c.ink), maxLines = 1,
+                            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 26.sp, maxFontSize = 42.sp, stepSize = 1.sp))
+                        if (subtitle != null) Text(subtitle, style = Type.small.copy(color = c.graphite, fontSize = 14.5.sp, lineHeight = 20.sp), modifier = Modifier.padding(top = 2.dp))
+                    }
+                }
+            }
+            DoubleRule(Modifier.padding(top = 18.dp, bottom = 6.dp))
+        }
+        return
+    }
     Margined(modifier.padding(top = 14.dp, bottom = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = Type.display.copy(color = c.ink), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(title, style = Type.pageTitle.copy(color = c.ink), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 if (subtitle != null) Voice(subtitle, Modifier.padding(top = 2.dp))
             }
             trailing?.invoke()
@@ -363,11 +396,11 @@ fun PageHead(title: String, subtitle: String? = null, modifier: Modifier = Modif
 
 /** The rule behind a whole screen, the same on every one. */
 @Composable
-fun Modifier.screenRule(): Modifier = marginRule(M.c.accent.copy(alpha = 0.85f), over = true)
+fun Modifier.screenRule(): Modifier = marginRule(M.c.sea, over = true)
 
 /** The same rule under the field at the bottom: drawn behind, so bubbles and pills over it keep their ground. */
 @Composable
-fun Modifier.fieldRule(): Modifier = marginRule(M.c.accent.copy(alpha = 0.85f))
+fun Modifier.fieldRule(): Modifier = if (planner) this else marginRule(M.c.sea)
 
 /** Where the field's words begin when its column is padded 14 dp from the edge: just right of the rule. */
 val FieldLead: Dp get() = MarginW - 14.dp + 4.dp

@@ -164,6 +164,7 @@ fun CardHead(title: String, onTitle: (String) -> Unit, done: Boolean, onToggle: 
     val c = M.c
     val s = M.s
     val titleStyle = Type.display.copy(color = if (done) c.graphite else c.ink, fontSize = 27.sp, lineHeight = 32.sp)
+    @Suppress("NAME_SHADOWING") val noMark = noMark || (planner && mark == null)
     Margined(margin = margin) {
         androidx.compose.foundation.layout.Column {
             if (trail.isNotEmpty()) androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(start = if (noMark) 0.dp else MarkCol), verticalAlignment = Alignment.CenterVertically) {

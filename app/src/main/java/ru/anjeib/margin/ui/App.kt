@@ -209,8 +209,22 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     val tagLinks = peopleLinks.copy(onTag = { label ->
         data.tasks.find { it.topic && !it.thought && it.title.equals(label, true) }?.let { openId(it.id) } ?: run { allFor = label; searching = true }
     })
+    // The calendar and the search at the top of the diary's pages (owner, 14 окт): moved up from the index on the right.
+    val toolsMonth by vm.monthOpen.collectAsState()
+    val toolsLanded = vm.landedDay.collectAsState().value
+    val pageTools = PageTools(
+        searchOn = find.open, monthOpen = toolsMonth, landed = toolsLanded, menuOn = contents,
+        menu = { searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null; if (find.open) closeFind(); contents = !contents },
+        search = {
+            openTask = null; fullIdea = null; openPerson = null; openNote = null; searching = false
+            if (find.open) closeFind() else find.open = true
+        },
+        calendar = {
+            if (toolsMonth) { vm.monthOpen.value = false; vm.pageDay.value = null }
+            else { toolsLanded?.let { d -> vm.pageDay.value = d.takeIf { it != java.time.LocalDate.now() } }; vm.monthOpen.value = true }
+        })
     androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.removeMatter(it) }), LocalFind provides find,
-        LocalPeopleLinks provides tagLinks) {
+        LocalPeopleLinks provides tagLinks, LocalPageTools provides pageTools.takeIf { planner }) {
     ModalNavigationDrawer(
         drawerState = drawer,
         // On the planner page the menu is a page of its own, not a drawer pulled from the side.
@@ -240,44 +254,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         // A topic, the search, a person or a note lies open on the page: the printed frame steps aside, the index stays.
         // A card (a matter, a note, a topic) is a page of the book (owner, 14 окт): the frame stays over it.
         val overlay = searching || openPerson != null || openNote != null
-        PageSheet(frame = !overlay, tabs = if (plannerPage) ({
-            val rows = remember(data) { data.listTasks().filter { !it.done } }
-            val onDiary = (screen == TASKS || screen == TOPICS) && !contents
-            // On the calendar the tabs are its week: a tap picks the day there (Fable, 14 окт); elsewhere it turns to the day's page.
-            // With the month unfolded the tabs mirror its choice in petrol (Fable, 14 окт: one colour for one «selected»).
-            val onCalendar = onDiary && screen == TASKS && view == Views.TODAY && monthOpen
-            // Today is marked on every page with the index (owner, 14 окт); on «Сегодня» the mark is the page's own day.
-            val onToday = onDiary && view == Views.TODAY && screen == TASKS
-            val open = if (onToday && !searching && !find.open) pageDay ?: todayNow else todayNow
-            // The search alone is chosen while it lies open (owner, 14 окт): the other tools step back.
-            val chosen = !searching && !find.open
-            fun toDiary(v: String, sc: String = TASKS) { contents = false; screen = sc; view = v; searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null }
-            PlannerIndex(
-                                // With the month unfolded its own row of weekdays is enough — the week tabs step aside (owner, 14 окт).
-                if (onCalendar) emptyList() else weekTabs(open, if (onToday) pageDay ?: todayNow else todayNow, todayNow, busy = { d -> rows.any { it.dueDate == d } }, petrol = onCalendar) { d ->
-                    vm.pageDay.value = d.takeIf { it != todayNow }; toDiary(Views.TODAY) },
-                listOf(
-                    IndexTab(petrol = true, label = s.quickToday, on = chosen && onToday && pageDay == null && !monthOpen,
-                        glyph = { ink -> TodayGlyph(ink, 21.dp) }) { vm.monthOpen.value = false; vm.pageDay.value = null; toDiary(Views.TODAY) },
-                    IndexTab(petrol = true, label = s.calendarTitle, on = chosen && onToday && monthOpen, glyph = { ink ->
-                        if (landed != null && view != Views.WEEK) Text(landed.dayOfMonth.toString(), style = Type.small.copy(color = c.accentText, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
-                        else CalendarGlyph(ink, 20.dp)
-                    }) {
-                        // The month unfolds at the top of «Сегодня» on the page's day; the same tab folds it and brings today back.
-                        if (monthOpen && onToday && !searching) { vm.monthOpen.value = false; vm.pageDay.value = null }
-                        else { landed?.let { vm.pageDay.value = it.takeIf { d -> d != todayNow } }; vm.monthOpen.value = true; toDiary(Views.TODAY) }
-                    },
-                    IndexTab(petrol = true, label = s.diaryTitle, on = chosen && onDiary && screen == TASKS && view == Views.NOTES, glyph = { ink -> DiaryGlyph(ink, 21.dp) }) { vm.monthOpen.value = false; toDiary(Views.NOTES) },
-                    // Topics, the fourth page of the diary (owner, 14 окт): no longer only in the contents.
-                    IndexTab(petrol = true, label = s.topicsPage, on = chosen && !contents && screen == TOPICS, glyph = { ink -> TopicsGlyph(ink, 21.dp) }) { vm.monthOpen.value = false; toDiary(view, TOPICS) },
-                    IndexTab(petrol = true, label = s.search, on = searching || find.open, glyph = { ink -> SearchGlyph(ink, 20.dp) }) {
-                        openTask = null; fullIdea = null; openPerson = null; openNote = null; searching = false
-                        if (find.open) closeFind() else find.open = true
-                    },
-                    IndexTab(petrol = true, label = s.contentsTitle, on = chosen && (contents || (screen != TASKS && screen != TOPICS)), glyph = { ink -> MenuGlyph(ink) }) {
-                        searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null; contents = !contents },
-                ))
-        }) else null) {
+        // Owner, 14 окт: no tabs at the foot — the sections are in the contents, opened by ≡ at the top by the search.
+        PageSheet(frame = !overlay) {
             Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
                 fun bare(t: ru.anjeib.margin.data.Task) = t.thought && t.subtasks.isEmpty()
                 val shown = remember(data, feedFilter) {
@@ -354,15 +332,16 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     // The diary's three pages lie side by side — Содержание · Сегодня · Обзор — and turn under the finger (owner, 14 окт);
                     // a day of «Сегодня» turns within its own page; the other sections are pages turned to from the contents.
                     if (planner && (screen == TASKS || screen == TOPICS)) PlannerPager(
-                        page = when { contents -> 0; screen == TOPICS -> 3; view == Views.NOTES -> 2; else -> 1 },
-                        onPage = { p -> when (p) { 0 -> contents = true; 1 -> { contents = false; screen = TASKS; view = Views.TODAY }; 2 -> { contents = false; screen = TASKS; view = Views.NOTES }
+                        // Сегодня · Заметки · Темы · Содержание (owner, 14 окт).
+                        page = when { contents -> 3; screen == TOPICS -> 2; view == Views.NOTES -> 1; else -> 0 },
+                        onPage = { p -> when (p) { 3 -> contents = true; 0 -> { contents = false; screen = TASKS; view = Views.TODAY }; 1 -> { contents = false; screen = TASKS; view = Views.NOTES }
                             else -> { contents = false; screen = TOPICS } } },
                         count = 4,
                     ) { p ->
                         when (p) {
-                            0 -> page(PageKey(MENU, view, null))
-                            1 -> PageTurn(pageDay, order = { (it ?: LocalDate.now()).toEpochDay() }) { d -> page(PageKey(TASKS, Views.TODAY, d)) }
-                            2 -> page(PageKey(TASKS, Views.NOTES, null))
+                            3 -> page(PageKey(MENU, view, null))
+                            0 -> PageTurn(pageDay, order = { (it ?: LocalDate.now()).toEpochDay() }) { d -> page(PageKey(TASKS, Views.TODAY, d)) }
+                            1 -> page(PageKey(TASKS, Views.NOTES, null))
                             else -> page(PageKey(TOPICS, view, null))
                         }
                     }
@@ -398,7 +377,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 if ((screen == TASKS || screen == NOTES || screen == TOPICS) && !contents && !find.open) Column(
                     // The planner (design/v9): the field wide on the page, the margin's line ending just under it, the frame's rule below.
                     // A band of tinted paper with a double rule over it (owner, 14 окт): the place to write is unmistakable on a full page.
-                    if (planner) Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)
+                    // Owner, 14 окт: the field floats over the stickers — one block: the hour, the words with the paperclip and the
+                    // microphone, «send».
+                    if (planner) Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 10.dp)
                     else Modifier.fillMaxWidth().background(c.bg).fieldRule().navigationBarsPadding().padding(horizontal = 14.dp).padding(bottom = 10.dp),
                 ) {
                     if (screen == TASKS) {
@@ -466,7 +447,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         prefill = prefill, onPrefillUsed = { prefill = null },
                         onTyping = { typing = it }, slash = screen != NOTES && view != Views.NOTES, preview = if (view == Views.NOTES) null else ({ vm.previewOf(it) }),
                         mentions = screen == TASKS && view == Views.NOTES,
-                        focusKey = focusKey, micKey = micKey,
+                        focusKey = focusKey, micKey = micKey, floating = planner,
                     )
                 }
             }
@@ -802,7 +783,7 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
         }
     }
     Column(Modifier.fillMaxSize().screenRule().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-        PageHead(s.contentsTitle, null)
+        PageHead(s.contentsTitle, null, trailing = { PageToolIcons() })
         Spacer(Modifier.height(8.dp))
         line(s.feedTitle, "", screen == TASKS) { onGo(TASKS, Views.TODAY) }
         line(s.diaryTitle, "", false) { onGo(TASKS, Views.NOTES) }

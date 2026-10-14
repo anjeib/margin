@@ -135,7 +135,7 @@ fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddi
             val line = listOfNotNull(p.about, p.company, wait?.let { s.waitLine(mid(it)) }, promise?.let { s.promiseLine(mid(it)) })
                 .joinToString(" · ").ifBlank { listOfNotNull(p.phone, p.email).joinToString(" · ") }
             Margined(Modifier.animateItem()) {
-                SwipeActions(left = s.toArchive to { vm.archivePerson(p.id) }, right = s.delete to { vm.removePerson(p.id) }, modifier = Modifier.bleed(PanelBleed), shape = seat.shape()) {
+                SwipeActions(left = s.toArchive to { vm.archivePerson(p.id) }, right = s.delete to { vm.removePerson(p.id) }, modifier = Modifier.bleed(if (planner) 0.dp else PanelBleed), shape = seat.shape(), enabled = !planner) {
                     PanelPiece(seat, bleed = false) {
                         RowBody(mark = { Avatar(p.name, 34.dp) }, onClick = { onOpen(p.id) },
                             trailing = if (open > listOfNotNull(wait, promise).size) ({ Text(s.tasksCount(open), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum")) }) else null) {

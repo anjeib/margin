@@ -154,6 +154,15 @@ fun Pill(
     onClick: (() -> Unit)? = null,
 ) {
     val c = M.c
+    if (planner) {
+        Column(modifier.clip(RoundedCornerShape(6.dp)).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text, style = Type.small.copy(color = if (filled || accent) c.ink else c.graphite, fontSize = 14.5.sp,
+                fontWeight = if (filled || accent) androidx.compose.ui.text.font.FontWeight.Medium else null), maxLines = 1)
+            Box(Modifier.padding(top = 4.dp).width(16.dp).height(1.5.dp).background(if (filled || accent) c.sea else Color.Transparent))
+        }
+        return
+    }
     val bg = when { filled -> c.ink; accent -> c.linkSoft; else -> Color.Transparent }
     val fg = when { filled -> c.bg; accent -> c.link; else -> c.ink }
     Box(
@@ -163,7 +172,7 @@ fun Pill(
             .then(if (!filled && !accent) Modifier.border(1.dp, c.hairline, RoundedCornerShape(50)) else Modifier)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 14.dp, vertical = 8.dp),
-    ) { Text(text, style = Type.small.copy(fontFamily = rowFamily, color = fg, fontSize = 14.sp)) }
+    ) { Text(text, style = Type.small.copy(color = fg, fontSize = 14.sp)) }
 }
 
 /** Projects are stored as typed by the model (lowercase); Russian names read better with a capital: «Садовая», «Дента+». */
@@ -280,7 +289,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         androidx.compose.ui.text.Placeholder(13.sp, 13.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {
         ClipGlyph(c.graphite, 13.dp)
     })
-    if (text.isNotEmpty()) PencilText(text, style = Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), maxLines = 2, overflow = TextOverflow.Ellipsis,
+    if (text.isNotEmpty()) PencilText(text, style = Type.small.copy(color = subInk, fontSize = subSize), maxLines = 2, overflow = TextOverflow.Ellipsis,
         inlineContent = inline, modifier = Modifier.padding(top = 3.dp))
 }
 
@@ -340,9 +349,12 @@ fun SwipeActions(
     modifier: Modifier = Modifier,
     radius: Int = 18,
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(radius.dp),
+    /** Off — just the content (on the planner page rows stand on the paper; what a swipe did is in the card). */
+    enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val c = M.c
+    if (!enabled) { Box(modifier) { content() }; return }
     val state = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
         when (v) {
             SwipeToDismissBoxValue.EndToStart -> left?.second?.invoke()

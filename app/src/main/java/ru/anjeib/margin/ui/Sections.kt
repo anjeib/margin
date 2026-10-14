@@ -126,7 +126,7 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(ym.month.getDisplayName(TextStyle.FULL_STANDALONE, if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) java.util.Locale.forLanguageTag("ru") else java.util.Locale.ENGLISH)
                     .replaceFirstChar { it.uppercase() } + if (ym.year != today.year) " ${ym.year}" else "",
-                    style = Type.display.copy(color = c.ink), modifier = Modifier.weight(1f))
+                    style = Type.pageTitle.copy(color = c.ink), modifier = Modifier.weight(1f))
                 Box(Modifier.size(44.dp).clip(CircleShape).clickable { month = ym.minusMonths(1).toString() }, contentAlignment = Alignment.Center) {
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, s.prevMonth, tint = c.graphite)
                 }

@@ -78,9 +78,10 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
     }
 
     Column(Modifier.fillMaxSize().screenRule().verticalScroll(rememberScrollState()).padding(contentPadding.vertical()).padding(start = MarginW + MarginGap, end = 16.dp)) {
-        Text(s.settings, style = Type.display.copy(color = c.ink), modifier = Modifier.padding(top = 14.dp, bottom = 18.dp))
+        Text(s.settings, style = Type.pageTitle.copy(color = c.ink), modifier = Modifier.padding(top = 14.dp, bottom = if (planner) 0.dp else 18.dp))
+        if (planner) DoubleRule(Modifier.pageWide().padding(top = 18.dp, bottom = 10.dp))
 
-        Group(s.voiceSection) {
+        Group(s.voiceSection, first = true) {
             // Russian speech is read on the phone (GigaAM) whenever its model is here; the switch keeps the voice there even before
             // that — nothing goes to the cloud. The model comes by itself over Wi-Fi (ModelWorker); nothing to download or delete here.
             // Owner, 14 окт: no switch and no model row here — the app comes with its speech model (RuStore); while testing it is
@@ -100,7 +101,7 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
 
         // Both choices labelled the same way: a small word, then the segments right under it.
         Group(s.appearance) {
-            Text(s.themeWord, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp))
+            Text(s.themeWord, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = if (planner) 0.dp else 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp))
             Segmented(
                 listOf(s.themeLight, s.themeDark, s.themeAuto),
                 listOf(ThemeMode.Light, ThemeMode.Dark, ThemeMode.Auto).indexOf(settings.theme),
@@ -295,8 +296,18 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
 private fun maskKey(k: String) = if (k.length < 12) k else k.take(6) + "••••••" + k.takeLast(4)
 
 @Composable
-private fun Group(label: String, content: @Composable () -> Unit) {
+private fun Group(label: String, first: Boolean = false, content: @Composable () -> Unit) {
     val c = M.c
+    if (planner) {
+        // «Полоса набора» (owner, 15 окт): a section as on every page — a rule across the page, the name letter-spaced — and its
+        // rows on the paper itself.
+        if (!first) Box(Modifier.pageWide().padding(horizontal = 14.dp).fillMaxWidth().height(0.75.dp).background(c.hairline))
+        Text(label.lowercase().replaceFirstChar { it.uppercase() }.replace(" ", "\u2002"), style = androidx.compose.ui.text.TextStyle(fontFamily = Literata, fontWeight = androidx.compose.ui.text.font.FontWeight(450),
+            fontSize = 19.sp, letterSpacing = 3.2.sp, color = c.ink), modifier = Modifier.padding(top = 18.dp, bottom = 6.dp))
+        Column(Modifier.fillMaxWidth()) { content() }
+        Spacer(Modifier.height(22.dp))
+        return
+    }
     // v8: the caps label over one panel, as every section in the app.
     SectionLabel(label, Modifier.padding(bottom = 8.dp, top = 6.dp))
     Column(Modifier.bleed(PanelBleed).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card)) { content() }
@@ -309,7 +320,7 @@ private fun Divider() = Hairline(Modifier.padding(start = 16.dp))
 @Composable
 private fun ValueRow(label: String, hint: String?, value: String, chevron: Boolean = true, onClick: () -> Unit) {
     val c = M.c
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = if (planner) 0.dp else 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically) {
         // The value sits on the label's line; the hint runs under both on the whole width (it used to be squeezed beside the value).
         Column(Modifier.weight(1f)) {
@@ -327,7 +338,7 @@ private fun ValueRow(label: String, hint: String?, value: String, chevron: Boole
 @Composable
 private fun ToggleRow(label: String, hint: String?, value: Boolean, onLabel: (() -> Unit)? = null, onChange: (Boolean) -> Unit) {
     val c = M.c
-    Row(Modifier.fillMaxWidth().clickable { if (onLabel != null) onLabel() else onChange(!value) }.padding(horizontal = 16.dp, vertical = 10.dp),
+    Row(Modifier.fillMaxWidth().clickable { if (onLabel != null) onLabel() else onChange(!value) }.padding(horizontal = if (planner) 0.dp else 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(label, style = Type.body.copy(color = c.ink))
@@ -336,7 +347,7 @@ private fun ToggleRow(label: String, hint: String?, value: Boolean, onLabel: (()
         Switch(
             checked = value, onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
-                checkedTrackColor = c.link, checkedThumbColor = c.card, checkedBorderColor = c.link,
+                checkedTrackColor = if (planner) c.sea else c.link, checkedThumbColor = c.card, checkedBorderColor = if (planner) c.sea else c.link,
                 uncheckedTrackColor = c.chip, uncheckedThumbColor = c.card, uncheckedBorderColor = c.hairline,
             ),
         )
@@ -346,6 +357,18 @@ private fun ToggleRow(label: String, hint: String?, value: Boolean, onLabel: (()
 @Composable
 private fun Segmented(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     val c = M.c
+    if (planner) {
+        // Words, the chosen one in ink over a short sea rule — no pills (owner, 15 окт).
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+            labels.forEachIndexed { i, l ->
+                Column(Modifier.clip(RoundedCornerShape(6.dp)).clickable { onSelect(i) }.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(l, style = Type.small.copy(color = if (i == selected) c.ink else c.graphite, fontSize = 15.sp, fontWeight = if (i == selected) androidx.compose.ui.text.font.FontWeight.Medium else null), maxLines = 1)
+                    Box(Modifier.padding(top = 5.dp).width(18.dp).height(1.5.dp).background(if (i == selected) c.sea else androidx.compose.ui.graphics.Color.Transparent))
+                }
+            }
+        }
+        return
+    }
     Row(Modifier.fillMaxWidth().padding(10.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         labels.forEachIndexed { i, l ->

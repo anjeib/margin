@@ -146,7 +146,7 @@ fun MatterRow(
                 ) {
                     StrikeText(t.title + (if (t.dropped) " · " + s.droppedMark else ""),
                         Type.body.copy(fontFamily = rowFamily, fontSize = rowSize, lineHeight = rowLine, color = if (t.done || ticking || faded) c.graphite else c.ink),
-                        strike.value, c.faint, maxLines = 3)
+                        strike.value, c.faint, maxLines = 3, marked = note.second && !t.done && !ticking)
                     if (!t.done) {
                         val days = t.dayOf()?.let { (i, n) -> s.dayOfDays(i, n) }
                         TaskLine(t, null, showProject = true, today = today, tappable = true, hidePerson = hidePerson,
@@ -157,7 +157,10 @@ fun MatterRow(
             }
         }
     }
-    Margined(modifier, margin = note.first?.let { m -> { RowMargin(m, note.second) } }) {
+    // «Полоса набора» (owner, 15 окт): the hour on the margin is the row's «done»; a row with no hour gets a quiet dash there.
+    val marginSlot: (@Composable () -> Unit)? = if (planner) ({ MarginTap(::tick) { RowMargin(note.first ?: "—", note.second && !t.done && !ticking) } })
+        else note.first?.let { m -> { RowMargin(m, note.second) } }
+    Margined(modifier, margin = marginSlot) {
         // Owner, 14 окт: no swipes on rows — on the planner a swipe turns the page; done is the circle, the rest is in the long press.
         if (swipe && !planner) SwipeTask(t, onDone = onToggle, onLater = onLater ?: {}, modifier = Modifier.bleed(PanelBleed), shape = seat.shape(), content = body)
         else body()
@@ -219,12 +222,14 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
     val incoming = t.waitingFor != null
     val who = t.waitingFor ?: t.promisedTo ?: ""
     val nudge = incoming && (d?.let { !it.isAfter(today) } ?: (runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()?.isBefore(today.minusDays(7)) == true))
-    PaperRow(seat, margin = d?.let { if (late) s.sinceWord + " " + it.dayMonthShort() else dayWord(it, today) }, late = late,
+    val arrow = if (planner) (if (incoming) " ←" else " →") else ""
+    PaperRow(seat, margin = (d?.let { if (late) s.sinceWord + " " + it.dayMonthShort() else dayWord(it, today) } ?: (if (planner) "—" else null))?.plus(arrow), late = late,
+        onMargin = { view.confirmTick(); onDone() },
         mark = {
             Box(Modifier.clip(CircleShape).clickable(onClickLabel = s.markDone) { view.confirmTick(); onDone() }
                 .semantics { contentDescription = if (incoming) s.a11yWaiting else s.a11yPromised }) { PromiseMark(incoming) }
         }, onClick = onOpen) {
-        RowTitle(t.title)
+        RowTitle(t.title, marked = late)
         // Words never broken: at a large font «напомнить» goes to the next line whole (FlowRow).
         @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
         androidx.compose.foundation.layout.FlowRow(itemVerticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -232,11 +237,13 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
             Text(buildAnnotatedString {
                 val (a, name, b) = if (incoming) s.promiseToYouParts(who) else s.promiseFromYouParts(who)
                 // The name is its person's card (owner, 14 окт), the rest of the row opens the matter.
-                append(a); withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("p", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = c.link))) { links.onName(who) }) { append(name) }; append(b)
-            }, style = Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))
+                // On the planner page the name keeps the italic's grey — still a tap to the person (owner's sample, 15 окт).
+                append(a); withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("p", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = if (planner) c.graphite else c.link))) { links.onName(who) }) { append(name) }; append(b)
+            }, style = if (planner) androidx.compose.ui.text.TextStyle(fontFamily = Literata, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, color = c.graphite, fontSize = 15.sp, lineHeight = 20.sp)
+                else Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), modifier = Modifier.padding(top = 2.dp))
             if (nudge) {
-                Text("  ·  ", style = Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))
-                Text(s.remindLink, style = Type.small.copy(fontFamily = rowFamily, color = c.link, fontSize = subSize, fontWeight = FontWeight.Medium),
+                Text("  ·  ", style = Type.small.copy(color = subInk, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))
+                Text(s.remindLink, style = Type.small.copy(color = c.link, fontSize = subSize, fontWeight = FontWeight.Medium),
                     modifier = Modifier.padding(top = 3.dp).clip(RoundedCornerShape(6.dp)).clickable { remindAbout(ctx, data, t) })
             }
         }
@@ -331,7 +338,7 @@ fun daySummary(plan: DayPlan, today: LocalDate, away: String? = null): androidx.
         if (plan.deals.isEmpty() && plan.events.isEmpty()) append(s.freeDay)
         if (plan.deals.isNotEmpty()) {
             append(s.summaryDeals(plan.deals.size))
-            if (late > 0) { append(", "); pencil { withStyle(SpanStyle(color = c.ink.copy(alpha = 0.8f))) { append(s.lateOfDay(late)) } } }
+            if (late > 0) { append(", "); pencil { append(s.lateOfDay(late)) } }
         }
         if (plan.events.isNotEmpty()) { if (plan.deals.isNotEmpty()) append("  ·  "); append(s.summaryMeetings(plan.events.size)) }
         // Without the cloud Margin reads on the phone and the unsure waits in «Входящие» — said once, quietly, here.

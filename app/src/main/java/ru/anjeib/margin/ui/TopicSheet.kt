@@ -320,7 +320,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     Column(
         Modifier.fillMaxSize().graphicsLayer {
             scaleY = 1f - 0.92f * fold.value; alpha = 1f - fold.value; transformOrigin = TransformOrigin(0.5f, 1f)
-        }.background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding().marginRule(c.accent.copy(alpha = 0.85f), rule.value),
+        }.background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding().marginRule(c.sea, rule.value),
     ) {
         // As every card (owner, 14 окт; design/v9/v9-card-topic.png): under the frame's «MARGIN», back on the margin.
         Row(Modifier.fillMaxWidth().padding(top = 18.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -759,8 +759,9 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
     }
     // A matter under a matter (owner, 14 окт: the elbow and guide looked wrong) — a sub-item as in a notebook: its smaller
     // circle stands under where the words above begin, no line between them; it reads as part of the one above.
-    val indent = (MarkCol / 2 + 21.dp) * depth
-    Margined(margin = margin) {
+    val indent = (if (planner) 18.dp else MarkCol / 2 + 21.dp) * depth
+    val plannerLook = planner
+    Margined(margin = if (plannerLook && !removed) ({ MarginTap(::tick) { margin?.invoke() ?: RowMargin("—") } }) else margin) {
         PanelPiece(seat, divider = depth == 0) {
         Box {
             Row(Modifier.fillMaxWidth().background(sel).padding(start = indent)
@@ -768,15 +769,17 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
                 .padding(end = 14.dp, top = if (depth > 0) 2.dp else RowTop - 2.dp, bottom = RowTop - 2.dp), verticalAlignment = Alignment.Top) {
                 // A removed matter has no circle at all — three states read by shape: ring open, disc done, nothing removed;
                 // something we wait for wears the arrow, which closes it as «получено».
-                Box(Modifier.size(MarkCol, 26.dp), contentAlignment = Alignment.Center) {
-                    if (!removed) {
-                        if (q.from != null && !q.done) Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = true, size = if (depth == 0) 28.dp else 24.dp) }
-                        else CheckCircle(q.done, size = if (depth == 0) 21.dp else 18.dp, onToggle = ::tick)
+                if (!plannerLook) {
+                    Box(Modifier.size(MarkCol, 26.dp), contentAlignment = Alignment.Center) {
+                        if (!removed) {
+                            if (q.from != null && !q.done) Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = true, size = if (depth == 0) 28.dp else 24.dp) }
+                            else CheckCircle(q.done, size = if (depth == 0) 21.dp else 18.dp, onToggle = ::tick)
+                        }
                     }
+                    Spacer(Modifier.width(12.dp))
                 }
-                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f).padding(top = 2.dp)) {
-                    Text(q.title, style = Type.body.copy(fontSize = if (depth == 0) 16.sp else 15.sp, lineHeight = 22.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    Text(q.title, style = Type.body.copy(fontFamily = rowFamily, fontSize = if (plannerLook) (if (depth == 0) 17.sp else 15.5.sp) else if (depth == 0) 16.sp else 15.sp, lineHeight = if (plannerLook) 24.sp else 22.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.drawWithContent {
                             drawContent()
                             if (strike.value > 0f) { val y = 11.dp.toPx(); drawLine(c.faint, Offset(0f, y), Offset(size.width * strike.value, y), strokeWidth = 1.3.dp.toPx()) }

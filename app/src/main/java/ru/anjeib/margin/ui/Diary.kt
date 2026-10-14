@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.AnnotatedString
@@ -118,16 +119,21 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
     val find = LocalFind.current
     val found = remember { mutableListOf<FindHit>() }
     ReportFound("notes", found, list, data)
-    Box(Modifier.fillMaxSize().ruledPage(pageLines).marginRule(c.accent.copy(alpha = 0.85f), over = true)) {
+    Box(Modifier.fillMaxSize().ruledPage(pageLines).marginRule(c.sea, over = true)) {
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())) {
           findable(found, find, { k -> data.taskOfKey(k)?.let { t -> find != null && findHit(find.words, t.title + " " + data.mentionsPlain(t.entries.joinToString(" ") { it.text })) } == true }) {
             item("head") {
-                Margined(Modifier.padding(top = 8.dp)) {
+                if (planner) PageToolsRow()
+                Margined(Modifier.padding(top = if (planner) 0.dp else 8.dp)) {
                     Column {
-                        Text(s.diaryTitle, style = Type.display.copy(color = c.ink))
+                        Row(verticalAlignment = Alignment.Top) {
+                            Text(s.diaryTitle, style = Type.pageTitle.copy(color = c.ink), modifier = Modifier.weight(1f))
+                            if (!planner) PageToolIcons()
+                        }
                         Voice(s.diarySub, Modifier.padding(top = 2.dp))
                     }
                 }
+                if (planner) DoubleRule(Modifier.padding(top = 18.dp, bottom = 6.dp))
             }
             if (notes.isEmpty()) item("empty") { Margined(Modifier.padding(top = 18.dp)) { Empty(s.diaryEmpty, s.diaryEmptyHint) } }
             // Owner, 14 окт: no «Сегодня» / «Суббота» line — a day is one block (its number large on the margin by its first note),
@@ -148,16 +154,17 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                             }
                         }) {
                             PanelPiece(seatOf(i, list.size)) {
-                                Column(Modifier.fillMaxWidth().clickable { onOpen(n.id) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                Column(Modifier.fillMaxWidth().clickable { onOpen(n.id) }.padding(horizontal = if (planner) 0.dp else 16.dp, vertical = 12.dp)) {
                                     var titleLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
                                     var bodyLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
                                     // Three lines of a note at most (owner, 14 окт) — the whole of it is in its card.
-                                    if (showTitle) Text(n.title, style = Type.body.copy(color = c.ink, fontSize = 16.5.sp, lineHeight = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                                    if (showTitle) Text(n.title, style = if (planner) Type.body.copy(fontFamily = Literata, color = c.ink, fontSize = 17.sp, lineHeight = 24.sp)
+                                        else Type.body.copy(color = c.ink, fontSize = 16.5.sp, lineHeight = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
                                         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                         onTextLayout = { titleLayout = it }, modifier = Modifier.foundMarks(n.title) { titleLayout })
                                     if (body.isNotBlank()) {
                                         val shown = mentionsText(body, data, onPerson, onOpen)
-                                        Text(shown, style = Type.body.copy(color = c.ink.copy(alpha = 0.9f), fontSize = 16.sp, lineHeight = 23.sp), onTextLayout = { bodyLayout = it },
+                                        Text(shown, style = Type.body.copy(color = c.ink.copy(alpha = 0.9f), fontSize = if (planner) 15.sp else 16.sp, lineHeight = if (planner) 22.sp else 23.sp), onTextLayout = { bodyLayout = it },
                                             maxLines = if (showTitle) 2 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(top = if (showTitle) 3.dp else 0.dp).foundMarks(shown.text) { bodyLayout })
                                     }

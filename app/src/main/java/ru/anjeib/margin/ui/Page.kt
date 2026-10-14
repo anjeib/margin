@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.navigationBars
@@ -73,13 +74,17 @@ fun PageEnd(lines: PageLines) {
     Spacer(Modifier.fillMaxWidth().height(0.dp).onGloballyPositioned { lines.end = it.positionInRoot().y })
 }
 
+/** The ruling's ink (owner, 14 окт): a faint cool grey, a little of the margin's sea in it — a printed notebook's lines. */
+val ruleInk: Color @Composable get() = androidx.compose.ui.graphics.lerp(M.c.ink, M.c.sea, 0.45f).copy(alpha = if (M.c.dark) 0.22f else 0.17f)
+
 /** Pitch of the ruling: a notebook's ~8 mm. */
 private val RulePitch = 32.dp
 
 /** Ruled lines behind the empty part of the page, from a little under [lines]'s end to the bottom. Variant ≥ 1 only. */
 @Composable
 fun Modifier.ruledPage(lines: PageLines): Modifier {
-    if (LocalPaper.current < 1) return this
+    // «Полоса набора» (owner, 15 окт): no ruling on the planner page.
+    if (LocalPaper.current < 1 || planner) return this
     val line = M.c.hairline
     var top by remember { mutableFloatStateOf(0f) }
     return this.onGloballyPositioned { top = it.positionInRoot().y }.drawBehind {
@@ -99,104 +104,82 @@ fun Modifier.ruledPage(lines: PageLines): Modifier {
 private val grain: ImageBitmap by lazy {
     val n = 160
     val r = java.util.Random(14_10_2026)
+    // Owner, 14 окт: specks read as cheap unbleached paper. A matte sheet has an even tooth instead: every point a hair
+    // lighter or darker, no single one standing out.
     val px = IntArray(n * n) {
-        val v = r.nextInt(256)
-        // dark and light specks, mostly nothing — paper, not noise.
-        when {
-            v < 26 -> android.graphics.Color.argb(255, 60, 45, 30)
-            v > 236 -> android.graphics.Color.argb(255, 255, 255, 250)
-            else -> android.graphics.Color.TRANSPARENT
-        }
+        val v = r.nextGaussian().toFloat().coerceIn(-2.5f, 2.5f) / 2.5f
+        if (v >= 0) android.graphics.Color.argb((v * 255).toInt(), 255, 255, 255) else android.graphics.Color.argb((-v * 255).toInt(), 40, 38, 34)
     }
     android.graphics.Bitmap.createBitmap(px, n, n, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+}
+
+/**
+ * Paper over a sheet (owner, 14 окт: «ощущение дорогого ежедневника», «матовость»): a warm white, as a good planner's paper
+ * is — no clouds, no darkened edges, only an even matte tooth, felt rather than seen. Not in the dark.
+ */
+private fun DrawScope.paperOver(dark: Boolean) {
+    if (dark) return
+    drawRect(ShaderBrush(ImageShader(grain, TileMode.Repeated, TileMode.Repeated)), alpha = 0.06f)
 }
 
 /** The «Планер» page is on. */
 val planner: Boolean @Composable get() = LocalPaper.current >= 4
 
 /** The rows' words: the book face on the planner page, Inter otherwise. */
-val rowFamily: androidx.compose.ui.text.font.FontFamily @Composable get() = Sans
+val rowFamily: androidx.compose.ui.text.font.FontFamily @Composable get() = if (planner) Literata else Sans
 /** Times reads small at Inter's size: a touch larger, a touch tighter on the planner page. */
-val rowSize: androidx.compose.ui.unit.TextUnit @Composable get() = 16.sp
-val rowLine: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 21.sp else 22.sp
+val rowSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 17.sp else 16.sp
+val rowLine: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 24.sp else 22.sp
 /** Grey words under a row: Times is thinner than Inter, so on the planner page they are a tone darker. */
-val subInk: Color @Composable get() = if (planner) androidx.compose.ui.graphics.lerp(M.c.graphite, M.c.ink, 0.15f) else M.c.graphite
-val subSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 13.5.sp else 13.5.sp
+val subInk: Color @Composable get() = M.c.graphite
+val subSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 13.sp else 13.5.sp
 
-/** Width of the planner's index tabs, and of the page edges and cover beyond them. */
-val TabsW = 30.dp
-private val EdgeW = 11.dp
+/** The calendar and the search at the top right of a diary page (owner, 14 окт); null off the planner. */
+class PageTools(val searchOn: Boolean, val monthOpen: Boolean, val landed: java.time.LocalDate?, val menuOn: Boolean,
+                val search: () -> Unit, val calendar: () -> Unit, val menu: () -> Unit)
+val LocalPageTools = compositionLocalOf<PageTools?> { null }
 
-/** One tab of the planner's index: a word (a weekday) or a glyph; [on] — terracotta, the page open at it. */
-class IndexTab(val label: String, val on: Boolean, val mark: Boolean = false, val accentWord: Boolean = false, val weekend: Boolean = false,
-               val glyph: (@Composable (Color) -> Unit)? = null,
-               /** A section, not a day: open, it is petrol — the colour of a choice; terracotta is only «the page's day» (Fable, 14 окт). */
-               val petrol: Boolean = false, val onClick: () -> Unit)
-
-/**
- * The planner's index down the right edge (owner, 14 окт, design/v9/v9-2-planner.png): the page itself goes on past its
- * edge and is cut into tabs by hairlines — no boxes; the open one is a terracotta tab standing a little out. The page's week
- * Пн…Вс in the book italic (today's word terracotta, a dot where there are matters), and under Вс, after a gap, the
- * calendar, the overview, the search and the menu.
- */
+/** The page's tools as drawn marks — the search and ≡ (the contents); [calendar] — on a day's page, where the month unfolds. */
 @Composable
-fun PlannerIndex(days: List<IndexTab>, tools: List<IndexTab>) {
+fun PageToolIcons(calendar: Boolean = false) {
+    val t = LocalPageTools.current ?: return
     val c = M.c
-    val line = c.graphite.copy(alpha = 0.22f)
-    // Owner, 14 окт: not a strip cut off the page — tabs of card a shade darker than the paper, each its own piece with a
-    // rounded outer edge, a hair apart, the page's edge casting a soft shadow onto them; the open one coloured and a little out.
-    val tabPaper = if (c.dark) androidx.compose.ui.graphics.lerp(c.bg, Color.White, 0.07f) else androidx.compose.ui.graphics.lerp(c.bg, Color(0xFF6E5A40), 0.10f)
-    val pageShade = Color.Black.copy(alpha = if (c.dark) 0.35f else 0.10f)
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp)
-    @Composable fun tab(t: IndexTab, h: androidx.compose.ui.unit.Dp, first: Boolean) {
-        Box(Modifier.size(TabsW + 3.dp, h)
-            .clickable(onClickLabel = t.label, onClick = t.onClick, indication = null,
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() })
-            .semanticsLabel(t.label)) {
-            // Owner, 14 окт: no grey card — the page's own paper, set apart by a soft shadow along its outline.
-            Box(Modifier.padding(vertical = 2.dp).size(if (t.on) TabsW + 3.dp else TabsW, h - 4.dp)
-                .shadow(if (t.on) 3.dp else 2.dp, shape, ambientColor = Color(0xFF3A2E22).copy(alpha = 0.35f), spotColor = Color(0xFF3A2E22).copy(alpha = 0.45f))
-                .clip(shape)
-                .background(if (t.on) (if (t.petrol) c.link else c.accent) else c.bg)
-                .drawWithContent {
-                    drawContent()
-                    // The page lies over the tabs: its edge's shadow on each of them.
-                    drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(pageShade, Color.Transparent), startX = 0f, endX = 7.dp.toPx()),
-                        size = androidx.compose.ui.geometry.Size(7.dp.toPx(), size.height))
-                })
-            val ink = if (t.on) c.onAccent else if (t.accentWord) c.accentText else if (t.weekend) weekendInk else c.ink.copy(alpha = 0.78f)
-            Box(Modifier.size(TabsW, h), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                if (t.glyph != null) t.glyph.invoke(if (t.on) c.onAccent else c.graphite)
-                else androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                    // A printed tab has a fixed width: its word doesn't grow with the system font, or «Чт» breaks in two.
-                    val fs = androidx.compose.ui.platform.LocalDensity.current.fontScale
-                    androidx.compose.material3.Text(t.label, style = androidx.compose.ui.text.TextStyle(fontFamily = Tinos, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                        fontSize = (14f / fs).sp, color = ink), maxLines = 1, softWrap = false)
-                    Box(Modifier.size(3.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(if (t.mark && !t.on) c.graphite.copy(alpha = 0.5f) else Color.Transparent))
-                }
-            }
+    val s = M.s
+    @Composable fun tool(label: String, on: Boolean, onClick: () -> Unit, glyph: @Composable (Color) -> Unit) {
+        Box(Modifier.size(42.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (on) c.linkSoft else Color.Transparent)
+            .clickable(onClickLabel = label, onClick = onClick).semanticsLabel(label), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            glyph(if (on) c.link else c.ink.copy(alpha = 0.7f))
         }
     }
-    androidx.compose.foundation.layout.Column {
-        // The week may step aside (the month is open), but the tools below stay where the thumb knows them (owner, 14 окт).
-        if (days.isNotEmpty()) days.forEachIndexed { i, t -> tab(t, 43.dp, i == 0) } else Spacer(Modifier.height(43.dp * 7))
-        Spacer(Modifier.height(18.dp))
-        tools.forEachIndexed { i, t -> tab(t, 44.dp, i == 0) }
+    androidx.compose.foundation.layout.Row {
+        if (calendar) tool(s.calendarTitle, t.monthOpen, t.calendar) { ink ->
+            // Something just went to another day: its number stands on the calendar, a tap opens the month there.
+            if (t.landed != null && !t.monthOpen) androidx.compose.material3.Text(t.landed.dayOfMonth.toString(),
+                style = Type.small.copy(color = c.accentText, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
+            else CalendarGlyph(ink, 21.dp)
+        }
+        tool(s.search, t.searchOn, t.search) { ink -> SearchGlyph(ink, 21.dp) }
+        // ≡ — the contents, where every section is (owner, 14 окт: instead of the tabs at the foot)
+        tool(s.contentsTitle, t.menuOn, t.menu) { ink -> MenuGlyph(ink) }
     }
 }
+
+/**
+ * The page's tools in a line of their own above its name (owner, 15 окт: «Понедельник» ran into them) — the name gets the
+ * whole width.
+ */
+@Composable
+fun PageToolsRow(calendar: Boolean = false) {
+    if (LocalPageTools.current == null) return
+    androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(end = 6.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
+        PageToolIcons(calendar)
+    }
+}
+
+/** The page edges and cover beyond the sheet. */
+private val EdgeW = 11.dp
 
 private fun Modifier.semanticsLabel(label: String) = this.then(Modifier.semantics { contentDescription = label })
-
-/** The page's week as index tabs; [open] — the day the page shows (null on another view: no day is open). */
-fun weekTabs(open: java.time.LocalDate?, base: java.time.LocalDate, today: java.time.LocalDate, busy: (java.time.LocalDate) -> Boolean,
-             petrol: Boolean = false, onPick: (java.time.LocalDate) -> Unit): List<IndexTab> {
-    val monday = base.minusDays(base.dayOfWeek.value - 1L)
-    return (0L until 7L).map { i ->
-        val d = monday.plusDays(i)
-        IndexTab(d.dowShort().replaceFirstChar { it.uppercase() }, on = d == open, mark = busy(d), accentWord = d == today, weekend = d.dayOfWeek.value >= 6, petrol = petrol) { onPick(d) }
-    }
-}
 
 /**
  * The printed frame of a planner page, measured off design/v9/v9-2-planner.png: a hairline at the top and at the bottom and,
@@ -209,7 +192,8 @@ fun Modifier.plannerFrame(ink: Color, mark: Color, label: androidx.compose.ui.te
     val hair = 0.8f * dp; val heavy = 1.2f * dp
     val top = 14f * dp; val bottom = size.height - 10f * dp
     val l = 28.5f * dp                 // the left hooks' upright
-    val r = size.width - 0.6f * dp     // the right hooks' upright: the sheet's edge
+    // the right hook's upright: in line with the panels' right edge, not at the sheet's cut (owner, 14 окт — the tabs are gone)
+    val r = size.width - 16f * dp
     val arm = 11f * dp
     // the rules
     val labelEnd = r - 19f * dp
@@ -226,13 +210,13 @@ fun Modifier.plannerFrame(ink: Color, mark: Color, label: androidx.compose.ui.te
  * and two hairlines are the pages under it. Variant 3: the grain over all of it, too faint to touch the words.
  */
 @Composable
-fun PageSheet(modifier: Modifier = Modifier, tabs: (@Composable () -> Unit)? = null,
+fun PageSheet(modifier: Modifier = Modifier,
               /** The printed frame: on the diary's pages; a page with its own top bar (a topic, the search) goes without it. */
               frame: Boolean = true, content: @Composable BoxScope.() -> Unit) {
     val c = M.c
     val v = LocalPaper.current
     if (v < 2) { Box(modifier.fillMaxSize().background(c.bg), content = content); return }
-    if (v >= 4) { PlannerSheet(modifier, tabs, frame, content); return }
+    if (v >= 4) { PlannerSheet(modifier, frame, content); return }
     val desk = if (c.dark) Color(0xFF0B0A09) else Color(0xFFE6DFD3)
     val shadow = if (c.dark) Color.Black.copy(alpha = 0.55f) else Color(0xFF3A2E22).copy(alpha = 0.16f)
     val edge = 8.dp
@@ -257,44 +241,13 @@ fun PageSheet(modifier: Modifier = Modifier, tabs: (@Composable () -> Unit)? = n
  * «Планер»: a page of a bound planner — the sheet with its index tabs, rounded at its outer corners; behind it the edges of
  * the pages under it, each a little wider, then the cover. The printed frame and a faint grain over the paper.
  */
+/**
+ * «Планер», after «полоса набора» (owner, 15 окт): the sheet is plain paper — no frame, no «MARGIN», no corner hook, no grain,
+ * no edges of pages under it. What gives the page its form is the type, the margin's rule and the double rule under each head.
+ */
 @Composable
-private fun PlannerSheet(modifier: Modifier, tabs: (@Composable () -> Unit)?, frame: Boolean, content: @Composable BoxScope.() -> Unit) {
-    val c = M.c
-    val cover = if (c.dark) Color(0xFF050404) else Color(0xFF4A3A2E)
-    val under = if (c.dark) Color(0xFF1B1815) else Color(0xFFEDE6DA)
-    val r = 18.dp
-    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-    val label = remember(c) {
-        measurer.measure("MARGIN", androidx.compose.ui.text.TextStyle(fontFamily = Tinos, fontSize = 9.5.sp, letterSpacing = 2.8.sp, color = c.ink.copy(alpha = 0.85f)))
-    }
-    Box(modifier.fillMaxSize().background(cover).drawBehind {
-        // Three pages under this one, each a step wider, every edge a hairline.
-        val rr = r.toPx()
-        for (k in 3 downTo 1) {
-            val w = size.width - EdgeW.toPx() + k * 2.2.dp.toPx()
-            drawRoundRect(under, Offset(-rr, 0f), androidx.compose.ui.geometry.Size(w + rr, size.height), androidx.compose.ui.geometry.CornerRadius(rr, rr))
-            drawRoundRect(c.graphite.copy(alpha = 0.3f), Offset(-rr, 0f), androidx.compose.ui.geometry.Size(w + rr, size.height), androidx.compose.ui.geometry.CornerRadius(rr, rr),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(0.7.dp.toPx()))
-        }
-    }) {
-        val dens = androidx.compose.ui.platform.LocalDensity.current
-        val edgeTop = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(dens).toFloat()
-        val edgeBottom = androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(dens).toFloat()
-        Box(Modifier.fillMaxSize().padding(end = EdgeW).clip(androidx.compose.foundation.shape.RoundedCornerShape(topEnd = r, bottomEnd = r)).background(c.bg)) {
-            Box(Modifier.fillMaxSize().padding(end = if (tabs != null) TabsW else 0.dp).drawBehind {
-                if (tabs == null) return@drawBehind
-                // The sheet's own edge, where the tabs begin — from the top hook down to the bottom one, not through the status bar.
-                drawLine(c.graphite.copy(alpha = 0.3f), Offset(size.width - 0.5.dp.toPx(), edgeTop + 14.dp.toPx()), Offset(size.width - 0.5.dp.toPx(), size.height - edgeBottom - 10.dp.toPx()), 1.dp.toPx())
-            }, content = content)
-            if (tabs != null) Box(Modifier.align(androidx.compose.ui.Alignment.TopEnd).statusBarsPadding().padding(top = 25.dp)) { tabs() }
-            // No grain in the dark (Fable, 14 окт): on OLED black a texture reads as dirt.
-            if (!c.dark) Box(Modifier.fillMaxSize().drawBehind {
-                drawRect(ShaderBrush(ImageShader(grain, TileMode.Repeated, TileMode.Repeated)), alpha = 0.05f)
-            })
-        }
-        if (frame) Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(end = TabsW + EdgeW)
-            .plannerFrame(c.ink.copy(alpha = 0.6f), c.ink.copy(alpha = 0.85f), label))
-    }
+private fun PlannerSheet(modifier: Modifier, @Suppress("UNUSED_PARAMETER") frame: Boolean, content: @Composable BoxScope.() -> Unit) {
+    Box(modifier.fillMaxSize().background(M.c.bg), content = content)
 }
 
 @Composable
@@ -321,7 +274,8 @@ fun <T> PageTurn(target: T, order: (T) -> Long, modifier: Modifier = Modifier, c
 /** The planner's paper grain over a sheet that is not a [PageSheet] (a card rising from below). */
 @Composable
 fun Modifier.paperGrain(): Modifier {
-    if (!planner || M.c.dark) return this
+    // «Полоса набора» (owner, 15 окт): plain paper, no grain.
+    if (planner || M.c.dark) return this
     val dark = M.c.dark
     return this.drawWithContent {
         drawContent()
@@ -361,6 +315,8 @@ fun PlannerPager(page: Int, onPage: (Int) -> Unit, count: Int = 3, content: @Com
 @Composable
 fun Modifier.fieldBand(): Modifier {
     val c = M.c
+    // «Полоса набора» (owner, 15 окт): no tinted band — the field's pieces stand on the page.
+    if (planner) return this.background(c.bg)
     val band = androidx.compose.ui.graphics.lerp(c.bg, c.accentSoft, if (c.dark) 0.55f else 0.6f)
     val rule = c.accent.copy(alpha = 0.55f)
     return this.background(band).drawBehind {
@@ -394,9 +350,10 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.markerBand(x0: Float, x1: F
     val r = java.util.Random(seed.toLong())
     val d = density
     val h = bottom - top
-    val y0 = top + h * 0.22f; val y1 = bottom - h * 0.12f
+    // Owner, 14 окт: «чуть шире надписи, как в реальности» — past both ends of the words, and a little taller.
+    val y0 = top + h * 0.12f; val y1 = bottom - h * 0.04f
     val slant = (y1 - y0) * 0.35f
-    val l = x0 - 2f * d; val rr = x1 + 2.5f * d
+    val l = x0 - (5f + r.nextFloat() * 2f) * d; val rr = x1 + (6f + r.nextFloat() * 2.5f) * d
     fun j() = (r.nextFloat() - 0.5f) * 1.2f * d
     val band = androidx.compose.ui.graphics.Path().apply {
         moveTo(l + slant, y0 + j()); lineTo((l + rr) / 2, y0 + j()); lineTo(rr, y0 + j())
@@ -440,22 +397,12 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.pencilLine(x0: Float, x1: F
 fun PencilText(text: androidx.compose.ui.text.AnnotatedString, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier, whole: Boolean = false,
                maxLines: Int = Int.MAX_VALUE, overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip,
                inlineContent: Map<String, androidx.compose.foundation.text.InlineTextContent> = emptyMap()) {
-    var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
-    val ranges = if (whole) listOf(0 until text.length) else text.getStringAnnotations(PENCIL, 0, text.length).map { it.start until it.end }
-    val ink = pencilInk
-    androidx.compose.material3.Text(text, style = style, maxLines = maxLines, overflow = overflow, inlineContent = inlineContent, onTextLayout = { layout = it },
-        modifier = if (ranges.isEmpty()) modifier else modifier.drawBehind {
-            val l = layout ?: return@drawBehind
-            ranges.forEachIndexed { k, rg ->
-                if (rg.isEmpty()) return@forEachIndexed
-                val a = rg.first; val b = rg.last + 1
-                for (line in l.getLineForOffset(a)..l.getLineForOffset((b - 1).coerceAtLeast(a))) {
-                    val s0 = maxOf(a, l.getLineStart(line)); val e0 = minOf(b, l.getLineEnd(line, visibleEnd = true))
-                    if (e0 <= s0) continue
-                    val x0 = l.getHorizontalPosition(s0, true); val x1 = l.getHorizontalPosition(e0, true)
-                    // Owner, 14 окт: a highlighter pass over the words, not a line under them.
-                    markerBand(minOf(x0, x1), maxOf(x0, x1), l.getLineTop(line), l.getLineBottom(line), ink, text.text.hashCode() * 31 + k * 7 + line)
-                }
-            }
-        })
+    // «Полоса набора» (owner, 15 окт): what is late in a line of words — «1 просрочено», «с 12 окт» — is set in terracotta;
+    // the highlighter is kept for a late entry's own words.
+    val late = M.c.accentText
+    val shown = if (whole) text else androidx.compose.ui.text.buildAnnotatedString {
+        append(text)
+        text.getStringAnnotations(PENCIL, 0, text.length).forEach { addStyle(androidx.compose.ui.text.SpanStyle(color = late), it.start, it.end) }
+    }
+    androidx.compose.material3.Text(shown, style = if (whole) style.copy(color = late) else style, maxLines = maxLines, overflow = overflow, inlineContent = inlineContent, modifier = modifier)
 }

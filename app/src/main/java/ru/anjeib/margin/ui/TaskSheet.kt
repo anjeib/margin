@@ -202,7 +202,9 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 Margined(Modifier.padding(top = 10.dp)) {
                     Column {
                         // Owner, 14 окт: the tools are not lit by what is set — that is said on the margin and in the line above.
-                        ActionBar(listOf(
+                        // «Полоса набора» (owner, 15 окт): no circle by the title — «Готово» is the first of the card's tools.
+                        ActionBar(listOfNotNull(
+                            if (planner) Action(s.markDone, task.done, { vm.toggleTask(task.id) }) { TickGlyph(it, 22.dp) } else null,
                             Action(s.actWhen, false, { dialog = "dates" }) { CalendarGlyph(it, 22.dp) },
                             Action(s.fieldRepeat, false, { dialog = "repeat" }) { RepeatGlyph(it, 22.dp) },
                             Action(s.actPeople, false, { fill("people") }) { PeopleGlyph(it, 22.dp) },

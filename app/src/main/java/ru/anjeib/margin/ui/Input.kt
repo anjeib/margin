@@ -144,6 +144,11 @@ fun SmartComposer(
     marksOnPlus: Boolean = false,
     /** The diary (owner, 14 окт): only «@», and it offers people, companies, places, matters and topics alike. */
     mentions: Boolean = false,
+    /**
+     * Owner, 14 окт: the main field as one block floating over the page's stickers — the hour in its own chip, the words with
+     * the paperclip and the microphone in a lighter pill, «send» a round button at the end.
+     */
+    floating: Boolean = false,
 ) {
     val c = M.c
     val s = M.s
@@ -227,7 +232,7 @@ fun SmartComposer(
     LaunchedEffect(micKey) { if (micKey != null) { delay(300); mic() } }
 
     // Everything over the field starts where the field does — right of the rule.
-    val lead = if (ruled) MarginW - edge + FieldInset else 0.dp
+    val lead = if (floating) 80.dp else if (ruled) MarginW - edge + FieldInset else 0.dp
     Column(modifier.fillMaxWidth()) {
       Column(Modifier.padding(start = lead)) {
         // «/…», «#…», «@…» at the end of the words: a line of choices right over the field, words without a box (owner, 13 окт).
@@ -373,7 +378,7 @@ fun SmartComposer(
             val micBox: @Composable () -> Unit = {
                 if (transcribing) Box(Modifier.size(FieldH + 6.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(18.dp))
-                } else Box(Modifier.size(FieldH + 6.dp).clip(CircleShape).background(if (rec != null) c.accent else Color.Transparent)
+                } else Box(Modifier.size(if (planner) FloatH - 4.dp else FieldH + 6.dp).clip(CircleShape).background(if (rec != null) (if (planner) c.sea else c.accent) else Color.Transparent)
                     .semantics { contentDescription = s.a11yMic }
                     .pointerInput(Unit) {
                         detectTapGestures(onPress = {
@@ -386,39 +391,46 @@ fun SmartComposer(
                             if (System.currentTimeMillis() - t0 > 450) finish()
                         })
                     }, contentAlignment = Alignment.Center) {
-                    MicGlyph(if (rec != null) M.c.onAccent else c.accent, 24.dp)
+                    MicGlyph(if (rec != null) M.c.onAccent else if (planner) c.sea else c.accent, if (planner) 20.dp else 24.dp)
                 }
             }
             if (planner) {
                 // The card's «графа» (owner, 14 окт; design/v9/v9-card-*.png): the same writing line as on every page — the hour on
                 // the margin, the paperclip, the words' line (a tap goes to the page, where they are written), the microphone and
                 // «send». What is written stays on the page itself; «send» only keeps it at once.
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    if (ruled) NowOnMargin(Modifier.width(MarginW - edge))
-                    Row(Modifier.weight(1f).padding(start = if (ruled) FieldInset else 0.dp).heightIn(min = FieldH).padding(end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                // «Полоса набора» (owner, 15 окт): the same three pieces as the main field — the hour in a grey chip, an outlined
+                // field (the paperclip, the words' last line, the microphone), «send» a sea circle.
+                val pill = RoundedCornerShape(FloatH / 2)
+                Row(Modifier.fillMaxWidth().padding(end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.width(70.dp).height(FloatH).clip(pill).background(c.chip), contentAlignment = Alignment.Center) { NowOnMargin(Modifier, end = 0.dp, plain = true) }
+                    Spacer(Modifier.width(6.dp))
+                    Row(Modifier.weight(1f).heightIn(min = FloatH).clip(pill).background(c.bg).border(1.dp, c.ink.copy(alpha = if (c.dark) 0.22f else 0.20f), pill).padding(start = 4.dp, end = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
                         when {
                             rec != null -> {
-                                Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) { CloseGlyph(c.graphite, 20.dp) }
-                                Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
+                                Box(Modifier.size(FloatH - 4.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) { CloseGlyph(c.graphite, 19.dp) }
+                                Box(Modifier.size(8.dp).clip(CircleShape).background(c.sea.copy(alpha = 0.4f + level * 0.6f)))
                                 Spacer(Modifier.width(10.dp))
                                 LevelBars(level, Modifier.weight(1f))
                             }
                             else -> {
-                                if (marksOnPlus && !transcribing) AttachPlus(vm, size = FieldH, glyph = { ClipGlyph(c.graphite, 19.dp) }) { files += it }
-                                val baseline = c.ink.copy(alpha = 0.35f)
-                                Box(Modifier.weight(1f).heightIn(min = FieldH - 2.dp).clip(RoundedCornerShape(6.dp)).clickable { onWrite?.invoke() }
-                                    .drawBehind { drawLine(baseline, androidx.compose.ui.geometry.Offset(0f, size.height - 6.dp.toPx()), androidx.compose.ui.geometry.Offset(size.width, size.height - 6.dp.toPx()), 1.dp.toPx()) }
-                                    .padding(vertical = 9.dp, horizontal = 2.dp), contentAlignment = Alignment.CenterStart) {
+                                if (marksOnPlus && !transcribing) AttachPlus(vm, size = FloatH - 4.dp, glyph = { ClipGlyph(c.graphite, 18.dp) }) { files += it }
+                                Box(Modifier.weight(1f).heightIn(min = FloatH - 4.dp).clip(RoundedCornerShape(6.dp)).clickable { onWrite?.invoke() }.padding(vertical = 9.dp, horizontal = 4.dp),
+                                    contentAlignment = Alignment.CenterStart) {
                                     val last = text.trim().lines().lastOrNull().orEmpty()
-                                    if (transcribing) Text(s.transcribing, style = Type.italic.copy(color = c.graphite, fontSize = 17.sp))
-                                    else if (last.isEmpty()) Text(hint, style = Type.italic.copy(color = c.graphite, fontSize = 17.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    else Text(last, style = Type.body.copy(fontFamily = rowFamily, color = c.ink.copy(alpha = 0.6f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    if (transcribing) Text(s.transcribing, style = Type.small.copy(color = c.graphite, fontSize = 15.sp))
+                                    else if (last.isEmpty()) Text(hint, style = Type.small.copy(color = c.graphite, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    else Text(last, style = Type.small.copy(color = c.ink.copy(alpha = 0.6f), fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                         }
                         micBox()
-                        FieldButton(filled = true, enabled = text.isNotBlank() || files.isNotEmpty(), label = s.a11ySend, onClick = ::send) { SendGlyph(M.c.onAccent, 15.dp) }
                     }
+                    Spacer(Modifier.width(6.dp))
+                    val live = text.isNotBlank() || files.isNotEmpty()
+                    Box(Modifier.size(FloatH).clip(CircleShape).background(if (live) c.sea else androidx.compose.ui.graphics.lerp(c.sea, c.bg, 0.45f))
+                        .clickable(enabled = live, onClickLabel = s.a11ySend, role = androidx.compose.ui.semantics.Role.Button, onClick = ::send)
+                        .semantics { contentDescription = s.a11ySend }, contentAlignment = Alignment.Center) { SendGlyph(if (c.dark) Color(0xFF0F1213) else Color.White, 16.dp) }
                 }
                 return@Column
             }
@@ -438,6 +450,68 @@ fun SmartComposer(
                 // The card's files: a paperclip by the microphone; what it adds shows on the page, under the words.
                 if (marksOnPlus && rec == null && !transcribing) AttachPlus(vm, size = FieldH + 6.dp, glyph = { ClipGlyph(c.graphite, 20.dp) }) { files += it }
                 micBox()
+            }
+            return@Column
+        }
+        if (floating) {
+            // Owner, 14 окт: one block of three pieces, as in the owner's example — the hour in a chip of the page's paper, the
+            // words in a white pill with the paperclip and the microphone, «send» a terracotta circle; all of one height and one
+            // rounding, the block itself nearly white and lifted by a soft shadow.
+            val block = RoundedCornerShape(FloatH / 2 + 7.dp)
+            val pill = RoundedCornerShape(FloatH / 2)
+            val hair = c.ink.copy(alpha = if (c.dark) 0.14f else 0.08f)
+            // «Полоса набора» (owner, 15 окт): three pieces standing on the page itself — the hour now in a grey chip, the field
+            // drawn as an outline on the page's paper, «send» a sea circle; no block under them.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                Box(Modifier.width(70.dp).height(FloatH).clip(pill).background(c.chip),
+                    contentAlignment = Alignment.Center) { NowOnMargin(Modifier, end = 0.dp, plain = true) }
+                Spacer(Modifier.width(6.dp))
+                Row(Modifier.weight(1f).heightIn(min = FloatH).clip(pill).background(c.bg).border(1.dp, c.ink.copy(alpha = if (c.dark) 0.22f else 0.20f), pill).padding(start = 8.dp, end = 2.dp),
+                    verticalAlignment = Alignment.Bottom) {
+                    if (rec != null) {
+                        Box(Modifier.size(FloatH).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) { CloseGlyph(c.graphite, 19.dp) }
+                        Row(Modifier.weight(1f).height(FloatH), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(c.sea.copy(alpha = 0.4f + level * 0.6f)))
+                            Spacer(Modifier.width(10.dp))
+                            LevelBars(level, Modifier.weight(1f))
+                            Spacer(Modifier.width(12.dp))
+                        }
+                    } else {
+                        AttachPlus(vm, size = FloatH, glyph = { ClipGlyph(c.graphite, 18.dp) }) { files += it }
+                        Box(Modifier.weight(1f).heightIn(min = FloatH).padding(vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
+                            if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = Type.small.copy(color = c.graphite, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val value = if (typedText == text) androidx.compose.ui.text.input.TextFieldValue(text, typedSel)
+                                else androidx.compose.ui.text.input.TextFieldValue(text, androidx.compose.ui.text.TextRange(text.length))
+                            BasicTextField(
+                                value = value, onValueChange = { v ->
+                                    val next = continueList(value, MarkLook.eraseWhole(value, v))
+                                    text = next.text; typedText = next.text; typedSel = next.selection
+                                },
+                                textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp), cursorBrush = SolidColor(c.link), maxLines = 6,
+                                visualTransformation = rememberMarkLook(vm),
+                                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                            )
+                        }
+                        if (transcribing) Box(Modifier.size(FloatH), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(16.dp))
+                        } else if (text.isBlank() && !busy) Box(Modifier.size(FloatH).clip(CircleShape).clickable(onClickLabel = s.a11yMic, onClick = ::mic)
+                            .semantics { contentDescription = s.a11yMic }, contentAlignment = Alignment.Center) { MicGlyph(c.sea, 20.dp) }
+                    }
+                }
+                Spacer(Modifier.width(6.dp))
+                // «send»: while recording it finishes the recording; pale until there is something to send.
+                val live = rec != null || canSend || busy
+                Box(Modifier.size(FloatH).shadow(if (live) 2.dp else 0.dp, CircleShape).clip(CircleShape)
+                    .background(if (live) c.sea else androidx.compose.ui.graphics.lerp(c.sea, c.card, 0.45f))
+                    .clickable(enabled = rec != null || canSend, onClickLabel = s.a11ySend, role = androidx.compose.ui.semantics.Role.Button) {
+                        if (rec != null) { recorder = null; val audio = rec.stop(); if (audio != null) vm.transcribe(audio) { gotSpeech(it, audio) } } else send()
+                    }.semantics { contentDescription = s.a11ySend }, contentAlignment = Alignment.Center) {
+                    when {
+                        busy -> CircularProgressIndicator(color = M.c.onAccent, strokeWidth = 1.5.dp, modifier = Modifier.size(15.dp))
+                        rec != null -> TickGlyph(M.c.onAccent, 18.dp)
+                        else -> SendGlyph(M.c.onAccent, 16.dp)
+                    }
+                }
             }
             return@Column
         }
@@ -561,6 +635,8 @@ class PageSend { var send: () -> Unit = {} }
 
 /** Height of the field: one line of words and a little air. */
 private val FieldH: Dp @Composable get() = if (planner) 37.dp else 42.dp
+/** The floating field (owner, 14 окт): the height of its line. */
+private val FloatH = 44.dp
 /** The field keeps this much clear of the rule; its words then line up with the page's text. */
 private val FieldInset = 4.dp
 
@@ -811,12 +887,13 @@ internal fun slotBase(id: String) = ru.anjeib.margin.data.slotRef(id)?.first ?: 
 
 /** The hour now on the margin of a writing line — the hour the words will get. */
 @Composable
-fun NowOnMargin(modifier: Modifier = Modifier) {
+fun NowOnMargin(modifier: Modifier = Modifier, end: Dp = 10.dp, /** Commissioner, upright, ink — the field's hour chip. */ plain: Boolean = false) {
     val c = M.c
     Box(modifier.heightIn(min = FieldH), contentAlignment = Alignment.CenterEnd) {
         val now by androidx.compose.runtime.produceState(java.time.LocalTime.now()) {
             while (true) { value = java.time.LocalTime.now(); kotlinx.coroutines.delay(((60 - value.second) * 1000L).coerceAtLeast(1000L)) }
         }
-        Text("%02d:%02d".format(now.hour, now.minute), style = Type.italic.copy(color = c.ink.copy(alpha = 0.75f), fontSize = 15.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = 10.dp))
+        Text("%02d:%02d".format(now.hour, now.minute), style = if (plain) Type.small.copy(color = c.ink, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum")
+            else Type.italic.copy(color = c.ink.copy(alpha = 0.75f), fontSize = 15.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = end))
     }
 }

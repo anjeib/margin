@@ -41,6 +41,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.layout
@@ -111,16 +116,57 @@ fun PanelPiece(seat: Seat, modifier: Modifier = Modifier, bleed: Boolean = true,
                /** false — no line above this piece: it belongs to the one above (a matter under a matter). */
                divider: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     val c = M.c
+    if (planner) {
+        // «Полоса набора» (owner, 15 окт): no block, no ruling — the entries stand on the page, parted by air; only the
+        // sections have a rule (see [SectionHead]).
+        CompositionLocalProvider(LocalRowGround provides c.bg) { Column(modifier.fillMaxWidth(), content = content) }
+        return
+    }
     CompositionLocalProvider(LocalRowGround provides c.card) {
-        val outline = if (planner) c.graphite.copy(alpha = 0.28f) else null
-        // The planner's panels are the page's own paper behind a printed hairline — barely lighter, never a card on top.
-        val ground = if (outline != null) androidx.compose.ui.graphics.lerp(c.bg, c.card, 0.45f) else c.card
+        // Owner, 14 окт: a block is set off by a soft shadow, not a printed hairline — a sheet of white lying on the page.
+        val lifted = planner
+        val outline = if (lifted) c.graphite.copy(alpha = 0.28f) else null
+        val ground = if (lifted && c.dark) androidx.compose.ui.graphics.lerp(c.bg, Color.White, 0.06f) else c.card
         Column(modifier.then(if (bleed) Modifier.bleed(if (outline != null) 2.dp else PanelBleed) else Modifier).fillMaxWidth()
+            .then(if (lifted && softShadows) Modifier.panelShadow(seat, c.dark) else Modifier)
             .clip(seat.shape(if (outline != null) PlannerR else PanelR)).background(ground)
-            .then(if (outline != null) Modifier.panelOutline(seat, outline) else Modifier)) {
+            .then(if (lifted && !softShadows) Modifier.panelOutline(seat, outline!!) else Modifier)) {
             if ((seat == Seat.Middle || seat == Seat.Last) && divider) Box(Modifier.padding(start = if (outline != null) 8.dp else dividerStart, end = if (outline != null) 4.dp else 0.dp)
                 .fillMaxWidth().height(1.dp).background(if (outline != null) c.graphite.copy(alpha = 0.2f) else c.hairline))
             content()
+        }
+    }
+}
+
+/** A blurred shadow needs Android 9: before it a hardware canvas ignores the blur and paints a hard block — the hairline then. */
+private val softShadows = android.os.Build.VERSION.SDK_INT >= 28
+
+/**
+ * A soft shadow under a panel, drawn piece by piece like [panelOutline]: each piece casts it only outward — its sides, and
+ * its top or bottom only when it is the panel's first or last — so the rows of a lazy list read as one lifted sheet, with no
+ * seams between them. Two layers: a wide, faint one and a close one that firms up the edge; both fall a little downward.
+ */
+private fun Modifier.panelShadow(seat: Seat, dark: Boolean): Modifier = drawBehind {
+    val r = PlannerR.toPx()
+    val first = seat == Seat.Single || seat == Seat.First
+    val last = seat == Seat.Single || seat == Seat.Last
+    val reach = 24.dp.toPx()
+    // The shadow's outline runs on past a piece's open ends; the clip keeps each piece's share to its own height.
+    val top = if (first) 0f else -r * 3
+    val bottom = if (last) size.height else size.height + r * 3
+    val clipTop = if (first) -reach else 0f
+    val clipBottom = if (last) size.height + reach else size.height
+    clipRect(-reach, clipTop, size.width + reach, clipBottom) {
+        drawIntoCanvas { cv ->
+            fun layer(blur: Float, dy: Float, alpha: Float) {
+                val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    color = (if (dark) Color.Black else Color(0xFF2A2620)).copy(alpha = alpha).toArgb()
+                    maskFilter = android.graphics.BlurMaskFilter(blur, android.graphics.BlurMaskFilter.Blur.NORMAL)
+                }
+                cv.nativeCanvas.drawRoundRect(0f, top + dy, size.width, bottom + dy, r, r, p)
+            }
+            layer(14.dp.toPx(), 4.dp.toPx(), if (dark) 0.55f else 0.10f)
+            layer(2.5.dp.toPx(), 0.8.dp.toPx(), if (dark) 0.5f else 0.07f)
         }
     }
 }
@@ -144,15 +190,23 @@ private fun Modifier.panelOutline(seat: Seat, color: Color): Modifier = drawWith
 @Composable
 fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = M.c
+    // On the planner page — the ruling, no block (owner, 14 окт): a line under the last row; [PanelDivider]s rule the others.
+    if (planner) {
+        CompositionLocalProvider(LocalRowGround provides c.bg) { Column(modifier.fillMaxWidth(), content = content) }
+        return
+    }
     CompositionLocalProvider(LocalRowGround provides c.card) {
-        Column(modifier.bleed(PanelBleed).fillMaxWidth().clip(RoundedCornerShape(PanelR)).background(c.card)
-            .then(if (planner) Modifier.panelOutline(Seat.Single, c.graphite.copy(alpha = 0.28f)) else Modifier), content = content)
+        Column(modifier.bleed(PanelBleed).fillMaxWidth()
+            .then(if (planner && softShadows) Modifier.panelShadow(Seat.Single, c.dark) else Modifier)
+            .clip(RoundedCornerShape(if (planner) PlannerR else PanelR)).background(if (planner && c.dark) androidx.compose.ui.graphics.lerp(c.bg, Color.White, 0.06f) else c.card)
+            .then(if (planner && !softShadows) Modifier.panelOutline(Seat.Single, c.graphite.copy(alpha = 0.28f)) else Modifier), content = content)
     }
 }
 
 /** A hairline between two rows of a [Panel], from the words' line. */
 @Composable
-fun PanelDivider() = Box(Modifier.padding(start = MarkCol + 12.dp).fillMaxWidth().height(1.dp).background(M.c.hairline))
+fun PanelDivider() = if (planner) Spacer(Modifier.height(2.dp))
+    else Box(Modifier.padding(start = MarkCol + 12.dp).fillMaxWidth().height(1.dp).background(M.c.hairline))
 
 /** The top of a row's words, so the margin note can stand on their first line. */
 val RowTop = 13.dp
@@ -164,6 +218,13 @@ fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modif
     // Owner, 10 окт: «красиво, но мелко и бледно» — larger and in ink (a touch softer than the words), medium italic.
     // Owner, 14 окт: the margin's dates and hours more telling — in full ink, a size up, pressed into the paper like the day's
     // number (a pale edge under each letter, as letterpress leaves).
+    if (planner) {
+        // «Полоса набора» (owner, 15 окт): hours and dates in Commissioner, set from the margin's left edge; late — in terracotta.
+        // Owner, 15 окт: in ink — they are read, not decoration; late ones in terracotta.
+        Text(text, style = Type.small.copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink }, fontSize = 14.sp, lineHeight = 20.sp,
+            fontFeatureSettings = "tnum"), maxLines = 1, softWrap = false, modifier = modifier.fillMaxWidth().padding(start = 18.dp))
+        return
+    }
     PencilText(AnnotatedString(text), style = Type.italic.copy(color = when { link -> c.link; else -> if (planner) c.ink else c.ink.copy(alpha = 0.8f) },
         fontSize = if (planner) 15.5.sp else 15.5.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End,
         shadow = if (planner && !c.dark) androidx.compose.ui.graphics.Shadow(Color.White.copy(alpha = 0.9f), androidx.compose.ui.geometry.Offset(0f, 1.6f), 0f) else null),
@@ -201,10 +262,13 @@ fun RowBody(
         // Owner, 14 окт: the mark stands on the middle of the first line of words, and its larger touch area
         // (the circle's 37 dp) doesn't make the row taller — every row is as tall as its words.
         // The planner (design/v9) sets the mark a little further in and the words closer to it.
-        Box(Modifier.width(if (planner) 46.dp else MarkCol).height(if (planner) 22.dp else 26.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.wrapContentSize(unbounded = true)) { mark?.invoke() }
+        // «Полоса набора» (owner, 15 окт): no circles, no signs before the words — done is a tap on the row's hour on the margin.
+        if (!planner) {
+            Box(Modifier.width(MarkCol).height(26.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.wrapContentSize(unbounded = true)) { mark?.invoke() }
+            }
+            Spacer(Modifier.width(12.dp))
         }
-        Spacer(Modifier.width(if (planner) 10.dp else 12.dp))
         Column(Modifier.weight(1f).padding(top = 2.dp), content = content)
         if (trailing != null) { Spacer(Modifier.width(8.dp)); Box(Modifier.padding(top = 2.dp)) { trailing() } }
     }
@@ -221,20 +285,38 @@ fun PaperRow(
     onClick: (() -> Unit)? = null,
     onLong: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
+    /** On the planner page a tap on the margin's hour or date marks the entry done (owner, 15 окт). */
+    onMargin: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Margined(modifier, margin = margin?.let { m -> { RowMargin(m, late) } }) {
+    Margined(modifier, margin = margin?.let { m -> { MarginTap(onMargin) { RowMargin(m, late) } } }) {
         PanelPiece(seat) { RowBody(mark, onClick = onClick, onLong = onLong, trailing = trailing, content = content) }
     }
 }
 
+/**
+ * The margin's cell as the row's «done» (owner, 15 окт: no circles — a tap on the entry's hour marks it): a finger-sized
+ * target over the hour or the date; without [onTap] — just the words.
+ */
+@Composable
+fun MarginTap(onTap: (() -> Unit)?, content: @Composable () -> Unit) {
+    if (onTap == null || !planner) { content(); return }
+    val s = M.s
+    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
+        .clickable(onClickLabel = s.markDone, role = androidx.compose.ui.semantics.Role.Checkbox, onClick = onTap)) { content() }
+}
+
 /** The words of a row: ink, 16 sp, up to three lines. */
 @Composable
-fun RowTitle(text: String, faded: Boolean = false, maxLines: Int = 3) {
+fun RowTitle(text: String, faded: Boolean = false, maxLines: Int = 3, marked: Boolean = false) {
     val c = M.c
     var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+    val marker = pencilInk
     Text(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis,
-        onTextLayout = { layout = it }, modifier = Modifier.foundMarks(text) { layout })
+        onTextLayout = { layout = it }, modifier = Modifier.foundMarks(text) { layout }.then(if (marked) Modifier.drawBehind {
+            // Late (owner, 14 окт): a highlighter over the words, as on the margin's date.
+            layout?.let { l -> for (i in 0 until l.lineCount) markerBand(l.getLineLeft(i), l.getLineRight(i), l.getLineTop(i), l.getLineBottom(i), marker, text.hashCode() + i) }
+        } else Modifier))
 }
 
 @Composable
@@ -249,8 +331,26 @@ fun RowTitle(text: AnnotatedString, faded: Boolean = false, maxLines: Int = 3) {
 @Composable
 fun RowSub(text: String, link: Boolean = false, late: Boolean = false, maxLines: Int = 1) {
     val c = M.c
-    PencilText(AnnotatedString(text), whole = late, style = Type.small.copy(fontFamily = rowFamily, color = when { link -> c.link; else -> subInk }, fontSize = subSize),
+    PencilText(AnnotatedString(text), whole = late, style = Type.small.copy(color = when { link -> c.link; else -> subInk }, fontSize = subSize),
         maxLines = maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+}
+
+/** Lays a line across the whole page from inside a column that starts at the page's text edge (the margin's width to the left, 16 dp to the right). */
+fun Modifier.pageWide(): Modifier = this.layout { m, c ->
+    val l = (MarginW + MarginGap).roundToPx(); val r = 16.dp.roundToPx()
+    val w = if (c.hasBoundedWidth) c.maxWidth + l + r else c.minWidth
+    val p = m.measure(c.copy(minWidth = w, maxWidth = w))
+    layout(if (c.hasBoundedWidth) c.maxWidth else p.width, p.height) { p.place(-l, 0) }
+}
+
+/** The page's head closes with a double rule — a heavy line and a hairline — across the whole sheet (owner, 15 окт). */
+@Composable
+fun DoubleRule(modifier: Modifier = Modifier) {
+    val ink = M.c.ink.copy(alpha = if (M.c.dark) 0.85f else 1f)
+    Box(modifier.fillMaxWidth().padding(horizontal = 14.dp).height(5.dp).drawBehind {
+        drawRect(ink, size = androidx.compose.ui.geometry.Size(size.width, 2.dp.toPx()))
+        drawRect(ink, androidx.compose.ui.geometry.Offset(0f, size.height - 0.75.dp.toPx()), androidx.compose.ui.geometry.Size(size.width, 0.75.dp.toPx()))
+    })
 }
 
 /** A section: the caps label over its panel, its count, one action at the right, a fold. */
@@ -263,9 +363,34 @@ fun SectionHead(
     open: Boolean? = null,
     onFold: (() -> Unit)? = null,
     top: Dp = 22.dp,
+    /** The thin rule over the section; off for the first one, which stands right under the page's double rule. */
+    rule: Boolean = true,
 ) {
     val c = M.c
-    Margined(modifier.padding(top = if (planner) top - 4.dp else top, bottom = if (planner) 5.dp else 8.dp)) {
+    if (planner) {
+        // «Полоса набора» (owner, 15 окт): a thin rule across the whole page, the margin too, then the section's name in
+        // Literata letter-spaced — the Russian way of setting a heading apart; no caps, no count (owner: «убери номера»).
+        Column(modifier.fillMaxWidth().padding(top = if (rule) top + 6.dp else 6.dp)) {
+            if (rule) Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp).height(0.75.dp).background(c.hairline))
+            Margined(Modifier.padding(top = if (rule) 20.dp else 0.dp, bottom = 4.dp)) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 32.dp).clip(RoundedCornerShape(6.dp))
+                    .then(if (onFold != null) Modifier.clickable(onClick = onFold) else Modifier), verticalAlignment = Alignment.CenterVertically) {
+                    Text(label.replace(" ", "\u2002"), style = androidx.compose.ui.text.TextStyle(fontFamily = Literata, fontWeight = FontWeight(450), fontSize = 19.sp,
+                        letterSpacing = 3.2.sp, color = c.ink), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    action?.let { (text, act) ->
+                        Text(text, style = Type.small.copy(color = c.link, fontSize = 13.5.sp, fontWeight = FontWeight.Medium),
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = act).padding(horizontal = 6.dp, vertical = 6.dp))
+                    }
+                    if (open != null) {
+                        val rot by animateFloatAsState(if (open) 0f else -90f, label = "fold")
+                        Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.graphite, modifier = Modifier.padding(start = 4.dp).size(20.dp).rotate(rot))
+                    }
+                }
+            }
+        }
+        return
+    }
+    Margined(modifier.padding(top = top, bottom = 8.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 24.dp).clip(RoundedCornerShape(6.dp))
             .then(if (onFold != null) Modifier.clickable(onClick = onFold) else Modifier), verticalAlignment = Alignment.CenterVertically) {
             if (planner) {
@@ -291,7 +416,8 @@ fun SectionHead(
 @Composable
 fun Voice(text: AnnotatedString, modifier: Modifier = Modifier, link: Boolean = false, onClick: (() -> Unit)? = null) {
     val c = M.c
-    PencilText(text, style = Type.italic.copy(color = if (link) c.link else c.graphite, fontSize = if (planner) 18.5.sp else 16.sp, lineHeight = if (planner) 23.sp else 22.sp),
+    PencilText(text, style = if (planner) Type.small.copy(color = if (link) c.link else c.graphite, fontSize = 14.5.sp, lineHeight = 20.sp)
+        else Type.italic.copy(color = if (link) c.link else c.graphite, fontSize = 16.sp, lineHeight = 22.sp),
         modifier = modifier.clip(RoundedCornerShape(6.dp)).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(vertical = if (onClick != null) 6.dp else 0.dp))
 }
@@ -323,6 +449,18 @@ fun TextTabs(options: List<Pair<String, String>>, selected: String, onSelect: (S
 @Composable
 fun Chip(label: String, on: Boolean, onClick: () -> Unit, dot: Color? = null, modifier: Modifier = Modifier) {
     val c = M.c
+    if (planner) {
+        // «Полоса набора» (owner, 15 окт): a filter is a word on the page; the chosen one in ink over a short sea rule.
+        Column(modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(6.dp)).semantics { selected = on }.clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (dot != null) { Box(Modifier.size(7.dp).clip(CircleShape).background(dot)); Spacer(Modifier.width(6.dp)) }
+                Text(label, style = Type.small.copy(color = if (on) c.ink else c.graphite, fontSize = 14.5.sp, fontWeight = if (on) FontWeight.Medium else null), maxLines = 1)
+            }
+            Box(Modifier.padding(top = 4.dp).width(16.dp).height(1.5.dp).background(if (on) c.sea else Color.Transparent))
+        }
+        return
+    }
     val shape = RoundedCornerShape(50)
     Row(modifier.heightIn(min = 36.dp).clip(shape).background(if (on) c.linkSoft else Color.Transparent)
         .border(1.dp, if (on) Color.Transparent else c.hairline, shape).semantics { selected = on }.clickable(onClick = onClick)
@@ -431,7 +569,7 @@ fun SearchField(value: String, onValue: (String) -> Unit, hint: String, modifier
 @Composable
 fun Modifier.marginLabel(): Modifier {
     val c = M.c
-    val card = if (c.dark) androidx.compose.ui.graphics.lerp(c.bg, Color.White, 0.07f) else androidx.compose.ui.graphics.lerp(c.bg, Color(0xFF6E5A40), 0.08f)
+    val card = if (c.dark) androidx.compose.ui.graphics.lerp(c.bg, Color.White, 0.07f) else androidx.compose.ui.graphics.lerp(c.bg, Color(0xFF8C8578), 0.09f)
     return this.then(androidx.compose.ui.Modifier.drawBehind {
         val padX = 5.dp.toPx(); val padY = 1.dp.toPx()
         drawRoundRect(card, androidx.compose.ui.geometry.Offset(-padX, -padY), androidx.compose.ui.geometry.Size(size.width + padX * 2, size.height + padY * 2),
