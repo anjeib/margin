@@ -61,8 +61,10 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
     var month by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var picked by rememberSaveable { mutableStateOf(today.toString()) }
     // Opened from «Завтра — N дел ›»: on that day, its month shown.
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        vm.calendarOpenOn.value?.let { d -> picked = d.toString(); month = YearMonth.from(d).toString(); vm.calendarOpenOn.value = null }
+    // …and from the planner's day tabs while the calendar is open: they pick a day here, they don't leave it (Fable, 14 окт).
+    val openOn by vm.calendarOpenOn.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(openOn) {
+        openOn?.let { d -> picked = d.toString(); month = YearMonth.from(d).toString(); vm.calendarOpenOn.value = null }
     }
     val ym = YearMonth.parse(month)
     val day = LocalDate.parse(picked)

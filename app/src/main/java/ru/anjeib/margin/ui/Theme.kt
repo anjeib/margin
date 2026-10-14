@@ -119,17 +119,19 @@ val Tinos = FontFamily(
 )
 val PlannerType = androidx.compose.runtime.mutableStateOf(false)
 
-/** The rows' book face on the planner page. */
+/** The planner's printed voice: headings, section caps, tabs, the margin's italic — one serif (Fable, 14 окт). */
 val Book: FontFamily get() = Tinos
 
 private val Playfair = FontFamily(playfair(400), playfair(500), playfair(600), playfair(400, true), playfair(500, true))
 /** Headings and Margin's italic voice: Playfair — or, on the planner page, the same book face as everything else. */
 val Serif: FontFamily get() = if (PlannerType.value) Tinos else Playfair
 private val Inter = FontFamily(inter(400), inter(500), inter(600))
-/** The text face: Inter — or, on the planner page, the book face everywhere (owner, 14 окт: every page in the new design). */
-val Sans: FontFamily get() = if (PlannerType.value) Tinos else Inter
-/** Times reads smaller than Inter at one size: the planner's text is set a touch larger. */
-private fun sz(inter: Float, planner: Float) = (if (PlannerType.value) planner else inter).sp
+/**
+ * The text face: Inter on both pages (Fable, 14 окт: Times at text size greys out, and the margin's italic must stand apart
+ * from the words to be scanned as its own column). The planner keeps its serif for headings and the margin.
+ */
+val Sans: FontFamily get() = Inter
+private fun sz(inter: Float, @Suppress("UNUSED_PARAMETER") planner: Float) = inter.sp
 
 object Type {
     // The planner's headings (design/v9): the regular cut, the ink spread a little as letterpress leaves it.
@@ -181,13 +183,7 @@ fun MarginTheme(mode: ThemeMode, strings: Strings, content: @Composable () -> Un
     CompositionLocalProvider(LocalPalette provides p, LocalStr provides strings) {
         // Dialogs, pickers and buttons of Material speak in the page's own face too.
         val base = androidx.compose.material3.Typography()
-        val typo = if (PlannerType.value) base.copy(
-            displayLarge = base.displayLarge.copy(fontFamily = Tinos), displayMedium = base.displayMedium.copy(fontFamily = Tinos), displaySmall = base.displaySmall.copy(fontFamily = Tinos),
-            headlineLarge = base.headlineLarge.copy(fontFamily = Tinos), headlineMedium = base.headlineMedium.copy(fontFamily = Tinos), headlineSmall = base.headlineSmall.copy(fontFamily = Tinos),
-            titleLarge = base.titleLarge.copy(fontFamily = Tinos), titleMedium = base.titleMedium.copy(fontFamily = Tinos), titleSmall = base.titleSmall.copy(fontFamily = Tinos),
-            bodyLarge = base.bodyLarge.copy(fontFamily = Tinos), bodyMedium = base.bodyMedium.copy(fontFamily = Tinos), bodySmall = base.bodySmall.copy(fontFamily = Tinos),
-            labelLarge = base.labelLarge.copy(fontFamily = Tinos), labelMedium = base.labelMedium.copy(fontFamily = Tinos), labelSmall = base.labelSmall.copy(fontFamily = Tinos),
-        ) else base
+        val typo = base
         MaterialTheme(colorScheme = scheme, typography = typo, content = content)
     }
 }

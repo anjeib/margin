@@ -112,12 +112,12 @@ private val grain: ImageBitmap by lazy {
 val planner: Boolean @Composable get() = LocalPaper.current >= 4
 
 /** The rows' words: the book face on the planner page, Inter otherwise. */
-val rowFamily: androidx.compose.ui.text.font.FontFamily @Composable get() = if (planner) Book else Sans
+val rowFamily: androidx.compose.ui.text.font.FontFamily @Composable get() = Sans
 /** Times reads small at Inter's size: a touch larger, a touch tighter on the planner page. */
-val rowSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 15.5.sp else 16.sp
-val rowLine: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 19.5.sp else 22.sp
+val rowSize: androidx.compose.ui.unit.TextUnit @Composable get() = 16.sp
+val rowLine: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 21.sp else 22.sp
 /** Grey words under a row: Times is thinner than Inter, so on the planner page they are a tone darker. */
-val subInk: Color @Composable get() = if (planner) androidx.compose.ui.graphics.lerp(M.c.graphite, M.c.ink, 0.3f) else M.c.graphite
+val subInk: Color @Composable get() = if (planner) androidx.compose.ui.graphics.lerp(M.c.graphite, M.c.ink, 0.15f) else M.c.graphite
 val subSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 13.5.sp else 13.5.sp
 
 /** Width of the planner's index tabs, and of the page edges and cover beyond them. */
@@ -126,7 +126,9 @@ private val EdgeW = 11.dp
 
 /** One tab of the planner's index: a word (a weekday) or a glyph; [on] — terracotta, the page open at it. */
 class IndexTab(val label: String, val on: Boolean, val mark: Boolean = false, val accentWord: Boolean = false,
-               val glyph: (@Composable (Color) -> Unit)? = null, val onClick: () -> Unit)
+               val glyph: (@Composable (Color) -> Unit)? = null,
+               /** A section, not a day: open, it is petrol — the colour of a choice; terracotta is only «the page's day» (Fable, 14 окт). */
+               val petrol: Boolean = false, val onClick: () -> Unit)
 
 /**
  * The planner's index down the right edge (owner, 14 окт, design/v9/v9-2-planner.png): the page itself goes on past its
@@ -145,13 +147,15 @@ fun PlannerIndex(days: List<IndexTab>, tools: List<IndexTab>) {
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() })
             .semanticsLabel(t.label)) {
             if (t.on) Box(Modifier.padding(vertical = 3.dp).fillMaxSize().clip(androidx.compose.foundation.shape.RoundedCornerShape(topEnd = 7.dp, bottomEnd = 7.dp))
-                .background(c.accent))
+                .background(if (t.petrol) c.link else c.accent))
             val ink = if (t.on) c.onAccent else if (t.accentWord) c.accentText else c.ink.copy(alpha = 0.78f)
             Box(Modifier.size(TabsW, h), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 if (t.glyph != null) t.glyph.invoke(if (t.on) c.onAccent else c.graphite)
                 else androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                    // A printed tab has a fixed width: its word doesn't grow with the system font, or «Чт» breaks in two.
+                    val fs = androidx.compose.ui.platform.LocalDensity.current.fontScale
                     androidx.compose.material3.Text(t.label, style = androidx.compose.ui.text.TextStyle(fontFamily = Tinos, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                        fontSize = 14.sp, color = ink))
+                        fontSize = (14f / fs).sp, color = ink), maxLines = 1, softWrap = false)
                     Box(Modifier.size(3.dp).clip(androidx.compose.foundation.shape.CircleShape)
                         .background(if (t.mark && !t.on) c.graphite.copy(alpha = 0.5f) else Color.Transparent))
                 }
@@ -170,11 +174,11 @@ private fun Modifier.semanticsLabel(label: String) = this.then(Modifier.semantic
 
 /** The page's week as index tabs; [open] — the day the page shows (null on another view: no day is open). */
 fun weekTabs(open: java.time.LocalDate?, base: java.time.LocalDate, today: java.time.LocalDate, busy: (java.time.LocalDate) -> Boolean,
-             onPick: (java.time.LocalDate) -> Unit): List<IndexTab> {
+             petrol: Boolean = false, onPick: (java.time.LocalDate) -> Unit): List<IndexTab> {
     val monday = base.minusDays(base.dayOfWeek.value - 1L)
     return (0L until 7L).map { i ->
         val d = monday.plusDays(i)
-        IndexTab(d.dowShort().replaceFirstChar { it.uppercase() }, on = d == open, mark = busy(d), accentWord = d == today) { onPick(d) }
+        IndexTab(d.dowShort().replaceFirstChar { it.uppercase() }, on = d == open, mark = busy(d), accentWord = d == today, petrol = petrol) { onPick(d) }
     }
 }
 
@@ -273,8 +277,9 @@ private fun PlannerSheet(modifier: Modifier, tabs: (@Composable () -> Unit)?, fr
                 drawLine(c.graphite.copy(alpha = 0.3f), Offset(size.width - 0.5.dp.toPx(), edgeTop + 14.dp.toPx()), Offset(size.width - 0.5.dp.toPx(), size.height - edgeBottom - 10.dp.toPx()), 1.dp.toPx())
             }, content = content)
             if (tabs != null) Box(Modifier.align(androidx.compose.ui.Alignment.TopEnd).statusBarsPadding().padding(top = 25.dp)) { tabs() }
-            Box(Modifier.fillMaxSize().drawBehind {
-                drawRect(ShaderBrush(ImageShader(grain, TileMode.Repeated, TileMode.Repeated)), alpha = if (c.dark) 0.04f else 0.05f)
+            // No grain in the dark (Fable, 14 окт): on OLED black a texture reads as dirt.
+            if (!c.dark) Box(Modifier.fillMaxSize().drawBehind {
+                drawRect(ShaderBrush(ImageShader(grain, TileMode.Repeated, TileMode.Repeated)), alpha = 0.05f)
             })
         }
         if (frame) Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(end = TabsW + EdgeW)
@@ -338,7 +343,7 @@ fun <T> PageTurn(target: T, order: (T) -> Long, modifier: Modifier = Modifier, c
 /** The planner's paper grain over a sheet that is not a [PageSheet] (a card rising from below). */
 @Composable
 fun Modifier.paperGrain(): Modifier {
-    if (!planner) return this
+    if (!planner || M.c.dark) return this
     val dark = M.c.dark
     return this.drawWithContent {
         drawContent()

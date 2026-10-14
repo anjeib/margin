@@ -219,19 +219,22 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         PageSheet(frame = !overlay, tabs = if (plannerPage) ({
             val rows = remember(data) { data.listTasks().filter { !it.done } }
             val onDiary = screen == TASKS && !contents
-            val open = (pageDay ?: todayNow).takeIf { onDiary && view == Views.TODAY }
+            // On the calendar the tabs are its week: a tap picks the day there (Fable, 14 окт); elsewhere it turns to the day's page.
+            val calDay by vm.calendarDay.collectAsState()
+            val onCalendar = onDiary && view == Views.WEEK
+            val open = if (onCalendar) (calDay ?: todayNow) else (pageDay ?: todayNow).takeIf { onDiary && view == Views.TODAY }
             fun toDiary(v: String) { contents = false; screen = TASKS; view = v; searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null }
             PlannerIndex(
-                weekTabs(open, pageDay ?: todayNow, todayNow, busy = { d -> rows.any { it.dueDate == d } }) { d ->
-                    vm.pageDay.value = d.takeIf { it != todayNow }; toDiary(Views.TODAY) },
+                weekTabs(open, if (onCalendar) (calDay ?: todayNow) else (pageDay ?: todayNow), todayNow, busy = { d -> rows.any { it.dueDate == d } }, petrol = onCalendar) { d ->
+                    if (onCalendar) vm.calendarOpenOn.value = d else { vm.pageDay.value = d.takeIf { it != todayNow }; toDiary(Views.TODAY) } },
                 listOf(
-                    IndexTab(s.calendarTitle, on = onDiary && view == Views.WEEK, glyph = { ink ->
+                    IndexTab(petrol = true, label = s.calendarTitle, on = onDiary && view == Views.WEEK, glyph = { ink ->
                         if (landed != null && view != Views.WEEK) Text(landed.dayOfMonth.toString(), style = Type.small.copy(color = c.accentText, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
                         else CalendarGlyph(ink, 20.dp)
                     }) { landed?.let { vm.calendarOpenOn.value = it }; toDiary(Views.WEEK) },
-                    IndexTab(s.overviewWord, on = onDiary && view == Views.ALL, glyph = { ink -> OverviewGlyph(ink, 19.dp) }) { toDiary(Views.ALL) },
-                    IndexTab(s.search, on = searching, glyph = { ink -> SearchGlyph(ink, 20.dp) }) { openTask = null; fullIdea = null; openPerson = null; openNote = null; contents = false; searching = true },
-                    IndexTab(s.a11yMenu, on = contents || screen != TASKS, glyph = { ink -> MenuGlyph(ink) }) {
+                    IndexTab(petrol = true, label = s.overviewWord, on = onDiary && view == Views.ALL, glyph = { ink -> OverviewGlyph(ink, 19.dp) }) { toDiary(Views.ALL) },
+                    IndexTab(petrol = true, label = s.search, on = searching, glyph = { ink -> SearchGlyph(ink, 20.dp) }) { openTask = null; fullIdea = null; openPerson = null; openNote = null; contents = false; searching = true },
+                    IndexTab(petrol = true, label = s.a11yMenu, on = contents || screen != TASKS, glyph = { ink -> MenuGlyph(ink) }) {
                         searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null; contents = !contents },
                 ))
         }) else null) {
@@ -686,13 +689,13 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
         Margined {
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(vertical = if (small) 10.dp else 13.dp),
                 verticalAlignment = Alignment.Bottom) {
-                Text(label, style = Type.body.copy(fontFamily = rowFamily, fontSize = if (small) 17.sp else 21.sp, color = if (active) c.accentText else c.ink))
+                Text(label, style = Type.body.copy(fontFamily = Book, fontSize = if (small) 17.sp else 21.sp, color = if (active) c.accentText else c.ink))
                 // the dotted leader of a contents page
                 Box(Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 6.dp).height(1.dp).drawBehind {
                     var x = 0f; val step = 5.dp.toPx()
                     while (x < size.width) { drawCircle(c.graphite.copy(alpha = 0.45f), 0.8.dp.toPx(), Offset(x, size.height / 2)); x += step }
                 })
-                Text(count, style = Type.body.copy(fontFamily = rowFamily, fontSize = if (small) 15.sp else 17.sp, color = c.graphite))
+                Text(count, style = Type.body.copy(fontFamily = Book, fontSize = if (small) 15.sp else 17.sp, color = c.graphite))
             }
         }
     }

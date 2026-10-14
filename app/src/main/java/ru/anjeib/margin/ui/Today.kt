@@ -218,7 +218,9 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
                 .semantics { contentDescription = if (incoming) s.a11yWaiting else s.a11yPromised }) { PromiseMark(incoming) }
         }, onClick = onOpen) {
         RowTitle(t.title)
-        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        // Words never broken: at a large font «напомнить» goes to the next line whole (FlowRow).
+        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+        androidx.compose.foundation.layout.FlowRow(itemVerticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             // The arrow alone was a riddle (Fable, 0.35): the words say it — «ждём от Олега», «обещали Лёше», as in «Обзор».
             Text(buildAnnotatedString {
                 val (a, name, b) = if (incoming) s.promiseToYouParts(who) else s.promiseFromYouParts(who)
