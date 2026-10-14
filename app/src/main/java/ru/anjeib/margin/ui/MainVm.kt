@@ -623,8 +623,11 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     val pageMarks = androidx.compose.runtime.mutableStateOf<(@androidx.compose.runtime.Composable () -> Unit)?>(null)
     /** The page's look (Page.kt, LocalPaper): 0 as before … 3 ruling, sheet edge and grain — chosen in the developer section. */
     val paperStyle = androidx.compose.runtime.mutableStateOf(ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).getInt("paper", 4)
-        .also { PlannerType.value = it >= 4 })
+        .let { 4 }.also { PlannerType.value = true })
     fun setPaper(v: Int) { paperStyle.value = v; PlannerType.value = v >= 4; ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).edit().putInt("paper", v).apply() }
+
+    /** The month unfolded at the top of «Сегодня» (the calendar tab). */
+    val monthOpen = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     /** The planner's day tabs: the day the main page shows (null — today). */
     val pageDay = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)

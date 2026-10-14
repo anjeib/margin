@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -308,6 +310,30 @@ fun Chip(label: String, on: Boolean, onClick: () -> Unit, dot: Color? = null, mo
         .padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         if (dot != null) { Box(Modifier.size(8.dp).clip(CircleShape).background(dot)); Spacer(Modifier.width(8.dp)) }
         Text(label, style = Type.small.copy(color = if (on) c.link else c.ink, fontSize = 14.sp, fontWeight = if (on) FontWeight.Medium else null))
+    }
+}
+
+/**
+ * A filter as a drawn mark on a round (owner, 14 окт: icons, not words): outlined, chosen — soft petrol with the mark in
+ * petrol; [label] is for TalkBack and a long press shows it.
+ */
+@Composable
+fun IconChip(label: String, on: Boolean, onClick: () -> Unit, glyph: @Composable (Color) -> Unit) {
+    val c = M.c
+    var hint by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    Box {
+        Box(Modifier.size(44.dp).clip(CircleShape).background(if (on) c.linkSoft else Color.Transparent)
+            .border(1.dp, if (on) c.link.copy(alpha = 0.5f) else c.graphite.copy(alpha = 0.3f), CircleShape)
+            .semantics { selected = on; contentDescription = label }
+            .combinedClickable(onClick = onClick, onLongClick = { hint = true }), contentAlignment = Alignment.Center) {
+            glyph(if (on) c.link else c.ink.copy(alpha = 0.75f))
+        }
+        if (hint) {
+            androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(1400); hint = false }
+            androidx.compose.ui.window.Popup(alignment = Alignment.TopCenter, offset = androidx.compose.ui.unit.IntOffset(0, -90)) {
+                Text(label, style = Type.small.copy(color = c.onBubble, fontSize = 13.sp), modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(c.bubble).padding(horizontal = 10.dp, vertical = 5.dp))
+            }
+        }
     }
 }
 

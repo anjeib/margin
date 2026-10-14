@@ -613,3 +613,33 @@ fun CloseGlyph(color: Color, size: Dp = 18.dp) = Canvas(Modifier.size(size)) {
     val w = this.size.width; val h = this.size.height
     drawPath(Path().apply { moveTo(w * 0.24f, h * 0.24f); lineTo(w * 0.76f, h * 0.76f); moveTo(w * 0.76f, h * 0.24f); lineTo(w * 0.24f, h * 0.76f) }, color, style = stroke(1.4.dp))
 }
+
+/** Work: a briefcase. */
+@Composable
+fun WorkGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawRoundRect(color, topLeft = Offset(w * 0.12f, h * 0.32f), size = Size(w * 0.76f, h * 0.52f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.08f), style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.36f, h * 0.32f); lineTo(w * 0.36f, h * 0.2f); lineTo(w * 0.64f, h * 0.2f); lineTo(w * 0.64f, h * 0.32f) }, color, style = stroke(1.4.dp))
+    drawLine(color, Offset(w * 0.12f, h * 0.54f), Offset(w * 0.88f, h * 0.54f), strokeWidth = 1.2.dp.toPx())
+}
+
+/** Personal: a small house. */
+@Composable
+fun HomeGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply { moveTo(w * 0.14f, h * 0.48f); lineTo(w * 0.5f, h * 0.16f); lineTo(w * 0.86f, h * 0.48f) }, color, style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.24f, h * 0.4f); lineTo(w * 0.24f, h * 0.84f); lineTo(w * 0.76f, h * 0.84f); lineTo(w * 0.76f, h * 0.4f) }, color, style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.43f, h * 0.84f); lineTo(w * 0.43f, h * 0.62f); lineTo(w * 0.57f, h * 0.62f); lineTo(w * 0.57f, h * 0.84f) }, color, style = stroke(1.2.dp))
+}
+
+/** Today: a sun — the day as it is now. */
+@Composable
+fun TodayGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawCircle(color, radius = w * 0.17f, center = Offset(w * 0.5f, h * 0.5f), style = stroke(1.4.dp))
+    for (i in 0 until 8) {
+        val a = Math.toRadians(i * 45.0); val cx = w * 0.5f; val cy = h * 0.5f
+        drawLine(color, Offset(cx + (w * 0.29f * kotlin.math.cos(a)).toFloat(), cy + (h * 0.29f * kotlin.math.sin(a)).toFloat()),
+            Offset(cx + (w * 0.4f * kotlin.math.cos(a)).toFloat(), cy + (h * 0.4f * kotlin.math.sin(a)).toFloat()), strokeWidth = 1.3.dp.toPx(), cap = StrokeCap.Round)
+    }
+}

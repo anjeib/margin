@@ -68,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.SideEffect
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -387,14 +388,16 @@ fun SmartComposer(
         // A light line, a little taller than the words, a hairline around it.
         val shape = RoundedCornerShape(FieldH / 2)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-            if (ruled) Spacer(Modifier.width(MarginW - edge))
+            // The planner (owner, 14 окт; design/v9/v9-field-*.png): a printed «графа» — «запись» on the margin, the words on a ruled line.
+            if (ruled && planner) Box(Modifier.width(MarginW - edge).heightIn(min = FieldH), contentAlignment = Alignment.CenterEnd) {
+                Text(s.fieldLabel, style = Type.italic.copy(color = c.ink.copy(alpha = 0.75f), fontSize = 15.sp), modifier = Modifier.padding(end = 10.dp))
+            } else if (ruled) Spacer(Modifier.width(MarginW - edge))
             Row(
                 // v8: the field floats a little over the page — a soft shadow, the one raised thing besides menus.
-                Modifier.weight(1f).padding(start = if (ruled) FieldInset else 0.dp).heightIn(min = FieldH)
-                    // The planner: a printed field on the page — no shadow, the paper itself, a hairline round it.
-                    .then(if (planner) Modifier else Modifier.shadow(6.dp, shape, ambientColor = c.ink.copy(alpha = 0.10f), spotColor = c.ink.copy(alpha = 0.14f)))
-                    .clip(shape).background(if (planner) androidx.compose.ui.graphics.lerp(c.bg, c.card, 0.45f) else c.card)
-                    .border(1.dp, if (planner) c.graphite.copy(alpha = 0.3f) else c.hairline, shape).padding(start = 2.dp, end = 5.dp),
+                if (planner) Modifier.weight(1f).padding(start = if (ruled) FieldInset else 0.dp).heightIn(min = FieldH).padding(end = 2.dp)
+                else Modifier.weight(1f).padding(start = if (ruled) FieldInset else 0.dp).heightIn(min = FieldH)
+                    .shadow(6.dp, shape, ambientColor = c.ink.copy(alpha = 0.10f), spotColor = c.ink.copy(alpha = 0.14f))
+                    .clip(shape).background(c.card).border(1.dp, c.hairline, shape).padding(start = 2.dp, end = 5.dp),
                 // Long text grows upwards; the buttons stay where the thumb is.
                 verticalAlignment = Alignment.Bottom,
             ) {
@@ -416,8 +419,12 @@ fun SmartComposer(
                     return@Row
                 }
                 attach()
-                Box(Modifier.weight(1f).heightIn(min = FieldH - 2.dp).padding(vertical = 9.dp, horizontal = 2.dp), contentAlignment = Alignment.CenterStart) {
-                    if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = Type.body.copy(fontFamily = rowFamily, color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val baseline = c.ink.copy(alpha = 0.35f)
+                Box(Modifier.weight(1f).heightIn(min = FieldH - 2.dp)
+                    .then(if (planner) Modifier.drawBehind { drawLine(baseline, androidx.compose.ui.geometry.Offset(0f, size.height - 6.dp.toPx()), androidx.compose.ui.geometry.Offset(size.width, size.height - 6.dp.toPx()), 1.dp.toPx()) } else Modifier)
+                    .padding(vertical = 9.dp, horizontal = 2.dp), contentAlignment = Alignment.CenterStart) {
+                    if (text.isEmpty()) Text(if (transcribing) s.transcribing else hint, style = if (planner) Type.italic.copy(color = c.graphite, fontSize = 17.sp)
+                        else Type.body.copy(fontFamily = rowFamily, color = c.graphite), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // Words put in from outside (shared, dictated, a mode's prefill) get the cursor after them, not before
                     // (Fable, 0.35); what the user types keeps the cursor where they put it.
                     val value = if (typedText == text) androidx.compose.ui.text.input.TextFieldValue(text, typedSel)

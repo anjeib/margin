@@ -210,7 +210,12 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         // «Планер» (owner, 14 окт): on the diary's pages the index on the right edge holds the week and, under Вс, the calendar,
         // the overview, the search and the menu — the top bar is gone, the page starts with its day.
         val pageDay by vm.pageDay.collectAsState()
+        val monthOpen by vm.monthOpen.collectAsState()
         val todayNow = java.time.LocalDate.now()
+        // There is no calendar page any more: whatever asked for it (a day something went to, «Завтра — N дел») opens the month on «Сегодня».
+        LaunchedEffect(view) {
+            if (view == Views.WEEK) { vm.calendarOpenOn.value?.let { d -> vm.pageDay.value = d.takeIf { it != todayNow }; vm.calendarOpenOn.value = null }; vm.monthOpen.value = true; view = Views.TODAY }
+        }
         val plannerPage = planner
         val landed = vm.landedDay.collectAsState().value
         // A topic, the search, a person or a note lies open on the page: the printed frame steps aside, the index stays.
@@ -220,18 +225,24 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             val rows = remember(data) { data.listTasks().filter { !it.done } }
             val onDiary = screen == TASKS && !contents
             // On the calendar the tabs are its week: a tap picks the day there (Fable, 14 окт); elsewhere it turns to the day's page.
-            val calDay by vm.calendarDay.collectAsState()
-            val onCalendar = onDiary && view == Views.WEEK
-            val open = if (onCalendar) (calDay ?: todayNow) else (pageDay ?: todayNow).takeIf { onDiary && view == Views.TODAY }
+            // With the month unfolded the tabs mirror its choice in petrol (Fable, 14 окт: one colour for one «selected»).
+            val onCalendar = onDiary && view == Views.TODAY && monthOpen
+            val open = (pageDay ?: todayNow).takeIf { onDiary && view == Views.TODAY }
             fun toDiary(v: String) { contents = false; screen = TASKS; view = v; searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null }
             PlannerIndex(
-                weekTabs(open, if (onCalendar) (calDay ?: todayNow) else (pageDay ?: todayNow), todayNow, busy = { d -> rows.any { it.dueDate == d } }, petrol = onCalendar) { d ->
-                    if (onCalendar) vm.calendarOpenOn.value = d else { vm.pageDay.value = d.takeIf { it != todayNow }; toDiary(Views.TODAY) } },
+                weekTabs(open, pageDay ?: todayNow, todayNow, busy = { d -> rows.any { it.dueDate == d } }, petrol = onCalendar) { d ->
+                    vm.pageDay.value = d.takeIf { it != todayNow }; toDiary(Views.TODAY) },
                 listOf(
-                    IndexTab(petrol = true, label = s.calendarTitle, on = onDiary && view == Views.WEEK, glyph = { ink ->
+                    IndexTab(petrol = true, label = s.quickToday, on = onDiary && view == Views.TODAY && pageDay == null && !monthOpen,
+                        glyph = { ink -> TodayGlyph(ink, 21.dp) }) { vm.monthOpen.value = false; vm.pageDay.value = null; toDiary(Views.TODAY) },
+                    IndexTab(petrol = true, label = s.calendarTitle, on = onDiary && view == Views.TODAY && monthOpen, glyph = { ink ->
                         if (landed != null && view != Views.WEEK) Text(landed.dayOfMonth.toString(), style = Type.small.copy(color = c.accentText, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
                         else CalendarGlyph(ink, 20.dp)
-                    }) { landed?.let { vm.calendarOpenOn.value = it }; toDiary(Views.WEEK) },
+                    }) {
+                        // The month unfolds at the top of «Сегодня» on the page's day; the same tab folds it and brings today back.
+                        if (monthOpen && onDiary && view == Views.TODAY) { vm.monthOpen.value = false; vm.pageDay.value = null }
+                        else { landed?.let { vm.pageDay.value = it.takeIf { d -> d != todayNow } }; vm.monthOpen.value = true; toDiary(Views.TODAY) }
+                    },
                     IndexTab(petrol = true, label = s.overviewWord, on = onDiary && view == Views.ALL, glyph = { ink -> OverviewGlyph(ink, 19.dp) }) { toDiary(Views.ALL) },
                     IndexTab(petrol = true, label = s.search, on = searching, glyph = { ink -> SearchGlyph(ink, 20.dp) }) { openTask = null; fullIdea = null; openPerson = null; openNote = null; contents = false; searching = true },
                     IndexTab(petrol = true, label = s.a11yMenu, on = contents || screen != TASKS, glyph = { ink -> MenuGlyph(ink) }) {
@@ -288,7 +299,19 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             else -> otherScreen(k.screen)
                         }
                     }
-                    if (planner) PageTurn(pageKey, order = { it.order() }) { k -> page(k) }
+                    // The diary's three pages lie side by side — Содержание · Сегодня · Обзор — and turn under the finger (owner, 14 окт);
+                    // a day of «Сегодня» turns within its own page; the other sections are pages turned to from the contents.
+                    if (planner && screen == TASKS) PlannerPager(
+                        page = when { contents -> 0; view == Views.ALL -> 2; else -> 1 },
+                        onPage = { p -> when (p) { 0 -> contents = true; 1 -> { contents = false; view = Views.TODAY }; else -> { contents = false; view = Views.ALL } } },
+                    ) { p ->
+                        when (p) {
+                            0 -> page(PageKey(MENU, view, null))
+                            1 -> PageTurn(pageDay, order = { (it ?: LocalDate.now()).toEpochDay() }) { d -> page(PageKey(TASKS, Views.TODAY, d)) }
+                            else -> page(PageKey(TASKS, Views.ALL, null))
+                        }
+                    }
+                    else if (planner) PageTurn(pageKey, order = { it.order() }) { k -> page(k) }
                     else Crossfade(screen, animationSpec = tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "screen") { sc ->
                         when (sc) {
                             TASKS -> Crossfade(view, animationSpec = tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "view") { v ->
@@ -308,7 +331,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 }
                 if ((screen == TASKS || screen == NOTES) && !contents) Column(
                     // The planner (design/v9): the field wide on the page, the margin's line ending just under it, the frame's rule below.
-                    if (planner) Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().padding(bottom = 20.dp).fieldRule().padding(start = 14.dp, end = 4.dp).padding(bottom = 6.dp)
+                    // A band of tinted paper with a double rule over it (owner, 14 окт): the place to write is unmistakable on a full page.
+                    if (planner) Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)
                     else Modifier.fillMaxWidth().background(c.bg).fieldRule().navigationBarsPadding().padding(horizontal = 14.dp).padding(bottom = 10.dp),
                 ) {
                     if (screen == TASKS) {
@@ -574,8 +598,6 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
           }
             // Settings at the bottom, out of the way.
             Spacer(Modifier.height(8.dp))
-            // Owner, 14 окт: the two looks of the diary, switched right from the menu.
-            NavRow(null, s.lookPlanner, "", false, small = true) { onLook() }
             NavRow(Icons.Outlined.Settings, s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
             NavRow(Icons.AutoMirrored.Outlined.HelpOutline, s.helpTitle, "", screen == HELP, small = true) { onGo(HELP, null) }
             NavRow(Icons.Outlined.ChatBubbleOutline, s.sendFeedback, "", false, small = true) { onFeedback() }
@@ -712,7 +734,6 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
         line(s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
         line(s.helpTitle, "", screen == HELP, small = true) { onGo(HELP, null) }
         line(s.sendFeedback, "", false, small = true) { onFeedback() }
-        line(s.lookMargins, "", false, small = true) { onLook() }
         Margined(Modifier.padding(top = 14.dp)) {
             Column {
                 Text(s.buildLabel(ru.anjeib.margin.BuildConfig.VERSION_NAME, ru.anjeib.margin.BuildConfig.VERSION_CODE, ru.anjeib.margin.BuildConfig.DEBUG),

@@ -170,6 +170,7 @@ fun TaskList(
     pageDay: LocalDate? = vm.pageDay.collectAsState().value,
 ) {
     val landed by vm.landed.collectAsState()
+    val monthOpen by vm.monthOpen.collectAsState()
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
@@ -223,9 +224,15 @@ fun TaskList(
     Box(Modifier.fillMaxSize().ruledPage(pageLines).marginRule(c.accent.copy(alpha = 0.85f), over = true)) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val listScope = androidx.compose.runtime.rememberCoroutineScope()
+    // The month unfolds at the very top: the page goes up to show it.
+    androidx.compose.runtime.LaunchedEffect(monthOpen) { if (monthOpen) listState.animateScrollToItem(0) }
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = pad) {
         when {
             view == Views.TODAY -> {
+                // The calendar tab unfolds the month over the page (owner, 14 окт); a tap on a day turns the page to it.
+                if (monthOpen) item("month") {
+                    Box(Modifier.animateItem()) { MonthPanel(data, vm, pageDay ?: today, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
+                }
                 // The planner's tabs turned the page to another day: that day alone — its name, its summary, its matters.
                 val other = pageDay?.takeIf { it != today }
                 if (other != null) {
@@ -374,13 +381,14 @@ fun TaskList(
                             Text(s.overviewWord, style = Type.display.copy(color = c.ink))
                             TextTabs(listOf("all" to s.allTab, "topics" to s.topicsBadge, "deals" to s.dealsBadge, "ideas" to s.thoughts), overviewTab,
                                 { overviewTab = it; if (it != "deals" && it != "all") monthOwe = null }, Modifier.padding(top = 10.dp))
-                            Row(Modifier.fillMaxWidth().horizontalScrollCompat().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf("wait" to s.a11yWaiting, "promise" to s.a11yPromised).forEach { (k, l) ->
-                                    Chip(l.replaceFirstChar { it.uppercase() }, monthOwe == k, onClick = { monthOwe = if (monthOwe == k) null else k; if (monthOwe != null) overviewTab = "deals" })
-                                }
-                                listOf("work" to (s.sphereWork to c.link), "personal" to (s.spherePersonal to c.ok)).forEach { (k, v) ->
-                                    Chip(v.first, monthSphere == k, onClick = { monthSphere = if (monthSphere == k) null else k }, dot = v.second)
-                                }
+                            // Owner, 14 окт: the filters as drawn marks — ждём ←, обещали →, работа, личное.
+                            Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                fun owe(k: String) { monthOwe = if (monthOwe == k) null else k; if (monthOwe != null) overviewTab = "deals" }
+                                IconChip(s.a11yWaiting.replaceFirstChar { it.uppercase() }, monthOwe == "wait", { owe("wait") }) { ArrowGlyph(it, 18.dp, incoming = true) }
+                                IconChip(s.a11yPromised.replaceFirstChar { it.uppercase() }, monthOwe == "promise", { owe("promise") }) { ArrowGlyph(it, 18.dp) }
+                                Spacer(Modifier.width(6.dp))
+                                IconChip(s.sphereWork, monthSphere == "work", { monthSphere = if (monthSphere == "work") null else "work" }) { WorkGlyph(it, 20.dp) }
+                                IconChip(s.spherePersonal, monthSphere == "personal", { monthSphere = if (monthSphere == "personal") null else "personal" }) { HomeGlyph(it, 20.dp) }
                             }
                         }
                     }

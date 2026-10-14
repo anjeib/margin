@@ -31,6 +31,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloat
@@ -200,14 +201,8 @@ fun Modifier.plannerFrame(ink: Color, mark: Color, label: androidx.compose.ui.te
     val labelStart = label?.let { labelEnd - it.size.width } ?: labelEnd
     // Owner, 14 окт: no rules between them — only the corner hooks and «MARGIN» frame the page.
     fun seg(x0: Float, y0: Float, x1: Float, y1: Float) = drawLine(mark, Offset(x0, y0), Offset(x1, y1), heavy, cap = androidx.compose.ui.graphics.StrokeCap.Square)
-    // top left «┘»: an upright crossing the rule's line, an arm out to the left at its foot
-    seg(l, top - 5.5f * dp, l, top + 5f * dp); seg(l - arm, top + 5f * dp, l, top + 5f * dp)
-    // top right «┐»: an arm in from the corner above the line, an upright down from it
+    // Owner, 14 окт: one hook only — the top right «┐», by «MARGIN».
     seg(r - 7.5f * dp, top - 3f * dp, r, top - 3f * dp); seg(r, top - 3f * dp, r, top + 5.5f * dp)
-    // bottom left «┐»: an arm out to the left above the line, an upright down across it
-    seg(l - arm, bottom - 6.5f * dp, l, bottom - 6.5f * dp); seg(l, bottom - 6.5f * dp, l, bottom + 4.5f * dp)
-    // bottom right «┘»: an upright up from below the line, an arm in at its foot
-    seg(r, bottom - 6.5f * dp, r, bottom + 4f * dp); seg(r - 7.5f * dp, bottom + 4f * dp, r, bottom + 4f * dp)
     label?.let { drawText(it, topLeft = Offset(labelStart, top - it.size.height / 2f)) }
 }
 
@@ -348,5 +343,62 @@ fun Modifier.paperGrain(): Modifier {
     return this.drawWithContent {
         drawContent()
         drawRect(ShaderBrush(ImageShader(grain, TileMode.Repeated, TileMode.Repeated)), alpha = if (dark) 0.04f else 0.05f)
+    }
+}
+
+/**
+ * The diary's three pages side by side — the contents, «Сегодня», the overview — turned under the finger like paper (owner,
+ * 14 окт): the page being turned rises from its right edge and goes over the spine on the left, the next one lies under it
+ * in its shadow; back — the earlier page comes over and lies down. [page] is where the diary is open; a tab moves it, a swipe
+ * tells [onPage].
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun PlannerPager(page: Int, onPage: (Int) -> Unit, content: @Composable (Int) -> Unit) {
+    val c = M.c
+    val state = androidx.compose.foundation.pager.rememberPagerState(initialPage = page) { 3 }
+    val motion = motionOn()
+    // A tab moved the diary: turn to it (animated, as if by hand).
+    androidx.compose.runtime.LaunchedEffect(page) {
+        if (state.currentPage != page && !state.isScrollInProgress) { if (motion) state.animateScrollToPage(page, animationSpec = androidx.compose.animation.core.tween(560, easing = androidx.compose.animation.core.FastOutSlowInEasing)) else state.scrollToPage(page) }
+    }
+    // A swipe settled on a page: the diary is open there.
+    androidx.compose.runtime.LaunchedEffect(state) {
+        androidx.compose.runtime.snapshotFlow { state.settledPage }.collect { if (it != page) onPage(it) }
+    }
+    androidx.compose.foundation.pager.HorizontalPager(state, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { p ->
+        // How far this page is turned: 0 — open; 0..1 — going over the spine (it is the one on the left); -1..0 — lying under.
+        val turned by androidx.compose.runtime.remember(p) { androidx.compose.runtime.derivedStateOf { (state.currentPage - p) + state.currentPageOffsetFraction } }
+        // The pager draws the later page over the earlier one, so the later page is the leaf: it lies down from the right edge
+        // over the page before it (forward) or rises from it back to the right (back); the page under it is in its shadow.
+        Box(Modifier.fillMaxSize()
+            .graphicsLayer {
+                translationX = turned * size.width
+                val f = (-turned).coerceIn(0f, 1f)
+                rotationY = 92f * f
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0.5f)
+                cameraDistance = 16f * density
+                alpha = if (f > 0.98f) 0f else 1f
+            }
+            .background(c.bg)
+            .drawWithContent {
+                drawContent()
+                val f = turned
+                if (f < 0f) drawRect(Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.2f * -f), Color.Black.copy(alpha = 0.04f * -f))))
+                else if (f > 0f) drawRect(Color.Black.copy(alpha = 0.16f * f.coerceIn(0f, 1f)))
+            }) { content(p) }
+    }
+}
+
+/** The writing band at the foot of the planner page: paper tinted towards terracotta, a double rule across its top. */
+@Composable
+fun Modifier.fieldBand(): Modifier {
+    val c = M.c
+    val band = androidx.compose.ui.graphics.lerp(c.bg, c.accentSoft, if (c.dark) 0.55f else 0.6f)
+    val rule = c.accent.copy(alpha = 0.55f)
+    return this.background(band).drawBehind {
+        val w = 0.8.dp.toPx()
+        drawLine(rule, Offset(0f, w / 2), Offset(size.width, w / 2), w)
+        drawLine(rule, Offset(0f, 3.dp.toPx()), Offset(size.width, 3.dp.toPx()), w)
     }
 }
