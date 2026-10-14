@@ -374,6 +374,31 @@ val weekendInk: Color @Composable get() = M.c.accent.copy(alpha = if (M.c.dark) 
 val pencilInk: Color @Composable get() = M.c.accent.copy(alpha = 0.9f)
 
 /**
+ * A highlighter stroke over [x0]..[x1] of a line [top]..[bottom]: a translucent band of the marker's width, its ends cut on a
+ * slant as a chisel tip leaves them, the edges not quite straight, a second thinner pass where the pen went over again.
+ */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.markerBand(x0: Float, x1: Float, top: Float, bottom: Float, color: Color, seed: Int) {
+    val r = java.util.Random(seed.toLong())
+    val d = density
+    val h = bottom - top
+    val y0 = top + h * 0.22f; val y1 = bottom - h * 0.12f
+    val slant = (y1 - y0) * 0.35f
+    val l = x0 - 2f * d; val rr = x1 + 2.5f * d
+    fun j() = (r.nextFloat() - 0.5f) * 1.2f * d
+    val band = androidx.compose.ui.graphics.Path().apply {
+        moveTo(l + slant, y0 + j()); lineTo((l + rr) / 2, y0 + j()); lineTo(rr, y0 + j())
+        lineTo(rr - slant, y1 + j()); lineTo((l + rr) / 2, y1 + j()); lineTo(l, y1 + j()); close()
+    }
+    drawPath(band, color.copy(alpha = color.alpha * 0.28f))
+    // the second pass, narrower, a little lower — highlighters overlap like this
+    val band2 = androidx.compose.ui.graphics.Path().apply {
+        val a = y0 + (y1 - y0) * 0.35f
+        moveTo(l + slant + 4f * d, a + j()); lineTo(rr - 6f * d, a + j()); lineTo(rr - 6f * d - slant * 0.6f, y1 - 1f * d + j()); lineTo(l + 4f * d, y1 - 1f * d + j()); close()
+    }
+    drawPath(band2, color.copy(alpha = color.alpha * 0.1f))
+}
+
+/**
  * A hand line under [x0]..[x1] at [y]: not ruler-straight — it wobbles a little and climbs a hair, and a second, fainter pass
  * gives it the grain of graphite. [seed] keeps one line the same from frame to frame.
  */
@@ -415,7 +440,8 @@ fun PencilText(text: androidx.compose.ui.text.AnnotatedString, style: androidx.c
                     val s0 = maxOf(a, l.getLineStart(line)); val e0 = minOf(b, l.getLineEnd(line, visibleEnd = true))
                     if (e0 <= s0) continue
                     val x0 = l.getHorizontalPosition(s0, true); val x1 = l.getHorizontalPosition(e0, true)
-                    pencilLine(minOf(x0, x1), maxOf(x0, x1), l.getLineBaseline(line) + 3.5f * density, ink, text.text.hashCode() * 31 + k * 7 + line)
+                    // Owner, 14 окт: a highlighter pass over the words, not a line under them.
+                    markerBand(minOf(x0, x1), maxOf(x0, x1), l.getLineTop(line), l.getLineBottom(line), ink, text.text.hashCode() * 31 + k * 7 + line)
                 }
             }
         })
