@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.outlined.DeleteOutline
 import ru.anjeib.margin.data.Entry
 import ru.anjeib.margin.data.Task
 
@@ -69,17 +70,20 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
         Column(Modifier.weight(1f, fill = false).fillMaxWidth().screenRule().verticalScroll(scroll).padding(bottom = 24.dp)) {
             // The same card as a matter (owner's call, 10 окт): ⋯ for the idea as a whole, its bulb and title in serif;
             // under a line — what was written in it, each piece with its day and hour.
-            Margined {
-                CardMenu { close ->
-                    SoftMenuItem(s.spherePersonal, selected = task.sphere != "work") { close(); vm.setSphere(task.id, "personal") }
-                    SoftMenuItem(s.sphereWork, selected = task.sphere == "work") { close(); vm.setSphere(task.id, "work") }
-                    SoftMenuItem(s.delete, danger = true) { close(); vm.removeMatter(task.id); onClose() }
-                }
+            // Owner, 14 окт: the same card as a matter — no ⋯, the sphere under the title, its tools in a row, a paperclip below.
+            androidx.compose.foundation.layout.Spacer(Modifier.size(12.dp))
+            CardHead(title, { title = it }, false, onToggle = {}, margin = null, meta = emptyList(), mark = { IdeaMark(28.dp) },
+                sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) })
+            Margined(Modifier.padding(top = 10.dp)) {
+                ActionBar(listOf(
+                    Action(s.actToMatter, false, { commitTitle(); vm.ideaToMatter(task.id); onClose() }) { androidx.compose.foundation.layout.Box(Modifier.size(20.dp)) { CheckCircle(false, size = 16.dp, interactive = false) {} } },
+                    Action(s.delete, false, { vm.removeMatter(task.id); onClose() }) {
+                        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.DeleteOutline, null, tint = it, modifier = Modifier.size(21.dp)) },
+                ), slots = 5)
             }
-            CardHead(title, { title = it }, false, onToggle = {}, margin = null, meta = emptyList(), mark = { IdeaMark(28.dp) })
             val born = task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
             WrittenLane(task.entries.filter { it.text.isNotBlank() }.map { LaneItem(it.id, it.at, it.text) }, s.ideaHint, Modifier.padding(top = 10.dp), after = null, label = s.records,
-                draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "task:${task.id}",
+                draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "task:${task.id}", plus = Plus.None,
                 onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
                 onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
             // Files, matters and all the rest of it — on the full page; offered only when the card doesn't show it all (owner, 13 окт).
@@ -91,7 +95,7 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
             SmartComposer(vm, s.writeOnPage, false, onSend = { t, f ->
                 // An idea's words stay words: a record with its photos and files, nothing parsed out of them.
                 if (t.isNotBlank() || f.isNotEmpty()) vm.insertEntry(owner, null, Entry(text = t.trim(), attachments = f))
-            }, pageText = pageDraft, onWrite = { writeTick++ }, pageSend = pageSend, pageFiles = pageFiles, slash = false)
+            }, pageText = pageDraft, onWrite = { writeTick++ }, pageSend = pageSend, pageFiles = pageFiles, slash = false, marksOnPlus = true)
         }
         }
     }

@@ -7,6 +7,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.DeleteOutline
 import ru.anjeib.margin.data.contact
 import ru.anjeib.margin.data.label
 import androidx.compose.material.icons.Icons
@@ -128,19 +131,8 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 var postponing by remember(qid) { mutableStateOf(false) }
                 if (postponing) PostponeDialog(onDismiss = { postponing = false }) { d -> vm.postponeTo(ref, d); postponing = false }
                 fun person(n: String) { data.contact(n)?.let { pp -> onOpenPerson?.invoke(pp.id) } ?: vm.offerContact(n) }
-                Margined {
-                    // Its topic — a way back to it — at the left of the top line, ⋯ at the right.
-                    CardMenu(context = if (onOpenTopic != null) ({ TopicLink(topic.title) { commit(); onOpenTopic() } }) else null) { close ->
-                        // The same as a simple matter's ⋯ (owner, 13 окт); the sphere is the topic's own.
-                        if (!q.done) {
-                            SoftMenuItem(s.postponeMenu) { close(); postponing = true }
-                            rowActs?.let { r -> SoftMenuItem(s.toOtherTopic) { close(); commit(); onClose(); r.toTopic(ref) } }
-                            SoftMenuItem(s.wontDo) { close(); commit(); vm.dropDeal(topic.id, q.id); onClose() }
-                        }
-                        SoftMenuItem(s.toNote) { close(); commit(); vm.dealToIdea(topic.id, q.id); onClose() }
-                        SoftMenuItem(s.delete, danger = true) { close(); vm.removeDeal(topic.id, q.id); onClose() }
-                    }
-                }
+                // Its topic — a way back to it — at the top; no ⋯ (owner, 14 окт): what it can do is under «Ещё».
+                if (onOpenTopic != null) Margined { TopicLink(topic.title) { commit(); onOpenTopic() } } else Spacer(Modifier.height(12.dp))
                 fun tick() {
                     val next = q.slots.firstOrNull { !it.done }
                     if (next != null) vm.toggleSlot(ref, next.id) else vm.toggleQuestion(topic.id, q.id)
@@ -170,18 +162,23 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                             Action(s.actMore, more, { more = !more }) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(22.dp)) },
                         ))
                         androidx.compose.animation.AnimatedVisibility(more) {
-                            ActionBar(listOfNotNull(
+                            MoreActions(listOfNotNull(
                                 Action(s.actWait, q.from != null, { dialog = "waiting" }) { ArrowGlyph(it, 20.dp, incoming = true) },
                                 Action(s.actPromised, q.promisedTo != null, { dialog = "promised" }) { ArrowGlyph(it, 20.dp) },
                                 if (!q.done && q.repeat == null) Action(s.actDay, false, { dialog = "day" }) { CalendarGlyph(it, 20.dp) } else null,
-                                if (!q.done) Action(s.actStep, false, { fill("step") }) { TopicGlyph(it, 20.dp) } else null,
-                            ), Modifier.padding(top = 2.dp), slots = 5)
+                                if (!q.done) Action(s.actStep, false, { fill("step") }) { PlusGlyph(it, 18.dp) } else null,
+                                if (!q.done) Action(s.actPostpone, false, { postponing = true }) { Icon(Icons.Outlined.Schedule, null, tint = it, modifier = Modifier.size(21.dp)) } else null,
+                                if (!q.done) rowActs?.let { r -> Action(s.actToTopic, false, { commit(); onClose(); r.toTopic(ref) }) { TopicGlyph(it, 19.dp) } } else null,
+                                Action(s.actToIdea, false, { commit(); vm.dealToIdea(topic.id, q.id); onClose() }) { ThoughtGlyph(it, 20.dp) },
+                                if (!q.done) Action(s.actWontDo, false, { commit(); vm.dropDeal(topic.id, q.id); onClose() }) { Icon(Icons.Outlined.Block, null, tint = it, modifier = Modifier.size(20.dp)) } else null,
+                                Action(s.delete, false, { vm.removeDeal(topic.id, q.id); onClose() }) { Icon(Icons.Outlined.DeleteOutline, null, tint = it, modifier = Modifier.size(21.dp)) },
+                            ))
                         }
                     }
                 }
                 val born = topic.events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at ?: topic.createdAt
                 WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
-                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "comment:$ref",
+                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "comment:$ref", plus = Plus.Marks,
                     onEdit = { id, t -> vm.editComment(ref, id, t); saved() }, onAdd = { t, at -> vm.addComment(ref, t, at); saved() })
                 // Their day has come: «напомнить» here too, the same as on a simple matter (one behaviour for every wait).
                 if (q.from != null && !q.done && due?.isAfter(LocalDate.now()) == false) Margined(Modifier.padding(top = 16.dp)) {
@@ -226,6 +223,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 },
                 modeLabel = modeLabel, onModeClose = { mode = null }, focusKey = modeTick.takeIf { it > 0 }?.toLong(),
                 pageText = pageDraft.takeIf { modeLabel == null }, onWrite = { writeTick++ }, slash = true, pageSend = pageSend, pageFiles = pageFiles.takeIf { modeLabel == null },
+                marksOnPlus = true,
               )
             }
         }

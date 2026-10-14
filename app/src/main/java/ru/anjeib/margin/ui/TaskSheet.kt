@@ -40,6 +40,8 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.MoreHoriz
@@ -181,20 +183,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 var more by remember(task.id) { mutableStateOf(false) }
                 var postponing by remember(task.id) { mutableStateOf(false) }
                 if (postponing) PostponeDialog(onDismiss = { postponing = false }) { d -> vm.postponeTo(task.id, d); postponing = false }
-                Margined {
-                    CardMenu { close ->
-                        // Where it goes, what it becomes, which sphere — and removing it last.
-                        if (!task.done) {
-                            SoftMenuItem(s.postponeMenu) { close(); postponing = true }
-                            rowActs?.let { r -> SoftMenuItem(s.toTopicPick) { close(); commitTitle(); onClose(); r.toTopic(task.id) } }
-                            SoftMenuItem(s.wontDo) { close(); commitTitle(); vm.dropTask(task.id); onClose() }
-                        }
-                        SoftMenuItem(s.toNote) { close(); commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }
-                        SoftMenuItem(s.spherePersonal, selected = task.sphere != "work") { close(); vm.setSphere(task.id, "personal") }
-                        SoftMenuItem(s.sphereWork, selected = task.sphere == "work") { close(); vm.setSphere(task.id, "work") }
-                        SoftMenuItem(s.delete, danger = true) { close(); dialog = "delete" }
-                    }
-                }
+                // Owner, 14 окт: no ⋯ at the top — everything the matter can do is under «Ещё».
+                Spacer(Modifier.height(12.dp))
                 // v8: «когда» on the margin as on «Сегодня», the mark and the title, one line of values under it, the tools.
                 val today = LocalDate.now()
                 val due = task.dueDate ?: task.startDate
@@ -214,7 +204,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     task.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
                     remind?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) { dialog = "time" }) }
                 }
-                CardHead(title, { title = it }, task.done, onToggle = { vm.toggleTask(task.id) },
+                CardHead(title, { title = it }, task.done, onToggle = { vm.toggleTask(task.id) }, sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) },
                     margin = if (task.slots.isEmpty()) ({ CardWhen(due, task.time, late, onDay = { dialog = "dates" }, onHour = if (due != null) ({ dialog = "time" }) else null, from = task.startDate.takeIf { task.dueDate != null }) }) else null,
                     meta = meta,
                     mark = if (!task.done && (task.waitingFor != null || task.promisedTo != null)) ({
@@ -231,17 +221,22 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             Action(s.actMore, more, { more = !more }) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(22.dp)) },
                         ))
                         androidx.compose.animation.AnimatedVisibility(more) {
-                            ActionBar(listOfNotNull(
+                            MoreActions(listOfNotNull(
                                 Action(s.actWait, task.waitingFor != null, { dialog = "waiting" }) { ArrowGlyph(it, 20.dp, incoming = true) },
                                 Action(s.actPromised, task.promisedTo != null, { dialog = "promised" }) { ArrowGlyph(it, 20.dp) },
                                 if (!task.done && task.repeat == null) Action(s.actDay, false, { dialog = "day" }) { CalendarGlyph(it, 20.dp) } else null,
-                                if (!task.done) Action(s.actStep, false, { fill("step") }) { TopicGlyph(it, 20.dp) } else null,
-                            ), Modifier.padding(top = 2.dp), slots = 5)
+                                if (!task.done) Action(s.actStep, false, { fill("step") }) { PlusGlyph(it, 18.dp) } else null,
+                                if (!task.done) Action(s.actPostpone, false, { postponing = true }) { Icon(Icons.Outlined.Schedule, null, tint = it, modifier = Modifier.size(21.dp)) } else null,
+                                if (!task.done) rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } } else null,
+                                Action(s.actToIdea, false, { commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }) { ThoughtGlyph(it, 20.dp) },
+                                if (!task.done) Action(s.actWontDo, false, { commitTitle(); vm.dropTask(task.id); onClose() }) { Icon(Icons.Outlined.Block, null, tint = it, modifier = Modifier.size(20.dp)) } else null,
+                                Action(s.delete, false, { dialog = "delete" }) { Icon(Icons.Outlined.DeleteOutline, null, tint = it, modifier = Modifier.size(21.dp)) },
+                            ))
                         }
                     }
                 }
                 WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
-                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "deal:${task.id}",
+                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "deal:${task.id}", plus = Plus.Marks,
                     onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
                     onAdd = { t, at -> vm.addComment(task.id, t, at); savedAt = System.currentTimeMillis() })
                 // Where it came from — below the shared part of every matter's card, quietly.
@@ -379,6 +374,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     modeLabel = modeLabel, onModeClose = { mode = null; fill = null }, focusKey = modeTick.takeIf { it > 0 },
                     // A mode (a step, a place…) is a one-line answer in the bar; otherwise the words are on the page.
                     pageText = pageDraft.takeIf { modeLabel == null }, onWrite = { writeTick++ }, slash = true, pageSend = pageSend, pageFiles = pageFiles.takeIf { modeLabel == null },
+                    marksOnPlus = true,
                 )
             }
         }

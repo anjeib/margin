@@ -142,7 +142,9 @@ fun CardWhen(due: java.time.LocalDate?, hour: String?, late: Boolean, onDay: () 
 /** The head of a card: the mark and the title (Inter, larger, edited where it stands), then one quiet line of values. */
 @Composable
 fun CardHead(title: String, onTitle: (String) -> Unit, done: Boolean, onToggle: () -> Unit,
-             margin: (@Composable () -> Unit)?, meta: List<MetaItem>, mark: (@Composable () -> Unit)? = null, hint: String? = null) {
+             margin: (@Composable () -> Unit)?, meta: List<MetaItem>, mark: (@Composable () -> Unit)? = null, hint: String? = null,
+             /** The sphere chip under the title — both choices on a tap (the ⋯ that held them is gone). */
+             sphere: String? = null, onSphere: ((String) -> Unit)? = null) {
     val c = M.c
     Margined(margin = margin) {
         androidx.compose.foundation.layout.Column {
@@ -159,6 +161,7 @@ fun CardHead(title: String, onTitle: (String) -> Unit, done: Boolean, onToggle: 
                 }
             }
             if (meta.isNotEmpty()) MetaLine(meta, Modifier.padding(start = MarkCol, top = 0.dp))
+            if (onSphere != null) SpherePick(sphere, Modifier.padding(start = MarkCol - 2.dp, top = 6.dp, bottom = 2.dp), onSphere)
         }
     }
 }

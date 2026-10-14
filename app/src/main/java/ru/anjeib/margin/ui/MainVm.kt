@@ -612,6 +612,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** The line of marks («/дело /тема /идея») the bar offers, shown over the page's writing line while a page is written on. */
     val pageMarks = androidx.compose.runtime.mutableStateOf<(@androidx.compose.runtime.Composable () -> Unit)?>(null)
+    /** The card page's «+»: each tap opens (or closes) the line of marks over its writing line. */
+    val markPicker = androidx.compose.runtime.mutableStateOf(0)
 
     private fun clipOf(owner: String, entryId: String, attId: String?, cut: Boolean): Clip? {
         val e = data.value.entriesOf(owner).find { it.id == entryId } ?: return null
@@ -1213,6 +1215,15 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     fun setDealPromised(topicId: String, subId: String, who: String?) = store.update { it.setDealPromised(topicId, subId, who) }
 
+    /** «В дело» on an idea (owner, 14 окт): the idea itself becomes a simple matter, its records kept; undo brings it back. */
+    fun ideaToMatter(id: String) {
+        val before = data.value
+        val t = before.tasks.find { it.id == id && it.thought } ?: return
+        store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(topic = false, thought = false, done = false) else it }) }
+        offerUndo(before, L.s.ideaBecameTask(t.title))
+        land(listOf(id))
+    }
+
     /** «В идеи» on a topic's matter: it leaves the topic and becomes an idea of its own, its comments its records. */
     fun dealToIdea(topicId: String, subId: String): String? {
         val before = data.value
@@ -1346,7 +1357,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         if (ui.getBoolean("introAdded", false) || ru.anjeib.margin.BuildConfig.DEMO) return
         ui.edit().putBoolean("introAdded", true).apply()
         ui.edit().putInt("introVersion", INTRO_VERSION).apply()
-        if (samplesHere() && data.value.tasks.none { !it.sample }) putSamples()
+        // Owner, 14 окт: a fresh start is a clean page — the examples come only from Settings → «Примеры».
     }
 
     /** The topic's two files are drawn off the main thread; the set goes in as one change. */

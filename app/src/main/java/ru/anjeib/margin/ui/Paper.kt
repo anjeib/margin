@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -151,12 +152,16 @@ fun RowBody(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Row(
-        modifier.fillMaxWidth().heightIn(min = 52.dp)
+        modifier.fillMaxWidth().heightIn(min = 48.dp)
             .then(if (onClick != null || onLong != null) Modifier.combinedClickable(onClick = onClick ?: {}, onLongClick = onLong) else Modifier)
-            .padding(end = 14.dp, top = RowTop - 2.dp, bottom = RowTop - 2.dp),
+            .padding(end = 14.dp, top = RowTop - 2.dp, bottom = RowTop),
         verticalAlignment = Alignment.Top,
     ) {
-        Box(Modifier.width(MarkCol).heightIn(min = 26.dp), contentAlignment = Alignment.Center) { mark?.invoke() }
+        // Owner, 14 окт: the mark stands on the middle of the first line of words, and its larger touch area
+        // (the circle's 37 dp) doesn't make the row taller — every row is as tall as its words.
+        Box(Modifier.width(MarkCol).height(26.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.wrapContentSize(unbounded = true)) { mark?.invoke() }
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f).padding(top = 2.dp), content = content)
         if (trailing != null) { Spacer(Modifier.width(8.dp)); Box(Modifier.padding(top = 2.dp)) { trailing() } }
@@ -301,6 +306,12 @@ fun ActionBar(items: List<Action>, modifier: Modifier = Modifier, slots: Int = i
         }
         repeat((slots - items.size).coerceAtLeast(0)) { Spacer(Modifier.weight(1f)) }
     }
+}
+
+/** «Ещё» of a card: all it can do, five to a row (owner, 14 окт: the ⋯ menu moved here). */
+@Composable
+fun MoreActions(items: List<Action>, modifier: Modifier = Modifier) {
+    Column(modifier) { items.chunked(5).forEach { row -> ActionBar(row, Modifier.padding(top = 2.dp), slots = 5) } }
 }
 
 /** A promise's arrow on its soft petrol round — the mark of «ждём» (←) and «обещал» (→). */

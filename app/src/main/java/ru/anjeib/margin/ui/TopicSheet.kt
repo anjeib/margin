@@ -376,6 +376,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                     else vm.send(t, scope = Scope.InTask(task.id), files = f, asQuestion = dealsOnly)
                 },
                 modeLabel = under?.let { s.underLine }, onModeClose = { addUnder = null }, focusKey = focusTick.takeIf { it > 0 }, slash = true,
+                // Owner, 14 окт: as in a card — marks with the page's «+», files with the paperclip, only «@» typed.
+                marksOnPlus = under == null && !materialsMode,
                 // A tap on the bar (or words just dictated): to the end of the page, the cursor in its line.
                 pageText = pageDraft.takeIf { under == null && !materialsMode }, pageFiles = pageFiles.takeIf { under == null && !materialsMode }, pageSend = pageSend,
                 // What the phone reads in the words being written, quietly over the microphone: «дело · пт 16 окт · ждём от Марины».
@@ -549,7 +551,7 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
             }
         }
         // The page goes on below the last day: write here, the bar sends it (as the old field did: records, matters, marks).
-        if (draft != null) item("write") { PageLine(draft, writeHint, writeKey, Modifier.padding(top = 10.dp), after = feed.lastOrNull()?.at, vm = vm, files = files, pasteTo = "task:${task.id}", onKeep = onKeep) }
+        if (draft != null) item("write") { PageLine(draft, writeHint, writeKey, Modifier.padding(top = 10.dp), after = feed.lastOrNull()?.at, vm = vm, files = files, pasteTo = "task:${task.id}", onKeep = onKeep, plus = Plus.Marks) }
     }
 }
 

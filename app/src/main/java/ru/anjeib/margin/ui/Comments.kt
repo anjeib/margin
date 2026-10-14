@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +48,8 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
                 draft: androidx.compose.runtime.MutableState<String>? = null, focusKey: Any? = null,
                 vm: MainVm? = null, files: androidx.compose.runtime.snapshots.SnapshotStateList<ru.anjeib.margin.data.Attachment>? = null,
                 pasteTo: String? = null, onKeep: (() -> Unit)? = null,
+                /** A card: the line's «+» chooses marks (files come with the paperclip in the bar); null — no «+» at all. */
+                plus: Plus = Plus.Files,
                 onEdit: (String, String) -> Unit, onAdd: (String, String) -> Unit) {
     val c = M.c
     val text = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp)
@@ -75,7 +78,7 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
             val add by rememberUpdatedState(onAdd)
             // Leaving the page with words not kept keeps them as a piece rather than losing them (when the page has no keeper of its own).
             DisposableEffect(Unit) { onDispose { if (onKeep == null && draft.value.isNotBlank()) { add(draft.value.trim(), nowStamp()); draft.value = "" } } }
-            PageLine(draft, if (items.isEmpty()) M.s.laneHint else "", focusKey, after = items.lastOrNull()?.at ?: after, vm = vm, files = files, pasteTo = pasteTo, onKeep = onKeep)
+            PageLine(draft, if (items.isEmpty()) M.s.laneHint else "", focusKey, after = items.lastOrNull()?.at ?: after, vm = vm, files = files, pasteTo = pasteTo, onKeep = onKeep, plus = plus)
             return@Column
         }
         var draft by remember { mutableStateOf("") }
@@ -111,7 +114,8 @@ fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, 
              /** Where «Вставить сюда» puts what was copied or is being moved: «task:<id>», «deal:<id>», «comment:<ref>». */
              pasteTo: String? = null,
              /** Keeps what is written (there is no «send»): called when the keyboard goes away after writing. */
-             onKeep: (() -> Unit)? = null) {
+             onKeep: (() -> Unit)? = null,
+             plus: Plus = Plus.Files) {
     val c = M.c
     val style = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp)
     var t by text
@@ -135,11 +139,16 @@ fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, 
         if (t.isNotBlank() || !files.isNullOrEmpty()) Box(Modifier.padding(top = 9.dp)) { Stamp(now, sameDay = after?.take(10) == now.take(10)) }
     }) {
       androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.Top) {
-        if (vm != null && files != null) Box(Modifier.offset(x = (-10).dp).padding(top = 1.dp)) { AttachPlus(vm, size = 36.dp, tint = M.c.graphite) { files += it } }
+        if (vm != null && files != null && plus == Plus.Files) Box(Modifier.offset(x = (-10).dp).padding(top = 1.dp)) { AttachPlus(vm, size = 36.dp, tint = M.c.graphite) { files += it } }
+        // A card (owner, 14 окт): «+» offers the marks — what it is, where it belongs, who owes, which topic.
+        if (vm != null && plus == Plus.Marks) Box(Modifier.offset(x = (-10).dp).padding(top = 1.dp).size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
+            .clickable(onClickLabel = M.s.slashWhat) { runCatching { focus.requestFocus() }; vm.markPicker.value++ }, contentAlignment = androidx.compose.ui.Alignment.Center) {
+            PlusGlyph(M.c.graphite, 18.dp)
+        }
         Box(Modifier.weight(1f).heightIn(min = 96.dp).clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {
             runCatching { focus.requestFocus() } }) {
             // The quiet word stays until something is written — a sheet may hand the line its focus by itself.
-            if (t.isEmpty() && hint.isNotEmpty() && (pasteTo == null || vm?.clip?.collectAsState()?.value == null)) Text(hint, style = Type.italic.copy(color = c.faint, fontSize = 16.sp, lineHeight = 23.sp), modifier = Modifier.padding(vertical = 8.dp))
+            if (t.isEmpty() && hint.isNotEmpty() && vm?.pageMarks?.value == null && (pasteTo == null || vm?.clip?.collectAsState()?.value == null)) Text(hint, style = Type.italic.copy(color = c.faint, fontSize = 16.sp, lineHeight = 23.sp), modifier = Modifier.padding(vertical = 8.dp))
             val value = if (typed == t) androidx.compose.ui.text.input.TextFieldValue(t, sel) else androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(t.length))
             Column {
                 // Something copied or being moved (owner, 13 окт): one quiet line offers to put it here.
@@ -168,6 +177,9 @@ fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, 
       }
     }
 }
+
+/** What the «+» at the start of a page's writing line does: add files (a topic), offer marks (a card), or nothing (an idea). */
+enum class Plus { Files, Marks, None }
 
 /** The day and the hour a piece was written, on the margin in Margin's italic; only the day when that is all that is known. */
 @Composable

@@ -134,6 +134,11 @@ fun SmartComposer(
     pageFiles: androidx.compose.runtime.snapshots.SnapshotStateList<Attachment>? = null,
     /** On a page there is no «send»: the page asks for what is written to be kept (keyboard hidden, page left) through this. */
     pageSend: PageSend? = null,
+    /**
+     * Owner, 14 окт: in a matter's card the marks are chosen with the page's «+» (MainVm.markPicker), not typed — only «@»
+     * still works in the words; files come with the paperclip down here.
+     */
+    marksOnPlus: Boolean = false,
 ) {
     val c = M.c
     val s = M.s
@@ -221,22 +226,33 @@ fun SmartComposer(
     Column(modifier.fillMaxWidth()) {
       Column(Modifier.padding(start = lead)) {
         // «/…», «#…», «@…» at the end of the words: a line of choices right over the field, words without a box (owner, 13 окт).
-        val trigger = if (slash && modeLabel == null) Regex("(?:^|\\s)([/#@])([\\p{L}\\d_-]*)$").find(text) else null
-        val query = trigger?.groupValues?.get(2)?.lowercase()?.replace('ё', 'е')
+        val trigger = if (slash && modeLabel == null) Regex(if (marksOnPlus) "(?:^|\\s)(@)([\\p{L}\\d_-]*)$" else "(?:^|\\s)([/#@])([\\p{L}\\d_-]*)$").find(text) else null
+        // The card's «+»: every mark at once («/» — what and where, «#» — the topic list), until something is typed or picked.
+        var picker by remember { mutableStateOf<String?>(null) }
+        var pickerText by remember { mutableStateOf("") }
+        if (marksOnPlus) {
+            val tick = vm.markPicker.value
+            val since = remember { tick }
+            LaunchedEffect(tick) { if (tick > since) { picker = if (picker == null) "/" else null; pickerText = text } }
+            LaunchedEffect(text) { if (picker != null && text != pickerText) picker = null }
+        }
+        val query = if (picker != null) null else trigger?.groupValues?.get(2)?.lowercase()?.replace('ё', 'е')
         val kinds = listOf(s.tagDeal, s.tagTopic, s.tagIdea)
         val spheres = listOf(s.tagWork, s.tagPersonal)
         // «/готово» and «/запись» still work when typed, but are not offered — words say the same (owner's call, 10 окт).
         val actions = listOf(s.tagWait, s.tagPromise)
         // Just picked a kind: where it belongs is offered next, until the user types on.
         LaunchedEffect(text) { if (sphereNext != null && text != sphereNext) sphereNext = null }
-        val sign = trigger?.groupValues?.get(1) ?: if (sphereNext != null && text == sphereNext) "+" else null
+        val sign = picker ?: trigger?.groupValues?.get(1) ?: if (sphereNext != null && text == sphereNext) "+" else null
         val d = vm.data.collectAsState().value
         // One choice: (the mark it adds, what the line shows, its group, a small sign before it).
         data class Pick(val token: String, val label: String, val group: String, val dot: Color? = null, val topic: Boolean = false)
         fun sphereDot(w: String) = if (w == s.tagWork) c.link else c.ok
         val offer: List<Pick> = when (sign) {
             // Only what it is at first; the rest is there when its first letters are typed (owner, 13 окт).
-            "/" -> if (query.isNullOrEmpty()) kinds.map { Pick("/$it", "/$it", "kind") }
+            "/" -> if (picker != null) kinds.map { Pick("/$it", "/$it", "kind") } + spheres.map { Pick("/$it", "/$it", "sphere", sphereDot(it)) } +
+                    actions.map { Pick("/$it", "/$it", "action") } + Pick("#", "# " + s.tagTopic + "…", "topicPick")
+                else if (query.isNullOrEmpty()) kinds.map { Pick("/$it", "/$it", "kind") }
                 else (kinds.map { Pick("/$it", "/$it", "kind") } + spheres.map { Pick("/$it", "/$it", "sphere", sphereDot(it)) } +
                     actions.map { Pick("/$it", "/$it", "action") }).filter { it.label.drop(1).startsWith(query) }
             "+" -> spheres.map { Pick("/$it", "/$it", "sphere", sphereDot(it)) }
@@ -253,8 +269,10 @@ fun SmartComposer(
         }
         val present = remember(text) { MarkLook.tokens(text) }
         fun pick(p: Pick) {
+            if (p.group == "topicPick") { picker = "#"; return }
+            picker = null
             // One of each kind of mark: a new choice replaces the old one of its group; a chosen one again — taken off.
-            var t = text.replace(Regex("(?:^|\\s)[/#@][\\p{L}\\d_-]*$"), "")
+            var t = if (trigger != null) text.replace(Regex("(?:^|\\s)[/#@][\\p{L}\\d_-]*$"), "") else text
             val again = present.any { it.equals(p.token, true) }
             present.filter { it.equals(p.token, true) || (groupOf(it) == p.group && p.group != "person") }.forEach { old ->
                 t = t.replace(Regex("(?:^|(?<=\\s))" + Regex.escape(old) + "(?:\\s|$)"), "")
@@ -343,6 +361,8 @@ fun SmartComposer(
                     transcribing -> Text(s.transcribing, style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f).padding(start = 6.dp))
                     else -> Spacer(Modifier.weight(1f))
                 }
+                // The card's files: a paperclip by the microphone; what it adds shows on the page, under the words.
+                if (marksOnPlus && rec == null && !transcribing) AttachPlus(vm, size = FieldH + 6.dp, glyph = { ClipGlyph(c.graphite, 20.dp) }) { files += it }
                 if (transcribing) Box(Modifier.size(FieldH + 6.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(18.dp))
                 } else Box(Modifier.size(FieldH + 6.dp).clip(CircleShape).background(if (rec != null) c.accent else Color.Transparent)
@@ -429,7 +449,7 @@ fun SmartComposer(
  * sits at the field's start; on a page (owner, 13 окт) on the margin of the writing line, so what is added lands right there.
  */
 @Composable
-fun AttachPlus(vm: MainVm, size: Dp = 40.dp, tint: Color = M.c.graphite, onAdd: (Attachment) -> Unit) {
+fun AttachPlus(vm: MainVm, size: Dp = 40.dp, tint: Color = M.c.graphite, glyph: (@Composable () -> Unit)? = null, onAdd: (Attachment) -> Unit) {
     val s = M.s
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -452,7 +472,7 @@ fun AttachPlus(vm: MainVm, size: Dp = 40.dp, tint: Color = M.c.graphite, onAdd: 
     Box {
         Box(Modifier.size(size).clip(CircleShape).clickable(onClickLabel = s.a11yAttach, role = androidx.compose.ui.semantics.Role.Button) { menu = true }
             .semantics { contentDescription = s.a11yAttach }, contentAlignment = Alignment.Center) {
-            PlusGlyph(tint, 18.dp)
+            if (glyph != null) glyph() else PlusGlyph(tint, 18.dp)
         }
         SoftMenu(menu, { menu = false }) {
             MenuItem(Icons.Outlined.PhotoLibrary, s.attachPhoto) { menu = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }

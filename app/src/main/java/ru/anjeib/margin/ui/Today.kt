@@ -305,8 +305,8 @@ fun TryLine(onTry: (String) -> Unit) {
 
 /** A line of Margin's voice under the lists: «Во «Входящих» ждут: 2 ›», «Завтра — 3 дела ›». */
 @Composable
-fun VoiceLink(text: String, onClick: () -> Unit, quiet: Boolean = false) {
-    Margined(Modifier.padding(top = 10.dp)) { Voice("$text  ›", link = !quiet, onClick = onClick, modifier = Modifier.heightIn(min = 40.dp)) }
+fun VoiceLink(text: String, onClick: () -> Unit, quiet: Boolean = false, arrow: String = "›") {
+    Margined(Modifier.padding(top = 10.dp)) { Voice("$text  $arrow", link = !quiet, onClick = onClick, modifier = Modifier.heightIn(min = 40.dp)) }
 }
 
 /** The day's summary under its name, in Margin's voice: «4 дела · 1 встреча · с прошлых дней: 2». */

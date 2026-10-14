@@ -815,6 +815,11 @@ interface Strings {
     val actPromised: String
     val actDay: String
     val actStep: String
+    val actPostpone: String
+    val actToTopic: String
+    val actToIdea: String
+    val actWontDo: String
+    val actToMatter: String
     val addTime: String
     val commentsTitle: String
     val filesWord: String
@@ -1767,6 +1772,11 @@ object Ru : Strings {
     override val actPromised = "Обещал"
     override val actDay = "+ день"
     override val actStep = "+ дело"
+    override val actPostpone = "Позже"
+    override val actToTopic = "В тему"
+    override val actToIdea = "В идеи"
+    override val actWontDo = "Не буду"
+    override val actToMatter = "В дело"
     override val addTime = "+ время"
     override val commentsTitle = "Комментарии"
     override val filesWord = "Файлы"
@@ -2634,6 +2644,11 @@ object En : Strings {
     override val actPromised = "Promised"
     override val actDay = "+ day"
     override val actStep = "+ to-do"
+    override val actPostpone = "Later"
+    override val actToTopic = "To topic"
+    override val actToIdea = "To ideas"
+    override val actWontDo = "Won't do"
+    override val actToMatter = "To-do"
     override val addTime = "+ time"
     override val commentsTitle = "Comments"
     override val filesWord = "Files"

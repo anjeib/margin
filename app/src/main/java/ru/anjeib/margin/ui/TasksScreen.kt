@@ -213,6 +213,7 @@ fun TaskList(
     var overviewTab by rememberSaveable { mutableStateOf("all") }
     // «+ тема»: a topic by its name at once — a project to fill (owner, 12 окт).
     var askTopic by remember { mutableStateOf(false) }
+    var tomorrowOpen by rememberSaveable { mutableStateOf(false) }
     if (askTopic) TextDialog(s.newTopicTitle, "", s.newTopicHint, onDismiss = { askTopic = false }) { v -> askTopic = false; vm.newTopic(v)?.let(onOpen) }
     // «Поля и панели» (v8): the rule runs behind the whole list; rows sit on panels right of it, «когда» on the margin.
     val pad = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
@@ -319,8 +320,12 @@ fun TaskList(
                 // One look ahead for the evening: tomorrow's count, a tap opens the calendar.
                 val tomorrowParts = listOfNotNull(tomorrowPlan.deals.size.takeIf { it > 0 }?.let { s.summaryDeals(it) },
                     tomorrowPlan.events.size.takeIf { it > 0 }?.let { s.summaryMeetings(it) })
-                if (tomorrowParts.isNotEmpty()) item("tomorrow") {
-                    VoiceLink(s.quickTomorrow + " — " + tomorrowParts.joinToString(" · "), { vm.calendarOpenOn.value = today.plusDays(1); onView(Views.WEEK) }, quiet = true)
+                // Owner, 14 окт: a tap opens tomorrow right here, under it — not the calendar.
+                if (tomorrowParts.isNotEmpty()) {
+                    item("tomorrow") {
+                        VoiceLink(s.quickTomorrow + " — " + tomorrowParts.joinToString(" · "), { tomorrowOpen = !tomorrowOpen }, quiet = true, arrow = if (tomorrowOpen) "‹" else "›")
+                    }
+                    if (tomorrowOpen) dayPanel(tomorrowPlan.copy(doneCount = 0, done = emptyList()), today, "tm", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it })
                 }
             }
 

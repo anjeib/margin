@@ -127,6 +127,7 @@ object LocalSpeech {
                 root(c).listFiles { f -> f.isDirectory && f.name != want.version }?.forEach { it.deleteRecursively() }
                 _state.value = State.Ready
             } catch (e: Exception) {
+                android.util.Log.w("MarginSpeech", "model download failed", e)
                 if (!update) _state.value = if (cancel) State.Missing else State.Failed(e.message ?: e.toString())
             } finally {
                 _updating.value = null
@@ -155,6 +156,7 @@ object LocalSpeech {
                 if (conn.responseCode in 301..308) { url = URL(url, conn.getHeaderField("Location")); conn.disconnect(); continue }
                 break
             }
+            android.util.Log.i("MarginSpeech", "${f.name}: HTTP ${conn.responseCode} from ${url.host}")
             val resumed = conn.responseCode == 206
             if (conn.responseCode !in listOf(200, 206)) error("HTTP ${conn.responseCode}")
             var done = if (resumed) part.length() else 0L
