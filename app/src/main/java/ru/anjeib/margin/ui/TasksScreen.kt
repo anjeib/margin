@@ -419,8 +419,8 @@ fun TaskList(
                                     IconChip(s.a11yPromised.replaceFirstChar { it.uppercase() }, monthOwe == "promise", { owe("promise") }) { HandGlyph(it, 23.dp) }
                                     Spacer(Modifier.width(6.dp))
                                 }
-                                IconChip(s.sphereWork, monthSphere == "work", { monthSphere = if (monthSphere == "work") null else "work" }) { WorkGlyph(it, 20.dp) }
-                                IconChip(s.spherePersonal, monthSphere == "personal", { monthSphere = if (monthSphere == "personal") null else "personal" }) { HomeGlyph(it, 20.dp) }
+                                // Owner, 14 окт: the spheres as words — the chosen one petrol; chosen again — all of them.
+                                SphereIcons(monthSphere, { monthSphere = it }, clearable = true)
                             }
                         }
                     }
@@ -443,7 +443,8 @@ fun TaskList(
                     Margined(Modifier.padding(top = 18.dp)) { Voice(if (topicsOnly) s.topicsEmpty else s.emptyAll) }
                 }
                 if (topics.isNotEmpty() || (owe == null && tab == "topics" && !topicsOnly)) {
-                    item("ot-head") { SectionHead(s.topicsBadge, count = topics.size.takeIf { it > 0 }, action = s.newTopicLink to { askTopic = true }) }
+                    // Owner, 14 окт: no «+ тема» here — a new topic is written in the field below («Новая тема…»).
+                    item("ot-head") { SectionHead(s.topicsBadge, count = topics.size.takeIf { it > 0 }) }
                     topics.forEachIndexed { i, t ->
                         item("ot" + t.id) { Box(Modifier.animateItem()) { TopicPaperRow(t, seatOf(i, topics.size), onOpen = { onOpen(t.id) }, onArchive = { vm.archiveTopic(t.id) }) } }
                     }

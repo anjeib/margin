@@ -118,16 +118,6 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 BackGlyph(c.ink)
             }
             Spacer(Modifier.weight(1f))
-            Box {
-                Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.MoreHoriz, s.moreActions, tint = c.graphite)
-                }
-                SoftMenu(menu, { menu = false }) {
-                    DropdownMenuItem(text = { Text(s.listBlock, style = Type.body) }, onClick = { menu = false; vm.addNoteList(note.id); fill("item") })
-                    DropdownMenuItem(text = { Text(s.project, style = Type.body) }, onClick = { menu = false; projectDialog = true })
-                    DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accentText)) }, onClick = { menu = false; vm.deleteNote(note.id); onBack() })
-                }
-            }
         }
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp)) {
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Top) {
@@ -142,6 +132,12 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                         onOpenTask = onOpenTask, onMake = { vm.ideaToTask(note.id, null) })
                 }
             }
+            // Owner, 14 окт: no ⋯ at the top — the row of tools, as in every card.
+            ActionBar(listOf(
+                Action(s.listBlock, false, { vm.addNoteList(note.id); fill("item") }) { NoteGlyph(it, 21.dp) },
+                Action(s.project, false, { projectDialog = true }) { TopicGlyph(it, 19.dp) },
+                Action(s.delete, false, { vm.deleteNote(note.id); onBack() }) { TrashGlyph(it, 21.dp) },
+            ), Modifier.padding(top = 8.dp), slots = 5)
             Spacer(Modifier.height(6.dp))
             // The same properties a task has — what is filled in one quiet line, «+ …» for the rest.
             val remind = note.remindAt?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }

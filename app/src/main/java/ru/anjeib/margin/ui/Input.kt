@@ -256,8 +256,8 @@ fun SmartComposer(
         fun sphereDot(w: String) = if (w == s.tagWork) c.link else c.ok
         val offer: List<Pick> = when (sign) {
             // Only what it is at first; the rest is there when its first letters are typed (owner, 13 окт).
-            "/" -> if (picker != null) kinds.map { Pick("/$it", "/$it", "kind") } + spheres.map { Pick("/$it", "/$it", "sphere", sphereDot(it)) } +
-                    actions.map { Pick("/$it", "/$it", "action") } + Pick("#", "# " + s.tagTopic + "…", "topicPick")
+            // The card's «+» (owner, 14 окт): only what the words become — a matter or a note.
+            "/" -> if (picker != null) listOf(s.tagDeal, s.tagIdea).map { Pick("/$it", "/$it", "kind") }
                 else if (query.isNullOrEmpty()) kinds.map { Pick("/$it", "/$it", "kind") }
                 else (kinds.map { Pick("/$it", "/$it", "kind") } + spheres.map { Pick("/$it", "/$it", "sphere", sphereDot(it)) } +
                     actions.map { Pick("/$it", "/$it", "action") }).filter { it.label.drop(1).startsWith(query) }
@@ -317,7 +317,12 @@ fun SmartComposer(
             }
         }
         if (pageText != null) {
-            SideEffect { vm.pageMarks.value = if (offer.isNotEmpty()) ({ line(offer, Modifier.offset(x = (-10).dp)) }) else null }
+            // From the «+»: the two choices drawn like the card's tools above them — the mark over its word (owner, 14 окт).
+            val kindsBar: @Composable (List<Pick>) -> Unit = { shown ->
+                ActionBar(shown.map { p -> Action(p.label.drop(1).replaceFirstChar { it.uppercase() }, false, { pick(p) }) { col ->
+                    if (p.token == "/" + s.tagDeal) DealGlyph(col, 22.dp) else NoteGlyph(col, 22.dp) } }, Modifier.offset(x = (-8).dp), slots = 4)
+            }
+            SideEffect { vm.pageMarks.value = if (offer.isEmpty()) null else if (picker != null) ({ kindsBar(offer) }) else ({ line(offer, Modifier.offset(x = (-10).dp)) }) }
             androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.pageMarks.value = null } }
         } else androidx.compose.animation.AnimatedVisibility(offer.isNotEmpty(), enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(140)),
             exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(100))) {

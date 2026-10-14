@@ -147,6 +147,7 @@ fun CardWhen(due: java.time.LocalDate?, hour: String?, late: Boolean, onDay: () 
  * its sphere («работа» / «личное», a tap switches it), then its values, each a tap.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun CardHead(title: String, onTitle: (String) -> Unit, done: Boolean, onToggle: () -> Unit,
              margin: (@Composable () -> Unit)?, meta: List<MetaItem>, mark: (@Composable () -> Unit)? = null, hint: String? = null,
              sphere: String? = null, onSphere: ((String) -> Unit)? = null,
@@ -172,19 +173,25 @@ fun CardHead(title: String, onTitle: (String) -> Unit, done: Boolean, onToggle: 
             }
             val line = buildList {
                 kind?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) {}) }
-                if (onSphere != null) add(MetaItem(Meta.plain(when (sphere) { "work" -> s.sphereWork.lowercase(); "personal" -> s.spherePersonal.lowercase()
-                    else -> s.spherePersonal.lowercase() + " / " + s.sphereWork.lowercase() }), if (sphere == null) Meta.faint() else Meta.quiet()) { onSphere(nextSphere(sphere)) })
                 addAll(meta)
             }
-            if (line.isNotEmpty()) MetaLine(line, Modifier.padding(start = if (noMark) 0.dp else MarkCol, top = 0.dp))
+            // The sphere as its two words at the end of the line (owner, 14 окт), the chosen one in petrol.
+            // The line flows on: its words, then «личное работа» where there is room, else on the next line — never squeezed.
+            // The house and the briefcase at the right of the line's first row (owner, 14 окт); a long line wraps beside them.
+            androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(start = if (noMark) 0.dp else MarkCol), verticalAlignment = Alignment.Top) {
+                androidx.compose.foundation.layout.Box(Modifier.weight(1f)) { if (line.isNotEmpty()) MetaLine(line) }
+                if (onSphere != null) SphereIcons(sphere, { k -> k?.let(onSphere) }, Modifier.padding(start = 6.dp))
+            }
         }
     }
 }
 
 /** At the very bottom, in Margin's voice: «создано 10 окт, 18:05» — when the matter appeared, never mistaken for its day. */
 @Composable
-fun CreatedLine(stamp: String?) {
+fun CreatedLine(stamp: String?, onClick: (() -> Unit)? = null) {
     val at = stamp?.let { runCatching { java.time.LocalDateTime.parse(it.take(16)) }.getOrNull() }
     val d = at?.toLocalDate() ?: stamp?.let { runCatching { java.time.LocalDate.parse(it.take(10)) }.getOrNull() } ?: return
-    Voice(M.s.createdOn(d.dayMonthYear() + (at?.let { ", " + it.toLocalTime().toString().take(5) } ?: "")), Modifier.padding(top = 22.dp, bottom = 6.dp))
+    // Made from words written in the field: a tap shows them as they were written (owner, 14 окт: no «↳ из сообщения» line).
+    Voice(M.s.createdOn(d.dayMonthYear() + (at?.let { ", " + it.toLocalTime().toString().take(5) } ?: "")) + if (onClick != null) "  ›" else "",
+        Modifier.padding(top = 22.dp, bottom = 6.dp), onClick = onClick)
 }

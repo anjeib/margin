@@ -182,15 +182,16 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 val others = task.people.filter { p -> p != task.waitingFor && p != task.promisedTo }
                 val meta = buildList {
                     if (window) task.whenLabel()?.substringBefore(" · ${task.time}")?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) { dialog = "dates" }) }
-                    owes?.let { add(MetaItem(Meta.promise(it), Meta.quiet()) { dialog = if (task.waitingFor != null) "waiting" else "promised" }) }
-                    others.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { data.contact(p)?.let { pp -> onOpenPerson(pp.id) } ?: fill("people") }) }
+                    // A name is its person's card (owner, 14 окт); who it is changes under «Ещё» → «Ждём» / «Обещал».
+                    owes?.let { add(MetaItem(Meta.promise(it), Meta.quiet()) { vm.nameTapped(task.waitingFor ?: task.promisedTo ?: return@MetaItem) }) }
+                    others.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { vm.nameTapped(p) }) }
                     task.place?.let { add(MetaItem(Meta.plain(it), Meta.link(), onLong = { fill("place") }) {
                         runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(it)))) }
                     }) }
                     task.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
                     remind?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) { dialog = "time" }) }
                 }
-                CardHead(title, { title = it }, task.done, onToggle = { vm.toggleTask(task.id) }, sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) }, kind = s.cardKindDeal,
+                CardHead(title, { title = it }, task.done, onToggle = { vm.toggleTask(task.id) }, sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) }, kind = s.cardKindDeal.takeIf { owes == null },
                     margin = if (task.slots.isEmpty()) ({ CardMargin(due, task.time, late, prefix = windowPrefix(task.startDate.takeIf { task.dueDate != null }, due),
                         onDay = { dialog = "dates" }, onHour = if (due != null) ({ dialog = "time" }) else null) }) else null,
                     meta = meta,
@@ -200,23 +201,20 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 if (task.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) }) }
                 Margined(Modifier.padding(top = 10.dp)) {
                     Column {
+                        // Owner, 14 окт: the tools are not lit by what is set — that is said on the margin and in the line above.
                         ActionBar(listOf(
-                            Action(s.actWhen, due != null, { dialog = "dates" }) { CalendarGlyph(it, 22.dp) },
-                            Action(s.fieldRepeat, task.repeat != null, { dialog = "repeat" }) { RepeatGlyph(it, 22.dp) },
-                            Action(s.fieldPeople, others.isNotEmpty(), { fill("people") }) { PeopleGlyph(it, 22.dp) },
-                            Action(s.fieldPlace, task.place != null, { fill("place") }) { PinGlyph(it, 23.dp) },
+                            Action(s.actWhen, false, { dialog = "dates" }) { CalendarGlyph(it, 22.dp) },
+                            Action(s.fieldRepeat, false, { dialog = "repeat" }) { RepeatGlyph(it, 22.dp) },
+                            Action(s.actPeople, false, { fill("people") }) { PeopleGlyph(it, 22.dp) },
+                            Action(s.fieldPlace, false, { fill("place") }) { PinGlyph(it, 23.dp) },
                             Action(s.actMore, more, { more = !more }) { MoreGlyph(it, 23.dp) },
                         ))
                         androidx.compose.animation.AnimatedVisibility(more) {
                             MoreActions(listOfNotNull(
-                                Action(s.actWait, task.waitingFor != null, { dialog = "waiting" }) { HandGlyph(it, 23.dp, incoming = true) },
-                                Action(s.actPromised, task.promisedTo != null, { dialog = "promised" }) { HandGlyph(it, 23.dp) },
-                                if (!task.done && task.repeat == null) Action(s.actDay, false, { dialog = "day" }) { CalendarGlyph(it, 20.dp) } else null,
-                                if (!task.done) Action(s.actStep, false, { fill("step") }) { PlusGlyph(it, 18.dp) } else null,
-                                if (!task.done) Action(s.actPostpone, false, { postponing = true }) { ClockGlyph(it, 22.dp) } else null,
+                                Action(s.actWait, false, { dialog = "waiting" }) { HandGlyph(it, 23.dp, incoming = true) },
+                                Action(s.actPromised, false, { dialog = "promised" }) { HandGlyph(it, 23.dp) },
                                 if (!task.done) rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } } else null,
                                 Action(s.actToIdea, false, { commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }) { NoteGlyph(it, 21.dp) },
-                                if (!task.done) Action(s.actWontDo, false, { commitTitle(); vm.dropTask(task.id); onClose() }) { NotGlyph(it, 21.dp) } else null,
                                 Action(s.delete, false, { dialog = "delete" }) { TrashGlyph(it, 22.dp) },
                             ))
                         }
@@ -233,29 +231,12 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         if (task.noteId != null) originLine(task, data)?.let { o ->
                             Voice("↳ $o", Modifier.padding(top = 8.dp), link = true, onClick = { task.noteId?.let(onOpenNote) })
                         }
-                        // Where it came from: «↳ из сообщения» — the words open on a tap.
-                        if (task.source != null && task.noteId == null) {
-                            androidx.compose.runtime.LaunchedEffect(task.id) { vm.tidySource(task.id) }
-                            Voice("↳ " + s.fromMessageShort, Modifier.padding(top = 8.dp), link = true, onClick = { dialog = "source" })
-                        }
+                        // Where it came from: the words as written open from «создано …» at the foot (owner, 14 окт).
+                        if (task.source != null && task.noteId == null) androidx.compose.runtime.LaunchedEffect(task.id) { vm.tidySource(task.id) }
                     }
                 }
 
-                // Their day has come (or passed): offer to nudge the person (SMS if we know the number, else share).
-                if (task.waitingFor != null && !task.done && task.dueDate?.isAfter(LocalDate.now()) == false) {
-                    val ctx = androidx.compose.ui.platform.LocalContext.current
-                    val who = task.waitingFor
-                    val phone = data.person(who)?.phone
-                    Margined(Modifier.padding(top = 16.dp)) {
-                        Panel {
-                            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(s.overdueWaiting, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.weight(1f))
-                                // The same message as «напомнить» on «Сегодня»: «Привет, Дима. Напоминаю про макет…», not the to-do's own title.
-                                Pill(s.remindPerson(who), filled = true, onClick = { remindAbout(ctx, data, task) })
-                            }
-                        }
-                    }
-                }
+                // Owner, 14 окт: no «напомнить» inside the card — it is on the row on «Сегодня».
 
                 // «Связи»: the idea it grew from, what we wait for around it, what was promised around it.
                 val links = taskLinks(task, data)
@@ -266,8 +247,9 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             when (l.kind) { "idea" -> IdeaMark(24.dp); "wait" -> PromiseMark(incoming = true, size = 28.dp); else -> PromiseMark(incoming = false, size = 28.dp) }
                         }, onClick = if (l.noteId != null || l.taskId != null) ({ l.noteId?.let(onOpenNote) ?: l.taskId?.let(onOpenTask) }) else null,
                             trailing = if (l.noteId != null || l.taskId != null) ({ Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.graphite) }) else null) {
-                            RowTitle(l.title, maxLines = 2)
-                            if (l.meta.isNotBlank()) RowSub(l.meta)
+                            // Whole, never cut (owner, 14 окт).
+                            RowTitle(l.title, maxLines = 6)
+                            if (l.meta.isNotBlank()) RowSub(l.meta, maxLines = 4)
                         }
                     }
                 }
@@ -327,7 +309,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         }
                     }
                 }
-                Margined { CreatedLine(task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt) }
+                Margined { CreatedLine(task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt, onClick = if (task.source != null && task.noteId == null) ({ dialog = "source" }) else null) }
                 PageEnd(pageLines)
                 Spacer(Modifier.height(8.dp))
             }

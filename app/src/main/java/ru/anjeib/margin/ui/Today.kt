@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.text.withLink
+
+import ru.anjeib.margin.data.shortLabel
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -52,12 +56,8 @@ import java.time.LocalDate
 @Suppress("UNUSED_PARAMETER")
 fun dayWord(d: LocalDate, today: LocalDate = LocalDate.now()): String = d.dayMonthShort()
 
-/** A day said in words inside a line or a heading: «сегодня», «завтра», else «11 окт». */
-fun dayTalk(d: LocalDate, today: LocalDate = LocalDate.now()): String = when (d) {
-    today -> L.s.quickToday.lowercase()
-    today.plusDays(1) -> L.s.quickTomorrow.lowercase()
-    else -> d.dayMonthShort()
-}
+/** A day said inside a line or a heading — the same as everywhere in words: «сегодня», «завтра», «вчера», else «вс 11 окт». */
+fun dayTalk(d: LocalDate, today: LocalDate = LocalDate.now()): String = d.shortLabel(today).replaceFirstChar { it.lowercase() }
 
 /**
  * A window for the narrow margin, said as one (owner, 13 окт): «9–11 окт», «13–31 окт»; across months two lines «28 сен –\n3 окт».
@@ -149,7 +149,7 @@ fun MatterRow(
                         strike.value, c.faint, maxLines = 3)
                     if (!t.done) {
                         val days = t.dayOf()?.let { (i, n) -> s.dayOfDays(i, n) }
-                        TaskLine(t, null, showProject = true, today = today, tappable = false, hidePerson = hidePerson,
+                        TaskLine(t, null, showProject = true, today = today, tappable = true, hidePerson = hidePerson,
                             topic = t.topicTitle?.takeIf { showTopic }, extra = listOfNotNull(days, extra).joinToString("  ·  ").ifBlank { null },
                             onTopic = t.topicId?.let { tid -> onOpenTopic?.let { f -> { f(tid) } } })
                     }
@@ -210,6 +210,7 @@ fun NotePaperRow(n: DayNote, seat: Seat, onOpen: (String) -> Unit) {
 @Composable
 fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen: () -> Unit, onDone: () -> Unit) {
     val c = M.c
+    val links = LocalPeopleLinks.current
     val s = M.s
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val view = androidx.compose.ui.platform.LocalView.current
@@ -230,7 +231,8 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
             // The arrow alone was a riddle (Fable, 0.35): the words say it — «ждём от Олега», «обещали Лёше», as in «Обзор».
             Text(buildAnnotatedString {
                 val (a, name, b) = if (incoming) s.promiseToYouParts(who) else s.promiseFromYouParts(who)
-                append(a); withStyle(SpanStyle(color = c.link)) { append(name) }; append(b)
+                // The name is its person's card (owner, 14 окт), the rest of the row opens the matter.
+                append(a); withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("p", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = c.link))) { links.onName(who) }) { append(name) }; append(b)
             }, style = Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))
             if (nudge) {
                 Text("  ·  ", style = Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))

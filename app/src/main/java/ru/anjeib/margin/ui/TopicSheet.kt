@@ -181,7 +181,8 @@ private fun arrange(feed: List<FeedLine>, grouped: Boolean, showDone: Boolean): 
     feed.filterIsInstance<FeedLine.Deal>().forEach { d -> if (d.depth == 0 || groups.isEmpty()) groups += mutableListOf(d) else groups.last() += d }
     val (open, settled) = groups.partition { !it.first().q.done && !it.first().removed }
     val openLines = open.sortedBy { it.first().q.due ?: "9999" }.flatten()
-    if (groups.isNotEmpty()) out += FeedRow.Head("h:deals", deals = true, count = open.size, first = true)
+    // The same count as the topic's line says: every matter still open, the ones hung under others too.
+    if (groups.isNotEmpty()) out += FeedRow.Head("h:deals", deals = true, count = groups.flatten().count { !it.q.done && !it.removed }, first = true)
     openLines.forEachIndexed { i, d -> out += FeedRow.Line(d, seats(openLines.size, i), byDue = true, dayFirst = false, firstInSection = i == 0) }
     if (settled.isNotEmpty()) {
         out += FeedRow.Fold("f:done", settled.size, showDone)
@@ -321,8 +322,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             scaleY = 1f - 0.92f * fold.value; alpha = 1f - fold.value; transformOrigin = TransformOrigin(0.5f, 1f)
         }.background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding().marginRule(c.accent.copy(alpha = 0.85f), rule.value),
     ) {
-        // ---- header: back on the margin, ⋯ on the right; nothing else up there ----
-        // As every card (owner, 14 окт; design/v9/v9-card-topic.png): under the frame's «MARGIN», back on the margin, ⋯ at the right.
+        // As every card (owner, 14 окт; design/v9/v9-card-topic.png): under the frame's «MARGIN», back on the margin.
         Row(Modifier.fillMaxWidth().padding(top = 18.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(MarginW), contentAlignment = Alignment.Center) {
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.backWord, onClick = onClose), contentAlignment = Alignment.Center) {
@@ -330,20 +330,6 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 }
             }
             Spacer(Modifier.weight(1f))
-            Box(Modifier.padding(end = 8.dp)) {
-                Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = s.moreActions) { menu = true }, contentAlignment = Alignment.Center) { MoreGlyph(c.graphite, 22.dp) }
-                // An open topic goes to the archive (it keeps everything); deleting is for one already there.
-                SoftMenu(menu, { menu = false }) {
-                    SoftMenuItem(s.rename) { menu = false; titleTick++ }
-                    // «что сделано и что ждём» as plain text — for a client, a colleague, a note to self.
-                    SoftMenuItem(s.sharePdf) { menu = false; shareTopic(ctx, task) }
-                    if (!task.done) SoftMenuItem(s.toArchive) { menu = false; dialog = "archive" }
-                    else {
-                        SoftMenuItem(s.bringBack) { menu = false; vm.reviveTopic(task.id) }
-                        SoftMenuItem(s.delete, danger = true) { menu = false; dialog = "delete" }
-                    }
-                }
-            }
         }
         val open = task.subtasks.count { !it.done }
         var titleV by remember(task.id) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(task.title)) }
@@ -382,19 +368,38 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 // v8: under the title one line in Margin's voice — since when, how far — and the sphere as a chip;
                 // then words as tabs, the same as in «Обзор»: everything, the matters, the records, the files.
                 // One italic line in Margin's voice (owner, 14 окт): what it is, how much is in it, its sphere — a tap switches it.
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) { Box(Modifier.weight(1f)) {
                 MetaLine(listOfNotNull(
                     MetaItem(Meta.plain(if (note) s.cardKindNote else s.cardKindTopic), Meta.quiet()) {},
+                    // Only the matters still open (owner, 14 окт): what is done is not counted up here.
                     open.takeIf { it > 0 }?.let { MetaItem(Meta.plain(s.tasksCount(it)), Meta.quiet()) { dealsOnly = true; saidOnly = false; materialsMode = false } },
-                    doneCount.takeIf { it > 0 }?.let { MetaItem(Meta.plain(s.doneCountWord(it)), Meta.quiet()) { dealsOnly = true; saidOnly = false; materialsMode = false } },
                     task.entries.size.takeIf { it > 0 }?.let { MetaItem(Meta.plain(s.entriesCount(it)), Meta.quiet()) { saidOnly = true; dealsOnly = false; materialsMode = false } },
-                    MetaItem(Meta.plain(when (task.sphere) { "work" -> s.sphereWork.lowercase(); "personal" -> s.spherePersonal.lowercase()
-                        else -> s.spherePersonal.lowercase() + " / " + s.sphereWork.lowercase() }), if (task.sphere == null) Meta.faint() else Meta.quiet()) { vm.setSphere(task.id, nextSphere(task.sphere)) },
                 ))
+                }
+                SphereIcons(task.sphere, { k -> k?.let { vm.setSphere(task.id, it) } }, Modifier.padding(start = 6.dp)) }
                 val files = task.materials().size
                 val tab = when { dealsOnly -> "deals"; saidOnly -> "said"; materialsMode -> "files"; else -> "all" }
-                TextTabs(listOfNotNull("all" to s.allTab, total.takeIf { it > 0 }?.let { "deals" to s.dealsBadge + " " + it },
-                    task.entries.size.takeIf { it > 0 }?.let { "said" to s.records + " " + it }, files.takeIf { it > 0 }?.let { "files" to s.filesWord + " " + it }),
-                    tab, { k -> dealsOnly = k == "deals"; saidOnly = k == "said"; materialsMode = k == "files" }, Modifier.padding(top = 8.dp, bottom = 10.dp))
+                // Owner, 14 окт: not words — the marks of what is in it; a chosen one narrows the page to it, chosen again — all of it.
+                fun pick(k: String) { val to = if (tab == k) "all" else k; dealsOnly = to == "deals"; saidOnly = to == "said"; materialsMode = to == "files" }
+                // The same row of tools as in every card (owner, 14 окт): what is in it — a chosen one narrows the page to it,
+                // chosen again shows all — and «Ещё» with what is done with the topic as a whole (the ⋯ at the top is gone).
+                Column(Modifier.padding(top = 8.dp, bottom = 10.dp)) {
+                    ActionBar(listOfNotNull(
+                        Action(s.dealsBadge, tab == "deals", { pick("deals") }) { DealGlyph(it, 22.dp) },
+                        Action(s.records, tab == "said", { pick("said") }) { NoteGlyph(it, 22.dp) },
+                        Action(s.filesWord, tab == "files", { pick("files") }) { ClipGlyph(it, 20.dp) },
+                        Action(s.actMore, menu, { menu = !menu }) { MoreGlyph(it, 23.dp) },
+                    ), slots = 5)
+                    androidx.compose.animation.AnimatedVisibility(menu) {
+                        MoreActions(listOfNotNull(
+                            // «что сделано и что ждём» as plain text — for a client, a colleague, a note to self.
+                            Action(s.actShare, false, { menu = false; shareTopic(ctx, task) }) { ShareGlyph(it, 22.dp) },
+                            if (!task.done) Action(s.toArchive, false, { menu = false; dialog = "archive" }) { ArchiveGlyph(it, 22.dp) }
+                            else Action(s.bringBack, false, { menu = false; vm.reviveTopic(task.id) }) { ArchiveGlyph(it, 22.dp) },
+                            if (task.done) Action(s.delete, false, { menu = false; dialog = "delete" }) { TrashGlyph(it, 22.dp) } else null,
+                        ))
+                    }
+                }
                 if (task.done) Panel(Modifier.padding(bottom = 10.dp)) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(s.inArchiveSince(task.doneAt?.let { runCatching { LocalDate.parse(it).dayMonthShort() }.getOrNull() } ?: ""), style = Type.body.copy(color = c.graphite, fontSize = 15.sp), modifier = Modifier.weight(1f))
@@ -577,13 +582,7 @@ private fun FeedPage(task: Task, rows: List<FeedRow>, onFoldDone: () -> Unit, st
     val freshKeys = feed.filter { it.key !in seen }.map { it.key }
     val today = LocalDate.now()
     LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(top = 6.dp, bottom = 24.dp)) {
-        item("origin") {
-            if (task.source != null) {
-                val born = task.history.firstOrNull { it.kind == "created" }?.at?.let { runCatching { LocalDateTime.parse(it.take(16)) }.getOrNull() }
-                val stamp = born?.let { it.toLocalDate().dayMonthShort() + ", " + it.toLocalTime().toString().take(5) } ?: LocalDate.parse(task.createdAt).dayMonthShort()
-                Margined(Modifier.padding(bottom = 8.dp)) { Voice("↳ " + s.fromMessage(stamp), link = true, onClick = onSource) }
-            } else Spacer(Modifier.height(4.dp))
-        }
+        item("origin") { Spacer(Modifier.height(4.dp)) }
         rows.forEach { row ->
             when (row) {
                 is FeedRow.Head -> item(row.key) {
@@ -602,8 +601,8 @@ private fun FeedPage(task: Task, rows: List<FeedRow>, onFoldDone: () -> Unit, st
                             val late = !line.q.done && !line.removed && d.isBefore(today)
                             ({ RowMargin(if (late) s.sinceWord + " " + d.dayMonthShort() else dayWord(d, today), late = late) })
                         }
-                        // The day as in the diary (owner, 14 окт): its number large, the month in capitals, the hour under it.
-                        row.dayFirst && day != null -> ({ Column(horizontalAlignment = Alignment.CenterHorizontally) { MarginDay(day.dayOfMonth, day.dayMonthShort().substringAfter(' ')); hour?.let { MarginNote(it, modifier = Modifier.padding(top = 2.dp)) } } })
+                        // A row's day the way every row says it (owner, 14 окт: one standard) — «14 окт» in italic, the hour under it.
+                        row.dayFirst && day != null -> ({ Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(top = 8.dp)) { MarginNote(dayWord(day, today)); hour?.let { MarginNote(it) } } })
                         hour != null -> ({ RowMargin(hour) })
                         else -> null
                     }
@@ -632,6 +631,8 @@ private fun FeedPage(task: Task, rows: List<FeedRow>, onFoldDone: () -> Unit, st
         }
         // The page goes on below the last day: write here, the bar sends it (as the old field did: records, matters, marks).
         if (draft != null) item("write") { PageLine(draft, writeHint, writeKey, Modifier.padding(top = 10.dp), after = feed.lastOrNull()?.at, vm = vm, files = files, pasteTo = "task:${task.id}", onKeep = onKeep, plus = Plus.Marks) }
+        // At the foot, as in every card: when it began — and, made from words in the field, those words on a tap (owner, 14 окт).
+        item("created") { Margined { CreatedLine(task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt, onClick = if (task.source != null) onSource else null) } }
     }
 }
 
@@ -756,22 +757,15 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
         val next = q.slots.firstOrNull { !it.done }
         if (next != null) vm.toggleSlot("q:${task.id}:${q.id}", next.id) else vm.toggleQuestion(task.id, q.id)
     }
-    // Nested matters hang from their parent's circle: a thin guide down from it and a short elbow to each child.
-    val step = 26.dp
-    val guideX = MarkCol / 2 + step * (depth - 1).coerceAtLeast(0)
-    val indent = step * depth
+    // A matter under a matter (owner, 14 окт: the elbow and guide looked wrong) — a sub-item as in a notebook: its smaller
+    // circle stands under where the words above begin, no line between them; it reads as part of the one above.
+    val indent = (MarkCol / 2 + 21.dp) * depth
     Margined(margin = margin) {
-        PanelPiece(seat) {
-        Box(Modifier.drawBehind {
-            if (depth > 0) {
-                val x = guideX.toPx(); val y = 26.dp.toPx(); val col = c.hairline
-                drawLine(col, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.2.dp.toPx())
-                drawLine(col, Offset(x, y), Offset((indent + 8.dp).toPx(), y), strokeWidth = 1.2.dp.toPx())
-            }
-        }) {
+        PanelPiece(seat, divider = depth == 0) {
+        Box {
             Row(Modifier.fillMaxWidth().background(sel).padding(start = indent)
                 .combinedClickable(onClick = { if (removed) menu = true else act.openDeal(q) }, onLongClick = { if (removed) menu = true else tools = true })
-                .padding(end = 14.dp, top = RowTop - 2.dp, bottom = RowTop - 2.dp), verticalAlignment = Alignment.Top) {
+                .padding(end = 14.dp, top = if (depth > 0) 2.dp else RowTop - 2.dp, bottom = RowTop - 2.dp), verticalAlignment = Alignment.Top) {
                 // A removed matter has no circle at all — three states read by shape: ring open, disc done, nothing removed;
                 // something we wait for wears the arrow, which closes it as «получено».
                 Box(Modifier.size(MarkCol, 26.dp), contentAlignment = Alignment.Center) {

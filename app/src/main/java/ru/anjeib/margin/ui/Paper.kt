@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.wrapContentWidth
+
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -103,7 +105,9 @@ fun Modifier.bleed(d: Dp): Modifier = this.layout { m, c ->
 
 /** A piece of a panel: its ground in the seat's shape and the hairline above every row but the first. */
 @Composable
-fun PanelPiece(seat: Seat, modifier: Modifier = Modifier, bleed: Boolean = true, dividerStart: Dp = MarkCol + 12.dp, content: @Composable ColumnScope.() -> Unit) {
+fun PanelPiece(seat: Seat, modifier: Modifier = Modifier, bleed: Boolean = true, dividerStart: Dp = MarkCol + 12.dp,
+               /** false — no line above this piece: it belongs to the one above (a matter under a matter). */
+               divider: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     val c = M.c
     CompositionLocalProvider(LocalRowGround provides c.card) {
         val outline = if (planner) c.graphite.copy(alpha = 0.28f) else null
@@ -112,7 +116,7 @@ fun PanelPiece(seat: Seat, modifier: Modifier = Modifier, bleed: Boolean = true,
         Column(modifier.then(if (bleed) Modifier.bleed(if (outline != null) 2.dp else PanelBleed) else Modifier).fillMaxWidth()
             .clip(seat.shape(if (outline != null) PlannerR else PanelR)).background(ground)
             .then(if (outline != null) Modifier.panelOutline(seat, outline) else Modifier)) {
-            if (seat == Seat.Middle || seat == Seat.Last) Box(Modifier.padding(start = if (outline != null) 8.dp else dividerStart, end = if (outline != null) 4.dp else 0.dp)
+            if ((seat == Seat.Middle || seat == Seat.Last) && divider) Box(Modifier.padding(start = if (outline != null) 8.dp else dividerStart, end = if (outline != null) 4.dp else 0.dp)
                 .fillMaxWidth().height(1.dp).background(if (outline != null) c.graphite.copy(alpha = 0.2f) else c.hairline))
             content()
         }
@@ -326,15 +330,16 @@ fun Chip(label: String, on: Boolean, onClick: () -> Unit, dot: Color? = null, mo
  * petrol; [label] is for TalkBack and a long press shows it.
  */
 @Composable
-fun IconChip(label: String, on: Boolean, onClick: () -> Unit, glyph: @Composable (Color) -> Unit) {
+fun IconChip(label: String, on: Boolean, onClick: () -> Unit, size: Dp = 44.dp, glyph: @Composable (Color) -> Unit) {
     val c = M.c
     var hint by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     Box {
-        Box(Modifier.size(44.dp).clip(CircleShape).background(if (on) c.linkSoft else Color.Transparent)
-            .border(1.dp, if (on) c.link.copy(alpha = 0.5f) else c.graphite.copy(alpha = 0.3f), CircleShape)
+        // Owner, 14 окт: drawn marks bare on the page, as the card's tools — no rounds; chosen — petrol with a short line under it.
+        Box(Modifier.size(size).clip(CircleShape)
             .semantics { selected = on; contentDescription = label }
             .combinedClickable(onClick = onClick, onLongClick = { hint = true }), contentAlignment = Alignment.Center) {
-            glyph(if (on) c.link else c.ink.copy(alpha = 0.75f))
+            glyph(if (on) c.link else c.graphite)
+            if (on) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).size(16.dp, 2.dp).clip(RoundedCornerShape(1.dp)).background(c.link))
         }
         if (hint) {
             androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(1400); hint = false }
@@ -368,7 +373,9 @@ fun ActionBar(items: List<Action>, modifier: Modifier = Modifier, slots: Int = i
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { a.glyph(col) }
                 Spacer(Modifier.height(4.dp))
-                Text(a.label, style = Type.small.copy(color = col, fontSize = 12.5.sp, fontWeight = if (a.on) FontWeight.Medium else null), maxLines = 1)
+                // A word is never cut to its first letter («В заметки» showed «В»): one line, a size smaller when long.
+                // One size for every word (owner, 14 окт: smaller words look wrong) — a row holds only what fits, the rest is in «Ещё».
+                Text(a.label, style = Type.small.copy(color = col, fontSize = 12.5.sp, fontWeight = if (a.on) FontWeight.Medium else null), maxLines = 1, softWrap = false)
             }
         }
         repeat((slots - items.size).coerceAtLeast(0)) { Spacer(Modifier.weight(1f)) }
@@ -378,7 +385,8 @@ fun ActionBar(items: List<Action>, modifier: Modifier = Modifier, slots: Int = i
 /** «Ещё» of a card: all it can do, five to a row (owner, 14 окт: the ⋯ menu moved here). */
 @Composable
 fun MoreActions(items: List<Action>, modifier: Modifier = Modifier) {
-    Column(modifier) { items.chunked(5).forEach { row -> ActionBar(row, Modifier.padding(top = 2.dp), slots = 5) } }
+    // Four to a row: the longer words of «Ещё» («В заметки», «Объединить») fit whole at the one size.
+    Column(modifier) { items.chunked(4).forEach { row -> ActionBar(row, Modifier.padding(top = 2.dp), slots = 4) } }
 }
 
 /**

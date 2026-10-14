@@ -75,26 +75,19 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
                     noMark = true, kind = s.cardKindNote, sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) })
                 Margined(Modifier.padding(top = 10.dp)) {
                     Column {
+                        // Owner, 14 окт: the same row of tools as every card; three things, so no «Ещё».
                         ActionBar(listOfNotNull(
-                            Action(s.actToMatter, false, { commitTitle(); vm.ideaToMatter(task.id); onClose() }) { androidx.compose.foundation.layout.Box(Modifier.size(20.dp)) { CheckCircle(false, size = 16.dp, interactive = false) {} } },
+                            Action(s.actToMatter, false, { commitTitle(); vm.ideaToMatter(task.id); onClose() }) { DealGlyph(it, 22.dp) },
                             rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } },
-                            Action(s.actMore, more, { more = !more }) { MoreGlyph(it, 23.dp) },
+                            Action(s.delete, false, { vm.removeMatter(task.id); onClose() }) { TrashGlyph(it, 22.dp) },
                         ), slots = 5)
-                        androidx.compose.animation.AnimatedVisibility(more) {
-                            MoreActions(listOf(
-                                Action(s.openWhole, false, { commitTitle(); onOpenFull() }) { NoteGlyph(it, 21.dp) },
-                                Action(s.delete, false, { vm.removeMatter(task.id); onClose() }) { TrashGlyph(it, 22.dp) },
-                            ))
-                        }
                     }
                 }
-                WrittenLane(task.entries.filter { it.text.isNotBlank() }.map { LaneItem(it.id, it.at, it.text) }, s.ideaHint, Modifier.padding(top = 10.dp), after = null, label = s.records,
+                // Everything of the note is here (owner, 14 окт: no second, «whole» view of it) — each file in its own record.
+                WrittenLane(task.entries.filter { it.text.isNotBlank() || it.attachments.isNotEmpty() }.map { LaneItem(it.id, it.at, it.text, it.attachments) }, s.ideaHint, Modifier.padding(top = 10.dp), after = null, label = s.records,
                     draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "task:${task.id}", plus = Plus.None,
                     onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
                     onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
-                // Files, matters and all the rest of it — on the full page; offered only when the card doesn't show it all (owner, 13 окт).
-                val hidden = task.entries.any { it.attachments.isNotEmpty() || it.text.isBlank() } || task.subtasks.isNotEmpty()
-                if (hidden) Margined(Modifier.padding(top = 14.dp)) { Voice(s.openWhole + "  ›", link = true, onClick = { commitTitle(); onOpenFull() }) }
                 // Begun when its first words were written (owner, 14 окт: it said «создано» on the day it was last touched).
                 bornDay?.let { d -> Margined { Voice(s.begunOn(d.dayMonthShort()), Modifier.padding(top = 22.dp, bottom = 6.dp)) } }
                 PageEnd(pageLines)

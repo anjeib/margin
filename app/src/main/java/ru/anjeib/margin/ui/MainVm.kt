@@ -1593,7 +1593,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     val openPersonReq: StateFlow<String?> = _openPerson
     fun personOpened() { _openPerson.value = null }
     fun nameTapped(name: String) {
-        val p = data.value.contact(name)
+        // Owner, 14 окт: any mark opens its own card — a name its person's; one not yet a contact becomes one on the tap.
+        val p = data.value.contact(name) ?: run { keepContact(name); data.value.contact(name) }
         if (p != null) _openPerson.value = p.id else offerContact(name)
     }
 

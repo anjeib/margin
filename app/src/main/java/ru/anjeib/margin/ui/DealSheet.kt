@@ -118,47 +118,48 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 var more by remember(qid) { mutableStateOf(false) }
                 var postponing by remember(qid) { mutableStateOf(false) }
                 if (postponing) PostponeDialog(onDismiss = { postponing = false }) { d -> vm.postponeTo(ref, d); postponing = false }
-                fun person(n: String) { data.contact(n)?.let { pp -> onOpenPerson?.invoke(pp.id) } ?: vm.offerContact(n) }
+                fun person(n: String) { vm.nameTapped(n) }
                 // Its topic — a way back to it — at the top; no ⋯ (owner, 14 окт): what it can do is under «Ещё».
-                if (onOpenTopic != null) Margined { TopicLink(topic.title) { commit(); onOpenTopic() } } else Spacer(Modifier.height(4.dp))
+                // The same card as a simple matter (owner, 14 окт): its topic is a mark in the line under the title, not a line above it.
+                Spacer(Modifier.height(4.dp))
                 fun tick() {
                     val next = q.slots.firstOrNull { !it.done }
                     if (next != null) vm.toggleSlot(ref, next.id) else vm.toggleQuestion(topic.id, q.id)
                 }
                 val meta = buildList {
+                    add(MetaItem(Meta.plain("# " + topic.title), Meta.link()) { commit(); onOpenTopic?.invoke() ?: onClose() })
                     if (window) row.whenLabel()?.substringBefore(" · ${q.time}")?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) { dialog = "date" }) }
-                    q.from?.let { add(MetaItem(Meta.promise(s.promiseToYouParts(it)), Meta.quiet()) { dialog = "waiting" }) }
-                    q.promisedTo?.let { add(MetaItem(Meta.promise(s.promiseFromYouParts(it)), Meta.quiet()) { dialog = "promised" }) }
+                    q.from?.let { add(MetaItem(Meta.promise(s.promiseToYouParts(it)), Meta.quiet()) { person(it) }) }
+                    q.promisedTo?.let { add(MetaItem(Meta.promise(s.promiseFromYouParts(it)), Meta.quiet()) { person(it) }) }
                     people.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { person(p) }) }
                     q.place?.let { add(MetaItem(Meta.plain(it), Meta.link(), onLong = { fill("place") }) {
                         runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(it)))) }
                     }) }
                     q.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
                 }
-                CardHead(title, { title = it }, q.done, onToggle = ::tick, kind = s.cardKindDeal,
+                CardHead(title, { title = it }, q.done, onToggle = ::tick, kind = s.cardKindDeal.takeIf { q.from == null && q.promisedTo == null },
+                    // A topic's matter is in its topic's sphere: the same two marks set it for the topic.
+                    sphere = topic.sphere, onSphere = { vm.setSphere(topic.id, it) },
                     margin = if (q.slots.isEmpty()) ({ CardMargin(due, q.time, late, prefix = windowPrefix(start, due), onDay = { dialog = "date" }, onHour = if (due != null) ({ dialog = "time" }) else null) }) else null,
                     meta = meta,
                     mark = if ((q.from != null || q.promisedTo != null) && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = q.from != null, size = 32.dp) } }) else null)
                 if (q.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(q.slots, onToggle = { vm.toggleSlot(ref, it) }, onRemove = { vm.removeSlot(ref, it) }) }
                 Margined(Modifier.padding(top = 10.dp)) {
                     Column {
+                        // Owner, 14 окт: the tools are not lit by what is set — that is said on the margin and in the line above.
                         ActionBar(listOf(
-                            Action(s.actWhen, due != null, { dialog = "date" }) { CalendarGlyph(it, 22.dp) },
-                            Action(s.fieldRepeat, q.repeat != null, { dialog = "repeat" }) { RepeatGlyph(it, 22.dp) },
-                            Action(s.fieldPeople, people.isNotEmpty(), { fill("people") }) { PeopleGlyph(it, 22.dp) },
-                            Action(s.fieldPlace, q.place != null, { fill("place") }) { PinGlyph(it, 23.dp) },
+                            Action(s.actWhen, false, { dialog = "date" }) { CalendarGlyph(it, 22.dp) },
+                            Action(s.fieldRepeat, false, { dialog = "repeat" }) { RepeatGlyph(it, 22.dp) },
+                            Action(s.actPeople, false, { fill("people") }) { PeopleGlyph(it, 22.dp) },
+                            Action(s.fieldPlace, false, { fill("place") }) { PinGlyph(it, 23.dp) },
                             Action(s.actMore, more, { more = !more }) { MoreGlyph(it, 23.dp) },
                         ))
                         androidx.compose.animation.AnimatedVisibility(more) {
                             MoreActions(listOfNotNull(
-                                Action(s.actWait, q.from != null, { dialog = "waiting" }) { HandGlyph(it, 23.dp, incoming = true) },
-                                Action(s.actPromised, q.promisedTo != null, { dialog = "promised" }) { HandGlyph(it, 23.dp) },
-                                if (!q.done && q.repeat == null) Action(s.actDay, false, { dialog = "day" }) { CalendarGlyph(it, 20.dp) } else null,
-                                if (!q.done) Action(s.actStep, false, { fill("step") }) { PlusGlyph(it, 18.dp) } else null,
-                                if (!q.done) Action(s.actPostpone, false, { postponing = true }) { ClockGlyph(it, 22.dp) } else null,
+                                Action(s.actWait, false, { dialog = "waiting" }) { HandGlyph(it, 23.dp, incoming = true) },
+                                Action(s.actPromised, false, { dialog = "promised" }) { HandGlyph(it, 23.dp) },
                                 if (!q.done) rowActs?.let { r -> Action(s.actToTopic, false, { commit(); onClose(); r.toTopic(ref) }) { TopicGlyph(it, 19.dp) } } else null,
                                 Action(s.actToIdea, false, { commit(); vm.dealToIdea(topic.id, q.id); onClose() }) { NoteGlyph(it, 21.dp) },
-                                if (!q.done) Action(s.actWontDo, false, { commit(); vm.dropDeal(topic.id, q.id); onClose() }) { NotGlyph(it, 21.dp) } else null,
                                 Action(s.delete, false, { vm.removeDeal(topic.id, q.id); onClose() }) { TrashGlyph(it, 22.dp) },
                             ))
                         }
@@ -169,14 +170,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                     draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "comment:$ref", plus = Plus.Marks,
                     onEdit = { id, t -> vm.editComment(ref, id, t); saved() }, onAdd = { t, at -> vm.addComment(ref, t, at); saved() })
                 // Their day has come: «напомнить» here too, the same as on a simple matter (one behaviour for every wait).
-                if (q.from != null && !q.done && due?.isAfter(LocalDate.now()) == false) Margined(Modifier.padding(top = 16.dp)) {
-                    Panel {
-                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(s.overdueWaiting, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.weight(1f))
-                            Pill(s.remindPerson(q.from), filled = true, onClick = { remindAbout(ctxOpen, data, row) })
-                        }
-                    }
-                }
+                // Owner, 14 окт: no «напомнить» inside the card — it is on the row on «Сегодня».
                 Margined { CreatedLine(born) }
                 PageEnd(pageLines)
             }

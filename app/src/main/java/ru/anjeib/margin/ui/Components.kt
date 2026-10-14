@@ -206,7 +206,8 @@ fun Hairline(modifier: Modifier = Modifier) {
 // ---------------- task card ----------------
 
 /** Who is a contact and what a tap on a name does — given by the app, so rows anywhere can link names. */
-data class PeopleLinks(val isContact: (String) -> Boolean = { false }, val onName: (String) -> Unit = {})
+/** What a mark in a line opens (owner, 14 окт: every mark its own card): a name — the person, «#метка» — its topic or the search. */
+data class PeopleLinks(val isContact: (String) -> Boolean = { false }, val onName: (String) -> Unit = {}, val onTag: (String) -> Unit = {})
 val LocalPeopleLinks = androidx.compose.runtime.compositionLocalOf { PeopleLinks() }
 
 /**
@@ -267,7 +268,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         val files = t.entries.sumOf { it.attachments.size }
         if (files > 0) { next(); appendInlineContent("clip", "📎"); append(" $files") }
         if (showIdea && t.noteId != null) { next(); append("✎ " + s.ideaMark) }
-        if (showProject) t.project?.let { next(); append("#" + projectLabel(it)) }
+        if (showProject) t.project?.let { pr -> next(); link("tag", "#" + projectLabel(pr), c.link) { links.onTag(projectLabel(pr)) } }
         // The user left a comment: a small mark says it is there (the words are in the card).
         if (t.comments.isNotEmpty()) { next(); appendInlineContent("note", "≡") }
         extra?.let { next(); append(it) }

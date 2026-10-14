@@ -83,25 +83,8 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         Group(s.voiceSection) {
             // Russian speech is read on the phone (GigaAM) whenever its model is here; the switch keeps the voice there even before
             // that — nothing goes to the cloud. The model comes by itself over Wi-Fi (ModelWorker); nothing to download or delete here.
-            if (ru.anjeib.margin.voice.LocalSpeech.supported) {
-                ToggleRow(s.onDevice, s.onDeviceHint, settings.whisperAlways) { v ->
-                    // Asked for in so many words: fetch it now, whatever the network.
-                    if (v && whisper !is ru.anjeib.margin.voice.LocalSpeech.State.Ready && whisper !is ru.anjeib.margin.voice.LocalSpeech.State.Downloading)
-                        vm.downloadSpeech()
-                    vm.updateSettings { it.copy(whisperAlways = v) }
-                }
-                // The model's way here: a percent while it downloads, then «Готово»; a tap fetches it now when it waits or failed.
-                speechStatus()?.let { (line, retry) -> Divider(); ValueRow(s.speechModel, null, line, chevron = retry) { if (retry) vm.downloadSpeech() } }
-                val st = whisper
-                if (settings.whisperAlways && st !is ru.anjeib.margin.voice.LocalSpeech.State.Ready) {
-                    Text(
-                        s.whisperComing, // the percent is on the row below
-                        style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp),
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-                    )
-                }
-                Divider()
-            }
+            // Owner, 14 окт: no switch and no model row here — the app comes with its speech model (RuStore); while testing it is
+            // fetched by itself, and how far that is shows under the contents («Распознавание речи · 42 %»).
             ToggleRow(s.voiceSendNow, null, settings.voiceSendNow) { v -> vm.updateSettings { it.copy(voiceSendNow = v) } }
         }
 

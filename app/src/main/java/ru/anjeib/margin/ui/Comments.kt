@@ -36,7 +36,7 @@ import ru.anjeib.margin.data.dayMonthShort
 import ru.anjeib.margin.data.nowStamp
 
 /** One line of a lane: a comment, a record of an idea — what it says and when it was written. */
-data class LaneItem(val id: String, val at: String, val text: String)
+data class LaneItem(val id: String, val at: String, val text: String, val files: List<ru.anjeib.margin.data.Attachment> = emptyList())
 
 /**
  * Text written right on the page, like in a notebook: each piece with its day and hour on the margin, edited in place.
@@ -69,7 +69,12 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
                 LaunchedEffect(t) { if (t != item.text) { kotlinx.coroutines.delay(800); edit(item.id, t) } }
                 DisposableEffect(item.id) { onDispose { if (tv.text.trim() != item.text.trim()) edit(item.id, tv.text) } }
                 Margined(margin = { Box(Modifier.padding(top = 9.dp)) { Stamp(item.at, sameDay = above?.take(10) == item.at.take(10)) } }) {
-                    BasicTextField(tv, { tv = continueList(tv, it) }, textStyle = text, cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                    Column {
+                        if (item.text.isNotBlank() || item.files.isEmpty())
+                            BasicTextField(tv, { tv = continueList(tv, it) }, textStyle = text, cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                        // A file stays in the piece it came with (owner, 14 окт), under its words.
+                        if (item.files.isNotEmpty()) Box(Modifier.padding(top = 4.dp, bottom = 8.dp)) { AttachmentsView(item.files) }
+                    }
                 }
             }
         }

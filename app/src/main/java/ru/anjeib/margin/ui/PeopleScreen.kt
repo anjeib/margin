@@ -179,17 +179,6 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, s.backWord, tint = c.ink)
             }
             Spacer(Modifier.weight(1f))
-            Box {
-                Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.MoreHoriz, s.moreActions, tint = c.graphite)
-                }
-                SoftMenu(menu, { menu = false }) {
-                    SoftMenuItem(s.rename, onClick = { menu = false; dialog = "rename" })
-                    if (data.persons.size > 1) SoftMenuItem(s.mergeWith, onClick = { menu = false; dialog = "merge" })
-                    SoftMenuItem(if (person.org) s.markPerson else s.markOrg, onClick = { menu = false; vm.setOrg(person.id, !person.org) })
-                    SoftMenuItem(s.delete, danger = true, onClick = { menu = false; vm.deletePerson(person.id); onBack() })
-                }
-            }
         }
         // «Поля»: the face on the margin, everything else right of the rule.
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
@@ -200,6 +189,21 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                     val projects = tasks.mapNotNull { it.project }.distinct().take(2).map { projectLabel(it) }
                     listOfNotNull(person.about, person.company, projects.joinToString(", ").ifBlank { null }).joinToString(" · ").takeIf { it.isNotBlank() }?.let {
                         Voice(it, onClick = { dialog = if (person.about == null) "company" else "about" })
+                    }
+                    // Owner, 14 окт: no ⋯ at the top — what is done with the card is its row of tools, as in every card.
+                    var more by remember { mutableStateOf(false) }
+                    Column(Modifier.padding(top = 8.dp)) {
+                        ActionBar(listOf(
+                            Action(s.actName, false, { dialog = "rename" }) { EditGlyph(it, 21.dp) },
+                            if (person.org) Action(s.actIsPerson, false, { vm.setOrg(person.id, false) }) { PersonGlyph(it, 21.dp) } else Action(s.actIsOrg, false, { vm.setOrg(person.id, true) }) { WorkGlyph(it, 21.dp) },
+                            Action(s.delete, false, { vm.deletePerson(person.id); onBack() }) { TrashGlyph(it, 21.dp) },
+                            Action(s.actMore, more, { more = !more }) { MoreGlyph(it, 23.dp) },
+                        ), slots = 4)
+                        androidx.compose.animation.AnimatedVisibility(more) {
+                            MoreActions(listOfNotNull(
+                                if (data.persons.size > 1) Action(s.actMerge, false, { more = false; dialog = "merge" }) { PeopleGlyph(it, 21.dp) } else null,
+                            ))
+                        }
                     }
                 }
             }

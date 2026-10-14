@@ -173,7 +173,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     var crashOffer by remember { mutableStateOf(ru.anjeib.margin.data.Feedback.newCrash(ctx)) }
     // The assistant tray is for the latest exchange — moving elsewhere tucks it away.
     LaunchedEffect(view, screen) { if (pending == null && busy == null) vm.dismissTray() }
-    LaunchedEffect(personReq) { personReq?.let { openTask = null; openPerson = it; vm.personOpened() } }
+    LaunchedEffect(personReq) { personReq?.let { openTask = null; openDeal = null; openPerson = it; vm.personOpened() } }
     LaunchedEffect(toast) { toast?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.toastShown() } }
 
     fun go(newScreen: String, newView: String? = null) {
@@ -198,7 +198,13 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
 
     // «В тему…» and «Удалить» from a matter's long press or card — one picker for every screen.
     var topicFor by remember { mutableStateOf<String?>(null) }
-    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.removeMatter(it) }), LocalFind provides find) {
+    // «#метка» under a row opens its topic, or — when there is no such topic — the search for it (owner, 14 окт).
+    val peopleLinks = LocalPeopleLinks.current
+    val tagLinks = peopleLinks.copy(onTag = { label ->
+        data.tasks.find { it.topic && !it.thought && it.title.equals(label, true) }?.let { openId(it.id) } ?: run { allFor = label; searching = true }
+    })
+    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.removeMatter(it) }), LocalFind provides find,
+        LocalPeopleLinks provides tagLinks) {
     ModalNavigationDrawer(
         drawerState = drawer,
         // On the planner page the menu is a page of its own, not a drawer pulled from the side.
