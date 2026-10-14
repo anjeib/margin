@@ -185,6 +185,11 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
 
     BackHandler(drawer.isOpen) { scope.launch { drawer.close() } }
     BackHandler(contents) { contents = false }
+    // Find on the page (owner, 14 окт): the search tab slides a field down over the page instead of opening a screen.
+    val find = remember { FindState() }
+    var allFor by remember { mutableStateOf("") }
+    fun closeFind() { keepSearch(ctx, find.query); find.open = false; find.query = ""; find.cur = 0 }
+    BackHandler(find.open && !searching) { closeFind() }
     // Turned to another day with the tabs: back is today's page.
     BackHandler(!drawer.isOpen && vm.pageDay.collectAsState().value != null && screen == TASKS && view == Views.TODAY) { vm.pageDay.value = null }
     BackHandler(!drawer.isOpen && openNote == null && openPerson == null && !searching && (screen != TASKS || view != Views.TODAY)) {
@@ -193,7 +198,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
 
     // «В тему…» and «Удалить» from a matter's long press or card — one picker for every screen.
     var topicFor by remember { mutableStateOf<String?>(null) }
-    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.removeMatter(it) })) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.removeMatter(it) }), LocalFind provides find) {
     ModalNavigationDrawer(
         drawerState = drawer,
         // On the planner page the menu is a page of its own, not a drawer pulled from the side.
@@ -221,8 +226,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         val plannerPage = planner
         val landed = vm.landedDay.collectAsState().value
         // A topic, the search, a person or a note lies open on the page: the printed frame steps aside, the index stays.
-        val overlay = searching || openPerson != null || openNote != null ||
-            openTask?.let { id -> data.tasks.find { it.id == id }?.let { it.topic && (!it.thought || fullIdea == id) } } == true
+        // A card (a matter, a note, a topic) is a page of the book (owner, 14 окт): the frame stays over it.
+        val overlay = searching || openPerson != null || openNote != null
         PageSheet(frame = !overlay, tabs = if (plannerPage) ({
             val rows = remember(data) { data.listTasks().filter { !it.done } }
             val onDiary = (screen == TASKS || screen == TOPICS) && !contents
@@ -231,9 +236,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             val onCalendar = onDiary && screen == TASKS && view == Views.TODAY && monthOpen
             // Today is marked on every page with the index (owner, 14 окт); on «Сегодня» the mark is the page's own day.
             val onToday = onDiary && view == Views.TODAY && screen == TASKS
-            val open = if (onToday && !searching) pageDay ?: todayNow else todayNow
+            val open = if (onToday && !searching && !find.open) pageDay ?: todayNow else todayNow
             // The search alone is chosen while it lies open (owner, 14 окт): the other tools step back.
-            val chosen = !searching
+            val chosen = !searching && !find.open
             fun toDiary(v: String, sc: String = TASKS) { contents = false; screen = sc; view = v; searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null }
             PlannerIndex(
                                 // With the month unfolded its own row of weekdays is enough — the week tabs step aside (owner, 14 окт).
@@ -253,7 +258,10 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     IndexTab(petrol = true, label = s.diaryTitle, on = chosen && onDiary && screen == TASKS && view == Views.NOTES, glyph = { ink -> DiaryGlyph(ink, 21.dp) }) { vm.monthOpen.value = false; toDiary(Views.NOTES) },
                     // Topics, the fourth page of the diary (owner, 14 окт): no longer only in the contents.
                     IndexTab(petrol = true, label = s.topicsPage, on = chosen && !contents && screen == TOPICS, glyph = { ink -> TopicsGlyph(ink, 21.dp) }) { vm.monthOpen.value = false; toDiary(view, TOPICS) },
-                    IndexTab(petrol = true, label = s.search, on = searching, glyph = { ink -> SearchGlyph(ink, 20.dp) }) { openTask = null; fullIdea = null; openPerson = null; openNote = null; contents = false; searching = true },
+                    IndexTab(petrol = true, label = s.search, on = searching || find.open, glyph = { ink -> SearchGlyph(ink, 20.dp) }) {
+                        openTask = null; fullIdea = null; openPerson = null; openNote = null; searching = false
+                        if (find.open) closeFind() else find.open = true
+                    },
                     IndexTab(petrol = true, label = s.contentsTitle, on = chosen && (contents || (screen != TASKS && screen != TOPICS)), glyph = { ink -> MenuGlyph(ink) }) {
                         searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null; contents = !contents },
                 ))
@@ -269,7 +277,22 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     }
                 }
                 // The printed page's head: just the room under the frame's top rule.
-                if (plannerPage) Spacer(Modifier.height(22.dp)) else
+                if (plannerPage) {
+                    Spacer(Modifier.height(22.dp))
+                    // The page in front, by the find bar's name for it — its matches are the ones the arrows go through.
+                    val findPageNow = when { contents -> "contents"; screen == TOPICS -> "topics"; screen == TASKS && view == Views.NOTES -> "notes"; screen == TASKS && view == Views.TODAY -> "today"; else -> screen }
+                    LaunchedEffect(findPageNow) { find.page = findPageNow; find.cur = 0 }
+                    androidx.compose.animation.AnimatedVisibility(find.open,
+                        enter = androidx.compose.animation.expandVertically(tween(220)) + androidx.compose.animation.fadeIn(tween(220)),
+                        exit = androidx.compose.animation.shrinkVertically(tween(180)) + androidx.compose.animation.fadeOut(tween(180))) {
+                        FindBar(find, data, rememberRecentSearches(), onClose = { closeFind() },
+                            onPage = { p ->
+                                contents = false; openTask = null; openPerson = null; openNote = null; vm.monthOpen.value = false
+                                if (p == "topics") screen = TOPICS else { screen = TASKS; view = Views.NOTES }
+                            },
+                            onAll = { allFor = find.query; searching = true })
+                    }
+                } else
                 TopBar(screen, view, shown, onMenu = { scope.launch { drawer.open() } }, onTab = { i -> view = listOf(Views.TODAY, Views.WEEK, Views.ALL)[i] },
                     onSearch = { searching = true }, filter = feedFilter, onFilter = { feedFilter = it },
                     landedDay = vm.landedDay.collectAsState().value, onLandedDay = { vm.calendarOpenOn.value = it })
@@ -280,7 +303,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         when (sc) {
                             PEOPLE -> PeopleList(data, vm, onOpen = { openPerson = it }, contentPadding = pad)
                             TOPICS -> TaskList(Views.ALL, data, settings, working, vm, emptyList(), onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
-                                contentPadding = pad, topicsOnly = true)
+                                contentPadding = pad, topicsOnly = true, findPage = "topics")
                             CALENDAR -> CalendarScreen(data, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
                             ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad, onOpenTask = { openId(it) })
                             MATERIALS -> MaterialsGrid(data.tasks.filter { !(it.topic && it.done) }, onView = { viewing = it }, onTopic = { openId(it) }) { t -> PageHead(s.materialsTitle, s.materialsSub, trailing = t) }
@@ -307,6 +330,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                     onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
                                     onOpenNotes = { screen = NOTES }, onOpenInbox = { screen = INBOX },
                                     onTry = { prefill = it; focusKey = System.currentTimeMillis() }, contentPadding = pad, pageDay = k.day,
+                                    findPage = if (k.view == Views.TODAY) "today" else null,
                                 )
                             else -> otherScreen(k.screen)
                         }
@@ -344,7 +368,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     }
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(20.dp).background(Brush.verticalGradient(listOf(Color.Transparent, c.bg))).fieldRule())
                 }
-                if ((screen == TASKS || screen == NOTES || screen == TOPICS) && !contents) Column(
+                if ((screen == TASKS || screen == NOTES || screen == TOPICS) && !contents && !find.open) Column(
                     // The planner (design/v9): the field wide on the page, the margin's line ending just under it, the frame's rule below.
                     // A band of tinted paper with a double rule over it (owner, 14 окт): the place to write is unmistakable on a full page.
                     if (planner) Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)
@@ -415,7 +439,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 }
             }
             // The planner: every page that opens over the diary is a sheet of the same book.
-            if (searching) Box(Modifier.fillMaxSize().background(c.bg).paperGrain()) { SearchScreen(data, vm, onBack = { searching = false },
+            if (searching) Box(Modifier.fillMaxSize().background(c.bg).paperGrain()) { SearchScreen(data, vm, initial = allFor, onBack = { searching = false },
                 onTask = { openId(it) }, onNote = { openNote = it }, onPerson = { openPerson = it }) }
             openPerson?.let { id ->
                 val p = data.persons.find { it.id == id }
@@ -439,6 +463,35 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 data.tasks.find { it.id == (topicId ?: lastTopic) }?.let { t ->
                     Box(Modifier.fillMaxSize().background(c.bg).paperGrain()) { TopicScreen(t, data, vm, openTab, openHl, onClose = { openTask = null; openHl = null; openTab = 0; fullIdea = null },
                         onOpenPerson = { openTask = null; openPerson = it }) }
+                }
+            }
+            // A matter, a topic's matter or a note opens as a page too (owner, 14 окт; design/v9/v9-card-*.png): it slides in like
+            // the topic, over the diary's page; the index stays on the right.
+            val cardKey = openDeal ?: openTask?.takeIf { id -> data.tasks.find { it.id == id }?.let { !it.topic || (it.thought && fullIdea != id) } == true }
+            var lastCard by remember { mutableStateOf<String?>(null) }
+            if (cardKey != null) lastCard = cardKey
+            AnimatedVisibility(cardKey != null,
+                enter = androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { it / 3 } + fadeIn(androidx.compose.animation.core.tween(220)),
+                exit = androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(220)) { it / 3 } + fadeOut(androidx.compose.animation.core.tween(180))) {
+                val k = cardKey ?: lastCard
+                val qr = k?.let { ru.anjeib.margin.data.questionRef(it) }
+                if (qr != null) {
+                    val topic = data.tasks.find { it.id == qr.first }
+                    if (topic == null) LaunchedEffect(Unit) { openDeal = null }
+                    else DealSheet(topic, qr.second, vm, onClose = { openDeal = null },
+                        // Owner, 10 окт: who goes to the topic wants the topic itself — from its start, not at this matter.
+                        onOpenTopic = { openDeal = null; openTask = topic.id; openTab = 0; openHl = null },
+                        onOpenPerson = { openDeal = null; openPerson = it })
+                } else data.tasks.find { it.id == k }?.let { t ->
+                    if (t.topic && t.thought) IdeaSheet(t, vm, onClose = { openTask = null }, onOpenFull = { fullIdea = t.id })
+                    else TaskSheet(
+                        t, data, vm, onClose = { openTask = null; openTaskDialog = null; openHl = null; openTab = 0 },
+                        startTab = openTab, startHl = openHl,
+                        startDialog = openTaskDialog, onStartDialogUsed = { openTaskDialog = null },
+                        onOpenNote = { openTask = null; openNote = it },
+                        onOpenPerson = { openTask = null; openPerson = it },
+                        onOpenTask = { openTask = it },
+                    )
                 }
             }
             // A name that isn't a contact was tapped: «Марина · + контакт», quietly, for a few seconds.
@@ -521,30 +574,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
 
     // The cards get the same «В тему…» / «Удалить» as the rows (their sheets live outside the drawer).
     androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.removeMatter(it) })) {
-    openDeal?.let { ref ->
-        val qr = ru.anjeib.margin.data.questionRef(ref)
-        val topic = qr?.let { (tid, _) -> data.tasks.find { it.id == tid } }
-        if (qr == null || topic == null) openDeal = null
-        else DealSheet(topic, qr.second, vm, onClose = { openDeal = null },
-            // Owner, 10 окт: who goes to the topic wants the topic itself — from its start, not at this matter.
-            onOpenTopic = { openDeal = null; openTask = topic.id; openTab = 0; openHl = null },
-            onOpenPerson = { openDeal = null; openPerson = it })
-    }
-
-    openTask?.let { id ->
-        val t = data.tasks.find { it.id == id }
-        if (t == null) openTask = null
-        // v2: a topic opens on the whole screen (below); a simple task keeps its sheet.
-        else if (t.topic && t.thought && fullIdea != id) IdeaSheet(t, vm, onClose = { openTask = null }, onOpenFull = { fullIdea = id })
-        else if (!t.topic) TaskSheet(
-            t, data, vm, onClose = { openTask = null; openTaskDialog = null; openHl = null; openTab = 0 },
-            startTab = openTab, startHl = openHl,
-            startDialog = openTaskDialog, onStartDialogUsed = { openTaskDialog = null },
-            onOpenNote = { openTask = null; openNote = it },
-            onOpenPerson = { openTask = null; openPerson = it },
-            onOpenTask = { openTask = it },
-        )
-    }
+    // The cards are pages now (owner, 14 окт) — opened over the diary, above (see «cardKey»).
+    openTask?.let { id -> if (data.tasks.none { it.id == id }) openTask = null }
     }
 }
 

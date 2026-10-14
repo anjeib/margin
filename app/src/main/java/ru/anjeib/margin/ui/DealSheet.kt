@@ -95,31 +95,17 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
     fun commit() { if (title.isNotBlank() && title.trim() != q.title) { vm.renameSubtask(topic.id, q.id, title.trim()); saved() } }
     DisposableEffect(qid) { onDispose { commit() } }
 
-    ModalBottomSheet(
-        modifier = Modifier.paperGrain(),
-        onDismissRequest = { commit(); onClose() },
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.bg,
-        scrimColor = c.scrim,
-        dragHandle = {
-            Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp)) {
-                Box(Modifier.align(Alignment.Center).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline))
-                androidx.compose.animation.AnimatedVisibility(savedAt > 0, Modifier.align(Alignment.CenterEnd).padding(end = 18.dp),
-                    enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
-                    Text("✓ " + s.savedTick, style = Type.small.copy(color = c.ok, fontSize = 12.5.sp))
-                }
-            }
-        },
-    ) {
-        // One design for every matter (owner's choice, 9 окт): the topic above, the title, the day, who owes it,
-        // «+ …» for what is not set, the comments written right here — and a small field below for changes in words.
-        val screen = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
-        val ime = androidx.compose.foundation.layout.WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-        val maxH = ((screen * 0.92f).dp - ime).coerceAtLeast(200.dp)
-        Column(Modifier.fillMaxWidth().heightIn(max = maxH).imePadding().navigationBarsPadding()) {
+    // A page of the planner, as every card (owner, 14 окт; design/v9/v9-card-deal.png).
+    CardPage(onClose = { commit(); onClose() }, trailing = {
+        androidx.compose.animation.AnimatedVisibility(savedAt > 0, Modifier.padding(end = 18.dp),
+            enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+            Text("✓ " + s.savedTick, style = Type.small.copy(color = c.ok, fontSize = 12.5.sp))
+        }
+    }) {
+        Column(Modifier.weight(1f).fillMaxWidth()) {
             // At least half the screen with the field right under it — the same as a simple matter's card.
             val pageLines = rememberPageLines()
-            Column(Modifier.weight(1f, fill = false).heightIn(min = ((screen * 0.6f).dp - 76.dp).coerceAtLeast(120.dp)).ruledPage(pageLines).screenRule().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
+            Column(Modifier.weight(1f).ruledPage(pageLines).screenRule().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
                 // The same card as a simple matter (owner's call, 10 окт), with its topic above the title.
                 val row = topic.questionRow(q)
                 val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
@@ -134,7 +120,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 if (postponing) PostponeDialog(onDismiss = { postponing = false }) { d -> vm.postponeTo(ref, d); postponing = false }
                 fun person(n: String) { data.contact(n)?.let { pp -> onOpenPerson?.invoke(pp.id) } ?: vm.offerContact(n) }
                 // Its topic — a way back to it — at the top; no ⋯ (owner, 14 окт): what it can do is under «Ещё».
-                if (onOpenTopic != null) Margined { TopicLink(topic.title) { commit(); onOpenTopic() } } else Spacer(Modifier.height(12.dp))
+                if (onOpenTopic != null) Margined { TopicLink(topic.title) { commit(); onOpenTopic() } } else Spacer(Modifier.height(4.dp))
                 fun tick() {
                     val next = q.slots.firstOrNull { !it.done }
                     if (next != null) vm.toggleSlot(ref, next.id) else vm.toggleQuestion(topic.id, q.id)
@@ -149,8 +135,8 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                     }) }
                     q.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
                 }
-                CardHead(title, { title = it }, q.done, onToggle = ::tick,
-                    margin = if (q.slots.isEmpty()) ({ CardWhen(due, q.time, late, onDay = { dialog = "date" }, onHour = if (due != null) ({ dialog = "time" }) else null, from = start) }) else null,
+                CardHead(title, { title = it }, q.done, onToggle = ::tick, kind = s.cardKindDeal,
+                    margin = if (q.slots.isEmpty()) ({ CardMargin(due, q.time, late, prefix = windowPrefix(start, due), onDay = { dialog = "date" }, onHour = if (due != null) ({ dialog = "time" }) else null) }) else null,
                     meta = meta,
                     mark = if ((q.from != null || q.promisedTo != null) && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = q.from != null, size = 32.dp) } }) else null)
                 if (q.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(q.slots, onToggle = { vm.toggleSlot(ref, it) }, onRemove = { vm.removeSlot(ref, it) }) }
@@ -198,7 +184,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
             val scopeKey = MainVm.key(Scope.InTask(topic.id))
             val modeLabel = when (mode) { "step" -> s.stepOne; "place" -> s.fieldPlace; "people" -> s.fieldPeople; else -> null }
             val notice by vm.notice.collectAsState()
-            Column(Modifier.fieldRule().padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
+            Column(Modifier.fillMaxWidth().background(c.bg).padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)) {
               // What became of the words (or that they wait for the cloud) — said here too, not only in the topic.
               notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> Box(Modifier.padding(start = FieldLead)) { NoticeLine(nt, vm) } }
               // A name here that isn't a contact was tapped: the same quiet offer as on a simple matter.
@@ -210,7 +196,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                   }
               }
               SmartComposer(
-                vm, if (mode == "step") s.stepHint else modeLabel?.let { s.fillHint(it) } ?: s.writeOnPage, busy == scopeKey,
+                vm, if (mode == "step") s.stepHint else modeLabel?.let { s.fillHint(it) } ?: s.cardDealHint, busy == scopeKey,
                 onSend = { t, f ->
                     when {
                         mode == "step" -> if (t.isNotBlank()) vm.addChildDeal(topic.id, q.id, t)

@@ -150,6 +150,50 @@ private sealed interface FeedLine {
 
 private fun norm(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
 
+/** A row of the topic's page: a section's head, «сделано · N», or a line of the feed with how its margin reads. */
+private sealed interface FeedRow {
+    val key: String
+    data class Head(override val key: String, val deals: Boolean, val count: Int, val first: Boolean) : FeedRow
+    data class Fold(override val key: String, val n: Int, val open: Boolean) : FeedRow
+    data class Line(val line: FeedLine, val seat: Seat, val byDue: Boolean, val dayFirst: Boolean, val firstInSection: Boolean) : FeedRow { override val key get() = line.key }
+}
+
+/**
+ * The page of a topic. [grouped] («Всё», owner 14 окт): the matters first — open ones by their day, each with what hangs under
+ * it, the settled ones folded into «сделано · N» — then the records in the order written, a day on the margin once. Otherwise
+ * (one kind only) the lines in the order they came, a day's lines one panel.
+ */
+private fun arrange(feed: List<FeedLine>, grouped: Boolean, showDone: Boolean): List<FeedRow> {
+    fun seats(n: Int, i: Int) = when { n == 1 -> Seat.Single; i == 0 -> Seat.First; i == n - 1 -> Seat.Last; else -> Seat.Middle }
+    val out = mutableListOf<FeedRow>()
+    if (!grouped) {
+        val days = feed.map { dateOfStamp(it.at) }
+        feed.forEachIndexed { i, l ->
+            val first = i == 0 || days[i - 1] != days[i]
+            val last = i == feed.lastIndex || days[i + 1] != days[i]
+            val seat = when { first && last -> Seat.Single; first -> Seat.First; last -> Seat.Last; else -> Seat.Middle }
+            out += FeedRow.Line(l, seat, byDue = false, dayFirst = first, firstInSection = i == 0)
+        }
+        return out
+    }
+    // The matters, each with the ones hung under it (the feed already has a child right after its parent).
+    val groups = mutableListOf<MutableList<FeedLine.Deal>>()
+    feed.filterIsInstance<FeedLine.Deal>().forEach { d -> if (d.depth == 0 || groups.isEmpty()) groups += mutableListOf(d) else groups.last() += d }
+    val (open, settled) = groups.partition { !it.first().q.done && !it.first().removed }
+    val openLines = open.sortedBy { it.first().q.due ?: "9999" }.flatten()
+    if (groups.isNotEmpty()) out += FeedRow.Head("h:deals", deals = true, count = open.size, first = true)
+    openLines.forEachIndexed { i, d -> out += FeedRow.Line(d, seats(openLines.size, i), byDue = true, dayFirst = false, firstInSection = i == 0) }
+    if (settled.isNotEmpty()) {
+        out += FeedRow.Fold("f:done", settled.size, showDone)
+        if (showDone) { val l = settled.flatten(); l.forEachIndexed { i, d -> out += FeedRow.Line(d, seats(l.size, i), byDue = true, dayFirst = false, firstInSection = i == 0) } }
+    }
+    val said = feed.filterIsInstance<FeedLine.Said>()
+    if (said.isNotEmpty()) out += FeedRow.Head("h:said", deals = false, count = said.count { !it.removed }, first = groups.isEmpty())
+    val days = said.map { dateOfStamp(it.at) }
+    said.forEachIndexed { i, l -> out += FeedRow.Line(l, Seat.Single, byDue = false, dayFirst = i == 0 || days[i - 1] != days[i], firstInSection = i == 0) }
+    return out
+}
+
 private fun feedOf(t: Task): List<FeedLine> {
     val deals = t.subtasks.map { it to false } + t.removed.map { it to true }
     val notes = t.entries.map { it to false } + t.removedEntries.map { it to true }
@@ -226,6 +270,9 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     val scopeKey = MainVm.key(Scope.InTask(task.id))
     val feedAll = remember(task) { feedOf(task) }
     val feed = when { dealsOnly -> feedAll.filter { it is FeedLine.Deal }; saidOnly -> feedAll.filter { it is FeedLine.Said }; else -> feedAll }
+    // «Всё» in sections (owner, 14 окт): the matters together at the top, the records under them on the page — each file in its record.
+    var showDone by remember(task.id) { mutableStateOf(false) }
+    val rows = arrange(feed, grouped = !dealsOnly && !saidOnly, showDone = showDone)
 
     // The task just grew into a topic: the thread grows down the margin and its lines arrive one by one.
     // Played once per topic in a run of the app (event times are kept to the minute, so «just now» is a two-minute window).
@@ -245,11 +292,17 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     // A topic opens at its start — the title, the summary, the first days (owner, 10 окт); only a line asked for
     // (a search hit) is scrolled to. When something new is written here, the feed follows it to the end.
     LaunchedEffect(task.id) {
-        val i = hl?.let { k -> feed.indexOfFirst { it.key == k } } ?: -1
+        val i = hl?.let { k -> rows.indexOfFirst { it.key == k } } ?: -1
         if (i >= 0) feedState.scrollToItem(i + 1)
     }
-    val openedWith = remember(task.id) { feed.size }
-    LaunchedEffect(feed.size) { if (feed.size > openedWith && hl == null) feedState.animateScrollToItem(feed.size) }
+    // Something new written here: the page goes to where it stood up — a matter among the matters, a record at the end.
+    var known by remember(task.id) { mutableStateOf(feed.map { it.key }.toSet()) }
+    LaunchedEffect(feed.size) {
+        val fresh = feed.map { it.key }.filter { it !in known }
+        known = known + fresh
+        val i = fresh.firstOrNull()?.let { k -> rows.indexOfFirst { it.key == k } } ?: -1
+        if (i >= 0 && hl == null) feedState.animateScrollToItem((i + 1 - 1).coerceAtLeast(0))
+    }
     fun archive() {
         scope.launch {
             view.confirmTick()
@@ -269,15 +322,16 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         }.background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding().marginRule(c.accent.copy(alpha = 0.85f), rule.value),
     ) {
         // ---- header: back on the margin, ⋯ on the right; nothing else up there ----
-        Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+        // As every card (owner, 14 окт; design/v9/v9-card-topic.png): under the frame's «MARGIN», back on the margin, ⋯ at the right.
+        Row(Modifier.fillMaxWidth().padding(top = 18.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(MarginW), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, s.backWord, tint = c.ink, modifier = Modifier.size(22.dp))
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.backWord, onClick = onClose), contentAlignment = Alignment.Center) {
+                    BackGlyph(c.ink.copy(alpha = 0.8f), 21.dp)
                 }
             }
             Spacer(Modifier.weight(1f))
             Box(Modifier.padding(end = 8.dp)) {
-                Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) { Icon(Icons.Outlined.MoreHoriz, s.moreActions, tint = c.graphite) }
+                Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = s.moreActions) { menu = true }, contentAlignment = Alignment.Center) { MoreGlyph(c.graphite, 22.dp) }
                 // An open topic goes to the archive (it keeps everything); deleting is for one already there.
                 SoftMenu(menu, { menu = false }) {
                     SoftMenuItem(s.rename) { menu = false; titleTick++ }
@@ -307,25 +361,35 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         }
         // Scrolled into the feed, the header folds to one line — the title — and gives the feed the screen; back at the start it opens again.
         val folded by remember { androidx.compose.runtime.derivedStateOf { feedState.firstVisibleItemIndex > 0 || feedState.firstVisibleItemScrollOffset > 60 } }
-        Margined {
+        val note = task.thought && task.subtasks.isEmpty()
+        val bornDay = runCatching { LocalDate.parse(task.createdAt.take(10)) }.getOrNull()
+        // Since when, on the margin as a day of the diary (owner, 14 окт): «с» over the day it was begun.
+        Margined(margin = if (folded) null else ({ CardMargin(bornDay, prefix = if (note) null else s.sinceWord) })) {
             Column(Modifier.animateContentSize(tween(220))) {
                 // The name is written right here (owner, 13 окт): a tap puts the cursor in it, «Готово» or leaving keeps it.
                 if (folded) Text(task.title, style = Type.cardTitle.copy(color = c.ink, fontSize = 19.sp, lineHeight = 24.sp),
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 8.dp))
-                else androidx.compose.foundation.text.BasicTextField(titleV, { titleV = it.copy(text = it.text.replace("\n", " ")) },
-                    textStyle = Type.display.copy(color = c.ink, fontSize = 32.sp, lineHeight = 38.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
+                else Row(verticalAlignment = Alignment.Top) {
+                  // «#» — the sign a topic goes by everywhere (its tab, its mentions); a note has none.
+                  if (!note) { Box(Modifier.padding(top = 7.dp)) { TopicGlyph(c.ink.copy(alpha = 0.75f), 24.dp) }; Spacer(Modifier.width(10.dp)) }
+                  androidx.compose.foundation.text.BasicTextField(titleV, { titleV = it.copy(text = it.text.replace("\n", " ")) },
+                    textStyle = Type.display.copy(color = c.ink, fontSize = 30.sp, lineHeight = 36.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences),
                     keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { saveTitle(); focusManager.clearFocus() }),
                     modifier = Modifier.fillMaxWidth().focusRequester(titleFocus).onFocusChanged { f -> if (f.isFocused) titleHad = true else if (titleHad) { titleHad = false; saveTitle() } })
+                }
                 if (!folded) {
                 // v8: under the title one line in Margin's voice — since when, how far — and the sphere as a chip;
                 // then words as tabs, the same as in «Обзор»: everything, the matters, the records, the files.
-                Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val since = runCatching { LocalDate.parse(task.createdAt) }.getOrNull()?.dayMonthYear()
-                    val sinceText = since?.let { if (task.thought && task.subtasks.isEmpty()) s.thoughtSince(it) else s.topicSince(it) }
-                    Voice(listOfNotNull(sinceText, total.takeIf { it > 0 }?.let { s.progressSolved(doneCount, it) }).joinToString("  ·  "), Modifier.weight(1f))
-                    SpherePick(task.sphere, Modifier.padding(start = 8.dp)) { vm.setSphere(task.id, it) }
-                }
+                // One italic line in Margin's voice (owner, 14 окт): what it is, how much is in it, its sphere — a tap switches it.
+                MetaLine(listOfNotNull(
+                    MetaItem(Meta.plain(if (note) s.cardKindNote else s.cardKindTopic), Meta.quiet()) {},
+                    open.takeIf { it > 0 }?.let { MetaItem(Meta.plain(s.tasksCount(it)), Meta.quiet()) { dealsOnly = true; saidOnly = false; materialsMode = false } },
+                    doneCount.takeIf { it > 0 }?.let { MetaItem(Meta.plain(s.doneCountWord(it)), Meta.quiet()) { dealsOnly = true; saidOnly = false; materialsMode = false } },
+                    task.entries.size.takeIf { it > 0 }?.let { MetaItem(Meta.plain(s.entriesCount(it)), Meta.quiet()) { saidOnly = true; dealsOnly = false; materialsMode = false } },
+                    MetaItem(Meta.plain(when (task.sphere) { "work" -> s.sphereWork.lowercase(); "personal" -> s.spherePersonal.lowercase()
+                        else -> s.spherePersonal.lowercase() + " / " + s.sphereWork.lowercase() }), if (task.sphere == null) Meta.faint() else Meta.quiet()) { vm.setSphere(task.id, nextSphere(task.sphere)) },
+                ))
                 val files = task.materials().size
                 val tab = when { dealsOnly -> "deals"; saidOnly -> "said"; materialsMode -> "files"; else -> "all" }
                 TextTabs(listOfNotNull("all" to s.allTab, total.takeIf { it > 0 }?.let { "deals" to s.dealsBadge + " " + it },
@@ -346,7 +410,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             run {
                 androidx.compose.animation.Crossfade(materialsMode, animationSpec = tween(240), label = "materials") { m ->
                     if (m) MaterialsFeed(task, onView = { viewing = it })
-                    else FeedPage(task, feed, feedState, hl, seenAtOpen, working, selected, vm, pageDraft.takeIf { addUnder == null }, pageFiles, writeTick.takeIf { it > 0 },
+                    else FeedPage(task, rows, { showDone = !showDone }, feedState, hl, seenAtOpen, working, selected, vm, pageDraft.takeIf { addUnder == null }, pageFiles, writeTick.takeIf { it > 0 },
                         if (dealsOnly) s.newQuestionHint else s.writeInTopic, { pageSend.send() }, FeedActions(
                         select = { k -> selected = if (k.isBlank() || selected == k) null else k },
                         addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
@@ -356,7 +420,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                 }
             }
             // The feed fades in under the header instead of being cut through a line of words.
-            Box(Modifier.fillMaxWidth().height(18.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.bg, c.bg.copy(alpha = 0f)))))
+            // Right of the rule, so the margin's line runs on unbroken (owner, 14 окт).
+            Box(Modifier.padding(start = MarginW + 2.dp).fillMaxWidth().height(18.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.bg, c.bg.copy(alpha = 0f)))))
             // At the bottom right, by the thumb, floating over the feed — not over the first words under the title.
             androidx.compose.animation.AnimatedVisibility(awayFromStart && !materialsMode, modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 10.dp, end = 14.dp),
                 enter = androidx.compose.animation.fadeIn(tween(180)), exit = androidx.compose.animation.fadeOut(tween(180))) {
@@ -366,11 +431,12 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             }
         }
         // ---- composer: words go to the feed, on «Вопросы» they become a question ----
-        Column(Modifier.background(c.bg).fieldRule().padding(horizontal = 14.dp).padding(top = 6.dp, bottom = 10.dp)) {
+        // The same «графа» as on every page of the diary (owner, 14 окт).
+        Column(Modifier.fillMaxWidth().background(c.bg).padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)) {
             notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> Box(Modifier.padding(start = FieldLead)) { NoticeLine(nt, vm) } }
             val under = addUnder
             SmartComposer(
-                vm, if (under != null) "«" + under.second.take(40) + "»" else s.writeOnPage, busy == scopeKey,
+                vm, if (under != null) "«" + under.second.take(40) + "»" else s.topicWriteHint, busy == scopeKey,
                 onSend = { t, f ->
                     if (under != null) { vm.addChildDeal(task.id, under.first, t); addUnder = null }
                     else vm.send(t, scope = Scope.InTask(task.id), files = f, asQuestion = dealsOnly)
@@ -500,14 +566,16 @@ private class FeedActions(
 )
 
 @Composable
-private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.foundation.lazy.LazyListState, hl: String?, seen: Set<String>, working: Set<String>,
+private fun FeedPage(task: Task, rows: List<FeedRow>, onFoldDone: () -> Unit, state: androidx.compose.foundation.lazy.LazyListState, hl: String?, seen: Set<String>, working: Set<String>,
                      selected: String?, vm: MainVm, draft: androidx.compose.runtime.MutableState<String>?,
                      files: androidx.compose.runtime.snapshots.SnapshotStateList<Attachment>, writeKey: Any?, writeHint: String, onKeep: () -> Unit,
                      act: FeedActions, onArchive: () -> Unit, onSource: () -> Unit) {
     val c = M.c
     val s = M.s
+    val feed = rows.filterIsInstance<FeedRow.Line>().map { it.line }
     // New lines arrive one after another, in the order they were written.
     val freshKeys = feed.filter { it.key !in seen }.map { it.key }
+    val today = LocalDate.now()
     LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(top = 6.dp, bottom = 24.dp)) {
         item("origin") {
             if (task.source != null) {
@@ -516,28 +584,40 @@ private fun FeedPage(task: Task, feed: List<FeedLine>, state: androidx.compose.f
                 Margined(Modifier.padding(bottom = 8.dp)) { Voice("↳ " + s.fromMessage(stamp), link = true, onClick = onSource) }
             } else Spacer(Modifier.height(4.dp))
         }
-        // v8: each day of the feed is one panel — its date big on the margin once, the hours of the records under it.
-        val days = feed.map { dateOfStamp(it.at) }
-        feed.forEachIndexed { idx, line ->
-            val day = days[idx]
-            val first = idx == 0 || days[idx - 1] != day
-            val last = idx == feed.lastIndex || days[idx + 1] != day
-            val seat = when { first && last -> Seat.Single; first -> Seat.First; last -> Seat.Last; else -> Seat.Middle }
-            val hour = timeOfStamp(line.at).takeIf { line is FeedLine.Said && it.isNotBlank() && it != "00:00" }
-            val margin: (@Composable () -> Unit)? = when {
-                first && day != null -> ({ Column(horizontalAlignment = Alignment.CenterHorizontally) { DayMargin(day, LocalDate.now(), false, strong = true); hour?.let { MarginNote(it, modifier = Modifier.padding(top = 2.dp)) } } })
-                hour != null -> ({ RowMargin(hour) })
-                else -> null
-            }
-            item(line.key) {
-                val fresh = line.key in freshKeys
-                // Lines slide into place but never fade: a line fading out under «только дела» kept its day on the margin
-                // on top of the next one's (review 0.13, defect 13). New lines have their own arrival.
-                Column(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).arrive(fresh, freshKeys.indexOf(line.key)).landing(hl == line.key, 10)
-                    .padding(top = if (first && idx > 0) 14.dp else 0.dp)) {
-                    when (line) {
-                        is FeedLine.Said -> NoteLine(task, line.e, line.removed, seat, margin, fresh, working, vm, act)
-                        is FeedLine.Deal -> DealLine(task, line.q, line.removed, line.depth, seat, margin, vm, act)
+        rows.forEach { row ->
+            when (row) {
+                is FeedRow.Head -> item(row.key) {
+                    SectionHead(if (row.deals) s.dealsBadge else s.records, count = row.count.takeIf { it > 0 }, top = if (row.first) 6.dp else 22.dp)
+                }
+                is FeedRow.Fold -> item(row.key) {
+                    Margined(Modifier.padding(top = 4.dp)) { QuietLink(s.doneCount(row.n) + if (row.open) " ▾" else " ▸", onClick = onFoldDone) }
+                }
+                is FeedRow.Line -> {
+                    val line = row.line
+                    val day = dateOfStamp(line.at)
+                    val hour = timeOfStamp(line.at).takeIf { line is FeedLine.Said && it.isNotBlank() && it != "00:00" }
+                    val margin: (@Composable () -> Unit)? = when {
+                        // A matter among the matters: its own day on the margin, as on «Сегодня».
+                        row.byDue -> (line as? FeedLine.Deal)?.q?.due?.let { d -> runCatching { LocalDate.parse(d) }.getOrNull() }?.let { d ->
+                            val late = !line.q.done && !line.removed && d.isBefore(today)
+                            ({ RowMargin(if (late) s.sinceWord + " " + d.dayMonthShort() else dayWord(d, today), late = late) })
+                        }
+                        // The day as in the diary (owner, 14 окт): its number large, the month in capitals, the hour under it.
+                        row.dayFirst && day != null -> ({ Column(horizontalAlignment = Alignment.CenterHorizontally) { MarginDay(day.dayOfMonth, day.dayMonthShort().substringAfter(' ')); hour?.let { MarginNote(it, modifier = Modifier.padding(top = 2.dp)) } } })
+                        hour != null -> ({ RowMargin(hour) })
+                        else -> null
+                    }
+                    item(line.key) {
+                        val fresh = line.key in freshKeys
+                        // Lines slide into place but never fade: a line fading out under «только дела» kept its day on the margin
+                        // on top of the next one's (review 0.13, defect 13). New lines have their own arrival.
+                        Column(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).arrive(fresh, freshKeys.indexOf(line.key)).landing(hl == line.key, 10)
+                            .padding(top = if (row.dayFirst && !row.firstInSection) 14.dp else 0.dp)) {
+                            when (line) {
+                                is FeedLine.Said -> NoteLine(task, line.e, line.removed, row.seat, margin, fresh, working, vm, act)
+                                is FeedLine.Deal -> DealLine(task, line.q, line.removed, line.depth, row.seat, margin, vm, act)
+                            }
+                        }
                     }
                 }
             }
@@ -608,20 +688,21 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin:
     LaunchedEffect(draft) { if (editing && draft != e.text) { kotlinx.coroutines.delay(900); save() } }
     androidx.compose.runtime.DisposableEffect(e.id) { onDispose { save() } }
     val sel by androidx.compose.animation.animateColorAsState(if (tools) c.chip else Color.Transparent, tween(180), label = "sel")
+    // Written straight on the page, as in the diary (owner, 14 окт; design/v9/v9-card-topic.png) — no panel; the matters keep theirs.
     Margined(margin = margin) {
-        PanelPiece(seat, dividerStart = 16.dp) {
         Box {
-            Column(Modifier.fillMaxWidth().background(sel)
-                .combinedClickable(onClick = { if (removed) menu = true else editing = true }, onLongClick = { if (removed) menu = true else tools = true }).padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Box {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(sel)
+                .combinedClickable(onClick = { if (removed) menu = true else editing = true }, onLongClick = { if (removed) menu = true else tools = true }).padding(end = 8.dp, top = 6.dp, bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
                         if (editing) androidx.compose.foundation.text.BasicTextField(draftValue, { draftValue = continueList(draftValue, it) },
-                            textStyle = Type.body.copy(color = c.ink, fontSize = 15.5.sp, lineHeight = 22.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
+                            textStyle = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
                             modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { f ->
                                 // The field reports «not focused» as it appears: leave editing only once the cursor has been in it.
                                 if (f.isFocused) hadFocus = true else if (editing && hadFocus) { save(); editing = false; hadFocus = false }
                             })
-                        else if (e.text.isNotBlank()) ListAwareText(e.text, Type.body.copy(color = if (removed) c.faint else c.ink, fontSize = 15.5.sp, lineHeight = 22.sp,
+                        else if (e.text.isNotBlank()) ListAwareText(e.text, Type.body.copy(color = if (removed) c.faint else c.ink.copy(alpha = 0.9f), fontSize = 16.sp, lineHeight = 23.sp,
                             textDecoration = if (removed) androidx.compose.ui.text.style.TextDecoration.LineThrough else null))
                         // A list in a record is a list of thoughts, not matters: bullets, no ticks.
                         e.items.forEach { Row(Modifier.padding(vertical = 1.dp)) {
@@ -712,13 +793,13 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
                             if (i > 0) append("  ·  ")
                             val d = runCatching { LocalDate.parse(sl.date) }.getOrNull()
                             withStyle(SpanStyle(color = if (sl.done) c.graphite else c.ink, fontFeatureSettings = "tnum", textDecoration = if (sl.done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)) {
-                                append((d?.let { dayWord(it, today) } ?: sl.date) + (sl.time?.let { " $it" } ?: ""))
+                                append((d?.let { dayTalk(it, today) } ?: sl.date) + (sl.time?.let { " $it" } ?: ""))
                             }
                         }
                     }, style = Type.small.copy(fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))
                     // The quiet line: when (late in terracotta) with its hour, who owes it, when it was done.
                     if (!removed) {
-                        val whenText = if (q.slots.isEmpty() && !q.done) due?.let { (if (late) s.lateSince(it.dayMonthShort()) else dayWord(it, today)) + (q.time?.let { t -> " $t" } ?: "") } else null
+                        val whenText = if (q.slots.isEmpty() && !q.done) due?.let { (if (late) s.lateSince(it.dayMonthShort()) else dayTalk(it, today)) + (q.time?.let { t -> " $t" } ?: "") } else null
                         val rest = listOfNotNull(q.from?.let { s.promiseToYou(it) }, q.assignee,
                             if (q.done) q.doneAt?.let { d -> LocalDate.parse(d).dayMonthShort().let { if (q.isWait) s.gotOn(it) else s.solvedOn(it) } } else null)
                         if (whenText != null || rest.isNotEmpty()) PencilText(buildAnnotatedString {

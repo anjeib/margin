@@ -365,21 +365,7 @@ fun SmartComposer(
                 val audio = r.stop()
                 if (audio != null) vm.transcribe(audio) { gotSpeech(it, audio) }
             }
-            Row(Modifier.fillMaxWidth().padding(start = if (ruled) MarginW - edge + FieldInset else 0.dp), verticalAlignment = Alignment.CenterVertically) {
-                when {
-                    rec != null -> {
-                        Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) {
-                            CloseGlyph(c.graphite, 20.dp)
-                        }
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
-                        Spacer(Modifier.width(10.dp))
-                        LevelBars(level, Modifier.weight(1f))
-                    }
-                    transcribing -> Text(s.transcribing, style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f).padding(start = 6.dp))
-                    else -> Spacer(Modifier.weight(1f))
-                }
-                // The card's files: a paperclip by the microphone; what it adds shows on the page, under the words.
-                if (marksOnPlus && rec == null && !transcribing) AttachPlus(vm, size = FieldH + 6.dp, glyph = { ClipGlyph(c.graphite, 20.dp) }) { files += it }
+            val micBox: @Composable () -> Unit = {
                 if (transcribing) Box(Modifier.size(FieldH + 6.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(18.dp))
                 } else Box(Modifier.size(FieldH + 6.dp).clip(CircleShape).background(if (rec != null) c.accent else Color.Transparent)
@@ -398,6 +384,56 @@ fun SmartComposer(
                     MicGlyph(if (rec != null) M.c.onAccent else c.accent, 24.dp)
                 }
             }
+            if (planner) {
+                // The card's «графа» (owner, 14 окт; design/v9/v9-card-*.png): the same writing line as on every page — the hour on
+                // the margin, the paperclip, the words' line (a tap goes to the page, where they are written), the microphone and
+                // «send». What is written stays on the page itself; «send» only keeps it at once.
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    if (ruled) NowOnMargin(Modifier.width(MarginW - edge))
+                    Row(Modifier.weight(1f).padding(start = if (ruled) FieldInset else 0.dp).heightIn(min = FieldH).padding(end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        when {
+                            rec != null -> {
+                                Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) { CloseGlyph(c.graphite, 20.dp) }
+                                Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
+                                Spacer(Modifier.width(10.dp))
+                                LevelBars(level, Modifier.weight(1f))
+                            }
+                            else -> {
+                                if (marksOnPlus && !transcribing) AttachPlus(vm, size = FieldH, glyph = { ClipGlyph(c.graphite, 19.dp) }) { files += it }
+                                val baseline = c.ink.copy(alpha = 0.35f)
+                                Box(Modifier.weight(1f).heightIn(min = FieldH - 2.dp).clip(RoundedCornerShape(6.dp)).clickable { onWrite?.invoke() }
+                                    .drawBehind { drawLine(baseline, androidx.compose.ui.geometry.Offset(0f, size.height - 6.dp.toPx()), androidx.compose.ui.geometry.Offset(size.width, size.height - 6.dp.toPx()), 1.dp.toPx()) }
+                                    .padding(vertical = 9.dp, horizontal = 2.dp), contentAlignment = Alignment.CenterStart) {
+                                    val last = text.trim().lines().lastOrNull().orEmpty()
+                                    if (transcribing) Text(s.transcribing, style = Type.italic.copy(color = c.graphite, fontSize = 17.sp))
+                                    else if (last.isEmpty()) Text(hint, style = Type.italic.copy(color = c.graphite, fontSize = 17.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    else Text(last, style = Type.body.copy(fontFamily = rowFamily, color = c.ink.copy(alpha = 0.6f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                        micBox()
+                        FieldButton(filled = true, enabled = text.isNotBlank() || files.isNotEmpty(), label = s.a11ySend, onClick = ::send) { SendGlyph(M.c.onAccent, 15.dp) }
+                    }
+                }
+                return@Column
+            }
+            Row(Modifier.fillMaxWidth().padding(start = if (ruled) MarginW - edge + FieldInset else 0.dp), verticalAlignment = Alignment.CenterVertically) {
+                when {
+                    rec != null -> {
+                        Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) {
+                            CloseGlyph(c.graphite, 20.dp)
+                        }
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
+                        Spacer(Modifier.width(10.dp))
+                        LevelBars(level, Modifier.weight(1f))
+                    }
+                    transcribing -> Text(s.transcribing, style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f).padding(start = 6.dp))
+                    else -> Spacer(Modifier.weight(1f))
+                }
+                // The card's files: a paperclip by the microphone; what it adds shows on the page, under the words.
+                if (marksOnPlus && rec == null && !transcribing) AttachPlus(vm, size = FieldH + 6.dp, glyph = { ClipGlyph(c.graphite, 20.dp) }) { files += it }
+                micBox()
+            }
             return@Column
         }
         // A light line, a little taller than the words, a hairline around it.
@@ -405,12 +441,8 @@ fun SmartComposer(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             // The planner (owner, 14 окт; design/v9/v9-field-*.png): a printed «графа», the words on a ruled line, and on its margin
             // the hour now — the margin is only for «когда», and that is the hour the entry will get (owner: no «запись» there).
-            if (ruled && planner) Box(Modifier.width(MarginW - edge).heightIn(min = FieldH), contentAlignment = Alignment.CenterEnd) {
-                val now by androidx.compose.runtime.produceState(java.time.LocalTime.now()) {
-                    while (true) { value = java.time.LocalTime.now(); kotlinx.coroutines.delay(((60 - value.second) * 1000L).coerceAtLeast(1000L)) }
-                }
-                Text("%02d:%02d".format(now.hour, now.minute), style = Type.italic.copy(color = c.ink.copy(alpha = 0.75f), fontSize = 15.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = 10.dp))
-            } else if (ruled) Spacer(Modifier.width(MarginW - edge))
+            if (ruled && planner) NowOnMargin(Modifier.width(MarginW - edge))
+            else if (ruled) Spacer(Modifier.width(MarginW - edge))
             Row(
                 // v8: the field floats a little over the page — a soft shadow, the one raised thing besides menus.
                 if (planner) Modifier.weight(1f).padding(start = if (ruled) FieldInset else 0.dp).heightIn(min = FieldH).padding(end = 2.dp)
@@ -729,7 +761,7 @@ fun rememberMarkLook(vm: MainVm?): androidx.compose.ui.text.input.VisualTransfor
                     append(raw.substring(pos, m.range.first))
                     val v = m.value
                     val label = when {
-                        v.startsWith("#[") -> "≡ " + (vm?.data?.value?.tasks?.find { it.id == v.drop(2).dropLast(1) }?.title ?: v.drop(2).dropLast(1))
+                        v.startsWith("#[") -> "# " + (vm?.data?.value?.tasks?.find { it.id == v.drop(2).dropLast(1) }?.title ?: v.drop(2).dropLast(1))
                         v.startsWith("@[d:") || v.startsWith("@[p:") -> vm?.data?.value?.mentionLabel(v) ?: v
                         v.startsWith("@[") -> "@" + v.drop(2).dropLast(1)
                         else -> v.drop(1).lowercase()
@@ -771,3 +803,15 @@ fun rememberMarkLook(vm: MainVm?): androidx.compose.ui.text.input.VisualTransfor
 
 /** A day-row's id without its day («<id>@<slot>» → «<id>»). */
 internal fun slotBase(id: String) = ru.anjeib.margin.data.slotRef(id)?.first ?: id
+
+/** The hour now on the margin of a writing line — the hour the words will get. */
+@Composable
+fun NowOnMargin(modifier: Modifier = Modifier) {
+    val c = M.c
+    Box(modifier.heightIn(min = FieldH), contentAlignment = Alignment.CenterEnd) {
+        val now by androidx.compose.runtime.produceState(java.time.LocalTime.now()) {
+            while (true) { value = java.time.LocalTime.now(); kotlinx.coroutines.delay(((60 - value.second) * 1000L).coerceAtLeast(1000L)) }
+        }
+        Text("%02d:%02d".format(now.hour, now.minute), style = Type.italic.copy(color = c.ink.copy(alpha = 0.75f), fontSize = 15.sp, fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = 10.dp))
+    }
+}

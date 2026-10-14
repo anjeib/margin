@@ -60,27 +60,20 @@ import java.time.LocalDate
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String) -> Unit, onNote: (String) -> Unit, onPerson: (String) -> Unit) {
+fun SearchScreen(data: AppData, vm: MainVm, initial: String = "", onBack: () -> Unit, onTask: (String) -> Unit, onNote: (String) -> Unit, onPerson: (String) -> Unit) {
     val c = M.c
     val s = M.s
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    var q by rememberSaveable { mutableStateOf("") }
+    var q by rememberSaveable { mutableStateOf(initial) }
     /** null — everything; "people" | "topics" | "files" — one kind, all of it when nothing is typed. */
     var kind by rememberSaveable { mutableStateOf<String?>(null) }
     var viewing by remember { mutableStateOf<ru.anjeib.margin.data.Attachment?>(null) }
     val prefs = remember { ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE) }
     // One list for the whole run: a search left a moment ago is there when the screen opens again.
-    val recentState = RecentSearches.state
-    if (recentState.value == null) recentState.value = prefs.getString("searchRecent", "").orEmpty().split('\n').filter { it.isNotBlank() }
-    val recent = recentState.value.orEmpty()
+    val recent = rememberRecentSearches()
     // A search is remembered when something it found is opened, and when the user leaves it with words typed
     // (Fable, 9 окт: looking without opening left «Недавние» empty).
-    fun keep() {
-        val t = q.trim().takeIf { it.length >= 2 } ?: return
-        val now = (listOf(t) + recentState.value.orEmpty().filterNot { it.equals(t, true) }).take(5)
-        recentState.value = now
-        prefs.edit().putString("searchRecent", now.joinToString("\n")).apply()
-    }
+    fun keep() = keepSearch(ctx, q)
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { keep() } }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
@@ -124,7 +117,9 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
             listOf("people", "topics", "files").zip(s.searchTry).forEach { (k, label) -> Chip(label.replaceFirstChar { it.uppercase() }, kind == k, onClick = { kind = if (kind == k) null else k }) }
         }
         // «Поля и панели» under the search line: each kind its own panel, «когда» on the margin.
-        val topics = tasks.filter { it.topic }
+        // A diary note is a thought without matters: it is found under «Заметки», not among the topics (owner, 14 окт).
+        val diary = tasks.filter { it.thought && it.subtasks.isEmpty() }
+        val topics = tasks.filter { it.topic } - diary.toSet()
         val deals = tasks.filterNot { it.topic }
         val today = LocalDate.now()
         LazyColumn(Modifier.fillMaxSize().screenRule(), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -157,6 +152,16 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
                     }
                 }
             }
+            if (diary.isNotEmpty()) {
+                item("yh") { SectionHead(s.diaryTitle, count = diary.size) }
+                diary.forEachIndexed { i, t ->
+                    item("y" + t.id) {
+                        PaperRow(seatOf(i, diary.size), mark = { DiaryGlyph(c.graphite, 19.dp) }, onClick = { keep(); onTask(t.id) }) {
+                            RowTitle(t.title, maxLines = 2)
+                        }
+                    }
+                }
+            }
             if (files.isNotEmpty()) {
                 item("fh") { SectionHead(s.searchTry[2], count = files.size) }
                 val shown = files.take(60)
@@ -165,7 +170,7 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
                         PaperRow(seatOf(i, shown.size), margin = runCatching { LocalDate.parse(e.at.take(10)) }.getOrNull()?.let { dayWord(it, today) },
                             mark = { Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.size(19.dp)) }, onClick = { keep(); viewing = a }) {
                             RowTitle(a.caption ?: a.name.ifBlank { a.kind }, maxLines = 1)
-                            RowSub("≡ " + t.title, link = true)
+                            RowSub("# " + t.title, link = true)
                         }
                     }
                 }
@@ -190,5 +195,26 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
     viewing?.let { a -> Viewer(a, vm, onClose = { viewing = null }) }
 }
 
-/** The last searches, shared by every opening of the search screen (kept in prefs «ui» / searchRecent). */
+/** The last searches, shared by the search screen and the find bar (kept in prefs «ui» / searchRecent). */
 private object RecentSearches { val state = mutableStateOf<List<String>?>(null) }
+
+private fun recentLoaded(ctx: android.content.Context): List<String> {
+    val st = RecentSearches.state
+    if (st.value == null) st.value = ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).getString("searchRecent", "").orEmpty().split('\n').filter { it.isNotBlank() }
+    return st.value.orEmpty()
+}
+
+@Composable
+fun rememberRecentSearches(): List<String> {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    recentLoaded(ctx)
+    return RecentSearches.state.value.orEmpty()
+}
+
+/** Remembers [q] among the last searches (two letters at least). */
+fun keepSearch(ctx: android.content.Context, q: String) {
+    val t = q.trim().takeIf { it.length >= 2 } ?: return
+    val now = (listOf(t) + recentLoaded(ctx).filterNot { it.equals(t, true) }).take(5)
+    RecentSearches.state.value = now
+    ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).edit().putString("searchRecent", now.joinToString("\n")).apply()
+}

@@ -150,34 +150,18 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     // The AI may rename the task while the sheet is open.
     androidx.compose.runtime.LaunchedEffect(task.title) { if (task.title != title) title = task.title }
 
-    ModalBottomSheet(
-        modifier = Modifier.paperGrain(),
-        onDismissRequest = { commitTitle(); onClose() },
-        sheetState = sheet,
-        containerColor = c.bg,
-        scrimColor = c.scrim,
-        // The handle, and by it a quiet «✓ Сохранено» after a change by hand.
-        dragHandle = {
-            Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp)) {
-                Box(Modifier.align(Alignment.Center).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline))
-                androidx.compose.animation.AnimatedVisibility(savedAt > 0, Modifier.align(Alignment.CenterEnd).padding(end = 18.dp),
-                    enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
-                    Text("✓ " + s.savedTick, style = Type.small.copy(color = c.ok, fontSize = 12.5.sp))
-                }
-            }
-        },
-    ) {
-        val maxH = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.92f).dp
-        // The sheet itself lifts above the keyboard, so the content gives up exactly the keyboard's height.
-        val ime = androidx.compose.foundation.layout.WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-
-        // Opens on half the screen (owner's call), grows with what is in it up to nearly all of it; the input at the bottom.
-        val half = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.6f).dp
-        Column(Modifier.fillMaxWidth().heightIn(max = (maxH - ime).coerceAtLeast(200.dp)).imePadding().navigationBarsPadding()) {
+    // A page of the planner, not a sheet from below (owner, 14 окт; design/v9/v9-card-deal.png); «✓ Сохранено» by the top.
+    CardPage(onClose = { commitTitle(); onClose() }, trailing = {
+        androidx.compose.animation.AnimatedVisibility(savedAt > 0, Modifier.padding(end = 18.dp),
+            enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+            Text("✓ " + s.savedTick, style = Type.small.copy(color = c.ok, fontSize = 12.5.sp))
+        }
+    }) {
+        Column(Modifier.weight(1f).fillMaxWidth()) {
             // «Поля»: the rule down the card, the day and hour on the margin, everything else right of it.
             // At least half the screen with the field right under it; a longer card grows, the field stays below.
             val pageLines = rememberPageLines()
-            Column(Modifier.weight(1f, fill = false).heightIn(min = (half - 76.dp).coerceAtLeast(120.dp)).ruledPage(pageLines).screenRule().verticalScroll(rememberScrollState())) {
+            Column(Modifier.weight(1f).ruledPage(pageLines).screenRule().verticalScroll(rememberScrollState())) {
                 // The card (owner's call, 10 окт): ⋯ for the matter as a whole; the title with its bagel in the sphere's colour;
                 // «когда» as a plaque; three tools (place, people, repeat) and ⋯ for the rest; then the comments.
                 val ctxOpen = androidx.compose.ui.platform.LocalContext.current
@@ -186,7 +170,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 var postponing by remember(task.id) { mutableStateOf(false) }
                 if (postponing) PostponeDialog(onDismiss = { postponing = false }) { d -> vm.postponeTo(task.id, d); postponing = false }
                 // Owner, 14 окт: no ⋯ at the top — everything the matter can do is under «Ещё».
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(4.dp))
                 // v8: «когда» on the margin as on «Сегодня», the mark and the title, one line of values under it, the tools.
                 val today = LocalDate.now()
                 val due = task.dueDate ?: task.startDate
@@ -206,8 +190,9 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     task.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
                     remind?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) { dialog = "time" }) }
                 }
-                CardHead(title, { title = it }, task.done, onToggle = { vm.toggleTask(task.id) }, sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) },
-                    margin = if (task.slots.isEmpty()) ({ CardWhen(due, task.time, late, onDay = { dialog = "dates" }, onHour = if (due != null) ({ dialog = "time" }) else null, from = task.startDate.takeIf { task.dueDate != null }) }) else null,
+                CardHead(title, { title = it }, task.done, onToggle = { vm.toggleTask(task.id) }, sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) }, kind = s.cardKindDeal,
+                    margin = if (task.slots.isEmpty()) ({ CardMargin(due, task.time, late, prefix = windowPrefix(task.startDate.takeIf { task.dueDate != null }, due),
+                        onDay = { dialog = "dates" }, onHour = if (due != null) ({ dialog = "time" }) else null) }) else null,
                     meta = meta,
                     mark = if (!task.done && (task.waitingFor != null || task.promisedTo != null)) ({
                         Box(Modifier.clip(CircleShape).clickable { vm.toggleTask(task.id) }) { PromiseMark(incoming = task.waitingFor != null, size = 32.dp) }
@@ -348,7 +333,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
             }
 
             // Scoped composer — everything about this task is said here.
-            Column(Modifier.fieldRule().padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
+            // The same «графа» as on every page of the diary (owner, 14 окт).
+            Column(Modifier.fillMaxWidth().background(c.bg).padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)) {
                 notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> Box(Modifier.padding(start = FieldLead)) { NoticeLine(nt, vm) } }
                 // A name here that isn't a contact was tapped: the same quiet offer as on the main screen.
                 val offer by vm.contactOffer.collectAsState()
@@ -360,7 +346,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 }
                 val modeLabel = fill?.label() ?: when (mode) { "step" -> s.stepOne; "place" -> s.fieldPlace; "people" -> s.fieldPeople; else -> null }
                 SmartComposer(
-                    vm, if (mode == "step") s.stepHint else modeLabel?.let { s.fillHint(it) } ?: s.writeOnPage, busy == scopeKey,
+                    vm, if (mode == "step") s.stepHint else modeLabel?.let { s.fillHint(it) } ?: s.cardDealHint, busy == scopeKey,
                     onSend = { t, f ->
                         val m = mode
                         val fl = fill

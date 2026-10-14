@@ -172,6 +172,8 @@ fun TaskList(
     pageDay: LocalDate? = vm.pageDay.collectAsState().value,
     /** «Темы» from the contents: the topics alone, under their own title (owner, 14 окт: «Обзор» is gone). */
     topicsOnly: Boolean = false,
+    /** The find bar's name for this page («today», «topics»): its matches are counted and scrolled to; null — just marked. */
+    findPage: String? = null,
 ) {
     val landed by vm.landed.collectAsState()
     val monthOpen by vm.monthOpen.collectAsState()
@@ -230,10 +232,16 @@ fun TaskList(
     val listScope = androidx.compose.runtime.rememberCoroutineScope()
     // The month unfolds at the very top: the page goes up to show it.
     androidx.compose.runtime.LaunchedEffect(monthOpen) { if (monthOpen) listState.animateScrollToItem(0) }
+    val find = LocalFind.current
+    val found = remember { mutableListOf<FindHit>() }
+    // A row's key ends with its matter's id — a matter of its own or one of a topic's («q:…»).
+    val findable = remember(tasks, data) { (data.tasks + tasks).distinctBy { it.id }.sortedByDescending { it.id.length } }
+    ReportFound(findPage, found, listState, data, monthOpen, pageDay)
     // The month unfolding or folding sets the whole page anew (owner, 14 окт): rows sliding while the section heads jumped
     // ran over each other and over the fading month — now everything simply stands in its new place.
     androidx.compose.runtime.key(monthOpen) {
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = pad) {
+      findable(found, find?.takeIf { findPage != null }, { k -> (k as? String)?.let { ks -> findable.firstOrNull { ks.endsWith(it.id) } }?.let { t -> find != null && findHit(find.words, t.findText()) } == true }) {
         when {
             view == Views.TODAY -> {
                 // The calendar tab unfolds the month over the page (owner, 14 окт); a tap on a day turns the page to it.
@@ -256,11 +264,11 @@ fun TaskList(
                         }
                     }
                     if (!p.quiet) {
-                        item("o-sec") { SectionHead(dayWord(other, today), count = (p.deals.size + p.events.size).takeIf { it > 0 }) }
+                        item("o-sec") { SectionHead(dayTalk(other, today), count = (p.deals.size + p.events.size).takeIf { it > 0 }) }
                         dayPanel(p, today, "o", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it })
                     }
                     item("page-end-o") { PageEnd(pageLines) }
-                    return@LazyColumn
+                    return@findable
                 }
                 val plan = dayPlan(data, today, today, events)
                 val tomorrowPlan = dayPlan(data, today.plusDays(1), today, events)
@@ -467,6 +475,7 @@ fun TaskList(
             }
         }
         item("page-end") { PageEnd(pageLines) }
+      }
     }
     }
     }
@@ -692,7 +701,7 @@ private fun WeekCard(w: ru.anjeib.margin.data.WeekReview, inbox: Int, onOpen: (S
             Text(s.weekLine(w.done, w.owedToYou, w.youOwe), style = Type.body.copy(color = c.ink, fontSize = 15.sp, fontFeatureSettings = "tnum"))
             if (w.still.isNotEmpty()) {
                 Text(s.weekStill, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(top = 8.dp))
-                w.still.take(4).forEach { t -> PaperLink("≡ " + t.title) { onOpen(t.id) } }
+                w.still.take(4).forEach { t -> PaperLink("# " + t.title) { onOpen(t.id) } }
             }
             // The week is a good moment to put away what came in unsorted.
             if (inbox > 0) PaperLink(s.inboxLine(inbox) + "  ›", onClick = onInbox)

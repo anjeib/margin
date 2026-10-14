@@ -131,14 +131,9 @@ fun MarginDay(day: Int, month: String) {
 
 private fun DrawScope.stroke(w: Dp = 1.5.dp) = Stroke(width = w.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
 
-/** A topic: three lines of a feed, the last shorter. */
+/** A topic: «#» (owner, 14 окт) — the sign it is mentioned by and its tab, the same mark wherever a topic is. */
 @Composable
-fun TopicGlyph(color: Color, size: Dp = 18.dp) = Canvas(Modifier.size(size)) {
-    val w = this.size.width; val h = this.size.height; val sw = 1.5.dp.toPx()
-    listOf(0.28f to 1f, 0.5f to 0.78f, 0.72f to 0.55f).forEach { (y, len) ->
-        drawLine(color, Offset(w * 0.1f, h * y), Offset(w * (0.1f + 0.8f * len), h * y), strokeWidth = sw, cap = StrokeCap.Round)
-    }
-}
+fun TopicGlyph(color: Color, size: Dp = 18.dp) = TopicsGlyph(color, size)
 
 /** A thought: a quiet speech bubble. */
 @Composable
@@ -211,7 +206,7 @@ fun Modifier.arrive(fresh: Boolean, index: Int = 0): Modifier {
 fun StrikeText(text: String, style: androidx.compose.ui.text.TextStyle, strike: Float, lineColor: Color, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     Text(text, style = style, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, onTextLayout = { layout = it },
-        modifier = modifier.drawWithContent {
+        modifier = modifier.foundMarks(text) { layout }.drawWithContent {
             drawContent()
             val l = layout ?: return@drawWithContent
             if (strike <= 0f) return@drawWithContent
@@ -691,15 +686,14 @@ fun NoteGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
     drawLine(color, Offset(w * 0.34f, h * 0.64f), Offset(w * 0.6f, h * 0.64f), strokeWidth = 1.2.dp.toPx(), cap = StrokeCap.Round)
 }
 
-/** The topics page: a heading and, under it, its matters — two rings with their lines. */
+/** The topics page: «#», the sign a topic is mentioned by in the words (owner, 14 окт: lines were too like the contents' glyph). */
 @Composable
 fun TopicsGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
-    val w = this.size.width; val h = this.size.height
-    drawLine(color, Offset(w * 0.14f, h * 0.2f), Offset(w * 0.86f, h * 0.2f), strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)
-    listOf(0.48f, 0.76f).forEach { y ->
-        drawCircle(color, w * 0.075f, Offset(w * 0.22f, h * y), style = stroke(1.2.dp))
-        drawLine(color, Offset(w * 0.38f, h * y), Offset(w * (if (y < 0.6f) 0.86f else 0.74f), h * y), strokeWidth = 1.2.dp.toPx(), cap = StrokeCap.Round)
-    }
+    val w = this.size.width; val h = this.size.height; val sw = 1.4.dp.toPx()
+    drawLine(color, Offset(w * 0.42f, h * 0.14f), Offset(w * 0.32f, h * 0.86f), strokeWidth = sw, cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.70f, h * 0.14f), Offset(w * 0.60f, h * 0.86f), strokeWidth = sw, cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.18f, h * 0.36f), Offset(w * 0.84f, h * 0.36f), strokeWidth = sw, cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.15f, h * 0.64f), Offset(w * 0.81f, h * 0.64f), strokeWidth = sw, cap = StrokeCap.Round)
 }
 
 /** The diary: a bound notebook with a ribbon marking the page. */

@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.dayMonthShort
+
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -57,49 +59,52 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
     val pageSend = remember(task.id) { PageSend() }
     androidx.compose.runtime.DisposableEffect(task.id) { onDispose { pageSend.send() } }
     var writeTick by remember { mutableStateOf(0) }
-    ModalBottomSheet(
-        modifier = Modifier.paperGrain(),
-        onDismissRequest = { commitTitle(); onClose() },
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.bg,
-        scrimColor = c.scrim,
-        dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 2.dp).size(36.dp, 4.dp).clip(CircleShape).background(c.hairline)) },
-    ) {
-        val half = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.5f).dp
-        Column(Modifier.fillMaxWidth().heightIn(min = half).imePadding().navigationBarsPadding()) {
-        val scroll = rememberScrollState()
+    val rowActs = LocalRowActions.current
+    var more by remember(task.id) { mutableStateOf(false) }
+    // A page of the planner, as every card (owner, 14 окт; design/v9/v9-card-note.png).
+    CardPage(onClose = { commitTitle(); onClose() }) {
+        Column(Modifier.weight(1f).fillMaxWidth()) {
+            val scroll = rememberScrollState()
             val pageLines = rememberPageLines()
-        Column(Modifier.weight(1f, fill = false).fillMaxWidth().ruledPage(pageLines).screenRule().verticalScroll(scroll).padding(bottom = 24.dp)) {
-            // The same card as a matter (owner's call, 10 окт): ⋯ for the idea as a whole, its bulb and title in serif;
-            // under a line — what was written in it, each piece with its day and hour.
-            // Owner, 14 окт: the same card as a matter — no ⋯, the sphere under the title, its tools in a row, a paperclip below.
-            androidx.compose.foundation.layout.Spacer(Modifier.size(12.dp))
-            CardHead(title, { title = it }, false, onToggle = {}, margin = null, meta = emptyList(), mark = { IdeaMark(28.dp) },
-                sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) })
-            Margined(Modifier.padding(top = 10.dp)) {
-                ActionBar(listOf(
-                    Action(s.actToMatter, false, { commitTitle(); vm.ideaToMatter(task.id); onClose() }) { androidx.compose.foundation.layout.Box(Modifier.size(20.dp)) { CheckCircle(false, size = 16.dp, interactive = false) {} } },
-                    Action(s.delete, false, { vm.removeMatter(task.id); onClose() }) {
-                        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.DeleteOutline, null, tint = it, modifier = Modifier.size(21.dp)) },
-                ), slots = 5)
+            Column(Modifier.weight(1f).fillMaxWidth().ruledPage(pageLines).screenRule().verticalScroll(scroll).padding(bottom = 24.dp)) {
+                // When it was begun — its first record — on the margin as a day of the diary, the weekday under it.
+                val bornAt = task.entries.minOfOrNull { it.at } ?: task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
+                val bornDay = runCatching { java.time.LocalDate.parse(bornAt.take(10)) }.getOrNull()
+                androidx.compose.foundation.layout.Spacer(Modifier.size(4.dp))
+                CardHead(title, { title = it }, false, onToggle = {}, margin = { CardMargin(bornDay, under = bornDay?.weekdayWord()) }, meta = emptyList(),
+                    noMark = true, kind = s.cardKindNote, sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) })
+                Margined(Modifier.padding(top = 10.dp)) {
+                    Column {
+                        ActionBar(listOfNotNull(
+                            Action(s.actToMatter, false, { commitTitle(); vm.ideaToMatter(task.id); onClose() }) { androidx.compose.foundation.layout.Box(Modifier.size(20.dp)) { CheckCircle(false, size = 16.dp, interactive = false) {} } },
+                            rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } },
+                            Action(s.actMore, more, { more = !more }) { MoreGlyph(it, 23.dp) },
+                        ), slots = 5)
+                        androidx.compose.animation.AnimatedVisibility(more) {
+                            MoreActions(listOf(
+                                Action(s.openWhole, false, { commitTitle(); onOpenFull() }) { NoteGlyph(it, 21.dp) },
+                                Action(s.delete, false, { vm.removeMatter(task.id); onClose() }) { TrashGlyph(it, 22.dp) },
+                            ))
+                        }
+                    }
+                }
+                WrittenLane(task.entries.filter { it.text.isNotBlank() }.map { LaneItem(it.id, it.at, it.text) }, s.ideaHint, Modifier.padding(top = 10.dp), after = null, label = s.records,
+                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "task:${task.id}", plus = Plus.None,
+                    onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
+                    onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
+                // Files, matters and all the rest of it — on the full page; offered only when the card doesn't show it all (owner, 13 окт).
+                val hidden = task.entries.any { it.attachments.isNotEmpty() || it.text.isBlank() } || task.subtasks.isNotEmpty()
+                if (hidden) Margined(Modifier.padding(top = 14.dp)) { Voice(s.openWhole + "  ›", link = true, onClick = { commitTitle(); onOpenFull() }) }
+                // Begun when its first words were written (owner, 14 окт: it said «создано» on the day it was last touched).
+                bornDay?.let { d -> Margined { Voice(s.begunOn(d.dayMonthShort()), Modifier.padding(top = 22.dp, bottom = 6.dp)) } }
+                PageEnd(pageLines)
             }
-            val born = task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
-            WrittenLane(task.entries.filter { it.text.isNotBlank() }.map { LaneItem(it.id, it.at, it.text) }, s.ideaHint, Modifier.padding(top = 10.dp), after = null, label = s.records,
-                draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "task:${task.id}", plus = Plus.None,
-                onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
-                onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
-            // Files, matters and all the rest of it — on the full page; offered only when the card doesn't show it all (owner, 13 окт).
-            val hidden = task.entries.any { it.attachments.isNotEmpty() || it.text.isBlank() } || task.subtasks.isNotEmpty()
-            if (hidden || scroll.maxValue > 0) Margined(Modifier.padding(top = 14.dp)) { Voice(s.openWhole + "  ›", link = true, onClick = { commitTitle(); onOpenFull() }) }
-            Margined { CreatedLine(born) }
-            PageEnd(pageLines)
-        }
-        Column(Modifier.fillMaxWidth().fieldRule().padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
-            SmartComposer(vm, s.writeOnPage, false, onSend = { t, f ->
-                // An idea's words stay words: a record with its photos and files, nothing parsed out of them.
-                if (t.isNotBlank() || f.isNotEmpty()) vm.insertEntry(owner, null, Entry(text = t.trim(), attachments = f))
-            }, pageText = pageDraft, onWrite = { writeTick++ }, pageSend = pageSend, pageFiles = pageFiles, slash = false, marksOnPlus = true)
-        }
+            Column(Modifier.fillMaxWidth().background(c.bg).padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)) {
+                SmartComposer(vm, s.cardNoteHint, false, onSend = { t, f ->
+                    // An idea's words stay words: a record with its photos and files, nothing parsed out of them.
+                    if (t.isNotBlank() || f.isNotEmpty()) vm.insertEntry(owner, null, Entry(text = t.trim(), attachments = f))
+                }, pageText = pageDraft, onWrite = { writeTick++ }, pageSend = pageSend, pageFiles = pageFiles, slash = false, marksOnPlus = true)
+            }
         }
     }
 }

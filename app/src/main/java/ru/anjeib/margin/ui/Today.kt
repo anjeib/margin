@@ -48,7 +48,12 @@ import java.time.LocalDate
  */
 
 /** A day in words for the margin: «сегодня», «завтра», «11 окт». */
-fun dayWord(d: LocalDate, today: LocalDate = LocalDate.now()): String = when (d) {
+/** A day on the margin — always its number (owner, 14 окт: «числами», as a printed planner; no «сегодня» / «завтра» there). */
+@Suppress("UNUSED_PARAMETER")
+fun dayWord(d: LocalDate, today: LocalDate = LocalDate.now()): String = d.dayMonthShort()
+
+/** A day said in words inside a line or a heading: «сегодня», «завтра», else «11 окт». */
+fun dayTalk(d: LocalDate, today: LocalDate = LocalDate.now()): String = when (d) {
     today -> L.s.quickToday.lowercase()
     today.plusDays(1) -> L.s.quickTomorrow.lowercase()
     else -> d.dayMonthShort()
@@ -91,7 +96,7 @@ fun MatterRow(
     onToggle: () -> Unit, onOpen: () -> Unit, onTime: () -> Unit, onLater: (() -> Unit)?,
     modifier: Modifier = Modifier, faded: Boolean = false, hidePerson: String? = null, extra: String? = null,
     showTopic: Boolean = true, lit: Boolean = false, swipe: Boolean = true,
-    /** A tap on «≡ Тема» under the words opens the topic itself. */
+    /** A tap on «# Тема» under the words opens the topic itself. */
     onOpenTopic: ((String) -> Unit)? = null,
 ) {
     val c = M.c
@@ -183,7 +188,7 @@ fun DonePaperRow(t: Task, seat: Seat, onToggle: () -> Unit, onOpen: () -> Unit) 
     val c = M.c
     PaperRow(seat, mark = { CheckCircle(true, size = 21.dp, onToggle = onToggle) }, onClick = onOpen) {
         StrikeText(t.title, Type.body.copy(fontFamily = rowFamily, fontSize = rowSize, lineHeight = rowLine, color = c.graphite), 1f, c.faint, maxLines = 2)
-        t.topicTitle?.let { RowSub("≡ $it") }
+        t.topicTitle?.let { RowSub("# $it") }
     }
 }
 
@@ -197,7 +202,7 @@ fun NotePaperRow(n: DayNote, seat: Seat, onOpen: (String) -> Unit) {
         if (n.idea) IdeaMark(26.dp) else Icon(kindIcon(n.file!!.kind), null, tint = c.graphite, modifier = Modifier.size(19.dp))
     }, onClick = { onOpen(n.owner.id) }) {
         RowTitle(if (n.idea) n.owner.title else (n.file!!.caption ?: attachmentLabel(n.file).ifBlank { n.file.name }), maxLines = 2)
-        if (!n.idea) RowSub("≡ " + n.owner.title, link = true)
+        if (!n.idea) RowSub("# " + n.owner.title, link = true)
     }
 }
 

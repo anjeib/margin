@@ -29,6 +29,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -219,13 +221,17 @@ fun PaperRow(
 @Composable
 fun RowTitle(text: String, faded: Boolean = false, maxLines: Int = 3) {
     val c = M.c
-    Text(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+    var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+    Text(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis,
+        onTextLayout = { layout = it }, modifier = Modifier.foundMarks(text) { layout })
 }
 
 @Composable
 fun RowTitle(text: AnnotatedString, faded: Boolean = false, maxLines: Int = 3) {
     val c = M.c
-    Text(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+    var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+    Text(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis,
+        onTextLayout = { layout = it }, modifier = Modifier.foundMarks(text.text) { layout })
 }
 
 /** The one quiet line under a row's words. */
@@ -292,7 +298,9 @@ fun TextTabs(options: List<Pair<String, String>>, selected: String, onSelect: (S
             val on = k == selected
             Column(Modifier.clip(RoundedCornerShape(6.dp)).semantics { this.selected = on }.clickable { onSelect(k) }.padding(top = 6.dp),
                 horizontalAlignment = Alignment.Start) {
-                Text(l, style = Type.body.copy(color = if (on) c.link else c.graphite, fontSize = 16.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium))
+                // The planner (owner, 14 окт): tabs in the book's italic, as the index on the right.
+                Text(l, style = if (planner) Type.italic.copy(color = if (on) c.link else c.graphite, fontSize = 18.sp, fontWeight = if (on) FontWeight.SemiBold else null)
+                    else Type.body.copy(color = if (on) c.link else c.graphite, fontSize = 16.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium))
                 Spacer(Modifier.height(6.dp))
                 Box(Modifier.width(if (on) 28.dp else 0.dp).height(2.dp).clip(RoundedCornerShape(1.dp)).background(if (on) c.link else Color.Transparent))
             }

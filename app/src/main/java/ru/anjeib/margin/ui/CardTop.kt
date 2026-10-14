@@ -49,7 +49,7 @@ fun MetaLine(items: List<MetaItem>, modifier: Modifier = Modifier) {
     if (items.isEmpty()) return
     val c = M.c
     // Each value is a tap of a finger's height; the dots stay between values on one line (DotFlow).
-    DotFlow(items.size, modifier, separator = { Text("  ·  ", style = Type.small.copy(color = c.graphite, fontSize = 14.5.sp)) }) { i ->
+    DotFlow(items.size, modifier, separator = { Text("  ·  ", style = if (planner) Type.italic.copy(color = c.graphite, fontSize = 17.sp) else Type.small.copy(color = c.graphite, fontSize = 14.5.sp)) }) { i ->
         val it = items[i]
         Text(it.text, style = it.style, modifier = Modifier.clip(RoundedCornerShape(6.dp))
             .combinedClickable(onClick = it.onClick, onLongClick = it.onLong).padding(vertical = 9.dp, horizontal = 1.dp))
@@ -59,9 +59,11 @@ fun MetaLine(items: List<MetaItem>, modifier: Modifier = Modifier) {
 /** The styles of the top line: dates and hours in ink (terracotta when late), links petrol, the rest graphite. */
 object Meta {
     @Composable fun date(late: Boolean = false) = dateStyle(14.5.sp, late)
-    @Composable fun link() = Type.small.copy(color = M.c.link, fontSize = 14.5.sp)
-    @Composable fun quiet() = Type.small.copy(color = M.c.graphite, fontSize = 14.5.sp)
+    // The planner (owner, 14 окт): the card's line under the title is Margin's own voice — the book's italic.
+    @Composable fun link() = if (planner) Type.italic.copy(color = M.c.link, fontSize = 17.sp) else Type.small.copy(color = M.c.link, fontSize = 14.5.sp)
+    @Composable fun quiet() = if (planner) Type.italic.copy(color = M.c.graphite, fontSize = 17.sp) else Type.small.copy(color = M.c.graphite, fontSize = 14.5.sp)
     fun plain(t: String) = AnnotatedString(t)
+    @Composable fun faint() = if (planner) Type.italic.copy(color = M.c.faint, fontSize = 17.sp) else Type.small.copy(color = M.c.faint, fontSize = 14.5.sp)
     /** «● Личное» / «● Работа» — the sphere with its coloured dot; a tap switches it. */
     @Composable fun sphere(work: Boolean): AnnotatedString {
         val c = M.c
@@ -139,29 +141,42 @@ fun CardWhen(due: java.time.LocalDate?, hour: String?, late: Boolean, onDay: () 
     }
 }
 
-/** The head of a card: the mark and the title (Inter, larger, edited where it stands), then one quiet line of values. */
+/**
+ * The head of a card (owner, 14 окт; design/v9/v9-card-*.png): «когда» on the margin, the mark (or none) and the title in the
+ * book's serif, edited where it stands; under it one italic line in Margin's voice — what it is ([kind]: «дело», «заметка»),
+ * its sphere («работа» / «личное», a tap switches it), then its values, each a tap.
+ */
 @Composable
 fun CardHead(title: String, onTitle: (String) -> Unit, done: Boolean, onToggle: () -> Unit,
              margin: (@Composable () -> Unit)?, meta: List<MetaItem>, mark: (@Composable () -> Unit)? = null, hint: String? = null,
-             /** The sphere chip under the title — both choices on a tap (the ⋯ that held them is gone). */
-             sphere: String? = null, onSphere: ((String) -> Unit)? = null) {
+             sphere: String? = null, onSphere: ((String) -> Unit)? = null,
+             /** What the card is, first in the line under the title; null — no mark column either (a note has none). */
+             kind: String? = null, noMark: Boolean = false) {
     val c = M.c
+    val s = M.s
+    val titleStyle = Type.display.copy(color = if (done) c.graphite else c.ink, fontSize = 27.sp, lineHeight = 32.sp)
     Margined(margin = margin) {
         androidx.compose.foundation.layout.Column {
             androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.Top) {
-                androidx.compose.foundation.layout.Box(Modifier.size(MarkCol - PanelBleed, 32.dp), contentAlignment = Alignment.CenterStart) {
-                    if (mark != null) mark() else CheckCircle(done, size = 22.dp, onToggle = onToggle)
+                if (!noMark) {
+                    androidx.compose.foundation.layout.Box(Modifier.size(MarkCol - PanelBleed, 34.dp), contentAlignment = Alignment.CenterStart) {
+                        if (mark != null) mark() else CheckCircle(done, size = 22.dp, onToggle = onToggle)
+                    }
+                    androidx.compose.foundation.layout.Spacer(Modifier.size(6.dp))
                 }
-                androidx.compose.foundation.layout.Spacer(Modifier.size(6.dp))
-                androidx.compose.foundation.layout.Box(Modifier.weight(1f).padding(top = 3.dp)) {
-                    if (title.isEmpty() && hint != null) Text(hint, style = Type.body.copy(color = c.graphite, fontSize = 20.sp, lineHeight = 27.sp))
-                    androidx.compose.foundation.text.BasicTextField(title, onTitle,
-                        textStyle = Type.body.copy(color = if (done) c.graphite else c.ink, fontSize = 20.sp, lineHeight = 27.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+                    if (title.isEmpty() && hint != null) Text(hint, style = titleStyle.copy(color = c.graphite))
+                    androidx.compose.foundation.text.BasicTextField(title, onTitle, textStyle = titleStyle,
                         cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link), modifier = Modifier.fillMaxWidth())
                 }
             }
-            if (meta.isNotEmpty()) MetaLine(meta, Modifier.padding(start = MarkCol, top = 0.dp))
-            if (onSphere != null) SpherePick(sphere, Modifier.padding(start = MarkCol - 2.dp, top = 6.dp, bottom = 2.dp), onSphere)
+            val line = buildList {
+                kind?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) {}) }
+                if (onSphere != null) add(MetaItem(Meta.plain(when (sphere) { "work" -> s.sphereWork.lowercase(); "personal" -> s.spherePersonal.lowercase()
+                    else -> s.spherePersonal.lowercase() + " / " + s.sphereWork.lowercase() }), if (sphere == null) Meta.faint() else Meta.quiet()) { onSphere(nextSphere(sphere)) })
+                addAll(meta)
+            }
+            if (line.isNotEmpty()) MetaLine(line, Modifier.padding(start = if (noMark) 0.dp else MarkCol, top = 0.dp))
         }
     }
 }

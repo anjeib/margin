@@ -372,6 +372,11 @@ fun AppData.intoTopic(ref: String, topicId: String): AppData {
             }
         })
     }
+    // A note of the diary (owner, 14 окт: «В тему» on its card): what was written in it goes to the topic as its records.
+    tasks.find { it.id == ref && it.thought && it.subtasks.isEmpty() }?.let { n ->
+        if (n.id == topicId) return this
+        return copy(tasks = tasks.filterNot { it.id == ref }.map { x -> if (x.id != target.id) x else x.copy(entries = (x.entries + n.entries).sortedBy { it.at }) })
+    }
     val t = tasks.find { it.id == ref && !it.topic } ?: return this
     val sub = Subtask(title = t.title, done = t.done, due = t.due, start = t.start?.takeIf { t.due != null }, time = t.time, from = t.waitingFor, promisedTo = t.promisedTo, dropped = t.dropped, doneAt = t.doneAt, slots = t.slots,
         comments = t.comments, repeat = t.repeat, place = t.place, people = t.people.filter { it != t.waitingFor })

@@ -103,7 +103,7 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
                 // v8: by day — the day as a section's label, the hour on the margin of each row.
                 val byDay = note.entries.reversed().groupBy { dayOf(it.at) }
                 byDay.forEach { (d, list) ->
-                item("d" + d) { SectionHead(d?.let { dayWord(it, today) } ?: "—", count = list.size) }
+                item("d" + d) { SectionHead(d?.let { dayTalk(it, today) } ?: "—", count = list.size) }
                 list.forEachIndexed { i, e ->
                     val a = e.attachments.firstOrNull()
                     item("e" + e.id) {

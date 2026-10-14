@@ -197,7 +197,7 @@ private fun BadgeLegend() {
         row(t("с прошлых дней — терракотой", "left from past days — terracotta")) { MarginNote(s.sinceWord + " " + today.minusDays(2).dayMonthShort(), late = true) }
         row(t("подпись раздела над его панелью", "a section's label over its panel")) { GroupBadge(s.dealsBadge + "  ·  2") }
         row(t("тема дела — под его словами; нажатие — открыть", "a to-do's topic — under its words")) {
-            Text("≡ " + t("Ремонт ванной", "Bathroom"), style = Type.small.copy(color = c.link, fontSize = 13.5.sp))
+            Text("# " + t("Ремонт ванной", "Bathroom"), style = Type.small.copy(color = c.link, fontSize = 13.5.sp))
         }
         row(t("сфера темы — в «Обзоре» и в теме", "a topic's sphere — in the overview and the topic")) { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { SphereBadge("personal"); SphereBadge("work") } }
         row(t("петроль — ссылки и выбранное: люди, адреса", "petrol — links and what is chosen")) { Text(s.promiseToYou(t("Дима", "Dima")), style = Type.small.copy(color = c.link, fontSize = 13.5.sp)) }

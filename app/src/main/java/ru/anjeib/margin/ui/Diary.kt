@@ -16,6 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.AnnotatedString
@@ -46,10 +49,10 @@ fun AppData.dealTitle(ref: String): String? {
     return tasks.find { it.id == ref }?.title
 }
 
-/** What a mention reads as: «Маша», «⌖ Ленина, 5», «○ Позвонить в банк», «≡ Ремонт кухни». */
+/** What a mention reads as: «Маша», «⌖ Ленина, 5», «○ Позвонить в банк», «# Ремонт кухни». */
 fun AppData.mentionLabel(token: String): String {
     val m = mentionRx.matchEntire(token) ?: return token
-    m.groupValues[2].takeIf { it.isNotEmpty() }?.let { id -> return "≡ " + (tasks.find { it.id == id }?.title ?: id) }
+    m.groupValues[2].takeIf { it.isNotEmpty() }?.let { id -> return "# " + (tasks.find { it.id == id }?.title ?: id) }
     val v = m.groupValues[1]
     return when {
         v.startsWith("p:") -> "⌖ " + v.drop(2)
@@ -59,7 +62,7 @@ fun AppData.mentionLabel(token: String): String {
 }
 
 /** The words with every mention spelled out — for a title, search, the AI. */
-fun AppData.mentionsPlain(text: String): String = mentionRx.replace(text) { mentionLabel(it.value).removePrefix("≡ ").removePrefix("⌖ ").removePrefix("○ ") }
+fun AppData.mentionsPlain(text: String): String = mentionRx.replace(text) { mentionLabel(it.value).removePrefix("# ").removePrefix("⌖ ").removePrefix("○ ") }
 
 /**
  * The words of a note with its mentions as petrol links (owner, 14 окт): a person opens their card, a matter or a topic opens
@@ -109,8 +112,14 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
     val byDay = remember(notes) { notes.groupBy { runCatching { LocalDate.parse(it.bornAt().take(10)) }.getOrDefault(today) }.toSortedMap(compareByDescending { it }) }
     val pageLines = rememberPageLines()
     val landed = vm.landed.collectAsState().value
+    // Found on this page by the find bar: a note by its words.
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    val find = LocalFind.current
+    val found = remember { mutableListOf<FindHit>() }
+    ReportFound("notes", found, list, data)
     Box(Modifier.fillMaxSize().ruledPage(pageLines).marginRule(c.accent.copy(alpha = 0.85f), over = true)) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())) {
+        LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())) {
+          findable(found, find, { k -> data.taskOfKey(k)?.let { t -> find != null && findHit(find.words, t.title + " " + data.mentionsPlain(t.entries.joinToString(" ") { it.text })) } == true }) {
             item("head") {
                 Margined(Modifier.padding(top = 8.dp)) {
                     Column {
@@ -138,9 +147,15 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                         val showTitle = n.title.isNotBlank() && !plainBody.trimStart().startsWith(n.title.trimEnd('…').take(40))
                         Margined(Modifier.padding(top = 12.dp).landing(n.id in landed, 0), margin = { Box(Modifier.padding(top = 2.dp)) { MarginNote(at.drop(11).take(5)) } }) {
                             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(n.id) }.padding(vertical = 2.dp)) {
-                                if (showTitle) Text(n.title, style = Type.body.copy(color = c.ink, fontSize = 16.5.sp, lineHeight = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
-                                if (body.isNotBlank()) Text(mentionsText(body, data, onPerson, onOpen), style = Type.body.copy(color = c.ink.copy(alpha = 0.9f), fontSize = 16.sp, lineHeight = 23.sp),
-                                    modifier = Modifier.padding(top = if (showTitle) 3.dp else 0.dp))
+                                var titleLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+                                var bodyLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+                                if (showTitle) Text(n.title, style = Type.body.copy(color = c.ink, fontSize = 16.5.sp, lineHeight = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                                    onTextLayout = { titleLayout = it }, modifier = Modifier.foundMarks(n.title) { titleLayout })
+                                if (body.isNotBlank()) {
+                                    val shown = mentionsText(body, data, onPerson, onOpen)
+                                    Text(shown, style = Type.body.copy(color = c.ink.copy(alpha = 0.9f), fontSize = 16.sp, lineHeight = 23.sp), onTextLayout = { bodyLayout = it },
+                                        modifier = Modifier.padding(top = if (showTitle) 3.dp else 0.dp).foundMarks(shown.text) { bodyLayout })
+                                }
                                 n.entries.flatMap { it.attachments }.takeIf { it.isNotEmpty() }?.let { Box(Modifier.padding(top = 8.dp)) { AttachmentsView(it) } }
                                 // Who and what the note touches, quietly — when it was made in the field with marks.
                                 val tags = (n.people.map { it } + listOfNotNull(n.place?.let { "⌖ $it" })).filter { t -> !plainBody.contains(t.removePrefix("⌖ ")) }
@@ -152,6 +167,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
             }
             item("end") { PageEnd(pageLines) }
             item("tail") { Box(Modifier.width(1.dp).height(40.dp)) }
+          }
         }
     }
 }
