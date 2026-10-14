@@ -128,6 +128,10 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                 listOf("Русский", "English", s.langAuto),
                 listOf(LangMode.Ru, LangMode.En, LangMode.Auto).indexOf(settings.lang),
             ) { i -> vm.updateSettings { it.copy(lang = listOf(LangMode.Ru, LangMode.En, LangMode.Auto)[i]) } }
+            Divider()
+            // The diary's look (owner, 14 окт): the planner page, or the earlier margins.
+            Text(s.lookWord, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp))
+            Segmented(listOf(s.lookPlannerShort, s.lookMarginsShort), if (vm.paperStyle.value >= 4) 0 else 1) { vm.setPaper(if (it == 0) 4 else 0) }
         }
 
         // Who reads the words: the phone, the phone with the AI for hard phrases, or the AI.
@@ -201,8 +205,6 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                 }) { Text(s.privacyPolicy, color = c.link) }
             })
         if (settings.devMode) {
-        // The page's look is the planner now (owner, 14 окт); the old «Поля» stays in the developer section only to compare.
-        Group("Страница") { Segmented(listOf("Поля", "Планер"), if (vm.paperStyle.value >= 4) 1 else 0) { vm.setPaper(if (it == 1) 4 else 0) } }
         Group(s.devSection) {
             val ya = settings.provider == "yandex"
             Segmented(listOf("Яндекс", "OpenRouter"), if (ya) 0 else 1) { i -> vm.updateSettings { it.copy(provider = if (i == 0) "yandex" else "openrouter") }; vm.checkKey() }

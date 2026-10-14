@@ -199,6 +199,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         scrimColor = c.scrim,
         drawerContent = {
             Drawer(data, screen, view, onGo = ::go, onFeedback = { feedback = true; scope.launch { drawer.close() } },
+                onLook = { scope.launch { drawer.close() }; vm.setPaper(4) },
                 onBuildLongPress = {
                     val on = !settings.devMode
                     vm.updateSettings { it.copy(devMode = on) }
@@ -268,6 +269,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     @Composable fun page(k: PageKey) {
                         when (k.screen) {
                             MENU -> ContentsPage(data, screen, onGo = ::go, onFeedback = { feedback = true },
+                                onLook = { contents = false; vm.setPaper(0) },
                                 onBuildLongPress = {
                                     val on = !settings.devMode
                                     vm.updateSettings { it.copy(devMode = on) }
@@ -548,7 +550,7 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
 }
 
 @Composable
-private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, String?) -> Unit, onFeedback: () -> Unit = {}, onBuildLongPress: () -> Unit = {}) {
+private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, String?) -> Unit, onFeedback: () -> Unit = {}, onLook: () -> Unit = {}, onBuildLongPress: () -> Unit = {}) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
@@ -569,6 +571,8 @@ private fun Drawer(data: AppData, screen: String, view: String, onGo: (String, S
           }
             // Settings at the bottom, out of the way.
             Spacer(Modifier.height(8.dp))
+            // Owner, 14 окт: the two looks of the diary, switched right from the menu.
+            NavRow(null, s.lookPlanner, "", false, small = true) { onLook() }
             NavRow(Icons.Outlined.Settings, s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
             NavRow(Icons.AutoMirrored.Outlined.HelpOutline, s.helpTitle, "", screen == HELP, small = true) { onGo(HELP, null) }
             NavRow(Icons.Outlined.ChatBubbleOutline, s.sendFeedback, "", false, small = true) { onFeedback() }
@@ -675,7 +679,7 @@ private data class PageKey(val screen: String, val view: String, val day: LocalD
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) -> Unit, onFeedback: () -> Unit, onBuildLongPress: () -> Unit) {
+private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) -> Unit, onFeedback: () -> Unit, onLook: () -> Unit, onBuildLongPress: () -> Unit) {
     val c = M.c
     val s = M.s
     @Composable fun line(label: String, count: String, active: Boolean, small: Boolean = false, onClick: () -> Unit) {
@@ -705,6 +709,7 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
         line(s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
         line(s.helpTitle, "", screen == HELP, small = true) { onGo(HELP, null) }
         line(s.sendFeedback, "", false, small = true) { onFeedback() }
+        line(s.lookMargins, "", false, small = true) { onLook() }
         Margined(Modifier.padding(top = 14.dp)) {
             Column {
                 Text(s.buildLabel(ru.anjeib.margin.BuildConfig.VERSION_NAME, ru.anjeib.margin.BuildConfig.VERSION_CODE, ru.anjeib.margin.BuildConfig.DEBUG),

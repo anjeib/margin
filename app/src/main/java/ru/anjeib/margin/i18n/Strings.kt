@@ -818,6 +818,11 @@ interface Strings {
     val actPostpone: String
     val backToToday: String
     val contentsTitle: String
+    val lookPlanner: String
+    val lookWord: String
+    val lookPlannerShort: String
+    val lookMarginsShort: String
+    val lookMargins: String
     val aboutApp: String
     val actToTopic: String
     val actToIdea: String
@@ -1778,6 +1783,11 @@ object Ru : Strings {
     override val actPostpone = "Позже"
     override val backToToday = "к сегодняшнему дню ›"
     override val contentsTitle = "Содержание"
+    override val lookPlanner = "Вид: планер"
+    override val lookWord = "Вид"
+    override val lookPlannerShort = "Планер"
+    override val lookMarginsShort = "Поля"
+    override val lookMargins = "Вид: поля"
     override val aboutApp = "О приложении"
     override val actToTopic = "В тему"
     override val actToIdea = "В идеи"
@@ -2653,6 +2663,11 @@ object En : Strings {
     override val actPostpone = "Later"
     override val backToToday = "back to today ›"
     override val contentsTitle = "Contents"
+    override val lookPlanner = "Look: planner"
+    override val lookWord = "Look"
+    override val lookPlannerShort = "Planner"
+    override val lookMarginsShort = "Margins"
+    override val lookMargins = "Look: margins"
     override val aboutApp = "About the app"
     override val actToTopic = "To topic"
     override val actToIdea = "To ideas"
