@@ -1247,6 +1247,25 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         land(listOf(id))
     }
 
+    /**
+     * A note written straight in the diary (owner, 14 окт): the words as they are, mentions kept as marks — @[Имя], @[p:место],
+     * @[d:дело], #[тема]; the people and the place go onto the note too, so their cards see it. Nothing is parsed out of it.
+     */
+    fun addDiaryNote(text0: String, files: List<Attachment>) {
+        val text = text0.trim()
+        if (text.isEmpty() && files.isEmpty()) return
+        val d = data.value
+        val plain = d.mentionsPlain(text)
+        val first = plain.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+        val title = (if (first.length > 70) first.take(70).substringBeforeLast(' ') + "…" else first).ifBlank { L.s.diaryTitle }.sentence()
+        val people = Regex("@\\[([^\\]]+)]").findAll(text).map { it.groupValues[1] }.filter { !it.startsWith("p:") && !it.startsWith("d:") }.map { d.personFor(it) }.distinct().toList()
+        val place = Regex("@\\[p:([^\\]]+)]").find(text)?.groupValues?.get(1)
+        val t = Task(title = title, topic = true, thought = true, people = people, place = place,
+            entries = listOf(Entry(text = text, attachments = files)), history = listOf(ru.anjeib.margin.data.Change(kind = "created", by = "you")))
+        store.update { it.copy(tasks = it.tasks + t).withMentionsOf(t, L.s.me) }
+        land(listOf(t.id))
+    }
+
     /** «В идеи» on a topic's matter: it leaves the topic and becomes an idea of its own, its comments its records. */
     fun dealToIdea(topicId: String, subId: String): String? {
         val before = data.value
@@ -1291,7 +1310,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val explicit get() = kind != null || topicId != null || people.isNotEmpty() || wait || promise || record
     }
 
-    private val slashRx = Regex("(?:^|\\s)/(дело|тема|идея|работа|личное|жду|обеща[лю]\\p{L}*|готово|запись|todo|topic|idea|work|personal|wait|promised|done|note)(?=\\s|$)", RegexOption.IGNORE_CASE)
+    private val slashRx = Regex("(?:^|\\s)/(дело|тема|идея|заметка|работа|личное|жду|обеща[лю]\\p{L}*|готово|запись|todo|topic|idea|work|personal|wait|promised|done|note)(?=\\s|$)", RegexOption.IGNORE_CASE)
     private val hashRx = Regex("(?:^|\\s)#(\\[[^\\]]+]|[\\p{L}\\d_-]+)")
     private val atRx = Regex("(?:^|\\s)@(\\[[^\\]]+]|[\\p{L}\\d_-]+)")
 
@@ -1308,7 +1327,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         t = t.replace(Regex("\\s{2,}"), " ").trim()
         return Tags(
             text = t,
-            kind = when { has("дело", "todo") -> "task"; has("идея", "idea") -> "note"; has("тема", "topic") -> "topic"; else -> null },
+            kind = when { has("дело", "todo") -> "task"; has("идея", "заметк", "idea") -> "note"; has("тема", "topic") -> "topic"; else -> null },
             sphere = when { has("работа", "work") -> "work"; has("личное", "personal") -> "personal"; else -> null } ?: topic?.sphere,
             topicId = topic?.id, people = people, wait = has("жду", "wait"), promise = has("обеща", "promised"), done = has("готово", "done"), record = has("запись", "note"),
         )

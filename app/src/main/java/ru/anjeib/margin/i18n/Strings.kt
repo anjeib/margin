@@ -818,6 +818,13 @@ interface Strings {
     val actPostpone: String
     val backToToday: String
     val contentsTitle: String
+    val diaryTitle: String
+    val diarySub: String
+    val diaryHint: String
+    val diaryEmpty: String
+    val diaryEmptyHint: String
+    val topicsPage: String
+    val topicsSub: String
     val fieldLabel: String
     val lookPlanner: String
     val lookWord: String
@@ -860,8 +867,8 @@ object Ru : Strings {
     )
     override val helpSections = listOf(
         // ---- concepts ----
-        HelpSection("Как это устроено", "Margin — ежедневник, в который пишут как в мессенджер. Одно поле внизу: пишете или диктуете — из слов получаются дела, темы и идеи. Обычные фразы Margin понимает сам, без интернета; со сложными помогает ИИ, если есть сеть (подробно — в разделе «ИИ и без ИИ»).",
-            examples = listOf("Завтра в 15 созвон с Мариной", "Купить корм коту", "Идея: блог о дизайне")),
+        HelpSection("Как это устроено", "Margin — ежедневник, в который пишут как в мессенджер. Одно поле внизу: пишете или диктуете — из слов получаются дела, темы и заметки. Обычные фразы Margin понимает сам, без интернета; со сложными помогает ИИ, если есть сеть (подробно — в разделе «ИИ и без ИИ»).",
+            examples = listOf("Завтра в 15 созвон с Мариной", "Купить корм коту", "Заметка: блог о дизайне")),
         HelpSection("ИИ-помощник", "Помощник ведёт ежедневник с ваших слов: разбирает фразы на дела, даты и обещания, переносит и закрывает дела, пополняет темы. На вопросы о делах отвечает коротко, в два-три предложения. Нужны интернет и код приглашения; обычные фразы Margin понимает и без помощника. Длинных текстов вроде договоров он не пишет — «подготовить договор» станет вашим делом.", pairs = listOf(
             "что горит на этой неделе?" to "просроченное, ближайшие даты, кто кому должен — с пояснением",
             "что я обещал Лёше?" to "ваши обещания этому человеку",
@@ -872,8 +879,8 @@ object Ru : Strings {
         HelpSection("Понятия и связи", "", pairs = listOf(
             "Дело" to "одно действие с датой или без: «Купить хлеб», «Стоматолог в пт в 11». Может быть на несколько дней и повторяться",
             "Тема" to "дело, которое разрослось, или проект: своя лента записей, файлов и дел. Дело становится темой само, как только в нём появляется запись, файл или ещё одно дело, — или по «+ дело» в карточке. Сразу темой — словами «Сделай тему Ремонт» или «+ тема» в «Обзоре»",
-            "Идея" to "тема без дел — мысль, заметка, список. Когда в идее появляется дело, она становится темой",
-            "Запись" to "ваш текст в ленте темы или идеи, с датой и временем. Дела из этой записи стоят под ней",
+            "Заметка" to "тема без дел — мысль, заметка, список. Когда в заметке появляется дело, она становится темой",
+            "Запись" to "ваш текст в ленте темы или заметки, с датой и временем. Дела из этой записи стоят под ней",
             "Дела темы" to "видны и в теме, и на «Сегодня» и в «Календаре» — в свои дни, со ссылкой на тему",
             "Обещание" to "дело, в котором кто-то должен: ← ждём от человека, → обещали ему",
             "Сфера" to "«Личное» или «Работа» — у дел и тем; фильтр в «Обзоре»",
@@ -892,14 +899,14 @@ object Ru : Strings {
             "Сегодня" to "дела и встречи по времени; на полях — час, у оставшихся с прошлых дней — «с 6 окт» терракотой; если их несколько — «всё на сегодня» у заголовка. Сделанное остаётся зачёркнутым; больше трёх — сворачивается в одну строку",
             "≡ Тема" to "под делом мелко — тема, к которой оно относится",
             "Без даты" to "дела без даты, под ними — с какого числа ждут («с 3 окт»); старше недели — бледнее. Нажмите на заголовок, чтобы свернуть",
-            "Идеи за сегодня" to "идеи, записанные сегодня",
+            "Заметки за сегодня" to "заметки, записанные сегодня",
             "Завтра — 3 дела · 1 встреча ›" to "внизу; открывает «Календарь»",
         )),
         HelpSection("Календарь", "Что когда. Месяц сеткой: точки под числом — сколько дел в его списке (сегодня — вместе с просроченным, терракотой; прошедший день — сделанное), кольцо — встреча из календаря телефона. Сегодня обведено рамкой, выбранный день закрашен. Под сеткой — дела выбранного дня, как на «Сегодня»; выбрали другой день — новое дело без своей даты встанет на него. Стрелками листаются месяцы.", image = "calendar"),
-        HelpSection("Обзор", "Что у вас есть. Вкладки «Всё · Темы · Дела · Идеи», под ними чипы «Ждём», «Обещали», «Работа», «Личное» — нажатие сужает список, повторное снимает.", image = "overview", pairs = listOf(
+        HelpSection("Обзор", "Что у вас есть. Вкладки «Всё · Темы · Дела · Заметки», под ними чипы «Ждём», «Обещали», «Работа», «Личное» — нажатие сужает список, повторное снимает.", image = "overview", pairs = listOf(
             "Темы" to "на полях — день последней записи; под названием — сколько дел открыто, ждём ли чего-то, сколько записей; у решённых — «В архив»",
             "Дела" to "все открытые дела: с датой — по дням (дата на полях), потом без даты; «Ждём» и «Обещали» — только кто кому должен",
-            "Идеи" to "на полях — день последней записи; под названием — записи и дела, что из идеи выросли",
+            "Заметки" to "на полях — день последней записи; под названием — записи и дела, что из заметки выросли",
         )),
         HelpSection("Тема", "Всё, что было в теме, по дням: каждый день — своя панель, его число на полях, под числом — время записи. Пишите прямо на странице — в конце ленты; внизу — «+», микрофон и «отправить»: продиктованное появляется на странице, вы его проверяете и отправляете. Margin разложит написанное на запись и дела, метки «/», «#», «@» работают и здесь.", image = "topic", pairs = listOf(
             "шапка" to "название (нажатие — переименовать), под ним — с какого числа тема и сколько сделано, справа — сфера (нажатие — переключить)",
@@ -921,10 +928,10 @@ object Ru : Strings {
             "Ещё" to "Ждём, Обещал, + день (дело на несколько дней), + дело (дело внутри — и дело станет темой)",
             "≡ Тема ›" to "у дела из темы — сверху; ведёт в тему",
             "под инструментами" to "пишите прямо на странице, как в тетради: дата и время встанут на полях; у дела в списках появится значок 💬. Продиктованное появляется здесь же",
-            "⋯" to "Отложить, В тему…, Личное / Работа, Не буду делать, В идеи, Удалить",
+            "⋯" to "Отложить, В тему…, Личное / Работа, Не буду делать, В заметки, Удалить",
         )),
         HelpSection("Поле ввода и метки", "Наберите «/», «#» или «@» — появится окошко с вариантами; выбранное встанет над полем. Ещё до отправки под полем видно, как Margin понял фразу.", image = "composer_slash", pairs = listOf(
-            "/дело  /тема  /идея" to "что это",
+            "/дело  /тема  /заметка" to "что это",
             "/работа  /личное" to "сфера",
             "#тема" to "в какую тему: слова — в её ленту, дела — в её дела; сфера — от темы",
             "@человек" to "кто: контакт или компания; нового можно добавить из окошка",
@@ -985,7 +992,7 @@ object Ru : Strings {
         )),
         // ---- AI ----
         HelpSection("ИИ и без ИИ", "Настройки → «Разбор текста»: «Телефон» — Margin разбирает всё сам, без ИИ; «Авто» (по умолчанию) — сложное передаёт ИИ, когда есть сеть; «ИИ» — всё через ИИ, а без сети — на телефоне. Фразы с метками (#, @, /…) всегда разбираются на телефоне. Если сеть есть, но облако Margin не отвечает или отвечает медленно, Margin сам переходит на телефон — у даты появится «без облака» — и сам возвращается, когда облако снова отвечает; то, что ждало во «Входящих», тогда разбирается.", pairs = listOf(
-            "всегда без ИИ" to "дела, темы, идеи, даты, время, повторы, несколько дней, люди, обещания, списки, все метки, отметки, перенос, поиск, все экраны",
+            "всегда без ИИ" to "дела, темы, заметки, даты, время, повторы, несколько дней, люди, обещания, списки, все метки, отметки, перенос, поиск, все экраны",
             "ИИ в «Авто», если есть сеть" to "отчёты («созвонились…»), правки («перенеси…», «Исправить: …»), длинная диктовка без точек, несколько дел со своими датами в одной фразе, телефоны и почта",
             "только с ИИ" to "короткое название для новой темы; текст с фото (визитка → контакт, доска → дела); разбор пересланных сообщений (кто что обещал); исправление опечаток в исходной фразе",
             "голос" to "в облаке; без сети или когда облако не отвечает — на телефоне (модель скачивается сама по Wi-Fi)",
@@ -994,12 +1001,12 @@ object Ru : Strings {
         HelpSection("Быстрый ввод и отзыв", "Быстро записать можно с плитки «Записать» в шторке (добавьте её через карандаш в быстрых настройках) или долгим нажатием на значок приложения — «Записать» / «Надиктовать». Если Margin понял фразу не так, нажмите «Не совсем понял» под результатом. «Отправить отзыв» в меню открывает письмо разработчику с журналами ошибок; ваши записи не отправляются."),
         HelpSection("Неделя, напоминания, виджет", "По воскресеньям на «Сегодня» появляется итог недели: сколько сделано, кто кому должен, какие темы стоят на месте; «Скрыть» убирает его до следующего воскресенья. Если кто-то просрочил обещание, рядом появится «напомнить»: Margin подготовит сообщение (SMS, если известен телефон, иначе через «Поделиться»), а отправите его вы. В день, когда кто-то обещал прислать или вы обещали отдать, утром придёт напоминание. Утренняя сводка и итог дня меняются словами: «сводку в 9», «итог дня в 21», «итог дня не нужен». Виджет «Margin · Сегодня» на рабочем столе показывает дела дня и открывает поле ввода или диктовку. Тему целиком можно отправить заказчику или коллеге страницей PDF: ⋯ → «Поделиться PDF»."),
         HelpSection("Приватность", "Настройки → «Приватность»: вход по отпечатку (или коду блокировки) и «Где ваши данные» — где хранятся записи и что уходит с телефона. На экране блокировки напоминания показываются без текста дел."),
-        HelpSection("Примеры", "При первом запуске в Margin уже есть примеры — несколько дней молодого дизайнера, по одному на каждую возможность: тема с записями и файлами, дела со временем, повтором и на несколько дней, просроченное, обещания в обе стороны, дело без даты, идея, контакт и компания. Убрать их можно в Настройках → «Примеры», там же их можно вернуть. Ваши записи останутся на месте."),
+        HelpSection("Примеры", "При первом запуске в Margin уже есть примеры — несколько дней молодого дизайнера, по одному на каждую возможность: тема с записями и файлами, дела со временем, повтором и на несколько дней, просроченное, обещания в обе стороны, дело без даты, заметка, контакт и компания. Убрать их можно в Настройках → «Примеры», там же их можно вернуть. Ваши записи останутся на месте."),
     )
     override val tourWriteTitle = "Пишите как думаете"
     override val tourWriteText = "Одно поле внизу — пишите или диктуйте. Margin сам разложит всё на дела, даты и обещания, даже без интернета и при плохой связи."
     override val tourWriteExample = "Завтра в 15 созвон с Мариной, она пришлёт правки до среды"
-    override val tourMarks = listOf("#тема", "@человек", "/жду", "/обещаю", "/идея")
+    override val tourMarks = listOf("#тема", "@человек", "/жду", "/обещаю", "/заметка")
     override val tourMarksText = "Метки — когда нужна точность:"
     override val tourTopicTitle = "Дело становится темой"
     override val tourTopicText = "Появилась запись, файл или второе дело — начинается тема."
@@ -1030,19 +1037,19 @@ object Ru : Strings {
     override val viaMailTitle = "Почта"
     override val forwardKept = "Сохранено во «Входящие»"
     override val tgBadToken = "Токен не подошёл — скопируйте его из @BotFather целиком"
-    override val tgWelcome = "Готово, это ваш бот Margin. Пересылайте сюда сообщения — из чатов, каналов, от кого угодно. Margin разложит их на дела, обещания и идеи и ответит, что получилось. Можно и просто написать, что нужно сделать."
+    override val tgWelcome = "Готово, это ваш бот Margin. Пересылайте сюда сообщения — из чатов, каналов, от кого угодно. Margin разложит их на дела, обещания и заметки и ответит, что получилось. Можно и просто написать, что нужно сделать."
     override val tgNotYours = "Это личный бот, он принимает сообщения только от владельца."
     override val mailBadLogin = "Не удалось войти в почту: проверьте адрес и пароль приложения (обычный пароль не подойдёт)"
     override val forwardTitle = "В Margin"
     override val forwardCommentHint = "Что с этим сделать — или просто отправьте"
-    override val forwardHint = "Margin найдёт дела, обещания, идеи"
+    override val forwardHint = "Margin найдёт дела, обещания, заметки"
     override val samplesLine = "Здесь примеры"
-    override val ideaBadge = "Идея"
+    override val ideaBadge = "Заметка"
     override val openTopic = "Открыть тему"
     override fun aboutDeal(title: String, text: String) = "Про дело «$title»: $text"
-    override val ideaHint = "Текст идеи"
+    override val ideaHint = "Текст заметки"
     override val openWhole = "Открыть целиком"
-    override val ideasBadge = "Идеи"
+    override val ideasBadge = "Заметки"
     override val samplesRemove = "Убрать примеры"
     override val samplesBack = "Вернуть примеры"
     override val samplesTitle = "Примеры"
@@ -1084,7 +1091,7 @@ object Ru : Strings {
     override val storeLostText = "Файл с записями и его копия повреждены. Оба сохранены внутри приложения — ничего не удалено. Напишите разработчику: записи можно будет вернуть."
     override val storeNewerTitle = "Записи из более новой версии"
     override val storeNewerText = "Эти записи сделаны в более новой версии Margin. Их копия сохранена — обновите приложение, чтобы ничего не потерять."
-    override val tryExamples = listOf("Завтра в 15 созвон с Олегом", "Маша вернёт 3000 к пятнице", "Идея: подкаст про дизайн")
+    override val tryExamples = listOf("Завтра в 15 созвон с Олегом", "Маша вернёт 3000 к пятнице", "Заметка: подкаст про дизайн")
     override val tryHint = "Нажмите на пример — он появится в поле"
     override val toStart = "↑ к началу"
     override val orderAz = "А–Я"
@@ -1154,7 +1161,7 @@ object Ru : Strings {
     override val tomorrow = "Завтра"
     override val yesterday = "Вчера"
     override val tasks = "Задачи"
-    override val notes = "Идеи"
+    override val notes = "Заметки"
     override val settings = "Настройки"
     override fun fromDate(d: String) = "с ${d.lowercase()}"
     override val thisWeekSoft = "Эта неделя"
@@ -1166,7 +1173,7 @@ object Ru : Strings {
     override fun stepsCount(n: Int) = "$n " + pluralRu(n, "дело", "дела", "дел")
     override val chipEvening = "Итоги дня"
     override val promptEvening = "Сделай короткий вечерний обзор: что сделано сегодня, что не успел. Предложи, что перенести на завтра, и спроси про задачи, которые переносились 3 раза и больше, — оставить или удалить. Если на завтра задач больше, чем реально успеть, скажи об этом."
-    override val notesCreated = "Сохранено в идеи"
+    override val notesCreated = "Сохранено в заметки"
     override fun tasksCount(n: Int) = "$n " + pluralRu(n, "дело", "дела", "дел")
 
     override val smart = "СПИСКИ"
@@ -1177,8 +1184,8 @@ object Ru : Strings {
     override val people = "КОНТАКТЫ"
     override val allTasks = "Все дела"
 
-    override val composerHint = "Дело, запись или идея…"
-    override val noteHint = "Новая идея…"
+    override val composerHint = "Дело, запись или заметка…"
+    override val noteHint = "Новая заметка…"
     override val chipNext = "Что дальше?"
     override val chipPlanDay = "План на день"
     override val thinking = "Думаю…"
@@ -1188,7 +1195,7 @@ object Ru : Strings {
     override fun tasksCreated(n: Int) = "Создано " + n + " " + pluralRu(n, "дело", "дела", "дел")
     override val taskUpdated = "Дело обновлено"
     override fun subtasksAdded(n: Int) = "Добавлено $n " + pluralRu(n, "дело", "дела", "дел")
-    override val noteCreated = "Создана идея"
+    override val noteCreated = "Создана заметка"
     override val edit = "Изменить"
     override val undo = "Отменить"
     override val undone = "Отменено"
@@ -1227,7 +1234,7 @@ object Ru : Strings {
     override val restoreWord = "Вернуть"
     override val calendarTitle = "Календарь"
     override val projectsEmpty = "Проектов пока нет"
-    override val projectsHint = "Проект появляется сам, когда вы пишете о нём: «для vuzburo купить домен», «идея по сайту vuzburo»."
+    override val projectsHint = "Проект появляется сам, когда вы пишете о нём: «для vuzburo купить домен», «заметка по сайту vuzburo»."
     override fun projectStats(tasks: Int, notes: Int) = listOfNotNull(tasksCount(tasks).takeIf { tasks > 0 }, notes.takeIf { it > 0 }?.let { "$it " + pluralRu(it, "заметка", "заметки", "заметок") }).joinToString(" · ").ifBlank { "пусто" }
     override val postponeTitle = "Отложить"
     override val inAWeek = "Через неделю"
@@ -1240,7 +1247,7 @@ object Ru : Strings {
     override val saveFailed = "Не получилось сохранить — попробуйте «Переслать»"
     override val shareWord = "Переслать"
     override val closeWord2 = "Закрыть"
-    override val contactInNote = "контакт в идее"
+    override val contactInNote = "контакт в заметке"
     override fun noSubtask(n: Int) = "Нет дела под номером $n"
     override fun dayPart(p: String) = when (p) { "morning" -> "утром"; "afternoon" -> "после обеда"; "evening" -> "вечером"; "night" -> "ночью"; else -> "днём" }
     override val insertBelow = "Вставить ниже"
@@ -1260,14 +1267,14 @@ object Ru : Strings {
     override val moveToToday = "Перенести на сегодня"
     override val skipOnce = "Пропустить один раз"
     override val droppedDone = "Решили не делать"
-    override val madeNote = "Теперь это идея"
-    override val toNote = "В идеи"
+    override val madeNote = "Теперь это заметка"
+    override val toNote = "В заметки"
     override val wontDo = "Не буду делать"
     override val droppedMark = "не делаем"
     override val historyWord = "История"
     override fun change(kind: String, value: String?, by: String): String {
         val what = when (kind) {
-            "created" -> when (value) { "chat" -> "создано из разговора"; "idea" -> "создано из идеи"; "repeat" -> "повтор"; else -> "создано" }
+            "created" -> when (value) { "chat" -> "создано из разговора"; "idea" -> "создано из заметки"; "repeat" -> "повтор"; else -> "создано" }
             "date" -> if (value == null) "дата убрана" else "дата: " + (runCatching { java.time.LocalDate.parse(value).shortLabel().lowercase() }.getOrNull() ?: value)
             "time" -> if (value == null) "время убрано" else "время: $value"
             "repeat" -> if (value == null) "повтор убран" else "повтор изменён"
@@ -1328,11 +1335,11 @@ object Ru : Strings {
     override val title = "Название"
     override val peopleHint = "Имена через запятую"
 
-    override val searchNotes = "Поиск по идеям…"
-    override val newNote = "Новая идея"
+    override val searchNotes = "Поиск по заметкам…"
+    override val newNote = "Новая заметка"
     override val noteTitleHint = "Название"
     override val noteBodyHint = "Пишите свободно…"
-    override val emptyNotes = "Идей пока нет"
+    override val emptyNotes = "Заметок пока нет"
     override val untitled = "Без названия"
 
     override val aiSection = "ИИ"
@@ -1407,7 +1414,7 @@ object Ru : Strings {
     override fun nFiles(n: Int) = "$n " + pluralRu(n, "файл", "файла", "файлов")
     override fun nVoice(n: Int) = "$n " + pluralRu(n, "голосовое", "голосовых", "голосовых")
     override fun nContacts(n: Int) = "$n " + pluralRu(n, "контакт", "контакта", "контактов")
-    override val notesHint = "Мысль, идея, итоги встречи…"
+    override val notesHint = "Мысль, заметка, итоги встречи…"
     override val appendHint = "Дописать мысль…"
     override val allFilter = "Все"
     override fun entriesCount(n: Int) = "$n " + pluralRu(n, "запись", "записи", "записей")
@@ -1446,14 +1453,14 @@ object Ru : Strings {
     override val everyYear = "Каждый год"
     override val overdueWaiting = "Пора напомнить?"
     override val search = "Поиск"
-    override val searchHint = "Дела, темы, идеи, люди…"
+    override val searchHint = "Дела, темы, заметки, люди…"
     override val nothing = "Ничего не найдено"
     override val calendarSection = "КАЛЕНДАРЬ"
     override val calendarRead = "Учитывать календарь телефона"
     override val calendarHint = "ИИ видит встречи и не ставит дела поверх них"
     override val offlineSection = "ОФЛАЙН-РАСПОЗНАВАНИЕ"
     override val backupSection = "РЕЗЕРВНАЯ КОПИЯ"
-    override val googleBackupHint = "Раз в день дела, темы, идеи и настройки сохраняются в ваш аккаунт Google (Google Диск) и вернутся на новом телефоне."
+    override val googleBackupHint = "Раз в день дела, темы, заметки и настройки сохраняются в ваш аккаунт Google (Google Диск) и вернутся на новом телефоне."
     override val googleBackup = "Копия в аккаунте Google"
     override val googleBackupOff = "Выключена: если потеряете телефон, записи не восстановить."
     override val skip = "Пропустить"
@@ -1466,9 +1473,9 @@ object Ru : Strings {
     override val ideasOpen = "ИДЕИ БЕЗ ДЕЛ"
     override fun waitLine(what: String) = "ждём: $what"
     override fun promiseLine(what: String) = "обещали: $what"
-    override val ideaMark = "из идеи"
+    override val ideaMark = "из заметки"
     override val linksTitle = "ОТКУДА"
-    override val linkIdea = "Идея"
+    override val linkIdea = "Заметка"
     override val inTasks = "В делах"
     override val fieldDue = "Дата"
     override val fieldTime = "Время"
@@ -1492,11 +1499,11 @@ object Ru : Strings {
     override val historyTitle = "ИСТОРИЯ"
     override val srcTaskEntry = "из записи дела"
     override val srcChat = "из разговора"
-    override val srcNote = "идея"
+    override val srcNote = "заметка"
     override val noDue = "без даты"
     override val tasksCaps = "ДЕЛА"
     override val makeSummary = "Собрать сводку"
-    override fun fromNote(title: String, date: String) = "из идеи «$title» · $date"
+    override fun fromNote(title: String, date: String) = "из заметки «$title» · $date"
     override fun fromChat(date: String) = "из разговора · $date"
     override fun promised(who: String) = "Обещали ${who.dative()}"
     override fun summaryAt(t: String) = "обновлено $t"
@@ -1510,7 +1517,7 @@ object Ru : Strings {
     override val rangeLink = "Период…"
     override val singleLink = "Одна дата"
     override val savedTick = "Сохранено"
-    override val toSeparateNote = "в отдельную идею"
+    override val toSeparateNote = "в отдельную заметку"
     override val devSection = "ДЛЯ РАЗРАБОТЧИКА"
     override val devUnlocked = "Раздел для разработчика открыт"
     override val onDevice = "Распознавать речь на телефоне"
@@ -1528,7 +1535,7 @@ object Ru : Strings {
     override val modePreciseHint = "Всё через DeepSeek: точнее, дороже примерно вдвое"
     override fun kindTasks(n: Int) = "$n " + pluralRu(n, "дело", "дела", "дел")
     override val kindChanged = "изменено"
-    override val kindNote = "идея"
+    override val kindNote = "заметка"
     override val kindContact = "контакт"
     override val readMore = "читать дальше"
     override fun notesToday(titles: String) = "Сегодня в заметках: $titles"
@@ -1542,7 +1549,7 @@ object Ru : Strings {
     override val ob2Title = "Жесты"
     override val ob2Text = "Свайп вправо — готово. Свайп влево — перенести на день. Меню — кнопка ☰ слева вверху. Нажатие на задачу открывает её карточку."
     override val ob3Title = "Голос, фото, файлы"
-    override val ob3Text = "Микрофон распознаёт речь с помощью ИИ, «+» прикрепляет фото, файлы и контакты. Мысли и идеи попадают в заметки, люди и компании — в «Контакты»."
+    override val ob3Text = "Микрофон распознаёт речь с помощью ИИ, «+» прикрепляет фото, файлы и контакты. Мысли и заметки попадают в заметки, люди и компании — в «Контакты»."
     override val ob4Title = "Пара разрешений"
     override val ob4Text = "Уведомления — для напоминаний. Календарь — чтобы не пропустить встречу. Всё можно поменять в настройках."
     override val notifications = "Уведомления"
@@ -1638,14 +1645,14 @@ object Ru : Strings {
     override val noMaterialsFound = "Ничего не нашлось"
     override val topicsInWork = "Темы"
     override val simpleTasks = "Дела"
-    override val thoughts = "Идеи"
+    override val thoughts = "Заметки"
     override val noNextStepCaps = "Без следующего шага"
     override fun nQuestions(n: Int) = "$n " + pluralRu(n, "дело", "дела", "дел")
     override fun waitUntil(d: String) = "ждём до $d"
     override val allDoneShort = "всё сделано"
     override fun nMaterials(n: Int) = "$n " + pluralRu(n, "материал", "материала", "материалов")
     override fun nEntries(n: Int) = "$n " + pluralRu(n, "запись", "записи", "записей")
-    override val thoughtWord = "идея"
+    override val thoughtWord = "заметка"
     override val whatNext = "Что дальше?"
     override val labelWord = "Метка"
     override val casesTitle = "Дела"
@@ -1654,7 +1661,7 @@ object Ru : Strings {
     override val noLabel = "Без метки"
     override val noDateQ = "без даты"
     override val kindTopic = "запись в теме"
-    override val kindThought = "идея"
+    override val kindThought = "заметка"
     override fun lateSince(d: String) = "просрочено с $d"
     override fun startedOn(d: String) = "начата $d"
     override val noDateShort = "без даты"
@@ -1667,7 +1674,7 @@ object Ru : Strings {
     override val reminderAt = "напоминание в"
     override val noTopicsYet = "Тем пока нет"
     override val likelyWord = "похоже, сюда"
-    override val allEverything = "всё: темы, дела и идеи"
+    override val allEverything = "всё: темы, дела и заметки"
     override val themeWord = "Светлая или тёмная"
     override val callWord = "Позвонить"
     override val smsWord = "Написать"
@@ -1716,7 +1723,7 @@ object Ru : Strings {
     override val openWord = "Открыть"
     override val readTextWord = "Распознать текст"
     override val searchWord = "Поиск"
-    override fun nIdeas(n: Int) = "$n " + pluralRu(n, "идея", "идеи", "идей")
+    override fun nIdeas(n: Int) = "$n " + pluralRu(n, "заметка", "заметки", "заметок")
     override val overviewWord = "Обзор"
     override val monthWord = "Месяц"
     override val dealsOnlyWord = "только дела"
@@ -1734,7 +1741,7 @@ object Ru : Strings {
     override val previewAi = "уточнит ИИ"
     override val demoSection = "ПРИМЕР ДАННЫХ"
     override val demoAskTitle = "Загрузить пример?"
-    override val demoAskText = "Два месяца жизни молодого дизайнера: темы, дела всех видов, идеи, контакты, материалы. Ваши данные сохранятся отдельно — вернуть их можно в Настройках."
+    override val demoAskText = "Два месяца жизни молодого дизайнера: темы, дела всех видов, заметки, контакты, материалы. Ваши данные сохранятся отдельно — вернуть их можно в Настройках."
     override val demoLoad = "Загрузить пример"
     override val demoLater = "Не сейчас"
     override val demoRestore = "Вернуть мои данные"
@@ -1745,7 +1752,7 @@ object Ru : Strings {
     override fun dayOfDays(i: Int, n: Int) = "день $i из $n"
     override val tagDeal = "дело"
     override val tagTopic = "тема"
-    override val tagIdea = "идея"
+    override val tagIdea = "заметка"
     override val tagWork = "работа"
     override val tagPersonal = "личное"
     override val removedWord = "удалено"
@@ -1772,8 +1779,8 @@ object Ru : Strings {
     override val sortsWhenOnline = "разберу, когда будет связь"
     override val unplacedBadge = "Без места"
     override val photoNoCaption = "Фото без подписи"
-    override fun thoughtSince(d: String) = "идея с $d"
-    override val thoughtsToday = "Идеи за сегодня"
+    override fun thoughtSince(d: String) = "заметка с $d"
+    override val thoughtsToday = "Заметки за сегодня"
     override val questionDateQ = "Дата"
     override val actWhen = "Когда"
     override val actMore = "Ещё"
@@ -1784,6 +1791,13 @@ object Ru : Strings {
     override val actPostpone = "Позже"
     override val backToToday = "к сегодняшнему дню ›"
     override val contentsTitle = "Содержание"
+    override val diaryTitle = "Заметки"
+    override val diarySub = "дневник: мысли, итоги, заметки из ленты"
+    override val diaryHint = "Запись в дневник…"
+    override val diaryEmpty = "Дневник пока пуст"
+    override val diaryEmptyHint = "Пишите сюда что угодно — мысль, итоги встречи, впечатление. Заметки из ленты тоже придут сюда. Через @ можно отметить человека, компанию, место, дело или тему."
+    override val topicsPage = "Темы"
+    override val topicsSub = "всё, что растёт: дела, записи и файлы вокруг одного"
     override val fieldLabel = "запись"
     override val lookPlanner = "Вид: планер"
     override val lookWord = "Вид"
@@ -1792,7 +1806,7 @@ object Ru : Strings {
     override val lookMargins = "Вид: поля"
     override val aboutApp = "О приложении"
     override val actToTopic = "В тему"
-    override val actToIdea = "В идеи"
+    override val actToIdea = "В заметки"
     override val actWontDo = "Не буду"
     override val actToMatter = "В дело"
     override val addTime = "+ время"
@@ -1803,7 +1817,7 @@ object Ru : Strings {
     override fun lateOfDay(n: Int) = "$n " + pluralRu(n, "просрочено", "просрочены", "просрочено")
     override val tourIconsText = "Вверху справа:"
     override val tourIconCalendar = "календарь — что на какой день"
-    override val tourIconOverview = "обзор — все темы, дела и идеи"
+    override val tourIconOverview = "обзор — все темы, дела и заметки"
     override val tourIconSearch = "поиск — по словам, людям и файлам"
     override val samplesShort = "Ниже — примеры"
     override fun draftLine(desc: String) = "Пока понял так: $desc — уточняю…"
@@ -2665,6 +2679,13 @@ object En : Strings {
     override val actPostpone = "Later"
     override val backToToday = "back to today ›"
     override val contentsTitle = "Contents"
+    override val diaryTitle = "Notes"
+    override val diarySub = "a diary: thoughts, outcomes, notes from the feed"
+    override val diaryHint = "Write in the diary… @ for people, places, to-dos"
+    override val diaryEmpty = "The diary is empty"
+    override val diaryEmptyHint = "Write anything here. Notes from the feed come here too."
+    override val topicsPage = "Topics"
+    override val topicsSub = "what grows: to-dos, records and files around one thing"
     override val fieldLabel = "write"
     override val lookPlanner = "Look: planner"
     override val lookWord = "Look"

@@ -291,49 +291,17 @@ private fun Modifier.statusBarsPaddingCompat(): Modifier = this.then(Modifier.st
  * left, the next one is already lying under it in a little shadow; back — the earlier page comes over and lies down. [order]
  * says which page is further in the book. With animations off — just the next page.
  */
-@OptIn(androidx.compose.animation.ExperimentalAnimationApi::class)
 @Composable
 fun <T> PageTurn(target: T, order: (T) -> Long, modifier: Modifier = Modifier, content: @Composable (T) -> Unit) {
+    // Owner, 14 окт: a plain horizontal slide — the next day (or the page further in the book) comes in from the right.
     val c = M.c
-    val forward = remember { mutableStateOf(true) }
     val motion = motionOn()
     androidx.compose.animation.AnimatedContent(target, modifier, transitionSpec = {
         val fwd = order(targetState) >= order(initialState)
-        forward.value = fwd
-        (androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.KeepUntilTransitionsFinished)
-            .apply { targetContentZIndex = if (fwd) -1f else 1f }
-    }, label = "page") { key ->
-        val fwd = forward.value
-        val spec = androidx.compose.animation.core.tween<Float>(if (motion) 520 else 0, easing = androidx.compose.animation.core.FastOutSlowInEasing)
-        val turn by transition.animateFloat({ spec }, label = "turn") { st ->
-            when (st) {
-                androidx.compose.animation.EnterExitState.Visible -> 0f
-                androidx.compose.animation.EnterExitState.PreEnter -> if (fwd) 0f else 1f
-                androidx.compose.animation.EnterExitState.PostExit -> if (fwd) 1f else 0f
-            }
-        }
-        val under by transition.animateFloat({ spec }, label = "under") { st ->
-            when (st) {
-                androidx.compose.animation.EnterExitState.Visible -> 0f
-                androidx.compose.animation.EnterExitState.PreEnter -> if (fwd) 1f else 0f
-                androidx.compose.animation.EnterExitState.PostExit -> if (fwd) 0f else 1f
-            }
-        }
-        Box(Modifier.fillMaxSize()
-            .graphicsLayer {
-                // Over the spine on the left: the right edge lifts toward the eye and goes over.
-                rotationY = -100f * turn
-                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
-                cameraDistance = 14f * density
-            }
-            .background(c.bg)
-            .drawWithContent {
-                drawContent()
-                // The page lying under is in the turning page's shadow; the turning page darkens as it leaves the light.
-                if (under > 0f) drawRect(Color.Black.copy(alpha = 0.16f * under))
-                if (turn > 0f) drawRect(Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.05f * turn), Color.Black.copy(alpha = 0.22f * turn))))
-            }) { content(key) }
-    }
+        val spec = androidx.compose.animation.core.tween<androidx.compose.ui.unit.IntOffset>(if (motion) 320 else 0, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+        androidx.compose.animation.slideInHorizontally(spec) { if (fwd) it else -it } togetherWith
+            androidx.compose.animation.slideOutHorizontally(spec) { if (fwd) -it else it }
+    }, label = "page") { key -> Box(Modifier.fillMaxSize().background(c.bg)) { content(key) } }
 }
 
 /** The planner's paper grain over a sheet that is not a [PageSheet] (a card rising from below). */
@@ -361,7 +329,7 @@ fun PlannerPager(page: Int, onPage: (Int) -> Unit, content: @Composable (Int) ->
     val motion = motionOn()
     // A tab moved the diary: turn to it (animated, as if by hand).
     androidx.compose.runtime.LaunchedEffect(page) {
-        if (state.currentPage != page && !state.isScrollInProgress) { if (motion) state.animateScrollToPage(page, animationSpec = androidx.compose.animation.core.tween(560, easing = androidx.compose.animation.core.FastOutSlowInEasing)) else state.scrollToPage(page) }
+        if (state.currentPage != page && !state.isScrollInProgress) { if (motion) state.animateScrollToPage(page, animationSpec = androidx.compose.animation.core.tween(380, easing = androidx.compose.animation.core.FastOutSlowInEasing)) else state.scrollToPage(page) }
     }
     // A swipe settled on a page: the diary is open there.
     val curPage by androidx.compose.runtime.rememberUpdatedState(page)
@@ -370,26 +338,8 @@ fun PlannerPager(page: Int, onPage: (Int) -> Unit, content: @Composable (Int) ->
         androidx.compose.runtime.snapshotFlow { state.settledPage }.collect { if (it != curPage) tell(it) }
     }
     androidx.compose.foundation.pager.HorizontalPager(state, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { p ->
-        // How far this page is turned: 0 — open; 0..1 — going over the spine (it is the one on the left); -1..0 — lying under.
-        val turned by androidx.compose.runtime.remember(p) { androidx.compose.runtime.derivedStateOf { (state.currentPage - p) + state.currentPageOffsetFraction } }
-        // The pager draws the later page over the earlier one, so the later page is the leaf: it lies down from the right edge
-        // over the page before it (forward) or rises from it back to the right (back); the page under it is in its shadow.
-        Box(Modifier.fillMaxSize()
-            .graphicsLayer {
-                translationX = turned * size.width
-                val f = (-turned).coerceIn(0f, 1f)
-                rotationY = 92f * f
-                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0.5f)
-                cameraDistance = 16f * density
-                alpha = if (f > 0.98f) 0f else 1f
-            }
-            .background(c.bg)
-            .drawWithContent {
-                drawContent()
-                val f = turned
-                if (f < 0f) drawRect(Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.2f * -f), Color.Black.copy(alpha = 0.04f * -f))))
-                else if (f > 0f) drawRect(Color.Black.copy(alpha = 0.16f * f.coerceIn(0f, 1f)))
-            }) { content(p) }
+        // Owner, 14 окт: the 3D leaf looked clumsy — the pages simply slide side by side.
+        Box(Modifier.fillMaxSize().background(c.bg)) { content(p) }
     }
 }
 
@@ -416,8 +366,8 @@ inline fun androidx.compose.ui.text.AnnotatedString.Builder.pencil(block: androi
     pushStringAnnotation(PENCIL, "1"); block(); pop()
 }
 
-/** The pencil's colour: graphite, a little lighter than the words. */
-val pencilInk: Color @Composable get() = M.c.ink.copy(alpha = if (M.c.dark) 0.6f else 0.5f)
+/** The pencil's colour: our terracotta (owner, 14 окт) — the mark of «late» as before, now as a stroke under the words. */
+val pencilInk: Color @Composable get() = M.c.accent.copy(alpha = 0.9f)
 
 /**
  * A hand line under [x0]..[x1] at [y]: not ruler-straight — it wobbles a little and climbs a hair, and a second, fainter pass

@@ -265,22 +265,22 @@ fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib
         (0L until 42L).associate { val d = from.plusDays(it); d to dayPlan(data, d, today, monthEvents) }
     }
     val loc = if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) java.util.Locale.forLanguageTag("ru") else java.util.Locale.ENGLISH
-    Margined(Modifier.padding(top = 4.dp, bottom = 6.dp)) {
+    Margined(Modifier.padding(top = 0.dp, bottom = 2.dp)) {
         Column {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(month.month.getDisplayName(TextStyle.FULL_STANDALONE, loc).replaceFirstChar { it.uppercase() } + if (month.year != today.year) " ${month.year}" else "",
-                    style = Type.title.copy(color = c.ink, fontSize = 22.sp), modifier = Modifier.weight(1f))
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable { month = month.minusMonths(1) }, contentAlignment = Alignment.Center) {
+                    style = Type.title.copy(color = c.ink, fontSize = 18.sp), modifier = Modifier.weight(1f))
+                Box(Modifier.size(34.dp).clip(CircleShape).clickable { month = month.minusMonths(1) }, contentAlignment = Alignment.Center) {
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, s.prevMonth, tint = c.graphite)
                 }
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable { month = month.plusMonths(1) }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(34.dp).clip(CircleShape).clickable { month = month.plusMonths(1) }, contentAlignment = Alignment.Center) {
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, s.nextMonth, tint = c.graphite)
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
+            Row(Modifier.fillMaxWidth()) {
                 (1..7).forEach { d ->
-                    Text(java.time.DayOfWeek.of(d).getDisplayName(TextStyle.SHORT, loc).lowercase(), style = Type.italic.copy(color = c.graphite, fontSize = 13.sp),
-                        modifier = Modifier.weight(1f).padding(bottom = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Text(java.time.DayOfWeek.of(d).getDisplayName(TextStyle.SHORT, loc).lowercase(), style = Type.italic.copy(color = c.graphite, fontSize = 12.sp, lineHeight = 14.sp),
+                        modifier = Modifier.weight(1f).padding(bottom = 1.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
             }
             val first = month.atDay(1)
@@ -290,7 +290,7 @@ fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib
                 Row(Modifier.fillMaxWidth()) {
                     (0..6).forEach { i ->
                         val n = w * 7 + i - lead + 1
-                        Box(Modifier.weight(1f).height(44.dp).padding(1.5.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.weight(1f).height(33.dp).padding(1.dp), contentAlignment = Alignment.Center) {
                             if (n in 1..month.lengthOfMonth()) {
                                 val d = month.atDay(n)
                                 val plan = plans[d] ?: dayPlan(data, d, today, monthEvents)
@@ -298,15 +298,15 @@ fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib
                                 val count = if (past) plan.done.size else plan.deals.size
                                 val late = d == today && plan.deals.any { it.isOverdue(today) }
                                 val sel = d == day
-                                Column(Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)).background(if (sel) c.link else Color.Transparent)
-                                    .then(if (d == today && !sel) Modifier.border(1.dp, c.link, RoundedCornerShape(10.dp)) else Modifier)
+                                Column(Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(if (sel) c.link else Color.Transparent)
+                                    .then(if (d == today && !sel) Modifier.border(1.dp, c.link, RoundedCornerShape(8.dp)) else Modifier)
                                     .clickable { onPick(d) }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    Text("$n", style = Type.body.copy(color = when { sel -> c.bg; past -> c.graphite; else -> c.ink }, fontSize = 15.sp,
+                                    Text("$n", style = Type.body.copy(color = when { sel -> c.bg; past -> c.graphite; else -> c.ink }, fontSize = 14.sp, lineHeight = 16.sp,
                                         fontWeight = if (sel || d == today) FontWeight.SemiBold else FontWeight.Normal))
-                                    Row(Modifier.height(7.dp).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Row(Modifier.height(5.dp).padding(top = 1.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                         val dot = when { sel -> c.bg; past -> c.ok; late -> c.ink; else -> c.link }
-                                        repeat(count.coerceAtMost(3)) { Box(Modifier.size(4.dp).clip(CircleShape).background(dot)) }
-                                        if (plan.events.isNotEmpty()) Box(Modifier.size(4.dp).border(1.dp, if (sel) c.bg else c.graphite, CircleShape))
+                                        repeat(count.coerceAtMost(3)) { Box(Modifier.size(3.5.dp).clip(CircleShape).background(dot)) }
+                                        if (plan.events.isNotEmpty()) Box(Modifier.size(3.5.dp).border(1.dp, if (sel) c.bg else c.graphite, CircleShape))
                                     }
                                 }
                             }

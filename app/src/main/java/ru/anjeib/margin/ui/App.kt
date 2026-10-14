@@ -100,6 +100,8 @@ private const val SETTINGS = "settings"
 private const val HELP = "help"
 private const val INBOX = "inbox"
 private const val PROJECTS = "projects"
+/** «Темы» — what «Обзор» held of topics, a page of the contents (owner, 14 окт: no «Обзор»). */
+private const val TOPICS = "topics"
 private const val CALENDAR = "calendar"
 private const val ARCHIVE = "archive"
 private const val MATERIALS = "materials"
@@ -243,7 +245,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         if (monthOpen && onDiary && view == Views.TODAY) { vm.monthOpen.value = false; vm.pageDay.value = null }
                         else { landed?.let { vm.pageDay.value = it.takeIf { d -> d != todayNow } }; vm.monthOpen.value = true; toDiary(Views.TODAY) }
                     },
-                    IndexTab(petrol = true, label = s.overviewWord, on = onDiary && view == Views.ALL, glyph = { ink -> OverviewGlyph(ink, 19.dp) }) { toDiary(Views.ALL) },
+                    IndexTab(petrol = true, label = s.diaryTitle, on = onDiary && view == Views.NOTES, glyph = { ink -> DiaryGlyph(ink, 21.dp) }) { vm.monthOpen.value = false; toDiary(Views.NOTES) },
                     IndexTab(petrol = true, label = s.search, on = searching, glyph = { ink -> SearchGlyph(ink, 20.dp) }) { openTask = null; fullIdea = null; openPerson = null; openNote = null; contents = false; searching = true },
                     IndexTab(petrol = true, label = s.a11yMenu, on = contents || screen != TASKS, glyph = { ink -> MenuGlyph(ink) }) {
                         searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null; contents = !contents },
@@ -270,6 +272,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     @Composable fun otherScreen(sc: String) {
                         when (sc) {
                             PEOPLE -> PeopleList(data, vm, onOpen = { openPerson = it }, contentPadding = pad)
+                            TOPICS -> TaskList(Views.ALL, data, settings, working, vm, emptyList(), onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
+                                contentPadding = pad, topicsOnly = true)
                             CALENDAR -> CalendarScreen(data, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
                             ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad, onOpenTask = { openId(it) })
                             MATERIALS -> MaterialsGrid(data.tasks.filter { !(it.topic && it.done) }, onView = { viewing = it }, onTopic = { openId(it) }) { t -> PageHead(s.materialsTitle, s.materialsSub, trailing = t) }
@@ -289,7 +293,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                     vm.updateSettings { it.copy(devMode = on) }
                                     if (on) android.widget.Toast.makeText(ctx, s.devUnlocked, android.widget.Toast.LENGTH_SHORT).show()
                                 })
-                            TASKS -> if (k.view == Views.WEEK) CalendarScreen(shown, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
+                            TASKS -> if (k.view == Views.NOTES) DiaryPage(data, vm, onOpen = { openId(it) }, onPerson = { n -> data.persons.find { it.matches(n) }?.let { openPerson = it.id } }, contentPadding = pad)
+                                else if (k.view == Views.WEEK) CalendarScreen(shown, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
                                 else TaskList(
                                     k.view, shown, settings, working, vm, if (feedFilter == "all" || feedFilter == "deals") events else emptyList(),
                                     onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
@@ -302,13 +307,13 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     // The diary's three pages lie side by side — Содержание · Сегодня · Обзор — and turn under the finger (owner, 14 окт);
                     // a day of «Сегодня» turns within its own page; the other sections are pages turned to from the contents.
                     if (planner && screen == TASKS) PlannerPager(
-                        page = when { contents -> 0; view == Views.ALL -> 2; else -> 1 },
-                        onPage = { p -> when (p) { 0 -> contents = true; 1 -> { contents = false; view = Views.TODAY }; else -> { contents = false; view = Views.ALL } } },
+                        page = when { contents -> 0; view == Views.NOTES -> 2; else -> 1 },
+                        onPage = { p -> when (p) { 0 -> contents = true; 1 -> { contents = false; view = Views.TODAY }; else -> { contents = false; view = Views.NOTES } } },
                     ) { p ->
                         when (p) {
                             0 -> page(PageKey(MENU, view, null))
                             1 -> PageTurn(pageDay, order = { (it ?: LocalDate.now()).toEpochDay() }) { d -> page(PageKey(TASKS, Views.TODAY, d)) }
-                            else -> page(PageKey(TASKS, Views.ALL, null))
+                            else -> page(PageKey(TASKS, Views.NOTES, null))
                         }
                     }
                     else if (planner) PageTurn(pageKey, order = { it.order() }) { k -> page(k) }
@@ -388,11 +393,12 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     val calDay by vm.calendarDay.collectAsState()
                     SmartComposer(
                         vm,
-                        hint = if (screen == NOTES) s.notesHint else calDay?.takeIf { screen == TASKS }?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
+                        hint = if (screen == NOTES) s.notesHint else if (screen == TASKS && view == Views.NOTES && !contents) s.diaryHint else calDay?.takeIf { screen == TASKS }?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
                         busy = busy == (if (screen == NOTES) "notes" else "main"),
-                        onSend = { t, f -> vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f) },
+                        onSend = { t, f -> if (screen == TASKS && view == Views.NOTES) vm.addDiaryNote(t, f) else vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f) },
                         prefill = prefill, onPrefillUsed = { prefill = null },
-                        onTyping = { typing = it }, slash = screen != NOTES, preview = { vm.previewOf(it) },
+                        onTyping = { typing = it }, slash = screen != NOTES && view != Views.NOTES, preview = if (view == Views.NOTES) null else ({ vm.previewOf(it) }),
+                        mentions = screen == TASKS && view == Views.NOTES,
                         focusKey = focusKey, micKey = micKey,
                     )
                 }
@@ -694,7 +700,7 @@ private data class PageKey(val screen: String, val view: String, val day: LocalD
         screen == TASKS && view == Views.TODAY -> (day ?: LocalDate.now()).toEpochDay() - LocalDate.now().toEpochDay()
         screen == TASKS && view == Views.WEEK -> 1_000_000L
         screen == TASKS -> 2_000_000L
-        else -> 3_000_000L + listOf(INBOX, MATERIALS, PEOPLE, ARCHIVE, SETTINGS, HELP).indexOf(screen)
+        else -> 3_000_000L + listOf(TOPICS, INBOX, MATERIALS, PEOPLE, ARCHIVE, SETTINGS, HELP).indexOf(screen)
     }
 }
 
@@ -725,6 +731,8 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
         PageHead(s.contentsTitle, null)
         Spacer(Modifier.height(8.dp))
         line(s.feedTitle, "", screen == TASKS) { onGo(TASKS, Views.TODAY) }
+        line(s.diaryTitle, data.tasks.count { it.thought && it.subtasks.isEmpty() && !it.done }.takeIf { it > 0 }?.toString() ?: "", false) { onGo(TASKS, Views.NOTES) }
+        line(s.topicsPage, data.tasks.count { it.topic && !it.done && !(it.thought && it.subtasks.isEmpty()) }.takeIf { it > 0 }?.toString() ?: "", screen == TOPICS) { onGo(TOPICS, null) }
         line(s.inboxNote, data.inboxCount().takeIf { it > 0 }?.toString() ?: "", screen == INBOX) { onGo(INBOX, null) }
         line(s.materialsTitle, data.tasks.sumOf { t -> t.entries.sumOf { e -> e.attachments.size } }.takeIf { it > 0 }?.toString() ?: "", screen == MATERIALS) { onGo(MATERIALS, null) }
         line(s.peopleTitle, data.persons.count { !it.archived && !it.draft }.takeIf { it > 0 }?.toString() ?: "", screen == PEOPLE) { onGo(PEOPLE, null) }

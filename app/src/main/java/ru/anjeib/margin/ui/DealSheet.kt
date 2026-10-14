@@ -171,7 +171,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                                 if (!q.done) Action(s.actStep, false, { fill("step") }) { PlusGlyph(it, 18.dp) } else null,
                                 if (!q.done) Action(s.actPostpone, false, { postponing = true }) { ClockGlyph(it, 22.dp) } else null,
                                 if (!q.done) rowActs?.let { r -> Action(s.actToTopic, false, { commit(); onClose(); r.toTopic(ref) }) { TopicGlyph(it, 19.dp) } } else null,
-                                Action(s.actToIdea, false, { commit(); vm.dealToIdea(topic.id, q.id); onClose() }) { ThoughtGlyph(it, 20.dp) },
+                                Action(s.actToIdea, false, { commit(); vm.dealToIdea(topic.id, q.id); onClose() }) { NoteGlyph(it, 21.dp) },
                                 if (!q.done) Action(s.actWontDo, false, { commit(); vm.dropDeal(topic.id, q.id); onClose() }) { NotGlyph(it, 21.dp) } else null,
                                 Action(s.delete, false, { vm.removeDeal(topic.id, q.id); onClose() }) { TrashGlyph(it, 22.dp) },
                             ))

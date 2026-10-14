@@ -164,7 +164,8 @@ fun ThoughtGlyph(color: Color, size: Dp = 18.dp, line: Dp = 1.5.dp) = Canvas(Mod
 /** An idea in a list: the bulb in the graphite line of every mark (v8: no sage round). */
 @Composable
 fun IdeaMark(size: Dp = 28.dp) {
-    Box(Modifier.size(size), contentAlignment = Alignment.Center) { ThoughtGlyph(M.c.graphite, size * 0.82f, 1.5.dp) }
+    // Owner, 14 окт: ideas are notes now — a written sheet, not a bulb.
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) { NoteGlyph(M.c.ink.copy(alpha = 0.62f), size * 0.78f) }
 }
 
 /** «Обещания»: two people, one a little behind the other. */
@@ -676,4 +677,25 @@ fun HandGlyph(color: Color, size: Dp = 20.dp, incoming: Boolean = false) = Canva
         drawLine(color, Offset(w * 0.60f, h * 0.45f), Offset(w * 0.84f, h * 0.46f), strokeWidth = 1.dp.toPx(), cap = StrokeCap.Round)
         drawLine(color, Offset(w * 0.60f, h * 0.52f), Offset(w * 0.82f, h * 0.52f), strokeWidth = 1.dp.toPx(), cap = StrokeCap.Round)
     }
+}
+
+/** A note: a sheet with its corner folded and two lines of writing — what used to be the idea's bulb. */
+@Composable
+fun NoteGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply {
+        moveTo(w * 0.24f, h * 0.12f); lineTo(w * 0.62f, h * 0.12f); lineTo(w * 0.78f, h * 0.28f); lineTo(w * 0.78f, h * 0.88f); lineTo(w * 0.24f, h * 0.88f); close()
+    }, color, style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.62f, h * 0.12f); lineTo(w * 0.62f, h * 0.28f); lineTo(w * 0.78f, h * 0.28f) }, color, style = stroke(1.2.dp))
+    drawLine(color, Offset(w * 0.34f, h * 0.48f), Offset(w * 0.68f, h * 0.48f), strokeWidth = 1.2.dp.toPx(), cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.34f, h * 0.64f), Offset(w * 0.6f, h * 0.64f), strokeWidth = 1.2.dp.toPx(), cap = StrokeCap.Round)
+}
+
+/** The diary: a bound notebook with a ribbon marking the page. */
+@Composable
+fun DiaryGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawRoundRect(color, topLeft = Offset(w * 0.2f, h * 0.1f), size = Size(w * 0.6f, h * 0.8f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.06f), style = stroke(1.4.dp))
+    drawLine(color, Offset(w * 0.32f, h * 0.1f), Offset(w * 0.32f, h * 0.9f), strokeWidth = 1.2.dp.toPx())
+    drawPath(Path().apply { moveTo(w * 0.58f, h * 0.1f); lineTo(w * 0.58f, h * 0.42f); lineTo(w * 0.64f, h * 0.36f); lineTo(w * 0.70f, h * 0.42f); lineTo(w * 0.70f, h * 0.1f) }, color, style = stroke(1.2.dp))
 }

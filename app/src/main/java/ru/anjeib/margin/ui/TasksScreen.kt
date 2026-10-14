@@ -127,6 +127,8 @@ object Views {
     const val TODAY = "today"
     const val WEEK = "week"
     const val ALL = "all"
+    /** «Заметки» — the diary page (owner, 14 окт). */
+    const val NOTES = "notes"
     const val DONE = "done"
     fun project(p: String) = "p:$p"
 }
@@ -168,6 +170,8 @@ fun TaskList(
     contentPadding: PaddingValues,
     /** The day this page shows (the planner's tabs; null — today): a page keeps its own day while it is being turned. */
     pageDay: LocalDate? = vm.pageDay.collectAsState().value,
+    /** «Темы» from the contents: the topics alone, under their own title (owner, 14 окт: «Обзор» is gone). */
+    topicsOnly: Boolean = false,
 ) {
     val landed by vm.landed.collectAsState()
     val monthOpen by vm.monthOpen.collectAsState()
@@ -382,15 +386,18 @@ fun TaskList(
                 item("o-head") {
                     Margined(Modifier.padding(top = 8.dp)) {
                         Column {
-                            Text(s.overviewWord, style = Type.display.copy(color = c.ink))
-                            TextTabs(listOf("all" to s.allTab, "topics" to s.topicsBadge, "deals" to s.dealsBadge, "ideas" to s.thoughts), overviewTab,
+                            Text(if (topicsOnly) s.topicsPage else s.overviewWord, style = Type.display.copy(color = c.ink))
+                            if (topicsOnly) Voice(s.topicsSub, Modifier.padding(top = 2.dp))
+                            else TextTabs(listOf("all" to s.allTab, "topics" to s.topicsBadge, "deals" to s.dealsBadge, "ideas" to s.thoughts), overviewTab,
                                 { overviewTab = it; if (it != "deals" && it != "all") monthOwe = null }, Modifier.padding(top = 10.dp))
                             // Owner, 14 окт: the filters as drawn marks — ждём ←, обещали →, работа, личное.
                             Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 fun owe(k: String) { monthOwe = if (monthOwe == k) null else k; if (monthOwe != null) overviewTab = "deals" }
-                                IconChip(s.a11yWaiting.replaceFirstChar { it.uppercase() }, monthOwe == "wait", { owe("wait") }) { HandGlyph(it, 23.dp, incoming = true) }
-                                IconChip(s.a11yPromised.replaceFirstChar { it.uppercase() }, monthOwe == "promise", { owe("promise") }) { HandGlyph(it, 23.dp) }
-                                Spacer(Modifier.width(6.dp))
+                                if (!topicsOnly) {
+                                    IconChip(s.a11yWaiting.replaceFirstChar { it.uppercase() }, monthOwe == "wait", { owe("wait") }) { HandGlyph(it, 23.dp, incoming = true) }
+                                    IconChip(s.a11yPromised.replaceFirstChar { it.uppercase() }, monthOwe == "promise", { owe("promise") }) { HandGlyph(it, 23.dp) }
+                                    Spacer(Modifier.width(6.dp))
+                                }
                                 IconChip(s.sphereWork, monthSphere == "work", { monthSphere = if (monthSphere == "work") null else "work" }) { WorkGlyph(it, 20.dp) }
                                 IconChip(s.spherePersonal, monthSphere == "personal", { monthSphere = if (monthSphere == "personal") null else "personal" }) { HomeGlyph(it, 20.dp) }
                             }
@@ -398,8 +405,9 @@ fun TaskList(
                     }
                 }
                 val data2 = if (monthSphere == null) data else data.copy(tasks = data.tasks.filter { sOk(it) })
-                val owe = monthOwe
-                fun wants(k: String) = overviewTab == "all" || overviewTab == k
+                val owe = if (topicsOnly) null else monthOwe
+                val tab = if (topicsOnly) "topics" else overviewTab
+                fun wants(k: String) = tab == "all" || tab == k
                 fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
                 val topics = if (owe == null && wants("topics")) data2.tasks.filter { it.topic && !it.done && !bare(it) }.sortedByDescending { it.lastActivity() ?: born(it) } else emptyList()
                 val ideas = if (owe == null && wants("ideas")) data2.tasks.filter { bare(it) && !it.done }.sortedByDescending { it.lastActivity() ?: born(it) } else emptyList()
@@ -410,7 +418,7 @@ fun TaskList(
                     .let { l -> l.filter { it.anchor != null }.sortedWith(compareBy({ it.anchor }, { it.time ?: "99" })) + l.filter { it.anchor == null }.sortedByDescending { it.createdAt } }
                     else emptyList()
                 if (topics.isEmpty() && ideas.isEmpty() && deals.isEmpty()) item("o-none") { Margined { Empty(s.emptyAll, s.emptyHint) } }
-                if (topics.isNotEmpty() || (owe == null && overviewTab == "topics")) {
+                if (topics.isNotEmpty() || (owe == null && tab == "topics")) {
                     item("ot-head") { SectionHead(s.topicsBadge, count = topics.size.takeIf { it > 0 }, action = s.newTopicLink to { askTopic = true }) }
                     topics.forEachIndexed { i, t ->
                         item("ot" + t.id) { Box(Modifier.animateItem()) { TopicPaperRow(t, seatOf(i, topics.size), onOpen = { onOpen(t.id) }, onArchive = { vm.archiveTopic(t.id) }) } }

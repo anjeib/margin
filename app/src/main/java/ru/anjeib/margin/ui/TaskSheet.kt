@@ -230,7 +230,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                                 if (!task.done) Action(s.actStep, false, { fill("step") }) { PlusGlyph(it, 18.dp) } else null,
                                 if (!task.done) Action(s.actPostpone, false, { postponing = true }) { ClockGlyph(it, 22.dp) } else null,
                                 if (!task.done) rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } } else null,
-                                Action(s.actToIdea, false, { commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }) { ThoughtGlyph(it, 20.dp) },
+                                Action(s.actToIdea, false, { commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }) { NoteGlyph(it, 21.dp) },
                                 if (!task.done) Action(s.actWontDo, false, { commitTitle(); vm.dropTask(task.id); onClose() }) { NotGlyph(it, 21.dp) } else null,
                                 Action(s.delete, false, { dialog = "delete" }) { TrashGlyph(it, 22.dp) },
                             ))

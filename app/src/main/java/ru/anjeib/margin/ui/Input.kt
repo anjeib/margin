@@ -88,6 +88,8 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.anjeib.margin.data.Attachment
+import ru.anjeib.margin.data.listTasks
+import ru.anjeib.margin.data.undatedTopicMatters
 import ru.anjeib.margin.data.Files
 import ru.anjeib.margin.data.WavRecorder
 import ru.anjeib.margin.data.durationLabel
@@ -140,6 +142,8 @@ fun SmartComposer(
      * still works in the words; files come with the paperclip down here.
      */
     marksOnPlus: Boolean = false,
+    /** The diary (owner, 14 окт): only «@», and it offers people, companies, places, matters and topics alike. */
+    mentions: Boolean = false,
 ) {
     val c = M.c
     val s = M.s
@@ -191,7 +195,7 @@ fun SmartComposer(
         }
         Files.delete(ctx, audio)
         // What it is and where it goes, said in words, becomes marks in the field — shown as marks, not as words (owner, 13 окт).
-        val (marks, words) = if (slash && text.isBlank()) vm.marksOf(t) else emptyList<String>() to t
+        val (marks, words) = if (slash && !mentions && text.isBlank()) vm.marksOf(t) else emptyList<String>() to t
         val full = (marks.joinToString(" ") + " " + text.trimEnd() + " " + words).replace(Regex("\\s{2,}"), " ").trim()
         // On a page the dictated words are shown there first — sent when the user has seen them.
         if (settings.voiceSendNow && pageText == null) { onSend(tagged(full), files.toList()); text = ""; files.clear() } else { text = full; onWrite?.invoke() }
@@ -227,7 +231,8 @@ fun SmartComposer(
     Column(modifier.fillMaxWidth()) {
       Column(Modifier.padding(start = lead)) {
         // «/…», «#…», «@…» at the end of the words: a line of choices right over the field, words without a box (owner, 13 окт).
-        val trigger = if (slash && modeLabel == null) Regex(if (marksOnPlus) "(?:^|\\s)(@)([\\p{L}\\d_-]*)$" else "(?:^|\\s)([/#@])([\\p{L}\\d_-]*)$").find(text) else null
+        val trigger = if (mentions && modeLabel == null) Regex("(?:^|\\s)(@)([\\p{L}\\d_-]*)$").find(text)
+            else if (slash && modeLabel == null) Regex(if (marksOnPlus) "(?:^|\\s)(@)([\\p{L}\\d_-]*)$" else "(?:^|\\s)([/#@])([\\p{L}\\d_-]*)$").find(text) else null
         // The card's «+»: every mark at once («/» — what and where, «#» — the topic list), until something is typed or picked.
         var picker by remember { mutableStateOf<String?>(null) }
         var pickerText by remember { mutableStateOf("") }
@@ -259,7 +264,17 @@ fun SmartComposer(
             "+" -> spheres.map { Pick("/$it", "/$it", "sphere", sphereDot(it)) }
             "#" -> d.tasks.filter { it.topic && !it.done }.sortedByDescending { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.createdAt) }
                 .filter { query.isNullOrEmpty() || it.title.lowercase().replace('ё', 'е').contains(query) }.take(8).map { Pick("#[${it.id}]", it.title, "topic", topic = true) }
-            "@" -> d.persons.filter { !it.archived && !it.draft }.filter { query.isNullOrEmpty() || it.name.lowercase().replace('ё', 'е').startsWith(query) || it.name.lowercase().replace('ё', 'е').contains(" $query") }
+            "@" -> if (mentions) {
+                fun hit(x: String) = query.isNullOrEmpty() || x.lowercase().replace('ё', 'е').let { it.startsWith(query) || it.contains(" $query") }
+                val people = d.persons.filter { !it.archived && !it.draft && hit(it.name) }.take(4).map { Pick("@[${it.name}]", it.name, "person", if (it.org) c.graphite else null) }
+                val places = (d.tasks.mapNotNull { it.place } + d.tasks.flatMap { t -> t.subtasks.mapNotNull { it.place } }).distinct().filter(::hit).take(3)
+                    .map { Pick("@[p:$it]", "⌖ $it", "person") }
+                val deals = (d.listTasks() + d.undatedTopicMatters()).filter { !it.done && hit(it.title) }.distinctBy { slotBase(it.id) }.take(4)
+                    .map { Pick("@[d:${slotBase(it.id)}]", "○ " + it.title, "person") }
+                val topics = d.tasks.filter { it.topic && !it.done && !it.thought && hit(it.title) }.take(3).map { Pick("#[${it.id}]", it.title, "person", topic = true) }
+                val add = if (!query.isNullOrBlank() && d.persons.none { it.name.equals(query, true) }) listOf(Pick("@[" + query.replaceFirstChar { it.uppercase() } + "]", "+ " + query.replaceFirstChar { it.uppercase() }, "person")) else emptyList()
+                people + places + deals + topics + add
+            } else d.persons.filter { !it.archived && !it.draft }.filter { query.isNullOrEmpty() || it.name.lowercase().replace('ё', 'е').startsWith(query) || it.name.lowercase().replace('ё', 'е').contains(" $query") }
                 .take(8).map { Pick("@[${it.name}]", it.name, "person", if (it.org) c.graphite else null) } +
                 (if (!query.isNullOrBlank() && d.persons.none { it.name.equals(query, true) }) listOf(Pick("@[" + query.replaceFirstChar { it.uppercase() } + "]", "+ " + query.replaceFirstChar { it.uppercase() }, "person")) else emptyList())
             else -> emptyList()
@@ -309,7 +324,7 @@ fun SmartComposer(
             var shown by remember { mutableStateOf(offer) }
             if (offer.isNotEmpty()) shown = offer
             // No box: the words stand on the page's own paper, faded in under them so the page behind doesn't fight them.
-            line(shown, Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.bg.copy(alpha = 0f), c.bg.copy(alpha = 0.92f), c.bg)))
+            line(shown, (if (planner) Modifier else Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.bg.copy(alpha = 0f), c.bg.copy(alpha = 0.92f), c.bg))))
                 .padding(start = 6.dp, end = 8.dp, top = 6.dp, bottom = 4.dp))
         }
         // The live reading: «дело · завтра 15:00 · Маша · работа» — what will be made, before it is sent.
@@ -651,7 +666,7 @@ fun attachmentsSummary(list: List<Attachment>): String? {
  * right in the line (owner, 13 окт), and erased as one piece.
  */
 object MarkLook {
-    val rx = Regex("(?<![\\p{L}\\d/])(/(?:дело|тема|идея|работа|личное|жду|обеща[лю]\\p{L}*|готово|запись|todo|topic|idea|work|personal|wait|promised|done|note)|#\\[[^\\]]+]|@\\[[^\\]]+])(?![\\p{L}\\d])", RegexOption.IGNORE_CASE)
+    val rx = Regex("(?<![\\p{L}\\d/])(/(?:дело|тема|идея|заметка|работа|личное|жду|обеща[лю]\\p{L}*|готово|запись|todo|topic|idea|work|personal|wait|promised|done|note)|#\\[[^\\]]+]|@\\[[^\\]]+])(?![\\p{L}\\d])", RegexOption.IGNORE_CASE)
 
     fun tokens(text: String): List<String> = rx.findAll(text).map { it.value }.toList()
 
@@ -715,6 +730,7 @@ fun rememberMarkLook(vm: MainVm?): androidx.compose.ui.text.input.VisualTransfor
                     val v = m.value
                     val label = when {
                         v.startsWith("#[") -> "≡ " + (vm?.data?.value?.tasks?.find { it.id == v.drop(2).dropLast(1) }?.title ?: v.drop(2).dropLast(1))
+                        v.startsWith("@[d:") || v.startsWith("@[p:") -> vm?.data?.value?.mentionLabel(v) ?: v
                         v.startsWith("@[") -> "@" + v.drop(2).dropLast(1)
                         else -> v.drop(1).lowercase()
                     }
@@ -752,3 +768,6 @@ fun rememberMarkLook(vm: MainVm?): androidx.compose.ui.text.input.VisualTransfor
         }
     }
 }
+
+/** A day-row's id without its day («<id>@<slot>» → «<id>»). */
+internal fun slotBase(id: String) = ru.anjeib.margin.data.slotRef(id)?.first ?: id

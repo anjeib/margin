@@ -911,7 +911,7 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                                     val t = g.first().first
                                     Row(Modifier.padding(top = 6.dp, bottom = 6.dp).clip(RoundedCornerShape(6.dp)).clickable(enabled = onTopic != null) { onTopic?.invoke(t.id) }.padding(vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically) {
-                                        if (t.thought && t.subtasks.isEmpty()) ThoughtGlyph(c.link, 14.dp) else TopicGlyph(c.link, 14.dp)
+                                        if (t.thought && t.subtasks.isEmpty()) NoteGlyph(c.link, 15.dp) else TopicGlyph(c.link, 14.dp)
                                         Spacer(Modifier.width(8.dp))
                                         Text(t.title + "  ›", style = Type.small.copy(color = c.link, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
