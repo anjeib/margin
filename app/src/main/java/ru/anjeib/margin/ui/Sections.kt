@@ -113,7 +113,7 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
             // Dots, not a second number under the date: one per matter up to three; petrol ahead, terracotta when today
             // has late ones, sage for what got done on a past day; a meeting — a small grey ring beside them.
             Row(Modifier.height(10.dp).padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.5.dp)) {
-                val dot = when { sel -> c.bg; past -> c.ok; late -> c.accent; else -> c.link }
+                val dot = when { sel -> c.bg; past -> c.ok; late -> c.ink; else -> c.link }
                 repeat(count.coerceAtMost(3)) { Box(Modifier.size(5.dp).clip(CircleShape).background(dot)) }
                 if (meets) Box(Modifier.size(5.dp).border(1.dp, if (sel) c.bg else c.graphite, CircleShape))
             }
@@ -304,7 +304,7 @@ fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib
                                     Text("$n", style = Type.body.copy(color = when { sel -> c.bg; past -> c.graphite; else -> c.ink }, fontSize = 15.sp,
                                         fontWeight = if (sel || d == today) FontWeight.SemiBold else FontWeight.Normal))
                                     Row(Modifier.height(7.dp).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        val dot = when { sel -> c.bg; past -> c.ok; late -> c.accent; else -> c.link }
+                                        val dot = when { sel -> c.bg; past -> c.ok; late -> c.ink; else -> c.link }
                                         repeat(count.coerceAtMost(3)) { Box(Modifier.size(4.dp).clip(CircleShape).background(dot)) }
                                         if (plan.events.isNotEmpty()) Box(Modifier.size(4.dp).border(1.dp, if (sel) c.bg else c.graphite, CircleShape))
                                     }

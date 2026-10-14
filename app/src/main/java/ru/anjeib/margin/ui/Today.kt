@@ -324,7 +324,7 @@ fun daySummary(plan: DayPlan, today: LocalDate, away: String? = null): androidx.
         if (plan.deals.isEmpty() && plan.events.isEmpty()) append(s.freeDay)
         if (plan.deals.isNotEmpty()) {
             append(s.summaryDeals(plan.deals.size))
-            if (late > 0) { append(", "); withStyle(SpanStyle(color = c.accentText)) { append(s.lateOfDay(late)) } }
+            if (late > 0) { append(", "); pencil { withStyle(SpanStyle(color = c.ink.copy(alpha = 0.8f))) { append(s.lateOfDay(late)) } } }
         }
         if (plan.events.isNotEmpty()) { if (plan.deals.isNotEmpty()) append("  ·  "); append(s.summaryMeetings(plan.events.size)) }
         // Without the cloud Margin reads on the phone and the unsure waits in «Входящие» — said once, quietly, here.

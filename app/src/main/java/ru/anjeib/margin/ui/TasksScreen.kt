@@ -295,13 +295,17 @@ fun TaskList(
                         }
                     }
                 }
+                // Owner, 14 окт: what «Ждём и обещали» shows at the top is not repeated in the day below (the day's summary still counts it).
+                fun base(id: String) = ru.anjeib.margin.data.slotRef(id)?.first ?: id
+                val above = promises.map { base(it.id) }.toSet()
+                val dayPlanShown = plan.copy(deals = plan.deals.filter { base(it.id) !in above })
                 // Several own matters left from past days: one tap puts them all on today (others' promises keep their dates).
-                val ownLate = plan.deals.count { it.dueDate?.isBefore(today) == true && it.waitingFor == null && it.promisedTo == null }
-                val dayCount = plan.deals.size + plan.events.size
+                val ownLate = dayPlanShown.deals.count { it.dueDate?.isBefore(today) == true && it.waitingFor == null && it.promisedTo == null }
+                val dayCount = dayPlanShown.deals.size + dayPlanShown.events.size
                 // Owner, 14 окт: an empty day says «Свободный день» once — under its name; no empty «Сегодня» repeating it.
-                val dayEmpty = plan.deals.isEmpty() && plan.events.isEmpty() && plan.done.isEmpty()
+                val dayEmpty = dayPlanShown.deals.isEmpty() && dayPlanShown.events.isEmpty() && dayPlanShown.done.isEmpty()
                 if (!dayEmpty) item("t-head") { SectionHead(s.today, count = dayCount.takeIf { it > 0 }, action = if (ownLate >= 2) s.allToToday to { vm.moveOverdue() } else null) }
-                if (!dayEmpty) dayPanel(plan, today, "t", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
+                if (!dayEmpty) dayPanel(dayPlanShown, today, "t", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                     doneOpen = isOpen("s-done-today"), onDoneFold = { toggle("s-done-today") })
                 if (undated.isNotEmpty()) {
                     item("u-head") {

@@ -31,6 +31,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.togetherWith
@@ -403,4 +404,65 @@ fun Modifier.fieldBand(): Modifier {
         drawLine(rule, Offset(0f, w / 2), Offset(size.width, w / 2), w)
         drawLine(rule, Offset(0f, 3.dp.toPx()), Offset(size.width, 3.dp.toPx()), w)
     }
+}
+
+// ---------------- the pencil (owner, 14 окт): what is late is not red — it is underlined, as if by hand in pencil ----------------
+
+/** The annotation that asks for a pencil line under its words (see [PencilText]). */
+const val PENCIL = "pencil"
+
+/** Words to be underlined in pencil inside an annotated string. */
+inline fun androidx.compose.ui.text.AnnotatedString.Builder.pencil(block: androidx.compose.ui.text.AnnotatedString.Builder.() -> Unit) {
+    pushStringAnnotation(PENCIL, "1"); block(); pop()
+}
+
+/** The pencil's colour: graphite, a little lighter than the words. */
+val pencilInk: Color @Composable get() = M.c.ink.copy(alpha = if (M.c.dark) 0.6f else 0.5f)
+
+/**
+ * A hand line under [x0]..[x1] at [y]: not ruler-straight — it wobbles a little and climbs a hair, and a second, fainter pass
+ * gives it the grain of graphite. [seed] keeps one line the same from frame to frame.
+ */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.pencilLine(x0: Float, x1: Float, y: Float, color: Color, seed: Int) {
+    val r = java.util.Random(seed.toLong())
+    val d = density
+    val start = x0 - 1.5f * d; val end = x1 + 2.5f * d
+    val climb = (0.6f + r.nextFloat() * 0.8f) * d
+    val path = androidx.compose.ui.graphics.Path()
+    var x = start
+    path.moveTo(x, y + (r.nextFloat() - 0.5f) * 0.8f * d)
+    while (x < end) {
+        x = minOf(end, x + (5f + r.nextFloat() * 4f) * d)
+        val t = (x - start) / (end - start).coerceAtLeast(1f)
+        path.lineTo(x, y - climb * t + (r.nextFloat() - 0.5f) * 0.9f * d)
+    }
+    drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(1.25f * d, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+    translate(0.4f * d, 0.7f * d) { drawPath(path, color.copy(alpha = color.alpha * 0.35f), style = androidx.compose.ui.graphics.drawscope.Stroke(0.6f * d, cap = androidx.compose.ui.graphics.StrokeCap.Round)) }
+}
+
+/**
+ * Text whose [PENCIL]-annotated words get a pencil line under them (each line of a wrapped run its own stroke); [whole] —
+ * the whole text is underlined (a late day on the margin).
+ */
+@Composable
+fun PencilText(text: androidx.compose.ui.text.AnnotatedString, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier, whole: Boolean = false,
+               maxLines: Int = Int.MAX_VALUE, overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+               inlineContent: Map<String, androidx.compose.foundation.text.InlineTextContent> = emptyMap()) {
+    var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+    val ranges = if (whole) listOf(0 until text.length) else text.getStringAnnotations(PENCIL, 0, text.length).map { it.start until it.end }
+    val ink = pencilInk
+    androidx.compose.material3.Text(text, style = style, maxLines = maxLines, overflow = overflow, inlineContent = inlineContent, onTextLayout = { layout = it },
+        modifier = if (ranges.isEmpty()) modifier else modifier.drawBehind {
+            val l = layout ?: return@drawBehind
+            ranges.forEachIndexed { k, rg ->
+                if (rg.isEmpty()) return@forEachIndexed
+                val a = rg.first; val b = rg.last + 1
+                for (line in l.getLineForOffset(a)..l.getLineForOffset((b - 1).coerceAtLeast(a))) {
+                    val s0 = maxOf(a, l.getLineStart(line)); val e0 = minOf(b, l.getLineEnd(line, visibleEnd = true))
+                    if (e0 <= s0) continue
+                    val x0 = l.getHorizontalPosition(s0, true); val x1 = l.getHorizontalPosition(e0, true)
+                    pencilLine(minOf(x0, x1), maxOf(x0, x1), l.getLineBaseline(line) + 3.5f * density, ink, text.text.hashCode() * 31 + k * 7 + line)
+                }
+            }
+        })
 }

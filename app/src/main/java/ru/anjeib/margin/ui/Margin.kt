@@ -100,8 +100,9 @@ fun Modifier.marginRule(color: Color, fraction: Float = 1f, top: Dp = 0.dp, over
 @Composable
 fun MarginText(text: String, late: Boolean = false, petrol: Boolean = false, faint: Boolean = false) {
     val c = M.c
-    Text(text, style = Type.italic.copy(color = when { late -> c.accentText; petrol -> c.link; faint -> c.faint; else -> c.ink.copy(alpha = 0.8f) }, fontSize = 15.5.sp,
-        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End, lineHeight = 19.sp), modifier = Modifier.padding(top = 3.dp))
+    // Late: in ink, underlined in pencil (owner, 14 окт: not red).
+    PencilText(androidx.compose.ui.text.AnnotatedString(text), style = Type.italic.copy(color = when { petrol -> c.link; faint -> c.faint; else -> c.ink.copy(alpha = 0.8f) }, fontSize = 15.5.sp,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End, lineHeight = 19.sp), modifier = Modifier.padding(top = 3.dp), whole = late)
 }
 
 /** The one look of a date or an hour inside a line: ink, medium, figures of one width. */
@@ -111,7 +112,7 @@ fun dateSpan(): androidx.compose.ui.text.SpanStyle = androidx.compose.ui.text.Sp
 /** A date or an hour on its own: the same look as [dateSpan]. */
 @Composable
 fun dateStyle(size: androidx.compose.ui.unit.TextUnit = 13.sp, late: Boolean = false) =
-    Type.small.copy(color = if (late) M.c.accentText else M.c.ink, fontSize = size, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum")
+    Type.small.copy(color = M.c.ink, fontSize = size, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum")
 
 /** The day on the margin: a big serif number and the month under it. */
 @Composable
@@ -499,7 +500,7 @@ fun continueList(old: androidx.compose.ui.text.input.TextFieldValue, new: androi
 fun hourColor(due: java.time.LocalDate?, time: String?, today: java.time.LocalDate = java.time.LocalDate.now()): androidx.compose.ui.graphics.Color {
     val c = M.c
     return when {
-        due != null && due.isBefore(today) -> c.accentText
+        due != null && due.isBefore(today) -> c.ink
         due == today && time != null && today == java.time.LocalDate.now() && time < java.time.LocalTime.now().toString().take(5) -> c.graphite
         else -> c.ink
     }

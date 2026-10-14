@@ -721,8 +721,8 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
                         val whenText = if (q.slots.isEmpty() && !q.done) due?.let { (if (late) s.lateSince(it.dayMonthShort()) else dayWord(it, today)) + (q.time?.let { t -> " $t" } ?: "") } else null
                         val rest = listOfNotNull(q.from?.let { s.promiseToYou(it) }, q.assignee,
                             if (q.done) q.doneAt?.let { d -> LocalDate.parse(d).dayMonthShort().let { if (q.isWait) s.gotOn(it) else s.solvedOn(it) } } else null)
-                        if (whenText != null || rest.isNotEmpty()) Text(buildAnnotatedString {
-                            whenText?.let { withStyle(SpanStyle(color = if (late) c.accentText else c.ink)) { append(it) } }
+                        if (whenText != null || rest.isNotEmpty()) PencilText(buildAnnotatedString {
+                            whenText?.let { w -> if (late) pencil { withStyle(SpanStyle(color = c.ink)) { append(w) } } else withStyle(SpanStyle(color = c.ink)) { append(w) } }
                             if (whenText != null && rest.isNotEmpty()) append("  ·  ")
                             append(rest.joinToString("  ·  "))
                         }, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))

@@ -476,7 +476,7 @@ internal fun DaysProp(slots: List<ru.anjeib.margin.data.Slot>, onToggle: (String
             slots.forEach { sl ->
                 val d = runCatching { LocalDate.parse(sl.date) }.getOrNull()
                 val late = !sl.done && d != null && d.isBefore(today)
-                val fg = when { sl.done -> c.ok; late -> c.accentText; else -> c.link }
+                val fg = when { sl.done -> c.ok; late -> c.ink; else -> c.link }
                 Row(Modifier.clip(RoundedCornerShape(50)).border(1.dp, if (sl.done) c.ok.copy(alpha = 0.4f) else c.hairline, RoundedCornerShape(50))
                     .combinedClickable(onClick = { onToggle(sl.id) }, onLongClick = { onRemove(sl.id) }).padding(horizontal = 10.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically) {

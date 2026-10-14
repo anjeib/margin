@@ -246,7 +246,9 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
             else withStyle(androidx.compose.ui.text.SpanStyle(color = c.link)) { append("≡ $tp") }
         }
         // When first, darker than the rest — the eye finds it without looking; late in accent.
-        whenText?.let { next(); withStyle(androidx.compose.ui.text.SpanStyle(color = if (t.dueDate?.isBefore(today) == true) c.accentText else c.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)) { append(it) } }
+        whenText?.let { w -> next()
+            val st = androidx.compose.ui.text.SpanStyle(color = c.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+            if (t.dueDate?.isBefore(today) == true) pencil { withStyle(st) { append(w) } } else withStyle(st) { append(w) } }
         // A name already said in the title («Скинуть Лёше исходники») is not repeated under it.
         if (!t.done) {
             val parts = t.waitingFor?.let { s.promiseToYouParts(it) to it } ?: t.promisedTo?.let { s.promiseFromYouParts(it) to it }
@@ -277,7 +279,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         androidx.compose.ui.text.Placeholder(13.sp, 13.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {
         ClipGlyph(c.graphite, 13.dp)
     })
-    if (text.isNotEmpty()) Text(text, style = Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), maxLines = 2, overflow = TextOverflow.Ellipsis,
+    if (text.isNotEmpty()) PencilText(text, style = Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), maxLines = 2, overflow = TextOverflow.Ellipsis,
         inlineContent = inline, modifier = Modifier.padding(top = 3.dp))
 }
 

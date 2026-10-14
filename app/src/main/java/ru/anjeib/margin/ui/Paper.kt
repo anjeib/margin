@@ -154,8 +154,8 @@ val RowTop = 13.dp
 fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modifier: Modifier = Modifier) {
     val c = M.c
     // Owner, 10 окт: «красиво, но мелко и бледно» — larger and in ink (a touch softer than the words), medium italic.
-    Text(text, style = Type.italic.copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink.copy(alpha = 0.8f) }, fontSize = if (planner) 14.5.sp else 15.5.sp, lineHeight = 19.sp,
-        fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End), modifier = modifier)
+    PencilText(AnnotatedString(text), style = Type.italic.copy(color = when { link -> c.link; else -> c.ink.copy(alpha = 0.8f) }, fontSize = if (planner) 14.5.sp else 15.5.sp, lineHeight = 19.sp,
+        fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End), modifier = modifier, whole = late)
 }
 
 /** The margin of a panel row: the note on the line of the row's first words. */
@@ -232,7 +232,7 @@ fun RowTitle(text: AnnotatedString, faded: Boolean = false, maxLines: Int = 3) {
 @Composable
 fun RowSub(text: String, link: Boolean = false, late: Boolean = false, maxLines: Int = 1) {
     val c = M.c
-    Text(text, style = Type.small.copy(fontFamily = rowFamily, color = when { late -> c.accentText; link -> c.link; else -> subInk }, fontSize = subSize),
+    PencilText(AnnotatedString(text), whole = late, style = Type.small.copy(fontFamily = rowFamily, color = when { link -> c.link; else -> subInk }, fontSize = subSize),
         maxLines = maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
 }
 
@@ -274,7 +274,7 @@ fun SectionHead(
 @Composable
 fun Voice(text: AnnotatedString, modifier: Modifier = Modifier, link: Boolean = false, onClick: (() -> Unit)? = null) {
     val c = M.c
-    Text(text, style = Type.italic.copy(color = if (link) c.link else c.graphite, fontSize = if (planner) 18.5.sp else 16.sp, lineHeight = if (planner) 23.sp else 22.sp),
+    PencilText(text, style = Type.italic.copy(color = if (link) c.link else c.graphite, fontSize = if (planner) 18.5.sp else 16.sp, lineHeight = if (planner) 23.sp else 22.sp),
         modifier = modifier.clip(RoundedCornerShape(6.dp)).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(vertical = if (onClick != null) 6.dp else 0.dp))
 }
