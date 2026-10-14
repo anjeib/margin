@@ -230,12 +230,16 @@ fun TaskList(
     val listScope = androidx.compose.runtime.rememberCoroutineScope()
     // The month unfolds at the very top: the page goes up to show it.
     androidx.compose.runtime.LaunchedEffect(monthOpen) { if (monthOpen) listState.animateScrollToItem(0) }
+    // The month unfolding or folding sets the whole page anew (owner, 14 окт): rows sliding while the section heads jumped
+    // ran over each other and over the fading month — now everything simply stands in its new place.
+    androidx.compose.runtime.key(monthOpen) {
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = pad) {
         when {
             view == Views.TODAY -> {
                 // The calendar tab unfolds the month over the page (owner, 14 окт); a tap on a day turns the page to it.
                 if (monthOpen) item("month") {
-                    Box(Modifier.animateItem()) { MonthPanel(data, vm, pageDay ?: today, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
+                    // No fade (owner, 14 окт): a fading month lay under the matters sliding up over it — it goes at once, they close up.
+                    Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)) { MonthPanel(data, vm, pageDay ?: today, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
                 }
                 // The planner's tabs turned the page to another day: that day alone — its name, its summary, its matters.
                 val other = pageDay?.takeIf { it != today }
@@ -463,6 +467,7 @@ fun TaskList(
             }
         }
         item("page-end") { PageEnd(pageLines) }
+    }
     }
     }
 }
@@ -746,3 +751,4 @@ fun TopicPickDialog(data: AppData, ref: String, onDismiss: () -> Unit, onPick: (
         dismissButton = { androidx.compose.material3.TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
     )
 }
+

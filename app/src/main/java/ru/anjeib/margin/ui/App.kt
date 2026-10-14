@@ -225,30 +225,36 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             openTask?.let { id -> data.tasks.find { it.id == id }?.let { it.topic && (!it.thought || fullIdea == id) } } == true
         PageSheet(frame = !overlay, tabs = if (plannerPage) ({
             val rows = remember(data) { data.listTasks().filter { !it.done } }
-            val onDiary = screen == TASKS && !contents
+            val onDiary = (screen == TASKS || screen == TOPICS) && !contents
             // On the calendar the tabs are its week: a tap picks the day there (Fable, 14 окт); elsewhere it turns to the day's page.
             // With the month unfolded the tabs mirror its choice in petrol (Fable, 14 окт: one colour for one «selected»).
-            val onCalendar = onDiary && view == Views.TODAY && monthOpen
-            val open = (pageDay ?: todayNow).takeIf { onDiary && view == Views.TODAY }
-            fun toDiary(v: String) { contents = false; screen = TASKS; view = v; searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null }
+            val onCalendar = onDiary && screen == TASKS && view == Views.TODAY && monthOpen
+            // Today is marked on every page with the index (owner, 14 окт); on «Сегодня» the mark is the page's own day.
+            val onToday = onDiary && view == Views.TODAY && screen == TASKS
+            val open = if (onToday && !searching) pageDay ?: todayNow else todayNow
+            // The search alone is chosen while it lies open (owner, 14 окт): the other tools step back.
+            val chosen = !searching
+            fun toDiary(v: String, sc: String = TASKS) { contents = false; screen = sc; view = v; searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null }
             PlannerIndex(
                                 // With the month unfolded its own row of weekdays is enough — the week tabs step aside (owner, 14 окт).
-                if (onCalendar) emptyList() else weekTabs(open, pageDay ?: todayNow, todayNow, busy = { d -> rows.any { it.dueDate == d } }, petrol = onCalendar) { d ->
+                if (onCalendar) emptyList() else weekTabs(open, if (onToday) pageDay ?: todayNow else todayNow, todayNow, busy = { d -> rows.any { it.dueDate == d } }, petrol = onCalendar) { d ->
                     vm.pageDay.value = d.takeIf { it != todayNow }; toDiary(Views.TODAY) },
                 listOf(
-                    IndexTab(petrol = true, label = s.quickToday, on = onDiary && view == Views.TODAY && pageDay == null && !monthOpen,
+                    IndexTab(petrol = true, label = s.quickToday, on = chosen && onToday && pageDay == null && !monthOpen,
                         glyph = { ink -> TodayGlyph(ink, 21.dp) }) { vm.monthOpen.value = false; vm.pageDay.value = null; toDiary(Views.TODAY) },
-                    IndexTab(petrol = true, label = s.calendarTitle, on = onDiary && view == Views.TODAY && monthOpen, glyph = { ink ->
+                    IndexTab(petrol = true, label = s.calendarTitle, on = chosen && onToday && monthOpen, glyph = { ink ->
                         if (landed != null && view != Views.WEEK) Text(landed.dayOfMonth.toString(), style = Type.small.copy(color = c.accentText, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
                         else CalendarGlyph(ink, 20.dp)
                     }) {
                         // The month unfolds at the top of «Сегодня» on the page's day; the same tab folds it and brings today back.
-                        if (monthOpen && onDiary && view == Views.TODAY) { vm.monthOpen.value = false; vm.pageDay.value = null }
+                        if (monthOpen && onToday && !searching) { vm.monthOpen.value = false; vm.pageDay.value = null }
                         else { landed?.let { vm.pageDay.value = it.takeIf { d -> d != todayNow } }; vm.monthOpen.value = true; toDiary(Views.TODAY) }
                     },
-                    IndexTab(petrol = true, label = s.diaryTitle, on = onDiary && view == Views.NOTES, glyph = { ink -> DiaryGlyph(ink, 21.dp) }) { vm.monthOpen.value = false; toDiary(Views.NOTES) },
+                    IndexTab(petrol = true, label = s.diaryTitle, on = chosen && onDiary && screen == TASKS && view == Views.NOTES, glyph = { ink -> DiaryGlyph(ink, 21.dp) }) { vm.monthOpen.value = false; toDiary(Views.NOTES) },
+                    // Topics, the fourth page of the diary (owner, 14 окт): no longer only in the contents.
+                    IndexTab(petrol = true, label = s.topicsPage, on = chosen && !contents && screen == TOPICS, glyph = { ink -> TopicsGlyph(ink, 21.dp) }) { vm.monthOpen.value = false; toDiary(view, TOPICS) },
                     IndexTab(petrol = true, label = s.search, on = searching, glyph = { ink -> SearchGlyph(ink, 20.dp) }) { openTask = null; fullIdea = null; openPerson = null; openNote = null; contents = false; searching = true },
-                    IndexTab(petrol = true, label = s.a11yMenu, on = contents || screen != TASKS, glyph = { ink -> MenuGlyph(ink) }) {
+                    IndexTab(petrol = true, label = s.contentsTitle, on = chosen && (contents || (screen != TASKS && screen != TOPICS)), glyph = { ink -> MenuGlyph(ink) }) {
                         searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null; contents = !contents },
                 ))
         }) else null) {
@@ -307,14 +313,17 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     }
                     // The diary's three pages lie side by side — Содержание · Сегодня · Обзор — and turn under the finger (owner, 14 окт);
                     // a day of «Сегодня» turns within its own page; the other sections are pages turned to from the contents.
-                    if (planner && screen == TASKS) PlannerPager(
-                        page = when { contents -> 0; view == Views.NOTES -> 2; else -> 1 },
-                        onPage = { p -> when (p) { 0 -> contents = true; 1 -> { contents = false; view = Views.TODAY }; else -> { contents = false; view = Views.NOTES } } },
+                    if (planner && (screen == TASKS || screen == TOPICS)) PlannerPager(
+                        page = when { contents -> 0; screen == TOPICS -> 3; view == Views.NOTES -> 2; else -> 1 },
+                        onPage = { p -> when (p) { 0 -> contents = true; 1 -> { contents = false; screen = TASKS; view = Views.TODAY }; 2 -> { contents = false; screen = TASKS; view = Views.NOTES }
+                            else -> { contents = false; screen = TOPICS } } },
+                        count = 4,
                     ) { p ->
                         when (p) {
                             0 -> page(PageKey(MENU, view, null))
                             1 -> PageTurn(pageDay, order = { (it ?: LocalDate.now()).toEpochDay() }) { d -> page(PageKey(TASKS, Views.TODAY, d)) }
-                            else -> page(PageKey(TASKS, Views.NOTES, null))
+                            2 -> page(PageKey(TASKS, Views.NOTES, null))
+                            else -> page(PageKey(TOPICS, view, null))
                         }
                     }
                     else if (planner) PageTurn(pageKey, order = { it.order() }) { k -> page(k) }

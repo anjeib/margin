@@ -324,9 +324,9 @@ fun Modifier.paperGrain(): Modifier {
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun PlannerPager(page: Int, onPage: (Int) -> Unit, content: @Composable (Int) -> Unit) {
+fun PlannerPager(page: Int, onPage: (Int) -> Unit, count: Int = 3, content: @Composable (Int) -> Unit) {
     val c = M.c
-    val state = androidx.compose.foundation.pager.rememberPagerState(initialPage = page) { 3 }
+    val state = androidx.compose.foundation.pager.rememberPagerState(initialPage = page) { count }
     val motion = motionOn()
     // A tab moved the diary: turn to it (animated, as if by hand).
     androidx.compose.runtime.LaunchedEffect(page) {

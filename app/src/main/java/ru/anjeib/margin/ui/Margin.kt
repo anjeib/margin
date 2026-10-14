@@ -691,6 +691,17 @@ fun NoteGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
     drawLine(color, Offset(w * 0.34f, h * 0.64f), Offset(w * 0.6f, h * 0.64f), strokeWidth = 1.2.dp.toPx(), cap = StrokeCap.Round)
 }
 
+/** The topics page: a heading and, under it, its matters — two rings with their lines. */
+@Composable
+fun TopicsGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawLine(color, Offset(w * 0.14f, h * 0.2f), Offset(w * 0.86f, h * 0.2f), strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)
+    listOf(0.48f, 0.76f).forEach { y ->
+        drawCircle(color, w * 0.075f, Offset(w * 0.22f, h * y), style = stroke(1.2.dp))
+        drawLine(color, Offset(w * 0.38f, h * y), Offset(w * (if (y < 0.6f) 0.86f else 0.74f), h * y), strokeWidth = 1.2.dp.toPx(), cap = StrokeCap.Round)
+    }
+}
+
 /** The diary: a bound notebook with a ribbon marking the page. */
 @Composable
 fun DiaryGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
