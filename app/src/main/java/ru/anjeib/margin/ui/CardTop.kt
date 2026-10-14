@@ -40,7 +40,8 @@ import androidx.compose.ui.unit.sp
  */
 
 /** One value of the card's top line. */
-class MetaItem(val text: AnnotatedString, val style: TextStyle, val onLong: (() -> Unit)? = null, val onClick: () -> Unit)
+/** [way] — a link to another card: one line, cut short with «…» when long, and «›» after it (owner, 14 окт). */
+class MetaItem(val text: AnnotatedString, val style: TextStyle, val onLong: (() -> Unit)? = null, val way: Boolean = false, val onClick: () -> Unit)
 
 /** «Пн 12 окт · 18:00 · ↻ каждая пт · ● Личное · Вам от Анны · Ленина, 5» — the same quiet line as under a matter in the lists. */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
@@ -51,7 +52,12 @@ fun MetaLine(items: List<MetaItem>, modifier: Modifier = Modifier) {
     // Each value is a tap of a finger's height; the dots stay between values on one line (DotFlow).
     DotFlow(items.size, modifier, separator = { Text("  ·  ", style = if (planner) Type.italic.copy(color = c.graphite, fontSize = 17.sp) else Type.small.copy(color = c.graphite, fontSize = 14.5.sp)) }) { i ->
         val it = items[i]
-        Text(it.text, style = it.style, modifier = Modifier.clip(RoundedCornerShape(6.dp))
+        if (it.way) androidx.compose.foundation.layout.Row(Modifier.clip(RoundedCornerShape(6.dp))
+            .combinedClickable(onClick = it.onClick, onLongClick = it.onLong).padding(vertical = 9.dp, horizontal = 1.dp)) {
+            Text(it.text, style = it.style, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text(" ›", style = it.style)
+        }
+        else Text(it.text, style = it.style, modifier = Modifier.clip(RoundedCornerShape(6.dp))
             .combinedClickable(onClick = it.onClick, onLongClick = it.onLong).padding(vertical = 9.dp, horizontal = 1.dp))
     }
 }
@@ -152,12 +158,23 @@ fun CardHead(title: String, onTitle: (String) -> Unit, done: Boolean, onToggle: 
              margin: (@Composable () -> Unit)?, meta: List<MetaItem>, mark: (@Composable () -> Unit)? = null, hint: String? = null,
              sphere: String? = null, onSphere: ((String) -> Unit)? = null,
              /** What the card is, first in the line under the title; null — no mark column either (a note has none). */
-             kind: String? = null, noMark: Boolean = false) {
+             kind: String? = null, noMark: Boolean = false,
+             /** Where it belongs, over the title in one line (owner, 14 окт): «# Тема   ○ Дело», each cut short to fit. */
+             trail: List<MetaItem> = emptyList()) {
     val c = M.c
     val s = M.s
     val titleStyle = Type.display.copy(color = if (done) c.graphite else c.ink, fontSize = 27.sp, lineHeight = 32.sp)
     Margined(margin = margin) {
         androidx.compose.foundation.layout.Column {
+            if (trail.isNotEmpty()) androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(start = if (noMark) 0.dp else MarkCol), verticalAlignment = Alignment.CenterVertically) {
+                val st = Type.italic.copy(color = c.link, fontSize = 15.5.sp)
+                trail.forEachIndexed { i, it ->
+                    if (i > 0) androidx.compose.foundation.layout.Spacer(Modifier.size(10.dp))
+                    // Owner, 14 окт: no «›» after it — petrol already says it is a way.
+                    Text(it.text, style = st, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false).clip(RoundedCornerShape(6.dp)).clickable(onClick = it.onClick).padding(vertical = 6.dp))
+                }
+            }
             androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.Top) {
                 if (!noMark) {
                     androidx.compose.foundation.layout.Box(Modifier.size(MarkCol - PanelBleed, 34.dp), contentAlignment = Alignment.CenterStart) {

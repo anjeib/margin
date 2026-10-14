@@ -5,4 +5,5 @@
     <string name="shortcut_dictate">Dictate</string>
     <string name="widget_description">Today and quick entry</string>
     <string name="widget_label">Margin · Today</string>
+    <string name="tile_inbox">To Inbox</string>
 </resources>

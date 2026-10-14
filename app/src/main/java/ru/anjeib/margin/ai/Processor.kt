@@ -45,6 +45,16 @@ object Processor {
         else d.copy(notes = listOf(Note(title = title, entries = listOf(e))) + d.notes)
     }
 
+    /**
+     * Without a cloud AI (owner, 14 окт): whatever comes in from another app — shared, picked from a selection, copied — goes to
+     * «Входящие» as it is, with where it came from; it is sorted there by hand («В дело», «В заметку», «В тему», «Разобрать»).
+     */
+    fun toInbox(ctx: Context, q: Queued) {
+        val words = listOfNotNull(q.comment?.takeIf { it.isNotBlank() }, q.text.trim().takeIf { it.isNotBlank() }).joinToString("\n\n")
+        val from = listOfNotNull(q.from, q.via?.let { L.s.forwardFrom(Forward.viaName(it)) }).joinToString(", ").ifBlank { null }
+        Store.get(ctx).update { inbox(it, Entry(text = words.take(4000), attachments = q.files, from = from)) }
+    }
+
     /** Puts attachments where the AI's changes landed: the touched task / note, else the scope's default place. */
     fun attachTo(applied: Applied, scope: Scope, files: List<Attachment>, before: AppData): AppData {
         if (files.isEmpty()) return applied.data

@@ -79,6 +79,8 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
                         ActionBar(listOfNotNull(
                             Action(s.actToMatter, false, { commitTitle(); vm.ideaToMatter(task.id); onClose() }) { DealGlyph(it, 22.dp) },
                             rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } },
+                            // Owner, 14 окт: put away (it stays in «Архив», with «Отменить») before deleting.
+                            Action(s.toArchive, false, { commitTitle(); vm.archiveTopic(task.id); onClose() }) { ArchiveGlyph(it, 22.dp) },
                             Action(s.delete, false, { vm.removeMatter(task.id); onClose() }) { TrashGlyph(it, 22.dp) },
                         ), slots = 5)
                     }

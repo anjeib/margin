@@ -27,8 +27,8 @@ android {
         applicationId = "ru.margin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 62
-        versionName = "0.62"
+        versionCode = 63
+        versionName = "0.63"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         // No keys in what people install: the AI goes through Margin's own door in Yandex Cloud (server/proxy),
@@ -40,6 +40,8 @@ android {
         // Closed alpha: one shared code built in, so testers need not type anything (switched off by itself in server/alpha.local).
         buildConfigField("String", "ALPHA_CODE", "\"${secrets.getProperty("ALPHA_CODE", "")}\"")
         buildConfigField("boolean", "DEMO", "false")
+        // Owner, 14 окт: the release is without the cloud AI for now — Margin reads everything on the phone; true brings it back.
+        buildConfigField("boolean", "CLOUD_AI", "false")
         // The developer's own Telegram bot and IMAP: only in debug builds — they need setup and a server-side redo.
         buildConfigField("boolean", "FORWARD_CHANNELS", "false")
     }

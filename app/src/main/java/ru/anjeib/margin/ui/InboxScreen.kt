@@ -71,7 +71,9 @@ private fun StampMargin(at: String) {
  * As on «Сегодня»: the day on the margin, one quiet row per thing; a tap opens a small menu — open, to a topic, read the text, remove.
  */
 @Composable
-fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, contentPadding: PaddingValues) {
+fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, contentPadding: PaddingValues,
+                /** «Разобрать»: the words to the main field, read there as everything typed is. */
+                onParse: (Entry) -> Unit = {}) {
     val c = M.c
     val s = M.s
     val note = data.inboxNote()
@@ -111,7 +113,7 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
                             icon = { Icon(kindIcon(a?.kind ?: "text"), null, tint = c.graphite, modifier = Modifier.size(19.dp)) },
                             // A photo without words is «Фото без подписи», not its file name; the kind is the mark on the left.
                             title = e.text.ifBlank { a?.caption ?: a?.let { if (it.kind == "photo") s.photoNoCaption else attachmentLabel(it).ifBlank { it.name } } ?: "" },
-                            meta = listOfNotNull(attachmentsSummary(e.attachments)?.takeIf { e.attachments.size > 1 || e.text.isNotBlank() },
+                            meta = listOfNotNull(e.from, attachmentsSummary(e.attachments)?.takeIf { e.attachments.size > 1 || e.text.isNotBlank() },
                                 if (a != null && "ocr:${a.id}" in working) "…" else null).joinToString("  ·  "),
                             thumb = a?.takeIf { it.kind == "photo" || it.kind == "video" }, onThumb = { viewing = it },
                             onOpen = { if (a != null) viewing = a else editing = e },
@@ -120,6 +122,10 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
                                 var picking by remember(pick) { mutableStateOf(pick) }
                                 if (!picking) {
                                     if (a != null) SoftMenuItem(s.openWord) { close(); viewing = a } else SoftMenuItem(s.openWord) { close(); onOpenNote(note.id) }
+                                    // Sorted by hand (owner, 14 окт): a matter, a note, or — for words — read by the phone in the main field first.
+                                    SoftMenuItem(s.inboxToDealWord) { close(); vm.inboxToDeal(e.id) }
+                                    SoftMenuItem(s.inboxToNoteWord) { close(); vm.inboxToNote(e.id) }
+                                    if (e.text.isNotBlank()) SoftMenuItem(s.inboxParseWord) { close(); onParse(e) }
                                     // The topic it most likely belongs to, by name — then the full list.
                                     val likely = remember(e.id) { data.likelyTopic(e.text + " " + e.attachments.joinToString(" ") { it.caption ?: it.name }) }
                                     likely?.let { lt -> SoftMenuItem(s.likelyTopic(lt.title).replaceFirstChar { it.uppercase() }) { close(); vm.inboxToTopic(e.id, lt.id) } }

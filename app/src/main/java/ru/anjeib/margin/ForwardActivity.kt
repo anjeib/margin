@@ -91,6 +91,12 @@ class ForwardActivity : ComponentActivity() {
                             text = text, files = files.toList() + extra, via = via, comment = comment.ifBlank { null }, subject = subject,
                             from = sender?.let { it.name ?: it.company ?: it.address },
                         )
+                        // No cloud AI (owner, 14 окт): kept as it is in «Входящие», sorted there by hand — nothing is guessed.
+                        if (!BuildConfig.CLOUD_AI) {
+                            Processor.toInbox(this, q)
+                            currentFocus?.let { v -> getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.hideSoftInputFromWindow(v.windowToken, 0) }
+                            Toast.makeText(this, strings.inboxSaved, Toast.LENGTH_SHORT).show(); finish(); return@ForwardSheet
+                        }
                         Processor.enqueue(this, q)
                         currentFocus?.let { v -> getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.hideSoftInputFromWindow(v.windowToken, 0) }
                         // Online: read it here and show what it became. Offline: it waits in «Входящие», as before.

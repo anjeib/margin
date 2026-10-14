@@ -350,16 +350,32 @@ fun TaskList(
                 // Owner, 13 окт: whatever was written today shows on «Сегодня», even when it isn't for today — a new topic,
                 // a matter for another day (its day on the margin), an idea. What the sections above already hold isn't repeated.
                 val todayStr = today.toString()
-                val topicsToday = data.tasks.filter { t -> t.topic && !t.thought && !t.done && !t.sample && (t.createdAt == todayStr || t.entries.any { it.at.startsWith(todayStr) }) }
+                // A topic written in today (owner, 14 окт): not the topic itself — what was written, under it «# Тема»; a topic begun
+                // today with nothing in it yet is itself what was written.
+                val topicsAll = data.tasks.filter { t -> t.topic && !t.thought && !t.done && !t.sample }
+                val recordsToday = topicsAll.flatMap { t -> t.entries.filter { it.at.startsWith(todayStr) && (it.text.isNotBlank() || it.attachments.isNotEmpty()) }.map { t to it } }
+                val topicsToday = topicsAll.filter { t -> t.createdAt == todayStr && recordsToday.none { it.first.id == t.id } }
                 val laterToday = data.tasks.filter { t -> !t.topic && !t.done && !t.sample && t.createdAt == todayStr && t.anchor?.isAfter(today) == true }
                     .sortedWith(compareBy({ it.anchor }, { it.time ?: "99" }))
                 val ideasToday = data.tasks.filter { t -> t.thought && !t.done && (t.createdAt == todayStr || t.entries.any { it.at.startsWith(todayStr) }) }
                 val written = topicsToday.map { "t" to it } + laterToday.map { "d" to it } + ideasToday.map { "i" to it }
-                if (written.isNotEmpty()) {
+                val writtenRecords = recordsToday.sortedBy { it.second.at }
+                val writtenAll = written.size + writtenRecords.size
+                if (writtenAll > 0) {
                     item("i-head") { SectionHead(s.writtenToday) }
-                    written.forEachIndexed { i, (kind, t) ->
+                    writtenRecords.forEachIndexed { i, (t, e) ->
+                        item("wr" + e.id) {
+                            PaperRow(seatOf(i, writtenAll), margin = e.at.drop(11).take(5).takeIf { it.length == 5 && it != "00:00" },
+                                mark = { NoteGlyph(c.graphite, 20.dp) }, onClick = { onOpen(t.id) }) {
+                                RowTitle(e.text.ifBlank { e.attachments.firstOrNull()?.let { a -> a.caption ?: a.name } ?: "" }, maxLines = 2)
+                                RowSub("# " + t.title, link = true)
+                            }
+                        }
+                    }
+                    written.forEachIndexed { i0, (kind, t) ->
+                        val i = i0 + writtenRecords.size
                         item("w" + t.id) {
-                            val seat = seatOf(i, written.size)
+                            val seat = seatOf(i, writtenAll)
                             Box(Modifier.animateItem().landing(t.id in landed, 0)) {
                                 when (kind) {
                                     "t" -> TopicPaperRow(t, seat, onOpen = { onOpen(t.id) })

@@ -19,6 +19,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.AnnotatedString
@@ -129,37 +130,42 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                 }
             }
             if (notes.isEmpty()) item("empty") { Margined(Modifier.padding(top = 18.dp)) { Empty(s.diaryEmpty, s.diaryEmptyHint) } }
+            // Owner, 14 окт: no «Сегодня» / «Суббота» line — a day is one block (its number large on the margin by its first note),
+            // and the notes in it are parted by a hairline; each note's hour on the margin by it.
             byDay.forEach { (day, list) ->
-                item("d$day") {
-                    Margined(Modifier.padding(top = 22.dp, bottom = 4.dp), margin = { MarginDay(day.dayOfMonth, day.dayMonthShort().substringAfter(' ')) }) {
-                        Column(Modifier.padding(top = 6.dp)) {
-                            Text(if (day == today) s.quickToday else day.dowFull(), style = Type.italic.copy(color = c.ink.copy(alpha = 0.85f), fontSize = 22.sp, lineHeight = 26.sp))
-                            Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(0.8.dp).background(c.ink.copy(alpha = 0.3f)))
-                        }
-                    }
-                }
-                list.forEach { n ->
+                list.forEachIndexed { i, n ->
                     item("n" + n.id) {
                         val at = n.bornAt()
                         val body = n.entries.filter { it.text.isNotBlank() }.joinToString("\n\n") { it.text }
                         val plainBody = data.mentionsPlain(body)
                         // The title only when the words don't already begin with it (a note written here is its own first line).
                         val showTitle = n.title.isNotBlank() && !plainBody.trimStart().startsWith(n.title.trimEnd('…').take(40))
-                        Margined(Modifier.padding(top = 12.dp).landing(n.id in landed, 0), margin = { Box(Modifier.padding(top = 2.dp)) { MarginNote(at.drop(11).take(5)) } }) {
-                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onOpen(n.id) }.padding(vertical = 2.dp)) {
-                                var titleLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
-                                var bodyLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
-                                if (showTitle) Text(n.title, style = Type.body.copy(color = c.ink, fontSize = 16.5.sp, lineHeight = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
-                                    onTextLayout = { titleLayout = it }, modifier = Modifier.foundMarks(n.title) { titleLayout })
-                                if (body.isNotBlank()) {
-                                    val shown = mentionsText(body, data, onPerson, onOpen)
-                                    Text(shown, style = Type.body.copy(color = c.ink.copy(alpha = 0.9f), fontSize = 16.sp, lineHeight = 23.sp), onTextLayout = { bodyLayout = it },
-                                        modifier = Modifier.padding(top = if (showTitle) 3.dp else 0.dp).foundMarks(shown.text) { bodyLayout })
+                        val hour = at.drop(11).take(5)
+                        Margined(Modifier.padding(top = if (i == 0) 20.dp else 0.dp).landing(n.id in landed, 0), margin = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (i == 0) 0.dp else 10.dp)) {
+                                if (i == 0) MarginDay(day.dayOfMonth, day.dayMonthShort().substringAfter(' '))
+                                MarginNote(hour)
+                            }
+                        }) {
+                            PanelPiece(seatOf(i, list.size)) {
+                                Column(Modifier.fillMaxWidth().clickable { onOpen(n.id) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                    var titleLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+                                    var bodyLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+                                    // Three lines of a note at most (owner, 14 окт) — the whole of it is in its card.
+                                    if (showTitle) Text(n.title, style = Type.body.copy(color = c.ink, fontSize = 16.5.sp, lineHeight = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        onTextLayout = { titleLayout = it }, modifier = Modifier.foundMarks(n.title) { titleLayout })
+                                    if (body.isNotBlank()) {
+                                        val shown = mentionsText(body, data, onPerson, onOpen)
+                                        Text(shown, style = Type.body.copy(color = c.ink.copy(alpha = 0.9f), fontSize = 16.sp, lineHeight = 23.sp), onTextLayout = { bodyLayout = it },
+                                            maxLines = if (showTitle) 2 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(top = if (showTitle) 3.dp else 0.dp).foundMarks(shown.text) { bodyLayout })
+                                    }
+                                    n.entries.flatMap { it.attachments }.takeIf { it.isNotEmpty() }?.let { Box(Modifier.padding(top = 8.dp)) { AttachmentsView(it) } }
+                                    // Who and what the note touches, quietly — when it was made in the field with marks.
+                                    val tags = (n.people.map { it } + listOfNotNull(n.place?.let { "⌖ $it" })).filter { t -> !plainBody.contains(t.removePrefix("⌖ ")) }
+                                    if (tags.isNotEmpty()) Text(tags.joinToString("  ·  "), style = Type.small.copy(color = c.link, fontSize = 13.5.sp), modifier = Modifier.padding(top = 4.dp))
                                 }
-                                n.entries.flatMap { it.attachments }.takeIf { it.isNotEmpty() }?.let { Box(Modifier.padding(top = 8.dp)) { AttachmentsView(it) } }
-                                // Who and what the note touches, quietly — when it was made in the field with marks.
-                                val tags = (n.people.map { it } + listOfNotNull(n.place?.let { "⌖ $it" })).filter { t -> !plainBody.contains(t.removePrefix("⌖ ")) }
-                                if (tags.isNotEmpty()) Text(tags.joinToString("  ·  "), style = Type.small.copy(color = c.link, fontSize = 13.5.sp), modifier = Modifier.padding(top = 4.dp))
                             }
                         }
                     }

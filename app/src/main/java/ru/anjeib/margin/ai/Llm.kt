@@ -19,7 +19,7 @@ object Llm {
     fun door(s: Settings) = Yandex.Door(s.yaKey, s.yaFolder, s.invite, s.device)
     /** With a key (developer builds) or, in what people install, with an invite code for Margin's own door. */
     /** The AI may be asked: «Телефон» (the default since 13 окт) asks it nothing — Margin reads everything on the phone. */
-    fun ready(s: Settings) = s.parseMode != "local" &&
+    fun ready(s: Settings) = ru.anjeib.margin.BuildConfig.CLOUD_AI && s.parseMode != "local" &&
         if (yandex(s)) (s.yaKey.isNotBlank() && s.yaFolder.isNotBlank()) || door(s).proxy else s.apiKey.isNotBlank()
 
     /** Which Yandex model answers: smart requests and complex phrases → DeepSeek, the rest per mode. */

@@ -564,6 +564,14 @@ interface Strings {
     // The cards as pages (owner, 14 окт).
     val cardKindDeal: String get() = "дело"
     val actShare: String get() = "Переслать"
+    val inboxSaved: String get() = "Во Входящих"
+    val inboxMadeDeal: String get() = "Стало делом"
+    val inboxMadeNote: String get() = "Стало заметкой"
+    val inboxToDealWord: String get() = "В дело"
+    val inboxToNoteWord: String get() = "В заметку"
+    val inboxParseWord: String get() = "Разобрать"
+    val clipTileLabel: String get() = "Во Входящие"
+    val clipEmpty: String get() = "В буфере ничего нет"
     val actName: String get() = "Имя"
     val actMerge: String get() = "Связать"
     val actPeople: String get() = "Люди"
@@ -1068,8 +1076,9 @@ object Ru : Strings {
     override val tgNotYours = "Это личный бот, он принимает сообщения только от владельца."
     override val mailBadLogin = "Не удалось войти в почту: проверьте адрес и пароль приложения (обычный пароль не подойдёт)"
     override val forwardTitle = "В Margin"
-    override val forwardCommentHint = "Что с этим сделать — или просто отправьте"
-    override val forwardHint = "Margin найдёт дела, обещания, заметки"
+    // Owner, 14 окт: without a cloud AI what comes in is kept as it is in «Входящие» and sorted there by hand.
+    override val forwardCommentHint get() = if (ru.anjeib.margin.BuildConfig.CLOUD_AI) "Что с этим сделать — или просто отправьте" else "Пара слов к этому — или просто отправьте"
+    override val forwardHint get() = if (ru.anjeib.margin.BuildConfig.CLOUD_AI) "Margin найдёт дела, обещания, заметки" else "Ляжет во «Входящие» — разберёте там"
     override val samplesLine = "Здесь примеры"
     override val ideaBadge = "Заметка"
     override val openTopic = "Открыть тему"
@@ -1134,8 +1143,8 @@ object Ru : Strings {
     override val whereDataTitle = "Где ваши данные"
     override val whereDataText = "Записи хранятся на этом телефоне — в памяти приложения, других копий у Margin нет.\n\n" +
         "Резервная копия: если включена, раз в день уходит в ваш аккаунт Google (Google Диск) и доступна только вам.\n\n" +
-        "Фразы: простые Margin разбирает на телефоне, они никуда не уходят. Сложные, когда есть интернет, отправляются в Cloud.ru (серверы в России) вместе с нужной частью записей: связанными делами и именами. Их читает модель GigaChat на серверах Cloud.ru — третьим лицам запросы не передаются, на них модель не дообучают. Если Cloud.ru не отвечает, запрос уходит в Yandex AI Studio (тоже в России), который его не сохраняет.\n\n" +
-        "Голос: распознаётся на телефоне (модель GigaAM) и в интернет не уходит. Пока модель не скачалась — в Cloud.ru; с переключателем «Распознавать речь на телефоне» не уходит и тогда.\n\n" +
+        "Фразы: Margin разбирает их на телефоне — ни слова не уходит в интернет.\n\n" +
+        "Голос: распознаётся на телефоне (модель GigaAM) и в интернет не уходит.\n\n" +
         "Журналы ошибок уходят разработчику только письмом, которое вы отправляете сами; ваших записей в них нет.\n\n" +
         "На экране блокировки напоминания показываются без текста дел."
     override val widgetFree = "На сегодня дел нет"
@@ -1404,7 +1413,7 @@ object Ru : Strings {
     override val saved = "Сохранено"
     override val savedToInbox = "Сохранено во «Входящие»"
     override val inboxNote = "Входящие"
-    override val inboxHint = "что ещё не разложено по делам и темам · вправо — в тему, влево — убрать"
+    override val inboxHint = "что ещё не разложено · подержите — в дело, в заметку, в тему"
     override val setupBriefQ = "Присылать утром короткую сводку дня? Выберите время — или «Не нужно»."
     override val setupBriefOptions = listOf("8:00", "9:00", "10:00", "Не нужно")
     override val obBrief = "Утром — короткая сводка дня:"
@@ -1413,7 +1422,8 @@ object Ru : Strings {
         "Пишите внизу, что нужно сделать, — обычными словами. Поменять это можно так же: «сводку в 9», «называй меня Аня»."
     override val settingsChanged = "Настройки изменены"
     override val inboxEmpty = "Здесь пусто"
-    override val inboxEmptyHint = "Сюда попадает то, что записано без интернета (Margin разберёт это, когда появится связь), и то, что прислано через «Поделиться → В Margin»."
+    override val inboxEmptyHint get() = if (ru.anjeib.margin.BuildConfig.CLOUD_AI) "Сюда попадает то, что записано без интернета (Margin разберёт это, когда появится связь), и то, что прислано через «Поделиться → В Margin»."
+        else "Сюда ложится всё, что пришло из других приложений: «Поделиться → В Margin», «В Margin» в меню выделенного текста, плитка «Во Входящие» в шторке. Нажмите и подержите — в дело, в заметку, в тему или разобрать."
     override val savedUnsorted = "СОХРАНЕНО БЕЗ РАЗБОРА"
     override fun queuedLine(n: Int) = "Ждут интернета: " + n + " " + pluralRu(n, "запись", "записи", "записей")
     override fun inboxLine(n: Int) = "Во «Входящих» ждут: " + n
@@ -1484,7 +1494,7 @@ object Ru : Strings {
     override val nothing = "Ничего не найдено"
     override val calendarSection = "КАЛЕНДАРЬ"
     override val calendarRead = "Учитывать календарь телефона"
-    override val calendarHint = "ИИ видит встречи и не ставит дела поверх них"
+    override val calendarHint = "Встречи из календаря телефона — на «Сегодня» среди дел"
     override val offlineSection = "ОФЛАЙН-РАСПОЗНАВАНИЕ"
     override val backupSection = "РЕЗЕРВНАЯ КОПИЯ"
     override val googleBackupHint = "Раз в день дела, темы, заметки и настройки сохраняются в ваш аккаунт Google (Google Диск) и вернутся на новом телефоне."
@@ -1822,7 +1832,7 @@ object Ru : Strings {
     override val topicsEmpty = "Тем пока нет. Начните новую тему со списком дел."
     override val topicsHint = "Новая тема…"
     override val diarySub = "дневник: мысли, итоги, заметки из ленты"
-    override val diaryHint = "Запись в дневник…"
+    override val diaryHint = "Добавить заметку…"
     override val diaryEmpty = "Дневник пока пуст"
     override val diaryEmptyHint = "Пишите сюда что угодно — мысль, итоги встречи, впечатление. Заметки из ленты тоже придут сюда. Через @ можно отметить человека, компанию, место, дело или тему."
     override val topicsPage = "Темы"

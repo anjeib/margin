@@ -108,8 +108,8 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             // The language choice is gone: English is frozen for now (owner, 14 окт).
         }
 
-        // Who reads the words: the phone, the phone with the AI for hard phrases, or the AI.
-        Group(s.parseSection) {
+        // Who reads the words: the phone, the phone with the AI for hard phrases, or the AI — only while there is a cloud AI at all.
+        if (ru.anjeib.margin.BuildConfig.CLOUD_AI) Group(s.parseSection) {
             val modes = listOf("local", "auto", "cloud")
             Segmented(listOf(s.parseLocal, s.parseAuto, s.parseCloud), modes.indexOf(settings.parseMode).coerceAtLeast(0)) { i -> vm.updateSettings { it.copy(parseMode = modes[i]) } }
             Text(when (settings.parseMode) { "local" -> s.parseLocalHint; "cloud" -> s.parseCloudHint; else -> s.parseAutoHint },
@@ -180,6 +180,8 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             })
         if (settings.devMode) {
         Group(s.devSection) {
+          // The cloud AI's own rows — provider, key, models, spending, its voice — only in a build that has it (CLOUD_AI).
+          if (ru.anjeib.margin.BuildConfig.CLOUD_AI) {
             val ya = settings.provider == "yandex"
             Segmented(listOf("Яндекс", "OpenRouter"), if (ya) 0 else 1) { i -> vm.updateSettings { it.copy(provider = if (i == 0) "yandex" else "openrouter") }; vm.checkKey() }
             Divider()
@@ -236,8 +238,9 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             Divider()
             if (settings.provider == "yandex") ValueRow(s.voiceModel, null, "Yandex SpeechKit", chevron = false) {}
             else ValueRow(s.voiceModel, null, settings.voiceModel) { picker = "voice"; vm.loadModels() }
+            Divider()
+          }
             if (ru.anjeib.margin.voice.LocalSpeech.supported) {
-                Divider()
                 // The developer's look at the model on the phone: what it is, how far its download is; a tap fetches it now.
                 val st = whisper
                 ValueRow(s.onDeviceModel, null, when (st) {

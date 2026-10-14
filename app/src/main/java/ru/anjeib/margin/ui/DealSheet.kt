@@ -66,7 +66,9 @@ import java.time.LocalDate
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenTopic: (() -> Unit)?, onOpenPerson: ((String) -> Unit)? = null) {
+fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenTopic: (() -> Unit)?, onOpenPerson: ((String) -> Unit)? = null,
+              /** A matter under another one: its parent's card opens from the line under the title (by the parent's id). */
+              onOpenParent: ((String) -> Unit)? = null) {
     val c = M.c
     val s = M.s
     fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it) + flat(it.children) }
@@ -127,7 +129,6 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                     if (next != null) vm.toggleSlot(ref, next.id) else vm.toggleQuestion(topic.id, q.id)
                 }
                 val meta = buildList {
-                    add(MetaItem(Meta.plain("# " + topic.title), Meta.link()) { commit(); onOpenTopic?.invoke() ?: onClose() })
                     if (window) row.whenLabel()?.substringBefore(" · ${q.time}")?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) { dialog = "date" }) }
                     q.from?.let { add(MetaItem(Meta.promise(s.promiseToYouParts(it)), Meta.quiet()) { person(it) }) }
                     q.promisedTo?.let { add(MetaItem(Meta.promise(s.promiseFromYouParts(it)), Meta.quiet()) { person(it) }) }
@@ -138,6 +139,11 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                     q.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
                 }
                 CardHead(title, { title = it }, q.done, onToggle = ::tick, kind = s.cardKindDeal.takeIf { q.from == null && q.promisedTo == null },
+                    // Where it belongs, over the title in one line (owner, 14 окт): its topic, then the matter it is part of.
+                    trail = listOfNotNull(
+                        MetaItem(Meta.plain("# " + topic.title), Meta.link()) { commit(); onOpenTopic?.invoke() ?: onClose() },
+                        flat(topic.subtasks).find { it.id == q.parent }?.let { p -> MetaItem(Meta.plain("○ " + p.title), Meta.link()) { commit(); onOpenParent?.invoke(p.id) } },
+                    ),
                     // A topic's matter is in its topic's sphere: the same two marks set it for the topic.
                     sphere = topic.sphere, onSphere = { vm.setSphere(topic.id, it) },
                     margin = if (q.slots.isEmpty()) ({ CardMargin(due, q.time, late, prefix = windowPrefix(start, due), onDay = { dialog = "date" }, onHour = if (due != null) ({ dialog = "time" }) else null) }) else null,

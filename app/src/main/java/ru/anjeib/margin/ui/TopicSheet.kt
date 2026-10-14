@@ -485,7 +485,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             dismissButton = { TextButton({ vm.misparsed(task.source.orEmpty(), "card", listOfNotNull(task.title, task.whenLabel()).joinToString(" · ")); dialog = null }) { Text(s.misparsed, color = c.link) } },
         )
     }
-    dealQ?.let { id -> DealSheet(task, id, vm, onClose = { dealQ = null }, onOpenTopic = null, onOpenPerson = { dealQ = null; onOpenPerson(it) }) }
+    dealQ?.let { id -> DealSheet(task, id, vm, onClose = { dealQ = null }, onOpenTopic = null, onOpenPerson = { dealQ = null; onOpenPerson(it) }, onOpenParent = { dealQ = it }) }
     editNote?.let { e -> TextDialog(s.edit, e.text, "", onDismiss = { editNote = null }) { v -> vm.editEntryText("task:${task.id}", e.id, v); editNote = null } }
     editQ?.let { q -> TextDialog(s.edit, q.title, "", onDismiss = { editQ = null }) { v -> vm.renameSubtask(task.id, q.id, v); editQ = null } }
     timeQ?.let { q -> TimeDialog(q.time, onDismiss = { timeQ = null }) { tm -> vm.setTime("q:${task.id}:${q.id}", tm); timeQ = null } }

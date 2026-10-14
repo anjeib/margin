@@ -5,4 +5,5 @@
     <string name="shortcut_dictate">Надиктовать</string>
     <string name="widget_description">Сегодня и быстрый ввод</string>
     <string name="widget_label">Margin · Сегодня</string>
+    <string name="tile_inbox">Во Входящие</string>
 </resources>

@@ -315,7 +315,11 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             MATERIALS -> MaterialsGrid(data.tasks.filter { !(it.topic && it.done) }, onView = { viewing = it }, onTopic = { openId(it) }) { t -> PageHead(s.materialsTitle, s.materialsSub, trailing = t) }
                             SETTINGS -> SettingsScreen(settings, vm, pad)
                             HELP -> HelpScreen(pad)
-                            INBOX -> InboxScreen(data, vm, onOpenNote = { openNote = it }, contentPadding = pad)
+                            INBOX -> InboxScreen(data, vm, onOpenNote = { openNote = it }, contentPadding = pad, onParse = { e ->
+                                // «Разобрать»: the words into the main field on «Сегодня», read there with the live line over it; sent — gone from «Входящие».
+                                vm.inboxDraft.value = e.id to e.attachments
+                                contents = false; screen = TASKS; view = Views.TODAY; prefill = e.text; focusKey = System.currentTimeMillis()
+                            })
                         }
                     }
                     // «Планер»: every move about the diary turns a page — a day, the calendar, the overview, the contents, a section.
@@ -436,7 +440,12 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         hint = if (screen == TOPICS) s.topicsHint else if (screen == NOTES) s.notesHint else if (screen == TASKS && view == Views.NOTES && !contents) s.diaryHint else calDay?.takeIf { screen == TASKS }?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
                         busy = busy == (if (screen == NOTES) "notes" else "main"),
                         // «Темы»: the words start a topic — its name, and a list under it becomes its matters.
-                        onSend = { t, f -> if (screen == TOPICS) vm.send("/" + s.tagTopic + " " + t, files = f) else if (screen == TASKS && view == Views.NOTES) vm.addDiaryNote(t, f) else vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f) },
+                        onSend = { t, f -> if (screen == TOPICS) vm.send("/" + s.tagTopic + " " + t, files = f) else if (screen == TASKS && view == Views.NOTES) vm.addDiaryNote(t, f) else {
+                            // Words taken from «Входящие» to be read here: their files go with them, and the thing leaves «Входящие».
+                            val fromInbox = vm.inboxDraft.value.takeIf { screen == TASKS }
+                            vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f + (fromInbox?.second ?: emptyList()))
+                            if (fromInbox != null) vm.inboxSent()
+                        } },
                         prefill = prefill, onPrefillUsed = { prefill = null },
                         onTyping = { typing = it }, slash = screen != NOTES && view != Views.NOTES, preview = if (view == Views.NOTES) null else ({ vm.previewOf(it) }),
                         mentions = screen == TASKS && view == Views.NOTES,
@@ -484,7 +493,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 if (qr != null) {
                     val topic = data.tasks.find { it.id == qr.first }
                     if (topic == null) LaunchedEffect(Unit) { openDeal = null }
-                    else DealSheet(topic, qr.second, vm, onClose = { openDeal = null },
+                    else DealSheet(topic, qr.second, vm, onClose = { openDeal = null }, onOpenParent = { pid -> openDeal = "q:${topic.id}:$pid" },
                         // Owner, 10 окт: who goes to the topic wants the topic itself — from its start, not at this matter.
                         onOpenTopic = { openDeal = null; openTask = topic.id; openTab = 0; openHl = null },
                         onOpenPerson = { openDeal = null; openPerson = it })

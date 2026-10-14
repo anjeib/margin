@@ -101,6 +101,8 @@ data class Entry(
     /** A «Список» block in a note: items with ticks (the same shape as subtasks). */
     val items: List<Subtask> = emptyList(),
     val isList: Boolean = false,
+    /** Where a thing in «Входящие» came from — «Марина, из Telegram», «из Chrome» (owner, 14 окт: what comes in is kept as is). */
+    val from: String? = null,
 )
 
 @Serializable

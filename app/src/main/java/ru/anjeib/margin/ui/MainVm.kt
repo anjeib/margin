@@ -196,6 +196,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** A copied message (MAX, Telegram «Копировать») or anything else handed in while the app is open. */
     fun forwardIn(text: String, via: String, comment: String?, files: List<Attachment> = emptyList(), from: String? = null) {
         if (text.isBlank()) return
+        // No cloud AI: kept as it is in «Входящие», sorted there by hand (owner, 14 окт).
+        if (!ru.anjeib.margin.BuildConfig.CLOUD_AI) {
+            Processor.toInbox(ctx, ru.anjeib.margin.data.Queued(text = text, via = via, comment = comment?.ifBlank { null }, files = files, from = from))
+            _toast.value = L.s.inboxSaved
+            return
+        }
         Processor.enqueue(ctx, ru.anjeib.margin.data.Queued(text = text, via = via, comment = comment?.ifBlank { null }, files = files, from = from))
         sortForwarded()
     }
@@ -996,6 +1002,48 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     /** «Входящие» → «В тему…»: the block leaves the inbox and lands in the topic's feed, at its own time. */
+    /** «В дело» from «Входящие»: the words become a matter (its first line the title), the files go with it. */
+    fun inboxToDeal(entryId: String) {
+        val inbox = data.value.inboxNote() ?: return
+        val e = inbox.entries.find { it.id == entryId } ?: return
+        val first = e.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+        val title = (if (first.length > 90) first.take(90).substringBeforeLast(' ') + "…" else first)
+            .ifBlank { e.attachments.firstOrNull()?.let { it.caption ?: it.name } ?: L.s.untitled }.sentence()
+        val rest = e.text.trim().removePrefix(first).trim()
+        val t = Task(title = title, entries = if (rest.isNotBlank() || e.attachments.isNotEmpty() || e.from != null)
+            listOf(Entry(at = e.at, text = listOfNotNull(rest.ifBlank { null }, e.from?.let { "— $it" }).joinToString("\n"), attachments = e.attachments)) else emptyList(),
+            history = listOf(ru.anjeib.margin.data.Change(kind = "created", by = "you")))
+        store.update { d -> d.copy(tasks = d.tasks + t, notes = d.notes.map { n -> if (n.id == inbox.id) n.copy(entries = n.entries.filterNot { it.id == e.id }) else n }) }
+        _toast.value = L.s.inboxMadeDeal
+        land(listOf(t.id))
+    }
+
+    /** «В заметку» from «Входящие»: a note of the diary with the words and the files, on the day they came. */
+    fun inboxToNote(entryId: String) {
+        val inbox = data.value.inboxNote() ?: return
+        val e = inbox.entries.find { it.id == entryId } ?: return
+        val first = e.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+        val title = (if (first.length > 70) first.take(70).substringBeforeLast(' ') + "…" else first)
+            .ifBlank { e.attachments.firstOrNull()?.let { it.caption ?: it.name } ?: L.s.diaryTitle }.sentence()
+        val t = Task(title = title, topic = true, thought = true, entries = listOf(Entry(at = e.at, text = listOfNotNull(e.text.trim().ifBlank { null }, e.from?.let { "— $it" }).joinToString("\n"), attachments = e.attachments)),
+            history = listOf(ru.anjeib.margin.data.Change(kind = "created", by = "you")))
+        store.update { d -> d.copy(tasks = d.tasks + t, notes = d.notes.map { n -> if (n.id == inbox.id) n.copy(entries = n.entries.filterNot { it.id == e.id }) else n }) }
+        _toast.value = L.s.inboxMadeNote
+        land(listOf(t.id))
+    }
+
+    /**
+     * «Разобрать»: the words go to the main field to be read there as everything typed is (the live reading over it), the files
+     * waiting with them; when they are sent, the thing leaves «Входящие». Left unsent — it stays where it was.
+     */
+    val inboxDraft = MutableStateFlow<Pair<String, List<Attachment>>?>(null)
+    fun inboxSent() {
+        val (id, _) = inboxDraft.value ?: return
+        inboxDraft.value = null
+        val inbox = data.value.inboxNote() ?: return
+        store.update { d -> d.copy(notes = d.notes.map { n -> if (n.id == inbox.id) n.copy(entries = n.entries.filterNot { it.id == id }) else n }) }
+    }
+
     fun inboxToTopic(entryId: String, topicId: String) {
         val inbox = data.value.inboxNote() ?: return
         val e = inbox.entries.find { it.id == entryId } ?: return

@@ -54,6 +54,26 @@
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/today_widget" />
         </receiver>
 
+        <!-- «Во Входящие» in the quick settings (owner, 14 окт): what is copied goes to «Входящие» as it is. -->
+        <service
+            android:name=".notify.ClipTile"
+            android:exported="true"
+            android:icon="@drawable/ic_inbox"
+            android:label="@string/tile_inbox"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <!-- A blink of a window: only an app in front may read what is copied. -->
+        <activity
+            android:name=".ClipActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity="ru.anjeib.margin.clip"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- «Записать» in the quick settings. -->
         <service
             android:name=".notify.WriteTile"

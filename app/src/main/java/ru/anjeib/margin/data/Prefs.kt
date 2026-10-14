@@ -87,7 +87,8 @@ class Prefs private constructor(context: Context) {
         voiceModel = sp.getString("voiceModel", null) ?: Settings.DEFAULT_VOICE,
         voiceSendNow = sp.getBoolean("voiceAutoSend", true),
         // Owner, 13 окт: no cloud AI for now — everything read on the phone. Installs from before are switched once to «Телефон».
-        parseMode = if (!sp.getBoolean("phoneFirst", false)) "local" else sp.getString("parseMode", null)?.takeIf { it in setOf("local", "auto", "cloud") } ?: "local",
+        // Without a cloud AI in the build (owner, 14 окт) the phone reads everything, whatever was chosen before — nothing waits for it.
+        parseMode = if (!ru.anjeib.margin.BuildConfig.CLOUD_AI || !sp.getBoolean("phoneFirst", false)) "local" else sp.getString("parseMode", null)?.takeIf { it in setOf("local", "auto", "cloud") } ?: "local",
         googleBackup = sp.getBoolean("googleBackup", true),
         whisperAlways = sp.getBoolean("whisperAlways", false),
         calendar = sp.getBoolean("calendar", false),
