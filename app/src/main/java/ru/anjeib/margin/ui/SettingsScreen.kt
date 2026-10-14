@@ -122,12 +122,7 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                 listOf(s.themeLight, s.themeDark, s.themeAuto),
                 listOf(ThemeMode.Light, ThemeMode.Dark, ThemeMode.Auto).indexOf(settings.theme),
             ) { i -> vm.updateSettings { it.copy(theme = listOf(ThemeMode.Light, ThemeMode.Dark, ThemeMode.Auto)[i]) } }
-            Divider()
-            Text(s.language, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp))
-            Segmented(
-                listOf("Русский", "English", s.langAuto),
-                listOf(LangMode.Ru, LangMode.En, LangMode.Auto).indexOf(settings.lang),
-            ) { i -> vm.updateSettings { it.copy(lang = listOf(LangMode.Ru, LangMode.En, LangMode.Auto)[i]) } }
+            // The language choice is gone: English is frozen for now (owner, 14 окт).
         }
 
         // Who reads the words: the phone, the phone with the AI for hard phrases, or the AI.

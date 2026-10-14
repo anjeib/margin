@@ -2699,11 +2699,8 @@ object L {
     val s: Strings get() = if (lang == Lang.Ru) Ru else En
 }
 
-fun resolveLang(mode: ru.anjeib.margin.data.LangMode): Lang = when (mode) {
-    ru.anjeib.margin.data.LangMode.Ru -> Lang.Ru
-    ru.anjeib.margin.data.LangMode.En -> Lang.En
-    ru.anjeib.margin.data.LangMode.Auto ->
-        if (java.util.Locale.getDefault().language in setOf("ru", "uk", "be", "kk")) Lang.Ru else Lang.En
-}
+/** Owner, 14 окт: the English version is frozen — the interface is Russian whatever the phone or an old setting says. */
+@Suppress("UNUSED_PARAMETER")
+fun resolveLang(mode: ru.anjeib.margin.data.LangMode): Lang = Lang.Ru
 
 fun stringsFor(lang: Lang): Strings = if (lang == Lang.Ru) Ru else En
