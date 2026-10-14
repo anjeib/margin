@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import ru.anjeib.margin.R
 import ru.anjeib.margin.data.ThemeMode
 import ru.anjeib.margin.i18n.Strings
@@ -124,7 +125,11 @@ val Book: FontFamily get() = Tinos
 private val Playfair = FontFamily(playfair(400), playfair(500), playfair(600), playfair(400, true), playfair(500, true))
 /** Headings and Margin's italic voice: Playfair — or, on the planner page, the same book face as everything else. */
 val Serif: FontFamily get() = if (PlannerType.value) Tinos else Playfair
-val Sans = FontFamily(inter(400), inter(500), inter(600))
+private val Inter = FontFamily(inter(400), inter(500), inter(600))
+/** The text face: Inter — or, on the planner page, the book face everywhere (owner, 14 окт: every page in the new design). */
+val Sans: FontFamily get() = if (PlannerType.value) Tinos else Inter
+/** Times reads smaller than Inter at one size: the planner's text is set a touch larger. */
+private fun sz(inter: Float, planner: Float) = (if (PlannerType.value) planner else inter).sp
 
 object Type {
     // The planner's headings (design/v9): the regular cut, the ink spread a little as letterpress leaves it.
@@ -132,11 +137,11 @@ object Type {
         shadow = if (PlannerType.value) androidx.compose.ui.graphics.Shadow(Color(0xFF1A1A1A).copy(alpha = 0.55f), androidx.compose.ui.geometry.Offset(0f, 0.6f), 1.6f) else null, fontSize = 40.sp, lineHeight = 46.sp, letterSpacing = (-0.5).sp)
     val title get() = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 26.sp, lineHeight = 32.sp)
     val cardTitle get() = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 19.sp, lineHeight = 25.sp)
-    val body = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 16.sp, lineHeight = 23.sp)
-    val task = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 16.5.sp, lineHeight = 22.sp)
-    val small = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 13.5.sp, lineHeight = 18.sp)
-    val label = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 11.5.sp, letterSpacing = 1.2.sp)
-    val tab = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 17.sp)
+    val body get() = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = sz(16f, 16.5f), lineHeight = 23.sp)
+    val task get() = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = sz(16.5f, 17f), lineHeight = 22.sp)
+    val small get() = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = sz(13.5f, 14f), lineHeight = 18.sp)
+    val label get() = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 11.5.sp, letterSpacing = 1.2.sp)
+    val tab get() = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 17.sp)
     val italic get() = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontSize = 15.sp, lineHeight = 21.sp)
 }
 
@@ -156,7 +161,8 @@ fun MarginTheme(mode: ThemeMode, strings: Strings, content: @Composable () -> Un
         ThemeMode.Auto -> isSystemInDarkTheme()
     }
     val p = if (dark) DarkPalette else LightPalette
-    MarginW = marginFor(androidx.compose.ui.platform.LocalDensity.current.fontScale)
+    // The planner's margin is narrower — room for the words (ChatGPT's review, owner, 14 окт).
+    MarginW = marginFor(androidx.compose.ui.platform.LocalDensity.current.fontScale) - if (PlannerType.value) 4.dp else 0.dp
     val scheme = if (dark) darkColorScheme(
         primary = p.accent, onPrimary = Color.White, background = p.bg, onBackground = p.ink,
         surface = p.card, onSurface = p.ink, surfaceVariant = p.chip, onSurfaceVariant = p.graphite,
@@ -173,6 +179,15 @@ fun MarginTheme(mode: ThemeMode, strings: Strings, content: @Composable () -> Un
         onPrimaryContainer = p.ink, scrim = Color.Black,
     )
     CompositionLocalProvider(LocalPalette provides p, LocalStr provides strings) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        // Dialogs, pickers and buttons of Material speak in the page's own face too.
+        val base = androidx.compose.material3.Typography()
+        val typo = if (PlannerType.value) base.copy(
+            displayLarge = base.displayLarge.copy(fontFamily = Tinos), displayMedium = base.displayMedium.copy(fontFamily = Tinos), displaySmall = base.displaySmall.copy(fontFamily = Tinos),
+            headlineLarge = base.headlineLarge.copy(fontFamily = Tinos), headlineMedium = base.headlineMedium.copy(fontFamily = Tinos), headlineSmall = base.headlineSmall.copy(fontFamily = Tinos),
+            titleLarge = base.titleLarge.copy(fontFamily = Tinos), titleMedium = base.titleMedium.copy(fontFamily = Tinos), titleSmall = base.titleSmall.copy(fontFamily = Tinos),
+            bodyLarge = base.bodyLarge.copy(fontFamily = Tinos), bodyMedium = base.bodyMedium.copy(fontFamily = Tinos), bodySmall = base.bodySmall.copy(fontFamily = Tinos),
+            labelLarge = base.labelLarge.copy(fontFamily = Tinos), labelMedium = base.labelMedium.copy(fontFamily = Tinos), labelSmall = base.labelSmall.copy(fontFamily = Tinos),
+        ) else base
+        MaterialTheme(colorScheme = scheme, typography = typo, content = content)
     }
 }

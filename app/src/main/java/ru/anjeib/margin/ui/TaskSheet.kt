@@ -151,6 +151,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     androidx.compose.runtime.LaunchedEffect(task.title) { if (task.title != title) title = task.title }
 
     ModalBottomSheet(
+        modifier = Modifier.paperGrain(),
         onDismissRequest = { commitTitle(); onClose() },
         sheetState = sheet,
         containerColor = c.bg,
@@ -218,8 +219,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                             Action(s.actWhen, due != null, { dialog = "dates" }) { CalendarGlyph(it, 22.dp) },
                             Action(s.fieldRepeat, task.repeat != null, { dialog = "repeat" }) { RepeatGlyph(it, 22.dp) },
                             Action(s.fieldPeople, others.isNotEmpty(), { fill("people") }) { PeopleGlyph(it, 22.dp) },
-                            Action(s.fieldPlace, task.place != null, { fill("place") }) { Icon(Icons.Outlined.Place, null, tint = it, modifier = Modifier.size(22.dp)) },
-                            Action(s.actMore, more, { more = !more }) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(22.dp)) },
+                            Action(s.fieldPlace, task.place != null, { fill("place") }) { PinGlyph(it, 23.dp) },
+                            Action(s.actMore, more, { more = !more }) { MoreGlyph(it, 23.dp) },
                         ))
                         androidx.compose.animation.AnimatedVisibility(more) {
                             MoreActions(listOfNotNull(
@@ -227,11 +228,11 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                                 Action(s.actPromised, task.promisedTo != null, { dialog = "promised" }) { ArrowGlyph(it, 20.dp) },
                                 if (!task.done && task.repeat == null) Action(s.actDay, false, { dialog = "day" }) { CalendarGlyph(it, 20.dp) } else null,
                                 if (!task.done) Action(s.actStep, false, { fill("step") }) { PlusGlyph(it, 18.dp) } else null,
-                                if (!task.done) Action(s.actPostpone, false, { postponing = true }) { Icon(Icons.Outlined.Schedule, null, tint = it, modifier = Modifier.size(21.dp)) } else null,
+                                if (!task.done) Action(s.actPostpone, false, { postponing = true }) { ClockGlyph(it, 22.dp) } else null,
                                 if (!task.done) rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } } else null,
                                 Action(s.actToIdea, false, { commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }) { ThoughtGlyph(it, 20.dp) },
-                                if (!task.done) Action(s.actWontDo, false, { commitTitle(); vm.dropTask(task.id); onClose() }) { Icon(Icons.Outlined.Block, null, tint = it, modifier = Modifier.size(20.dp)) } else null,
-                                Action(s.delete, false, { dialog = "delete" }) { Icon(Icons.Outlined.DeleteOutline, null, tint = it, modifier = Modifier.size(21.dp)) },
+                                if (!task.done) Action(s.actWontDo, false, { commitTitle(); vm.dropTask(task.id); onClose() }) { NotGlyph(it, 21.dp) } else null,
+                                Action(s.delete, false, { dialog = "delete" }) { TrashGlyph(it, 22.dp) },
                             ))
                         }
                     }

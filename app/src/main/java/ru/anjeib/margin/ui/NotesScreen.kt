@@ -115,7 +115,7 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().imePadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = close), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, s.backWord, tint = c.ink)
+                BackGlyph(c.ink)
             }
             Spacer(Modifier.weight(1f))
             Box {
@@ -156,7 +156,7 @@ fun NoteEditor(note: Note, data: AppData, vm: MainVm, onBack: () -> Unit, onOpen
                 note.place?.let { pl -> Row(Modifier.clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = {
                     runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
                 }, onLongClick = { fill("place") }), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Place, null, tint = c.graphite, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp))
+                    PinGlyph(c.graphite, 16.dp); Spacer(Modifier.width(5.dp))
                     Text(pl, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
                 } }
                 note.project?.let { Box(Modifier.clickable { projectDialog = true }) { Tag(it) } }

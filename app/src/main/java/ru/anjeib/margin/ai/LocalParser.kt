@@ -205,6 +205,15 @@ object LocalParser {
      * A report of what has happened — «Анна уже прислала договор», «оплатил интернет», «Маша заболела»: a verb in the past
      * tense at the start of a clause or right after who did it. Such words change what exists: the AI's work, never a new matter.
      */
+    /** What happened, said after the fact («Созвонились с Катей: лендинг переносим…», «клиент согласовал макет»): a record, not a matter. */
+    private val happened = Regex("${B}(созвонил$L*|договорил$L*|сказал$L*|ответил$L*|встречал$L*|встретил$L*|обсудил$L*|обсуждал$L*|поговорил$L*|списал$L*ись|решил$L*|отказал$L*|согласовал$L*|утвердил$L*|передумал$L*|получил$L*|выполнил$L*|сделал$L*)$E", RegexOption.IGNORE_CASE)
+    fun isReport(text: String, d: AppData): Boolean {
+        val t = text.trim()
+        // An edit asked of what exists («перенеси…», «удали…») is not a report.
+        if (Regex("^(?:перенес$L*|перенеси|сдвин$L*|измени$L*|исправ$L*|переимен$L*|удали$L*|убери|отмени$L*)$E", RegexOption.IGNORE_CASE).containsMatchIn(t)) return false
+        return happened.containsMatchIn(t) || reported(t, Names(d))
+    }
+
     private fun reported(text: String, names: Names): Boolean {
         if (Regex("^\\s*(?:всё|все)\\s*[,!.—-]|${B}(?:не\\s+состоится|отменяется|отменили)$E", RegexOption.IGNORE_CASE).containsMatchIn(text)) return true
         text.split(Regex("[,.;:!?\\n]+")).forEach { clause ->

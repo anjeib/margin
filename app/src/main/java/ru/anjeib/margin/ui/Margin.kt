@@ -504,3 +504,112 @@ fun hourColor(due: java.time.LocalDate?, time: String?, today: java.time.LocalDa
     }
 }
 
+
+// ---------------- the planner's pen (owner, 14 окт): every icon drawn in the same thin line, no Material shapes ----------------
+
+/** Search: a lens and its handle. */
+@Composable
+fun SearchGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawCircle(color, radius = w * 0.27f, center = Offset(w * 0.43f, h * 0.43f), style = stroke(1.4.dp))
+    drawLine(color, Offset(w * 0.63f, h * 0.63f), Offset(w * 0.86f, h * 0.86f), strokeWidth = 1.6.dp.toPx(), cap = StrokeCap.Round)
+}
+
+/** The overview: four small squares, like the index of a planner's sections. */
+@Composable
+fun OverviewGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    val s = w * 0.3f; val r = androidx.compose.ui.geometry.CornerRadius(w * 0.05f)
+    for ((x, y) in listOf(0.16f to 0.16f, 0.54f to 0.16f, 0.16f to 0.54f, 0.54f to 0.54f))
+        drawRoundRect(color, topLeft = Offset(w * x, h * y), size = Size(s, s), cornerRadius = r, style = stroke(1.3.dp))
+}
+
+/** «Ещё»: three dots in a row. */
+@Composable
+fun MoreGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    for (x in listOf(0.24f, 0.5f, 0.76f)) drawCircle(color, radius = w * 0.06f, center = Offset(w * x, h * 0.5f))
+}
+
+/** A place: a pin with a hollow head. */
+@Composable
+fun PinGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply {
+        moveTo(w * 0.5f, h * 0.9f)
+        cubicTo(w * 0.28f, h * 0.62f, w * 0.2f, h * 0.5f, w * 0.2f, h * 0.38f)
+        cubicTo(w * 0.2f, h * 0.2f, w * 0.34f, h * 0.08f, w * 0.5f, h * 0.08f)
+        cubicTo(w * 0.66f, h * 0.08f, w * 0.8f, h * 0.2f, w * 0.8f, h * 0.38f)
+        cubicTo(w * 0.8f, h * 0.5f, w * 0.72f, h * 0.62f, w * 0.5f, h * 0.9f)
+    }, color, style = stroke(1.4.dp))
+    drawCircle(color, radius = w * 0.09f, center = Offset(w * 0.5f, h * 0.37f), style = stroke(1.3.dp))
+}
+
+/** Back: a long thin arrow to the left. */
+@Composable
+fun BackGlyph(color: Color, size: Dp = 22.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply { moveTo(w * 0.86f, h * 0.5f); lineTo(w * 0.14f, h * 0.5f); moveTo(w * 0.38f, h * 0.26f); lineTo(w * 0.14f, h * 0.5f); lineTo(w * 0.38f, h * 0.74f) }, color, style = stroke(1.5.dp))
+}
+
+/** Delete: a bin with its lid. */
+@Composable
+fun TrashGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawLine(color, Offset(w * 0.16f, h * 0.26f), Offset(w * 0.84f, h * 0.26f), strokeWidth = 1.4.dp.toPx(), cap = StrokeCap.Round)
+    drawPath(Path().apply { moveTo(w * 0.4f, h * 0.26f); lineTo(w * 0.42f, h * 0.14f); lineTo(w * 0.58f, h * 0.14f); lineTo(w * 0.6f, h * 0.26f) }, color, style = stroke(1.3.dp))
+    drawPath(Path().apply { moveTo(w * 0.24f, h * 0.26f); lineTo(w * 0.3f, h * 0.88f); lineTo(w * 0.7f, h * 0.88f); lineTo(w * 0.76f, h * 0.26f) }, color, style = stroke(1.4.dp))
+    drawLine(color, Offset(w * 0.44f, h * 0.42f), Offset(w * 0.45f, h * 0.74f), strokeWidth = 1.2.dp.toPx(), cap = StrokeCap.Round)
+    drawLine(color, Offset(w * 0.56f, h * 0.42f), Offset(w * 0.55f, h * 0.74f), strokeWidth = 1.2.dp.toPx(), cap = StrokeCap.Round)
+}
+
+/** Later: a clock face, its hands at a quarter past. */
+@Composable
+fun ClockGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawCircle(color, radius = w * 0.36f, center = Offset(w * 0.5f, h * 0.5f), style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.5f, h * 0.28f); lineTo(w * 0.5f, h * 0.5f); lineTo(w * 0.66f, h * 0.6f) }, color, style = stroke(1.4.dp))
+}
+
+/** «Не буду»: a circle struck through. */
+@Composable
+fun NotGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawCircle(color, radius = w * 0.36f, center = Offset(w * 0.5f, h * 0.5f), style = stroke(1.4.dp))
+    drawLine(color, Offset(w * 0.25f, h * 0.75f), Offset(w * 0.75f, h * 0.25f), strokeWidth = 1.4.dp.toPx(), cap = StrokeCap.Round)
+}
+
+/** A photo: a frame with a hill and the sun. */
+@Composable
+fun PhotoGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawRoundRect(color, topLeft = Offset(w * 0.12f, h * 0.18f), size = Size(w * 0.76f, h * 0.64f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.08f), style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.14f, h * 0.72f); lineTo(w * 0.4f, h * 0.48f); lineTo(w * 0.58f, h * 0.64f); lineTo(w * 0.68f, h * 0.56f); lineTo(w * 0.86f, h * 0.72f) }, color, style = stroke(1.3.dp))
+    drawCircle(color, radius = w * 0.06f, center = Offset(w * 0.66f, h * 0.36f), style = stroke(1.2.dp))
+}
+
+/** The camera: a body, its lens and the bump. */
+@Composable
+fun CameraGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply {
+        moveTo(w * 0.12f, h * 0.32f); lineTo(w * 0.34f, h * 0.32f); lineTo(w * 0.4f, h * 0.2f); lineTo(w * 0.6f, h * 0.2f); lineTo(w * 0.66f, h * 0.32f)
+        lineTo(w * 0.88f, h * 0.32f); lineTo(w * 0.88f, h * 0.8f); lineTo(w * 0.12f, h * 0.8f); close()
+    }, color, style = stroke(1.4.dp))
+    drawCircle(color, radius = w * 0.15f, center = Offset(w * 0.5f, h * 0.55f), style = stroke(1.3.dp))
+}
+
+/** A person: a head and shoulders. */
+@Composable
+fun PersonGlyph(color: Color, size: Dp = 20.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawCircle(color, radius = w * 0.16f, center = Offset(w * 0.5f, h * 0.32f), style = stroke(1.4.dp))
+    drawPath(Path().apply { moveTo(w * 0.18f, h * 0.86f); cubicTo(w * 0.18f, h * 0.58f, w * 0.82f, h * 0.58f, w * 0.82f, h * 0.86f) }, color, style = stroke(1.4.dp))
+}
+
+/** Close: two thin strokes. */
+@Composable
+fun CloseGlyph(color: Color, size: Dp = 18.dp) = Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height
+    drawPath(Path().apply { moveTo(w * 0.24f, h * 0.24f); lineTo(w * 0.76f, h * 0.76f); moveTo(w * 0.76f, h * 0.24f); lineTo(w * 0.24f, h * 0.76f) }, color, style = stroke(1.4.dp))
+}

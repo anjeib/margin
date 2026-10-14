@@ -212,22 +212,26 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         val todayNow = java.time.LocalDate.now()
         val plannerPage = planner
         val landed = vm.landedDay.collectAsState().value
-        PageSheet(tabs = if (plannerPage) ({
+        // A topic, the search, a person or a note lies open on the page: the printed frame steps aside, the index stays.
+        val overlay = searching || openPerson != null || openNote != null ||
+            openTask?.let { id -> data.tasks.find { it.id == id }?.let { it.topic && (!it.thought || fullIdea == id) } } == true
+        PageSheet(frame = !overlay, tabs = if (plannerPage) ({
             val rows = remember(data) { data.listTasks().filter { !it.done } }
             val onDiary = screen == TASKS && !contents
             val open = (pageDay ?: todayNow).takeIf { onDiary && view == Views.TODAY }
-            fun toDiary(v: String) { contents = false; screen = TASKS; view = v }
+            fun toDiary(v: String) { contents = false; screen = TASKS; view = v; searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null }
             PlannerIndex(
                 weekTabs(open, pageDay ?: todayNow, todayNow, busy = { d -> rows.any { it.dueDate == d } }) { d ->
                     vm.pageDay.value = d.takeIf { it != todayNow }; toDiary(Views.TODAY) },
                 listOf(
                     IndexTab(s.calendarTitle, on = onDiary && view == Views.WEEK, glyph = { ink ->
                         if (landed != null && view != Views.WEEK) Text(landed.dayOfMonth.toString(), style = Type.small.copy(color = c.accentText, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
-                        else Icon(Icons.Outlined.CalendarMonth, null, tint = ink, modifier = Modifier.size(19.dp))
+                        else CalendarGlyph(ink, 20.dp)
                     }) { landed?.let { vm.calendarOpenOn.value = it }; toDiary(Views.WEEK) },
-                    IndexTab(s.overviewWord, on = onDiary && view == Views.ALL, glyph = { ink -> Icon(Icons.Outlined.GridView, null, tint = ink, modifier = Modifier.size(18.dp)) }) { toDiary(Views.ALL) },
-                    IndexTab(s.search, on = false, glyph = { ink -> Icon(Icons.Outlined.Search, null, tint = ink, modifier = Modifier.size(19.dp)) }) { searching = true },
-                    IndexTab(s.a11yMenu, on = contents || screen != TASKS, glyph = { ink -> MenuGlyph(ink) }) { contents = !contents },
+                    IndexTab(s.overviewWord, on = onDiary && view == Views.ALL, glyph = { ink -> OverviewGlyph(ink, 19.dp) }) { toDiary(Views.ALL) },
+                    IndexTab(s.search, on = searching, glyph = { ink -> SearchGlyph(ink, 20.dp) }) { openTask = null; fullIdea = null; openPerson = null; openNote = null; contents = false; searching = true },
+                    IndexTab(s.a11yMenu, on = contents || screen != TASKS, glyph = { ink -> MenuGlyph(ink) }) {
+                        searching = false; openPerson = null; openNote = null; openTask = null; fullIdea = null; contents = !contents },
                 ))
         }) else null) {
             Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
@@ -348,7 +352,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         Row(Modifier.fillMaxWidth().padding(start = FieldLead, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Pill(s.pasteCopied, accent = true, onClick = { copiedText = readCopied(); if (copiedText == null) onCopiedSeen() })
                             Box(Modifier.size(32.dp).clip(CircleShape).clickable { onCopiedSeen() }, contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.Close, s.dismiss, tint = c.graphite, modifier = Modifier.size(16.dp))
+                                CloseGlyph(c.graphite, 18.dp)
                             }
                         }
                     }
@@ -364,18 +368,19 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     )
                 }
             }
-            if (searching) SearchScreen(data, vm, onBack = { searching = false },
-                onTask = { openId(it) }, onNote = { openNote = it }, onPerson = { openPerson = it })
+            // The planner: every page that opens over the diary is a sheet of the same book.
+            if (searching) Box(Modifier.fillMaxSize().background(c.bg).paperGrain()) { SearchScreen(data, vm, onBack = { searching = false },
+                onTask = { openId(it) }, onNote = { openNote = it }, onPerson = { openPerson = it }) }
             openPerson?.let { id ->
                 val p = data.persons.find { it.id == id }
                 if (p == null) openPerson = null
-                else PersonScreen(p, data, vm, onBack = { openPerson = null }, onOpenTask = { openTask = it }, onOpenNote = { openNote = it })
+                else Box(Modifier.fillMaxSize().background(c.bg).paperGrain()) { PersonScreen(p, data, vm, onBack = { openPerson = null }, onOpenTask = { openTask = it }, onOpenNote = { openNote = it }) }
             }
             openNote?.let { id ->
                 val note = data.notes.find { it.id == id }
                 // v2: a note became a thought — it opens as a topic.
                 if (note == null) { openNote = null; if (data.tasks.any { it.id == id }) openId(id) }
-                else NoteEditor(note, data, vm, onBack = { openNote = null }, onOpenTask = { openTask = it })
+                else Box(Modifier.fillMaxSize().background(c.bg).paperGrain()) { NoteEditor(note, data, vm, onBack = { openNote = null }, onOpenTask = { openTask = it }) }
             }
             // v2: a topic on the whole screen, sliding in from the side; when a task grows into one, its sheet gives way to it.
             // An idea opens as a half-page notebook card; «Открыть целиком» gives it the whole screen like any topic.
@@ -386,8 +391,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 enter = androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { it / 3 } + fadeIn(androidx.compose.animation.core.tween(220)),
                 exit = androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(220)) { it / 3 } + fadeOut(androidx.compose.animation.core.tween(180))) {
                 data.tasks.find { it.id == (topicId ?: lastTopic) }?.let { t ->
-                    TopicScreen(t, data, vm, openTab, openHl, onClose = { openTask = null; openHl = null; openTab = 0; fullIdea = null },
-                        onOpenPerson = { openTask = null; openPerson = it })
+                    Box(Modifier.fillMaxSize().background(c.bg).paperGrain()) { TopicScreen(t, data, vm, openTab, openHl, onClose = { openTask = null; openHl = null; openTab = 0; fullIdea = null },
+                        onOpenPerson = { openTask = null; openPerson = it }) }
                 }
             }
             // A name that isn't a contact was tapped: «Марина · + контакт», quietly, for a few seconds.
@@ -509,7 +514,7 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
         val away = screen == TASKS && (view == Views.WEEK || view == Views.ALL)
         if (away) Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape).clickable(onClickLabel = s.backWord) { onTab(0) }
             .semantics { contentDescription = s.backWord }, contentAlignment = Alignment.Center) {
-            Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = M.c.ink, modifier = Modifier.size(22.dp))
+            BackGlyph(M.c.ink, 23.dp)
         }
         else Box(Modifier.align(Alignment.CenterStart).size(44.dp).clip(CircleShape).clickable(onClickLabel = s.a11yMenu, onClick = onMenu)
             .semantics { contentDescription = s.a11yMenu }, contentAlignment = Alignment.Center) {
@@ -525,7 +530,7 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
                 tool(s.calendarTitle, { landedDay?.let(onLandedDay); onTab(1) }) {
                     // Something just went to another day: the icon makes way for that day's number in a terracotta ring, breathing a moment.
                     androidx.compose.animation.Crossfade(landedDay, label = "landedDay") { day ->
-                        if (day == null) Icon(Icons.Outlined.CalendarMonth, null, tint = c.ink, modifier = Modifier.size(22.dp))
+                        if (day == null) CalendarGlyph(c.ink, 23.dp)
                         else {
                             val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "pulse")
                             val k by pulse.animateFloat(1f, 1.15f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse), label = "k")
@@ -535,9 +540,9 @@ private fun TopBar(screen: String, view: String, data: AppData, onMenu: () -> Un
                         }
                     }
                 }
-                tool(s.overviewWord, { onTab(2) }) { Icon(Icons.Outlined.GridView, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
+                tool(s.overviewWord, { onTab(2) }) { OverviewGlyph(c.ink, 23.dp) }
             }
-            if (screen == TASKS || screen == PEOPLE) tool(s.search, onSearch) { Icon(Icons.Outlined.Search, null, tint = c.ink, modifier = Modifier.size(22.dp)) }
+            if (screen == TASKS || screen == PEOPLE) tool(s.search, onSearch) { SearchGlyph(c.ink, 23.dp) }
         }
     }
 }

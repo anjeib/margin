@@ -440,7 +440,7 @@ private fun MaterialsFeed(task: Task, onView: (Attachment) -> Unit) {
                 Column {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(14.dp))
                         .padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Search, null, tint = c.graphite, modifier = Modifier.size(18.dp))
+                        SearchGlyph(c.graphite, 19.dp)
                         Spacer(Modifier.width(10.dp))
                         Box(Modifier.weight(1f)) {
                             if (q.isEmpty()) Text(s.searchMaterials, style = Type.body.copy(color = c.graphite, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -152,7 +152,7 @@ val RowTop = 13.dp
 fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modifier: Modifier = Modifier) {
     val c = M.c
     // Owner, 10 окт: «красиво, но мелко и бледно» — larger and in ink (a touch softer than the words), medium italic.
-    Text(text, style = Type.italic.copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink.copy(alpha = 0.8f) }, fontSize = 15.5.sp, lineHeight = 19.sp,
+    Text(text, style = Type.italic.copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink.copy(alpha = 0.8f) }, fontSize = if (planner) 14.5.sp else 15.5.sp, lineHeight = 19.sp,
         fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End), modifier = modifier)
 }
 
@@ -230,7 +230,7 @@ fun RowTitle(text: AnnotatedString, faded: Boolean = false, maxLines: Int = 3) {
 @Composable
 fun RowSub(text: String, link: Boolean = false, late: Boolean = false, maxLines: Int = 1) {
     val c = M.c
-    Text(text, style = Type.small.copy(fontFamily = rowFamily, color = when { late -> c.accentText; link -> c.link; else -> c.graphite }, fontSize = subSize),
+    Text(text, style = Type.small.copy(fontFamily = rowFamily, color = when { late -> c.accentText; link -> c.link; else -> subInk }, fontSize = subSize),
         maxLines = maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
 }
 

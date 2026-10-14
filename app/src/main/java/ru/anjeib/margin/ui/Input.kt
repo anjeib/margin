@@ -324,7 +324,7 @@ fun SmartComposer(
             .clickable(onClick = onModeClose).padding(start = 12.dp, end = 8.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(modeLabel, style = Type.small.copy(color = c.link, fontSize = 13.5.sp))
             Spacer(Modifier.width(6.dp))
-            Icon(Icons.Rounded.Close, s.dismiss, tint = c.link, modifier = Modifier.size(14.dp))
+            CloseGlyph(c.link, 16.dp)
         }
         // On a page the picked files show there, under the words; here only for the field itself.
         if (files.isNotEmpty() && pageFiles == null) {
@@ -353,7 +353,7 @@ fun SmartComposer(
                 when {
                     rec != null -> {
                         Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Rounded.Close, s.cancel, tint = c.graphite, modifier = Modifier.size(18.dp))
+                            CloseGlyph(c.graphite, 20.dp)
                         }
                         Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
                         Spacer(Modifier.width(10.dp))
@@ -401,7 +401,7 @@ fun SmartComposer(
                 if (rec != null) {
                     // Recording: cancel · the pulsing dot and the level · done.
                     Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Close, s.cancel, tint = c.graphite, modifier = Modifier.size(18.dp))
+                        CloseGlyph(c.graphite, 20.dp)
                     }
                     Row(Modifier.weight(1f).height(FieldH - 2.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
@@ -478,14 +478,14 @@ fun AttachPlus(vm: MainVm, size: Dp = 40.dp, tint: Color = M.c.graphite, glyph: 
             if (glyph != null) glyph() else PlusGlyph(tint, 18.dp)
         }
         SoftMenu(menu, { menu = false }) {
-            MenuItem(Icons.Outlined.PhotoLibrary, s.attachPhoto) { menu = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
-            MenuItem(Icons.Outlined.PhotoCamera, s.attachCamera) {
+            MenuItem({ PhotoGlyph(it, 21.dp) }, s.attachPhoto) { menu = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+            MenuItem({ CameraGlyph(it, 21.dp) }, s.attachCamera) {
                 menu = false
                 val (f, uri) = Files.newPhotoFile(ctx); cameraFile = f
                 runCatching { takePhoto.launch(uri) }
             }
-            MenuItem(Icons.Outlined.AttachFile, s.attachFile) { menu = false; pickFile.launch(arrayOf("*/*")) }
-            MenuItem(Icons.Outlined.PersonOutline, s.attachContact) {
+            MenuItem({ ClipGlyph(it, 21.dp) }, s.attachFile) { menu = false; pickFile.launch(arrayOf("*/*")) }
+            MenuItem({ PersonGlyph(it, 21.dp) }, s.attachContact) {
                 menu = false
                 runCatching { pickContact.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)) }
             }
@@ -513,9 +513,9 @@ private fun FieldButton(filled: Boolean = false, enabled: Boolean = true, busy: 
 }
 
 @Composable
-private fun MenuItem(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun MenuItem(glyph: @Composable (Color) -> Unit, label: String, onClick: () -> Unit) {
     DropdownMenuItem(
-        leadingIcon = { Icon(icon, null, tint = M.c.graphite, modifier = Modifier.size(20.dp)) },
+        leadingIcon = { glyph(M.c.graphite) },
         text = { Text(label, style = Type.body.copy(color = M.c.ink)) },
         onClick = onClick,
     )
@@ -554,7 +554,7 @@ fun AttachmentChip(a: Attachment, onRemove: (() -> Unit)? = null) {
         if (onRemove != null) Box(
             Modifier.align(Alignment.TopEnd).padding(2.dp).size(20.dp).clip(CircleShape).background(c.ink.copy(alpha = 0.65f)).clickable(onClick = onRemove),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.Close, M.s.removeWord, tint = c.bg, modifier = Modifier.size(12.dp)) }
+        ) { CloseGlyph(c.bg, 14.dp) }
     }
 }
 

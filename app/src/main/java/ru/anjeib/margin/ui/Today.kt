@@ -223,9 +223,9 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
             Text(buildAnnotatedString {
                 val (a, name, b) = if (incoming) s.promiseToYouParts(who) else s.promiseFromYouParts(who)
                 append(a); withStyle(SpanStyle(color = c.link)) { append(name) }; append(b)
-            }, style = Type.small.copy(fontFamily = rowFamily, color = c.graphite, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))
+            }, style = Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))
             if (nudge) {
-                Text("  ·  ", style = Type.small.copy(fontFamily = rowFamily, color = c.graphite, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))
+                Text("  ·  ", style = Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))
                 Text(s.remindLink, style = Type.small.copy(fontFamily = rowFamily, color = c.link, fontSize = subSize, fontWeight = FontWeight.Medium),
                     modifier = Modifier.padding(top = 3.dp).clip(RoundedCornerShape(6.dp)).clickable { remindAbout(ctx, data, t) })
             }

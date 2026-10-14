@@ -201,10 +201,8 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
                 }) { Text(s.privacyPolicy, color = c.link) }
             })
         if (settings.devMode) {
-        // Owner, 14 окт: the page's look, to choose by eye — as before · ruled · + the sheet's edge · + grain.
-        Group("Страница") {
-            Segmented(listOf("Было", "Линии", "Край", "Бумага", "Планер"), vm.paperStyle.value) { vm.setPaper(it) }
-        }
+        // The page's look is the planner now (owner, 14 окт); the old «Поля» stays in the developer section only to compare.
+        Group("Страница") { Segmented(listOf("Поля", "Планер"), if (vm.paperStyle.value >= 4) 1 else 0) { vm.setPaper(if (it == 1) 4 else 0) } }
         Group(s.devSection) {
             val ya = settings.provider == "yandex"
             Segmented(listOf("Яндекс", "OpenRouter"), if (ya) 0 else 1) { i -> vm.updateSettings { it.copy(provider = if (i == 0) "yandex" else "openrouter") }; vm.checkKey() }
@@ -396,7 +394,7 @@ private fun ModelPicker(current: String, vm: MainVm, audioOnly: Boolean = false,
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.chip).padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Outlined.Search, null, tint = c.graphite, modifier = Modifier.size(20.dp))
+                SearchGlyph(c.graphite, 21.dp)
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.weight(1f)) {
                     if (q.isEmpty()) Text(s.searchModels, style = Type.body.copy(color = c.graphite))

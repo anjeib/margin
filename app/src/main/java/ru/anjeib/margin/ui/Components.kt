@@ -277,7 +277,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         androidx.compose.ui.text.Placeholder(13.sp, 13.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {
         ClipGlyph(c.graphite, 13.dp)
     })
-    if (text.isNotEmpty()) Text(text, style = Type.small.copy(fontFamily = rowFamily, color = c.graphite, fontSize = subSize), maxLines = 2, overflow = TextOverflow.Ellipsis,
+    if (text.isNotEmpty()) Text(text, style = Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), maxLines = 2, overflow = TextOverflow.Ellipsis,
         inlineContent = inline, modifier = Modifier.padding(top = 3.dp))
 }
 

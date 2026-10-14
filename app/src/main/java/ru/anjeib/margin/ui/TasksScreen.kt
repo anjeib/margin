@@ -221,7 +221,9 @@ fun TaskList(
     val pad = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
     val pageLines = rememberPageLines()
     Box(Modifier.fillMaxSize().ruledPage(pageLines).marginRule(c.accent.copy(alpha = 0.85f), over = true)) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = pad) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val listScope = androidx.compose.runtime.rememberCoroutineScope()
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = pad) {
         when {
             view == Views.TODAY -> {
                 // The planner's tabs turned the page to another day: that day alone — its name, its summary, its matters.
@@ -232,7 +234,7 @@ fun TaskList(
                         Margined(Modifier.padding(top = 8.dp), margin = { MarginDay(other.dayOfMonth, other.dayMonthShort().substringAfter(' ')) }) {
                             Column {
                                 BasicText(other.dowFull(), style = Type.display.copy(color = c.ink), maxLines = 1,
-                                    autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 50.sp else 40.sp, stepSize = 1.sp))
+                                    autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 44.sp else 40.sp, stepSize = 1.sp))
                                 Voice(daySummary(p, other), Modifier.padding(top = 2.dp))
                                 Voice(s.backToToday, Modifier.padding(top = 6.dp), link = true, onClick = { vm.pageDay.value = null })
                             }
@@ -260,9 +262,16 @@ fun TaskList(
                     Margined(Modifier.padding(top = 8.dp), margin = { MarginDay(today.dayOfMonth, today.dayMonthShort().substringAfter(' ')) }) {
                         Column {
                             BasicText(today.dowFull(), style = Type.display.copy(color = c.ink), maxLines = 1,
-                                autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 50.sp else 40.sp, stepSize = 1.sp))
+                                autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 44.sp else 40.sp, stepSize = 1.sp))
                             val away by vm.away.collectAsState()
-                            Voice(daySummary(plan, today, away), Modifier.padding(top = 2.dp))
+                            // «2 просрочены» leads to them (ChatGPT's review, owner, 14 окт): the list turns to today's matters, the late ones light up.
+                            val lateIds = plan.deals.filter { it.dueDate?.isBefore(today) == true }.map { it.id }
+                            Voice(daySummary(plan, today, away), Modifier.padding(top = 2.dp), onClick = if (lateIds.isEmpty()) null else ({
+                                // «Сегодня» stands after the head and the promises (their head and rows).
+                                val i = 1 + if (promises.isNotEmpty()) 1 + (if (allPromises) promises.size else minOf(3, promises.size)) else 0
+                                listScope.launch { listState.animateScrollToItem(i) }
+                                vm.lightUp(lateIds)
+                            }))
                             TodayHints(plan, data, ui, onRemoveSamples = { vm.removeSamples() })
                         }
                     }

@@ -106,7 +106,7 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, s.cancel, tint = c.ink)
+                BackGlyph(c.ink)
             }
             Box(Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(24.dp)).padding(horizontal = 18.dp, vertical = 13.dp)) {
                 if (q.isEmpty()) Text(s.searchHint, style = Type.body.copy(color = c.graphite))
@@ -114,7 +114,7 @@ fun SearchScreen(data: AppData, vm: MainVm, onBack: () -> Unit, onTask: (String)
                     modifier = Modifier.fillMaxWidth().padding(end = if (q.isNotEmpty()) 28.dp else 0.dp).focusRequester(focus))
                 // Cleared in one tap.
                 if (q.isNotEmpty()) Box(Modifier.align(Alignment.CenterEnd).offset(x = 10.dp).size(40.dp).clip(CircleShape).clickable { q = ""; runCatching { focus.requestFocus() } },
-                    contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, s.clearWord, tint = c.graphite, modifier = Modifier.size(18.dp)) }
+                    contentAlignment = Alignment.Center) { CloseGlyph(c.graphite, 20.dp) }
             }
             Spacer(Modifier.width(8.dp))
         }

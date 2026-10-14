@@ -96,6 +96,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
     DisposableEffect(qid) { onDispose { commit() } }
 
     ModalBottomSheet(
+        modifier = Modifier.paperGrain(),
         onDismissRequest = { commit(); onClose() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = c.bg,
@@ -159,8 +160,8 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                             Action(s.actWhen, due != null, { dialog = "date" }) { CalendarGlyph(it, 22.dp) },
                             Action(s.fieldRepeat, q.repeat != null, { dialog = "repeat" }) { RepeatGlyph(it, 22.dp) },
                             Action(s.fieldPeople, people.isNotEmpty(), { fill("people") }) { PeopleGlyph(it, 22.dp) },
-                            Action(s.fieldPlace, q.place != null, { fill("place") }) { Icon(Icons.Outlined.Place, null, tint = it, modifier = Modifier.size(22.dp)) },
-                            Action(s.actMore, more, { more = !more }) { Icon(Icons.Outlined.MoreHoriz, null, tint = it, modifier = Modifier.size(22.dp)) },
+                            Action(s.fieldPlace, q.place != null, { fill("place") }) { PinGlyph(it, 23.dp) },
+                            Action(s.actMore, more, { more = !more }) { MoreGlyph(it, 23.dp) },
                         ))
                         androidx.compose.animation.AnimatedVisibility(more) {
                             MoreActions(listOfNotNull(
@@ -168,11 +169,11 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                                 Action(s.actPromised, q.promisedTo != null, { dialog = "promised" }) { ArrowGlyph(it, 20.dp) },
                                 if (!q.done && q.repeat == null) Action(s.actDay, false, { dialog = "day" }) { CalendarGlyph(it, 20.dp) } else null,
                                 if (!q.done) Action(s.actStep, false, { fill("step") }) { PlusGlyph(it, 18.dp) } else null,
-                                if (!q.done) Action(s.actPostpone, false, { postponing = true }) { Icon(Icons.Outlined.Schedule, null, tint = it, modifier = Modifier.size(21.dp)) } else null,
+                                if (!q.done) Action(s.actPostpone, false, { postponing = true }) { ClockGlyph(it, 22.dp) } else null,
                                 if (!q.done) rowActs?.let { r -> Action(s.actToTopic, false, { commit(); onClose(); r.toTopic(ref) }) { TopicGlyph(it, 19.dp) } } else null,
                                 Action(s.actToIdea, false, { commit(); vm.dealToIdea(topic.id, q.id); onClose() }) { ThoughtGlyph(it, 20.dp) },
-                                if (!q.done) Action(s.actWontDo, false, { commit(); vm.dropDeal(topic.id, q.id); onClose() }) { Icon(Icons.Outlined.Block, null, tint = it, modifier = Modifier.size(20.dp)) } else null,
-                                Action(s.delete, false, { vm.removeDeal(topic.id, q.id); onClose() }) { Icon(Icons.Outlined.DeleteOutline, null, tint = it, modifier = Modifier.size(21.dp)) },
+                                if (!q.done) Action(s.actWontDo, false, { commit(); vm.dropDeal(topic.id, q.id); onClose() }) { NotGlyph(it, 21.dp) } else null,
+                                Action(s.delete, false, { vm.removeDeal(topic.id, q.id); onClose() }) { TrashGlyph(it, 22.dp) },
                             ))
                         }
                     }

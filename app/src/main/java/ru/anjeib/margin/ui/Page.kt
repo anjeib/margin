@@ -114,6 +114,8 @@ val rowFamily: androidx.compose.ui.text.font.FontFamily @Composable get() = if (
 /** Times reads small at Inter's size: a touch larger, a touch tighter on the planner page. */
 val rowSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 15.5.sp else 16.sp
 val rowLine: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 19.5.sp else 22.sp
+/** Grey words under a row: Times is thinner than Inter, so on the planner page they are a tone darker. */
+val subInk: Color @Composable get() = if (planner) androidx.compose.ui.graphics.lerp(M.c.graphite, M.c.ink, 0.3f) else M.c.graphite
 val subSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 13.5.sp else 13.5.sp
 
 /** Width of the planner's index tabs, and of the page edges and cover beyond them. */
@@ -209,11 +211,13 @@ fun Modifier.plannerFrame(ink: Color, mark: Color, label: androidx.compose.ui.te
  * and two hairlines are the pages under it. Variant 3: the grain over all of it, too faint to touch the words.
  */
 @Composable
-fun PageSheet(modifier: Modifier = Modifier, tabs: (@Composable () -> Unit)? = null, content: @Composable BoxScope.() -> Unit) {
+fun PageSheet(modifier: Modifier = Modifier, tabs: (@Composable () -> Unit)? = null,
+              /** The printed frame: on the diary's pages; a page with its own top bar (a topic, the search) goes without it. */
+              frame: Boolean = true, content: @Composable BoxScope.() -> Unit) {
     val c = M.c
     val v = LocalPaper.current
     if (v < 2) { Box(modifier.fillMaxSize().background(c.bg), content = content); return }
-    if (v >= 4) { PlannerSheet(modifier, tabs, content); return }
+    if (v >= 4) { PlannerSheet(modifier, tabs, frame, content); return }
     val desk = if (c.dark) Color(0xFF0B0A09) else Color(0xFFE6DFD3)
     val shadow = if (c.dark) Color.Black.copy(alpha = 0.55f) else Color(0xFF3A2E22).copy(alpha = 0.16f)
     val edge = 8.dp
@@ -239,7 +243,7 @@ fun PageSheet(modifier: Modifier = Modifier, tabs: (@Composable () -> Unit)? = n
  * the pages under it, each a little wider, then the cover. The printed frame and a faint grain over the paper.
  */
 @Composable
-private fun PlannerSheet(modifier: Modifier, tabs: (@Composable () -> Unit)?, content: @Composable BoxScope.() -> Unit) {
+private fun PlannerSheet(modifier: Modifier, tabs: (@Composable () -> Unit)?, frame: Boolean, content: @Composable BoxScope.() -> Unit) {
     val c = M.c
     val cover = if (c.dark) Color(0xFF050404) else Color(0xFF4A3A2E)
     val under = if (c.dark) Color(0xFF1B1815) else Color(0xFFEDE6DA)
@@ -259,7 +263,8 @@ private fun PlannerSheet(modifier: Modifier, tabs: (@Composable () -> Unit)?, co
         }
     }) {
         Box(Modifier.fillMaxSize().padding(end = EdgeW).clip(androidx.compose.foundation.shape.RoundedCornerShape(topEnd = r, bottomEnd = r)).background(c.bg)) {
-            Box(Modifier.fillMaxSize().padding(end = TabsW).drawBehind {
+            Box(Modifier.fillMaxSize().padding(end = if (tabs != null) TabsW else 0.dp).drawBehind {
+                if (tabs == null) return@drawBehind
                 // The sheet's own edge, where the tabs begin.
                 drawLine(c.graphite.copy(alpha = 0.3f), Offset(size.width - 0.5.dp.toPx(), 0f), Offset(size.width - 0.5.dp.toPx(), size.height), 1.dp.toPx())
             }, content = content)
@@ -268,7 +273,7 @@ private fun PlannerSheet(modifier: Modifier, tabs: (@Composable () -> Unit)?, co
                 drawRect(ShaderBrush(ImageShader(grain, TileMode.Repeated, TileMode.Repeated)), alpha = if (c.dark) 0.04f else 0.05f)
             })
         }
-        Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(end = TabsW + EdgeW)
+        if (frame) Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(end = TabsW + EdgeW)
             .plannerFrame(c.ink.copy(alpha = 0.6f), c.ink.copy(alpha = 0.85f), label))
     }
 }
@@ -323,5 +328,16 @@ fun <T> PageTurn(target: T, order: (T) -> Long, modifier: Modifier = Modifier, c
                 if (under > 0f) drawRect(Color.Black.copy(alpha = 0.16f * under))
                 if (turn > 0f) drawRect(Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.05f * turn), Color.Black.copy(alpha = 0.22f * turn))))
             }) { content(key) }
+    }
+}
+
+/** The planner's paper grain over a sheet that is not a [PageSheet] (a card rising from below). */
+@Composable
+fun Modifier.paperGrain(): Modifier {
+    if (!planner) return this
+    val dark = M.c.dark
+    return this.drawWithContent {
+        drawContent()
+        drawRect(ShaderBrush(ImageShader(grain, TileMode.Repeated, TileMode.Repeated)), alpha = if (dark) 0.04f else 0.05f)
     }
 }

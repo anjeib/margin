@@ -92,4 +92,14 @@ class ListsTest {
         assertEquals(emptyList<String>(), ru.anjeib.margin.ui.dayPlan(d, thu.minusDays(1), thu, emptyList()).deals.map { it.title })
         assertEquals(listOf("Смета"), ru.anjeib.margin.ui.dayPlan(d, java.time.LocalDate.of(2026, 10, 31), thu, emptyList()).deals.map { it.title })
     }
+
+    // ChatGPT's review, owner, 14 окт: a report of what happened is a record, not a matter with an empty circle.
+    @Test fun reportsAreRecords() {
+        val d = ru.anjeib.margin.data.AppData()
+        org.junit.Assert.assertTrue(LocalParser.isReport("Созвонились с Катей: лендинг переносим на следующую неделю", d))
+        org.junit.Assert.assertTrue(LocalParser.isReport("клиент согласовал макет", d))
+        org.junit.Assert.assertFalse(LocalParser.isReport("Позвонить маме завтра в 12", d))
+        org.junit.Assert.assertFalse(LocalParser.isReport("перенеси созвон на пятницу", d))
+        org.junit.Assert.assertFalse(LocalParser.isReport("Купить молоко и хлеб", d))
+    }
 }

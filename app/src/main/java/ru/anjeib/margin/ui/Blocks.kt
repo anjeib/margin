@@ -523,7 +523,7 @@ private fun InsertRow(vm: MainVm, onText: () -> Unit, onList: () -> Unit, onAtta
         Row(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(50)).background(c.linkSoft).padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Close, s.cancel, tint = c.graphite, modifier = Modifier.size(20.dp))
+                CloseGlyph(c.graphite, 22.dp)
             }
             Box(Modifier.size(10.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
             Spacer(Modifier.width(10.dp))

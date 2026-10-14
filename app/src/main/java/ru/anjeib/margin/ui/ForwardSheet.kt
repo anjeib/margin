@@ -77,7 +77,7 @@ fun ForwardSheet(
                 Spark(); Spacer(Modifier.width(8.dp))
                 Text(s.forwardTitle, style = Type.cardTitle.copy(color = c.ink), modifier = Modifier.weight(1f))
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Close, s.cancel, tint = c.graphite, modifier = Modifier.size(20.dp))
+                    CloseGlyph(c.graphite, 22.dp)
                 }
             }
             Spacer(Modifier.height(8.dp))

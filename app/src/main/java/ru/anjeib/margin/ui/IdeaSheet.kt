@@ -58,6 +58,7 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
     androidx.compose.runtime.DisposableEffect(task.id) { onDispose { pageSend.send() } }
     var writeTick by remember { mutableStateOf(0) }
     ModalBottomSheet(
+        modifier = Modifier.paperGrain(),
         onDismissRequest = { commitTitle(); onClose() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = c.bg,

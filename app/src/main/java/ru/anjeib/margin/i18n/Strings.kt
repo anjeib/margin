@@ -1131,7 +1131,7 @@ object Ru : Strings {
     override val addContact = "+ контакт"
     override fun notAContact(n: String) = "$n — нет в контактах"
     override val inContacts = "в контактах"
-    override val promisesTitle = "Обещания"
+    override val promisesTitle = "Ждём и обещали"
     override fun promiseToYou(from: String) = "ждём от ${from.genitive()}"
     override fun promiseToYouParts(from: String) = Triple("ждём от ", from.genitive(), "")
     override fun promiseFromYouParts(to: String) = Triple("обещали ", to.dative(), "")
@@ -2006,7 +2006,7 @@ object En : Strings {
     override val addContact = "+ contact"
     override fun notAContact(n: String) = "$n isn’t in contacts"
     override val inContacts = "in contacts"
-    override val promisesTitle = "Promises"
+    override val promisesTitle = "Waiting & promised"
     override fun promiseToYou(from: String) = "waiting on $from"
     override fun promiseToYouParts(from: String) = Triple("waiting on ", from, "")
     override fun promiseFromYouParts(to: String) = Triple("promised to ", to, "")

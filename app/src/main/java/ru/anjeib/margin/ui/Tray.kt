@@ -111,7 +111,7 @@ fun Tray(
                 Box(
                     Modifier.padding(start = 8.dp).size(30.dp).clip(CircleShape).clickable(onClick = onDismiss),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.Close, s.dismiss, tint = c.graphite, modifier = Modifier.size(16.dp)) }
+                ) { CloseGlyph(c.graphite, 18.dp) }
             }
         }
         Column(

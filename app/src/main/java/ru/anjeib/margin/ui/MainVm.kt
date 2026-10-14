@@ -432,6 +432,15 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 queue(t, scope, files)
                 return
             }
+            // A report of what happened, read on the phone (ChatGPT's review, owner, 14 окт): written down, not made a matter —
+            // into the topic it is about, or else kept as a record of its own («Записано сегодня»).
+            if (scope == Scope.Main && !tg.explicit && !local.sure && (offline || mode == "local") && LocalParser.isReport(t, data.value)) {
+                val topic = data.value.likelyTopic(t)
+                if (topic != null) { _toast.value = L.s.movedToTopic(topic.title); land(listOf(topic.id)); sendNow("/" + L.s.tagRecord + " " + t, false, label, Scope.InTask(topic.id), files, false, true) }
+                else runCommand(Command("note", t.sentence()), scope, files, null)
+                count("parse:phone")
+                return
+            }
             if (local.items.isNotEmpty() && (offline || mode == "local" || tg.explicit || (mode == "auto" && local.sure))) {
                 val plan = LocalParser.plan(local, scope, asQuestion, source = t)
                 count("parse:phone")
@@ -613,7 +622,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** The line of marks («/дело /тема /идея») the bar offers, shown over the page's writing line while a page is written on. */
     val pageMarks = androidx.compose.runtime.mutableStateOf<(@androidx.compose.runtime.Composable () -> Unit)?>(null)
     /** The page's look (Page.kt, LocalPaper): 0 as before … 3 ruling, sheet edge and grain — chosen in the developer section. */
-    val paperStyle = androidx.compose.runtime.mutableStateOf(ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).getInt("paper", 0)
+    val paperStyle = androidx.compose.runtime.mutableStateOf(ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).getInt("paper", 4)
         .also { PlannerType.value = it >= 4 })
     fun setPaper(v: Int) { paperStyle.value = v; PlannerType.value = v >= 4; ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE).edit().putInt("paper", v).apply() }
 
@@ -927,6 +936,9 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         }
         return ids
     }
+
+    /** A row (or several) lights up the way a just-made one does — «2 просрочены» shows which. */
+    fun lightUp(ids: List<String>) = land(ids)
 
     private fun land(ids: List<String>) {
         if (ids.isEmpty()) return
