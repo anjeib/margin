@@ -129,13 +129,11 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                         Spacer(Modifier.height(16.dp))
                         // The top bar's icons have no words on the screen: here, once, what each one is.
                         Text(s.tourIconsText, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
-                        listOf<Pair<androidx.compose.ui.graphics.vector.ImageVector, String>>(
-                            Icons.Outlined.CalendarMonth to s.tourIconCalendar,
-                            Icons.Outlined.GridView to s.tourIconOverview,
-                            Icons.Outlined.Search to s.tourIconSearch,
-                        ).forEach { (icon, text) ->
+                        // 0.66: the planner's own glyphs, not Material icons; each row draws its glyph by number (a composable
+                        // lambda in a Pair loses its @Composable type at the call site).
+                        listOf(s.tourIconCalendar, s.tourIconSearch, s.tourIconOverview).forEachIndexed { i, text ->
                             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                androidx.compose.material3.Icon(icon, null, tint = c.ink, modifier = Modifier.size(20.dp))
+                                when (i) { 0 -> CalendarGlyph(c.ink, 20.dp); 1 -> SearchGlyph(c.ink, 20.dp); else -> MenuGlyph(c.ink) }
                                 Spacer(Modifier.width(10.dp))
                                 Text(text, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
                             }

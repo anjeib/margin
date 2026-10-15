@@ -174,9 +174,11 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
     val notes = data.notes.filter { n -> listOf(person.name).plus(person.aliases).any { n.title.contains(it, true) || n.text.contains(it, true) } }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().screenRule()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, s.backWord, tint = c.ink)
+        Row(Modifier.fillMaxWidth().padding(top = 18.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(MarginW), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
+                    BackGlyph(c.ink.copy(alpha = 0.8f), 21.dp)
+                }
             }
             Spacer(Modifier.weight(1f))
         }

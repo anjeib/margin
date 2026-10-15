@@ -169,13 +169,13 @@ private fun IconLegend() {
     val ru = ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.Ru
     fun t(r: String, e: String) = if (ru) r else e
     Column(Modifier.padding(top = 6.dp)) {
-        HelpPair("", t("дело — нажатие на кружок отмечает сделанным", "a to-do — a tap on the circle marks it done")) { CheckCircle(false, size = 18.dp, interactive = false) {} }
-        HelpPair("", t("сделано — кружок закрашен, слова зачёркнуты; дело остаётся в своём дне", "done — the circle filled, the words struck; it stays on its day")) { CheckCircle(true, size = 18.dp, interactive = false) {} }
-        HelpPair("", t("ждём от кого-то — нажатие на стрелку: «получено»", "waiting on someone — a tap on the arrow: received")) { PromiseMark(incoming = true, size = 26.dp) }
-        HelpPair("", t("обещали кому-то", "promised to someone")) { PromiseMark(incoming = false, size = 26.dp) }
+        HelpPair("", t("дело — нажатие на отметку на линии поля (или на время слева) отмечает сделанным", "a to-do — a tap on the margin mark marks it done")) { CheckCircle(false, size = 18.dp, interactive = false) {} }
+        HelpPair("", t("сделано — отметка закрашена, слова зачёркнуты; дело остаётся в своём дне", "done — the mark filled, the words struck; it stays on its day")) { CheckCircle(true, size = 18.dp, interactive = false) {} }
+        HelpPair("", t("ждём от кого-то (←) — нажатие отмечает «получено»", "waiting on someone — a tap marks it received")) { PromiseMark(incoming = true, size = 26.dp) }
+        HelpPair("", t("обещали кому-то (→)", "promised to someone")) { PromiseMark(incoming = false, size = 26.dp) }
         HelpPair("", t("встреча из календаря телефона", "a meeting from the phone's calendar")) { CalendarGlyph(c.graphite, 18.dp) }
-        HelpPair("", t("тема — в «Обзоре», поиске и архиве", "a topic — in the overview, search and archive")) { TopicGlyph(c.graphite, 18.dp) }
-        HelpPair("", t("идея", "an idea")) { IdeaMark(24.dp) }
+        HelpPair("", t("тема (#) — дела, записи и файлы вокруг одного вопроса", "a topic — in the topics page, search and archive")) { TopicGlyph(c.graphite, 18.dp) }
+        HelpPair("", t("заметка — дневниковая запись", "a note")) { IdeaMark(24.dp) }
     }
 }
 

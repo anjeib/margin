@@ -158,7 +158,7 @@ fun MatterRow(
         }
     }
     // «Полоса набора» (owner, 15 окт): the hour on the margin is the row's «done»; a row with no hour gets a quiet dash there.
-    val marginSlot: (@Composable () -> Unit)? = if (planner) ({ MarginTap(::tick) { RowMargin(note.first ?: "—", note.second && !t.done && !ticking) } })
+    val marginSlot: (@Composable () -> Unit)? = if (planner) ({ MarginTap(::tick, late = note.second && !t.done && !ticking, done = t.done || ticking) { RowMargin(note.first ?: "—", note.second && !t.done && !ticking) } })
         else note.first?.let { m -> { RowMargin(m, note.second) } }
     Margined(modifier, margin = marginSlot) {
         // Owner, 14 окт: no swipes on rows — on the planner a swipe turns the page; done is the circle, the rest is in the long press.

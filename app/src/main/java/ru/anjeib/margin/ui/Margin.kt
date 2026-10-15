@@ -220,9 +220,10 @@ fun StrikeText(text: String, style: androidx.compose.ui.text.TextStyle, strike: 
                marked: Boolean = false) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val marker = pencilInk
+    val showMarker = marked && !planner
     Text(text, style = style, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, onTextLayout = { layout = it },
         modifier = modifier.foundMarks(text) { layout }.drawWithContent {
-            if (marked && strike <= 0f) layout?.let { l -> for (i in 0 until l.lineCount) markerBand(l.getLineLeft(i), l.getLineRight(i), l.getLineTop(i), l.getLineBottom(i), marker, text.hashCode() + i) }
+            if (showMarker && strike <= 0f) layout?.let { l -> for (i in 0 until l.lineCount) markerBand(l.getLineLeft(i), l.getLineRight(i), l.getLineTop(i), l.getLineBottom(i), marker, text.hashCode() + i) }
             drawContent()
             val l = layout ?: return@drawWithContent
             if (strike <= 0f) return@drawWithContent

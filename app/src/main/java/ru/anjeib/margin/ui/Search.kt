@@ -96,20 +96,22 @@ fun SearchScreen(data: AppData, vm: MainVm, initial: String = "", onBack: () -> 
         .filter { (_, _, a) -> hit(listOfNotNull(a.name, a.caption, a.ocr, a.transcript, a.contact?.name).joinToString(" ")) }
         .sortedByDescending { it.second.at }
 
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
-                BackGlyph(c.ink)
+    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().imePadding().screenRule()) {
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 6.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(MarginW), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
+                    BackGlyph(c.ink.copy(alpha = 0.8f), 21.dp)
+                }
             }
-            Box(Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(24.dp)).padding(horizontal = 18.dp, vertical = 13.dp)) {
-                if (q.isEmpty()) Text(s.searchHint, style = Type.body.copy(color = c.graphite))
-                BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink), cursorBrush = SolidColor(c.link),
+            Spacer(Modifier.width(MarginGap))
+            Box(Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(c.card).border(1.dp, c.hairline, RoundedCornerShape(24.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
+                if (q.isEmpty()) Text(s.searchHint, style = Type.body.copy(color = c.graphite, fontSize = 15.sp))
+                BasicTextField(q, { q = it }, singleLine = true, textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp), cursorBrush = SolidColor(c.link),
                     modifier = Modifier.fillMaxWidth().padding(end = if (q.isNotEmpty()) 28.dp else 0.dp).focusRequester(focus))
                 // Cleared in one tap.
                 if (q.isNotEmpty()) Box(Modifier.align(Alignment.CenterEnd).offset(x = 10.dp).size(40.dp).clip(CircleShape).clickable { q = ""; runCatching { focus.requestFocus() } },
-                    contentAlignment = Alignment.Center) { CloseGlyph(c.graphite, 20.dp) }
+                    contentAlignment = Alignment.Center) { CloseGlyph(c.graphite, 19.dp) }
             }
-            Spacer(Modifier.width(8.dp))
         }
         // Three kinds to narrow the search to — or, with nothing typed, to look through.
         androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(start = MarginW + MarginGap - PanelBleed, end = 16.dp, top = 4.dp, bottom = 4.dp),

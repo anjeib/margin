@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -145,15 +146,17 @@ fun Tray(
 @Composable
 private fun UserBubble(m: ChatMsg, working: Boolean) {
     val c = M.c
+    val bg = if (planner) c.chip else c.bubble
+    val fg = if (planner) c.ink else c.onBubble
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Column(
-            Modifier.padding(start = 48.dp).widthIn(max = 320.dp).clip(bubbleShape).background(c.bubble)
+            Modifier.padding(start = 48.dp).widthIn(max = 320.dp).clip(bubbleShape).background(bg)
                 .padding(horizontal = 16.dp, vertical = 11.dp),
         ) {
-            Text(m.text, style = Type.body.copy(color = c.onBubble))
+            Text(m.text, style = Type.body.copy(color = fg))
             Box(Modifier.align(Alignment.End)) {
-                if (working) Dots(c.onBubble)
-                else Text(m.at, style = Type.small.copy(color = c.onBubble.copy(alpha = 0.72f), fontSize = 11.5.sp))
+                if (working) Dots(fg)
+                else Text(m.at, style = Type.small.copy(color = fg.copy(alpha = 0.65f), fontSize = 11.5.sp))
             }
         }
     }
@@ -269,26 +272,31 @@ private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, on
         current.tasks.filter { it.topic && !it.done && it.id !in touched }
             .sortedByDescending { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.events.maxOfOrNull { it.at } ?: "", t.createdAt) }.take(6)
     }
+    val cardBg = if (planner) c.card else c.bubble
+    val cardFg = if (planner) c.ink else c.onBubble
+    val cardSub = if (planner) c.graphite else c.onBubble.copy(alpha = 0.75f)
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
         Column(
-            Modifier.padding(start = 48.dp).widthIn(max = 320.dp).clip(bubbleShape).background(c.bubble).clickable(onClick = onHold),
+            Modifier.padding(start = 48.dp).widthIn(max = 320.dp).clip(bubbleShape).background(cardBg)
+                .then(if (planner) Modifier.border(1.dp, c.sea.copy(alpha = 0.45f), bubbleShape) else Modifier)
+                .clickable(onClick = onHold),
         ) {
             Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)) {
                 lines.forEachIndexed { i, (title, meta) ->
                     if (i > 0) Spacer(Modifier.height(8.dp))
-                    Text(title, style = Type.cardTitle.copy(fontSize = 17.sp, color = c.onBubble), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (meta.isNotBlank()) Text(meta, style = Type.small.copy(color = c.onBubble.copy(alpha = 0.75f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(title, style = Type.cardTitle.copy(fontSize = 17.sp, color = cardFg), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (meta.isNotBlank()) Text(meta, style = Type.small.copy(color = cardSub), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 if (p.smart) p.plan.reply?.takeIf { it.isNotBlank() }?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(it, style = Type.small.copy(color = c.onBubble.copy(alpha = 0.75f)))
+                    Text(it, style = Type.small.copy(color = cardSub))
                 }
                 // Someone met for the first time: «+ контакт» once, here; not pressed — they stay just a name.
                 after.persons.filter { pr -> pr.draft && current.persons.none { it.matches(pr.name) } }.take(2).forEach { pr ->
-                    Text(s.addContact + ": " + pr.name, style = Type.small.copy(color = c.linkOnBubble, fontSize = 14.sp),
+                    Text(s.addContact + ": " + pr.name, style = Type.small.copy(color = if (planner) c.link else c.linkOnBubble, fontSize = 14.sp),
                         modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).clickable { onKeepContact(pr.name) }.padding(vertical = 2.dp))
                 }
-                if (kind.isNotBlank()) Text(kind, style = Type.label.copy(color = c.onBubble.copy(alpha = 0.72f), fontSize = 10.5.sp),
+                if (kind.isNotBlank()) Text(kind, style = Type.label.copy(color = if (planner) c.sea else c.onBubble.copy(alpha = 0.72f), fontSize = 10.5.sp),
                     modifier = Modifier.align(Alignment.End).padding(top = 6.dp))
             }
             if (p.auto) Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)) { BubbleCountdown(p.id) }
@@ -335,8 +343,10 @@ private fun BubbleCountdown(key: Any) {
         if (started) 0f else 1f, tween(MainVm.AUTO_CONFIRM_MS.toInt(), easing = androidx.compose.animation.core.LinearEasing), label = "cd",
     )
     LaunchedEffect(key) { started = true }
-    Box(Modifier.fillMaxWidth().height(2.dp).clip(CircleShape).background(c.onBubble.copy(alpha = 0.12f))) {
-        Box(Modifier.fillMaxWidth(f).height(2.dp).background(c.onBubble.copy(alpha = 0.45f)))
+    val barBg = if (planner) c.hairline else c.onBubble.copy(alpha = 0.12f)
+    val barFg = if (planner) c.sea else c.onBubble.copy(alpha = 0.45f)
+    Box(Modifier.fillMaxWidth().height(2.dp).clip(CircleShape).background(barBg)) {
+        Box(Modifier.fillMaxWidth(f).height(2.dp).background(barFg))
     }
 }
 

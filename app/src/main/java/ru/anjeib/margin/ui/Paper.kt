@@ -219,10 +219,10 @@ fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modif
     // Owner, 14 окт: the margin's dates and hours more telling — in full ink, a size up, pressed into the paper like the day's
     // number (a pale edge under each letter, as letterpress leaves).
     if (planner) {
-        // «Полоса набора» (owner, 15 окт): hours and dates in Commissioner, set from the margin's left edge; late — in terracotta.
-        // Owner, 15 окт: in ink — they are read, not decoration; late ones in terracotta.
-        Text(text, style = Type.small.copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink }, fontSize = 14.sp, lineHeight = 20.sp,
-            fontFeatureSettings = "tnum"), maxLines = 1, softWrap = false, modifier = modifier.fillMaxWidth().padding(start = 18.dp))
+        // «Полоса набора» (0.66): hours and dates in Commissioner, aligned right against the margin rule to share the same
+        // vertical axis as the day's large number; late — in terracotta.
+        Text(text, style = Type.small.copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink }, fontSize = 13.5.sp, lineHeight = 20.sp,
+            fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End), maxLines = 1, softWrap = false, modifier = modifier.fillMaxWidth())
         return
     }
     PencilText(AnnotatedString(text), style = Type.italic.copy(color = when { link -> c.link; else -> if (planner) c.ink else c.ink.copy(alpha = 0.8f) },
@@ -289,20 +289,29 @@ fun PaperRow(
     onMargin: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Margined(modifier, margin = margin?.let { m -> { MarginTap(onMargin) { RowMargin(m, late) } } }) {
+    Margined(modifier, margin = margin?.let { m -> { MarginTap(onMargin, late = late) { RowMargin(m, late) } } }) {
         PanelPiece(seat) { RowBody(mark, onClick = onClick, onLong = onLong, trailing = trailing, content = content) }
     }
 }
 
 /**
- * The margin's cell as the row's «done» (owner, 15 окт: no circles — a tap on the entry's hour marks it): a finger-sized
- * target over the hour or the date; without [onTap] — just the words.
+ * The margin's cell as the row's «done» (0.66): a finger-sized target over the hour or date, plus a subtle 12 dp ring node right
+ * on the margin rule (`MarginW`) so the user immediately sees the interactive check target without cluttering the text column.
  */
 @Composable
-fun MarginTap(onTap: (() -> Unit)?, content: @Composable () -> Unit) {
+fun MarginTap(onTap: (() -> Unit)?, late: Boolean = false, done: Boolean = false, content: @Composable () -> Unit) {
     if (onTap == null || !planner) { content(); return }
+    val c = M.c
     val s = M.s
-    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
+    val ringColor = when { done -> c.sea; late -> c.accent; else -> c.sea }
+    val bgColor = c.bg
+    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).drawBehind {
+        val x = size.width + 10.dp.toPx() // aligns with MarginW (since m-left has padding(end = 10.dp))
+        val y = (RowTop + 11.dp).toPx()
+        val r = 6.dp.toPx()
+        drawCircle(if (done) ringColor else bgColor, radius = r, center = androidx.compose.ui.geometry.Offset(x, y))
+        drawCircle(ringColor, radius = r, center = androidx.compose.ui.geometry.Offset(x, y), style = androidx.compose.ui.graphics.drawscope.Stroke(1.3.dp.toPx()))
+    }.clip(RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
         .clickable(onClickLabel = s.markDone, role = androidx.compose.ui.semantics.Role.Checkbox, onClick = onTap)) { content() }
 }
 
@@ -312,9 +321,9 @@ fun RowTitle(text: String, faded: Boolean = false, maxLines: Int = 3, marked: Bo
     val c = M.c
     var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
     val marker = pencilInk
+    val showMarker = marked && !planner
     Text(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis,
-        onTextLayout = { layout = it }, modifier = Modifier.foundMarks(text) { layout }.then(if (marked) Modifier.drawBehind {
-            // Late (owner, 14 окт): a highlighter over the words, as on the margin's date.
+        onTextLayout = { layout = it }, modifier = Modifier.foundMarks(text) { layout }.then(if (showMarker) Modifier.drawBehind {
             layout?.let { l -> for (i in 0 until l.lineCount) markerBand(l.getLineLeft(i), l.getLineRight(i), l.getLineTop(i), l.getLineBottom(i), marker, text.hashCode() + i) }
         } else Modifier))
 }

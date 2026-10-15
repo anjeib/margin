@@ -18,6 +18,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.clickable
@@ -510,20 +511,28 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             // A name that isn't a contact was tapped: «Марина · + контакт», quietly, for a few seconds.
             AnimatedVisibility(contactOffer != null && undoBar == null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 84.dp)) {
                 val n = contactOffer
-                if (n != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.bubble)
+                val barBg = if (planner) c.card else c.bubble
+                val barFg = if (planner) c.ink else c.onBubble
+                val barLink = if (planner) c.sea else c.linkOnBubble
+                if (n != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(barBg)
+                    .then(if (planner) Modifier.border(1.dp, c.hairline, RoundedCornerShape(14.dp)) else Modifier)
                     .padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(s.notAContact(n), style = Type.small.copy(color = c.onBubble, fontSize = 14.sp), modifier = Modifier.weight(1f))
-                    Text(s.addContact, style = Type.small.copy(color = c.linkOnBubble, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+                    Text(s.notAContact(n), style = Type.small.copy(color = barFg, fontSize = 14.sp), modifier = Modifier.weight(1f))
+                    Text(s.addContact, style = Type.small.copy(color = barLink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
                         modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.keepContact(n) }.padding(12.dp))
                 }
             }
             // «Удалено · Отменить» for a few seconds after a swipe — above whatever screen is open.
             AnimatedVisibility(undoBar != null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 84.dp)) {
                 val ub = undoBar
-                if (ub != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.bubble)
+                val barBg = if (planner) c.card else c.bubble
+                val barFg = if (planner) c.ink else c.onBubble
+                val barLink = if (planner) c.sea else c.linkOnBubble
+                if (ub != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(barBg)
+                    .then(if (planner) Modifier.border(1.dp, c.hairline, RoundedCornerShape(14.dp)) else Modifier)
                     .padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(ub.text, style = Type.small.copy(color = c.onBubble, fontSize = 14.sp), modifier = Modifier.weight(1f))
-                    Text(s.undo, style = Type.small.copy(color = c.linkOnBubble, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+                    Text(ub.text, style = Type.small.copy(color = barFg, fontSize = 14.sp), modifier = Modifier.weight(1f))
+                    Text(s.undo, style = Type.small.copy(color = barLink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
                         modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.undoBar() }.padding(12.dp))
                 }
             }
@@ -788,7 +797,7 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
         line(s.feedTitle, "", screen == TASKS) { onGo(TASKS, Views.TODAY) }
         line(s.diaryTitle, "", false) { onGo(TASKS, Views.NOTES) }
         line(s.topicsPage, "", screen == TOPICS) { onGo(TOPICS, null) }
-        line(s.inboxNote, "", screen == INBOX) { onGo(INBOX, null) }
+        line(s.inboxNote, data.inboxCount().takeIf { it > 0 }?.toString() ?: "", screen == INBOX) { onGo(INBOX, null) }
         line(s.materialsTitle, "", screen == MATERIALS) { onGo(MATERIALS, null) }
         line(s.peopleTitle, "", screen == PEOPLE) { onGo(PEOPLE, null) }
         line(s.archiveTitle, "", screen == ARCHIVE) { onGo(ARCHIVE, null) }

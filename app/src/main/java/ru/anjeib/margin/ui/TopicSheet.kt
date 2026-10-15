@@ -761,7 +761,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
     // circle stands under where the words above begin, no line between them; it reads as part of the one above.
     val indent = (if (planner) 18.dp else MarkCol / 2 + 21.dp) * depth
     val plannerLook = planner
-    Margined(margin = if (plannerLook && !removed) ({ MarginTap(::tick) { margin?.invoke() ?: RowMargin("—") } }) else margin) {
+    Margined(margin = if (plannerLook && !removed) ({ MarginTap(::tick, late = late, done = q.done) { margin?.invoke() ?: RowMargin("—") } }) else margin) {
         PanelPiece(seat, divider = depth == 0) {
         Box {
             Row(Modifier.fillMaxWidth().background(sel).padding(start = indent)
