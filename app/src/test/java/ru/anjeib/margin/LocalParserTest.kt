@@ -8,6 +8,7 @@ import ru.anjeib.margin.ai.Scope
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.Person
 import ru.anjeib.margin.data.Task
+import ru.anjeib.margin.data.next
 import ru.anjeib.margin.data.Topics
 import ru.anjeib.margin.i18n.L
 import ru.anjeib.margin.i18n.Lang
@@ -127,6 +128,32 @@ class LocalParserTest {
             println((if (pass) "  ok   " else "  ✗    ") + "«$text» → " + new.joinToString(" | ") { "${it.title} [due=${it.due} t=${it.time} wait=${it.waitingFor} prom=${it.promisedTo} ppl=${it.people}]" })
         }
         println("Чужие фразы: верно ${right}/${foreign.size}, отдано ИИ $toAi, ошибся уверенно $wrongSure")
+    }
+
+    /** What three personas and ChatGPT caught on 0.67 (15 окт): the tour's own phrase, strangers who owe, bare weekdays, days of the month, dangling «до». */
+    @Test fun personaPhrases() {
+        L.lang = Lang.Ru
+        val thu = LocalDate.of(2026, 10, 15)
+        fun p(s: String) = LocalParser.parse(s, base, today = thu, now = java.time.LocalTime.of(14, 38)).items
+        val tour = p("Завтра в 15 созвон с Мариной, она пришлёт правки до среды")
+        assertTrue("tour: $tour", tour.size == 2 && tour[0].title == "Созвон с Мариной" && tour[0].due == thu.plusDays(1) && tour[0].time == "15:00" && tour[0].waitingFor == null &&
+            tour[1].waitingFor == "Марина" && tour[1].due == LocalDate.of(2026, 10, 21) && tour[1].title == "Получить правки от Марины")
+        val kp = p("Серёга обещал прислать КП до среды").single()
+        assertTrue("kp: $kp", kp.waitingFor == "Серёга" && kp.due == LocalDate.of(2026, 10, 21) && kp.title == "Получить КП от Серёги")
+        val acts = p("ип петров пришлёт акты до пятницы").single()
+        assertTrue("acts: $acts", acts.waitingFor == "ИП Петров" && acts.due == LocalDate.of(2026, 10, 16))
+        val pool = p("мише бассейн вт и чт 17:30").single()
+        assertTrue("pool: $pool", pool.repeat == Triple("weekly", 1, listOf(2, 4)) && pool.time == "17:30" && pool.title == "Мише бассейн")
+        val pay = p("зарплата ип ивановой 10 и 25 числа").single()
+        assertTrue("pay: $pay", pay.repeat == Triple("monthly", 1, listOf(10, 25)) && pay.due == LocalDate.of(2026, 10, 25) && pay.title == "Зарплата ип ивановой")
+        assertTrue(p("сдать 6-ндфл до 25 октября").single().title == "Сдать 6-ндфл")
+        assertTrue(p("Авиасейлс должны оплатить 60 тысяч до 20 октября").single().title == "Авиасейлс должны оплатить 60 тысяч")
+        assertTrue(p("Олег бариста просит отпуск с 1 ноября, решить до вторника").first().title == "Олег бариста просит отпуск")
+        // Not a wait: an errand of my own, a plain plan, and the dictionary's own rule stays.
+        assertTrue(p("маме отправить фото в субботу").single().waitingFor == null)
+        assertTrue(p("Игорь пришлёт правки по лендингу к среде").single().waitingFor == "Игорь")
+        val r = ru.anjeib.margin.data.Repeat("monthly", 1, listOf(10, 25))
+        assertTrue(with(r) { next(LocalDate.of(2026, 10, 25)) == LocalDate.of(2026, 11, 10) && next(LocalDate.of(2026, 10, 3)) == LocalDate.of(2026, 10, 10) })
     }
 
     /** A window that has already begun, said from inside it: it stays this year (Fable, 15 окт — it had landed in 2027). */

@@ -827,11 +827,15 @@ object Assistant {
             val owed = runCatching { LocalParser.parse(source, data).items }.getOrDefault(emptyList()).filter { it.waitingFor != null || it.promisedTo != null }
             owed.forEach { w ->
                 val person = w.waitingFor ?: w.promisedTo ?: return@forEach
-                val said = stems(w.title)
-                val t = touched.mapNotNull { id -> d.tasks.find { it.id == id } }.filter { t ->
-                    data.tasks.none { it.id == t.id } && !t.topic && t.waitingFor == null && t.promisedTo == null &&
+                // The name itself is not «the same words» («Созвон с Мариной» and «правки от Марины» share only Марина).
+                val said = stems(w.title) - stems(person)
+                val made = touched.mapNotNull { id -> d.tasks.find { it.id == id } }.filter { t -> data.tasks.none { it.id == t.id } }
+                // The wait already landed on a matter of this pass (the phone read «она пришлёт…» itself): nothing to recover.
+                if (made.any { t -> (t.waitingFor ?: t.promisedTo)?.let { sameName(it, person) } == true }) return@forEach
+                val t = made.filter { t ->
+                    !t.topic && t.waitingFor == null && t.promisedTo == null &&
                         (t.people.any { sameName(it, person) } || stems(t.title).any { st -> stems(person).contains(st) }) &&
-                        (stems(t.title) intersect said).isNotEmpty()
+                        ((stems(t.title) - stems(person)) intersect said).isNotEmpty()
                 }.singleOrNull() ?: return@forEach
                 // «Напомнить Саше о смете» is the model's reading of a wait: the matter is what Саша sends.
                 val retitle = Regex("^(?:напомнить|напомни|remind)\\s", RegexOption.IGNORE_CASE).containsMatchIn(t.title) && w.title.isNotBlank()

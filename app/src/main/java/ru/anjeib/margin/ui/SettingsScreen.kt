@@ -96,6 +96,14 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             }
         }
 
+        // Persona test, 15 окт: the morning summary was chosen in the tour and then nowhere to be found — here it is, with the evening review.
+        Group(s.notifSection) {
+            ToggleRow(s.morningRow, s.morningHint, settings.morningBrief) { v -> vm.updateSettings { it.copy(morningBrief = v) } }
+            if (settings.morningBrief) TimePills(listOf("07:00", "08:00", "08:30", "09:00", "10:00"), settings.morningTime) { t -> vm.updateSettings { it.copy(morningTime = t) } }
+            ToggleRow(s.eveningRow, s.eveningHint, settings.eveningReview) { v -> vm.updateSettings { it.copy(eveningReview = v) } }
+            if (settings.eveningReview) TimePills(listOf("19:00", "20:00", "21:00", "22:00"), settings.eveningTime) { t -> vm.updateSettings { it.copy(eveningTime = t) } }
+        }
+
         // How to share into Margin is a matter for «Помощь»; here only the developer's own bot and mail, which need setup.
         if (settings.devMode && ru.anjeib.margin.BuildConfig.FORWARD_CHANNELS) Group(s.forwardSection) { ForwardSettings(vm) }
 
@@ -332,6 +340,18 @@ private fun ValueRow(label: String, hint: String?, value: String, chevron: Boole
             hint?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp)) }
         }
         if (chevron) Icon(Icons.Rounded.KeyboardArrowRight, null, tint = c.graphite, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** The hours to choose from, the chosen one filled; an hour set elsewhere (the tour) stays shown even when it is not on the list. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun TimePills(options: List<String>, chosen: String, onPick: (String) -> Unit) {
+    androidx.compose.foundation.layout.FlowRow(Modifier.padding(start = if (planner) 0.dp else 16.dp, end = 16.dp, top = 2.dp, bottom = 10.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+        (if (chosen in options) options else (options + chosen).sorted()).forEach { t ->
+            Pill(t.removePrefix("0"), accent = t == chosen, onClick = { onPick(t) })
+        }
     }
 }
 

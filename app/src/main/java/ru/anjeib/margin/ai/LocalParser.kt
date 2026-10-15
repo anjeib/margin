@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.dative
+import ru.anjeib.margin.data.next
 import ru.anjeib.margin.data.dayMonthShort
 import ru.anjeib.margin.data.dowShort
 import ru.anjeib.margin.data.genitive
@@ -141,8 +142,17 @@ object LocalParser {
         // A report of what happened: «встречались, обсудили», «клиент отказался», «согласовали».
         "встречал$L*|обсудил$L*|обсуждал$L*|поговорил$L*|списал$L*ись|решил$L*|отказал$L*|согласовал$L*|утвердил$L*|передумал$L*)$E", RegexOption.IGNORE_CASE)
     private val filler = Regex("^(?:(?:надо|нужно|не забыть|не забудь|напомни(?:ть)?(?: мне)?|мне|я|хочу|пора|обязательно|плиз|пожалуйста)[,\\s]+)+", RegexOption.IGNORE_CASE)
+    /** A waiting-for that points at the person named in the previous matter; parse() resolves it. */
+    private const val PREV = "\u0000prev"
+    /** Words that never name who gives something. */
+    private val notSubjects = setOf("я", "мы", "мне", "нам", "ты", "вы", "вам", "тебе", "ему", "ей", "им", "кто", "что", "когда", "если", "надо", "нужно",
+        "пусть", "завтра", "сегодня", "потом", "скоро", "уже", "ещё", "еще", "как", "так", "не", "ни", "а", "и", "но", "это", "этот", "эта", "то", "там",
+        "тут", "здесь", "может", "можно", "вроде", "точно", "просто", "срочно", "обязательно", "сначала", "пока", "чтобы", "чтоб", "хочу", "хотел",
+        "хотела", "планирую", "собираюсь", "буду", "нужен", "нужна", "нужны", "должен", "должна", "должны")
     private val verbStart = Regex("^(?:$L+(?:ть|ти|чь|ться|тись)|позвон$L*|напис$L*|купи|сходи|сделай|отправь|забери|заплати|оплати|закажи|запишись)$E", RegexOption.IGNORE_CASE)
     private val waitVerbs = "(пришл[её]т|пришлют|прислать|присылает|скин[еу]т|скинуть|отправит|отправить|верн[её]т|вернуть|сда[её]т|сдаст|сдать|сдаёт|сдает|даст|ответит|подготовит|сделает|принес[её]т|передаст|подпишет|привез[её]т|оплатит)"
+    /** «она пришлёт…», «он обещал скинуть…»: the one just named in the words before. */
+    private val pronounGives = Regex("^(?:он|она|они)\\s+(?:обещал$L*\\s+|должн$L*\\s+)?$waitVerbs", RegexOption.IGNORE_CASE)
 
     private val leftoverDay = Regex("${B}(сегодня|завтра|послезавтра|понедельник$L*|вторник$L*|сред[ауеы]|четверг$L*|пятниц$L*|суббот$L*|воскресень$L*|\\d{1,2}\\s+$MON|\\d{1,2}-?(?:го|му|ому|ого))$E", RegexOption.IGNORE_CASE)
 
@@ -174,7 +184,7 @@ object LocalParser {
         // A long stream with no punctuation is dictation — the AI splits it better.
         if (!Regex("[\\n.;,!?]").containsMatchIn(text) && text.split(Regex("\\s+")).size > 16) { sure = false; why = why ?: "long" }
         // «@Маша», «/жду», «/обещал» are said outright: they win over what the words seem to say.
-        val items = chunks.mapNotNull { one(it, names, today, kind, sphere, now) }.map { i0 ->
+        val items0 = chunks.mapNotNull { one(it, names, today, kind, sphere, now) }.map { i0 ->
             val named = i0.people.firstOrNull()
             val i = when {
                 waitFor == null && wait && i0.waitingFor == null && named != null -> i0.copy(waitingFor = named, promisedTo = null, people = i0.people - named)
@@ -186,6 +196,18 @@ object LocalParser {
                 waitingFor = waitFor ?: i.waitingFor.takeIf { promiseTo == null }, promisedTo = promiseTo ?: i.promisedTo.takeIf { waitFor == null },
                 title = if (waitFor != null && i.waitingFor == null) i.title else i.title)
         }
+        // «она пришлёт…»: the person named in the matter before («созвон с Мариной» → we wait for Марина).
+        var lastPerson: String? = null
+        val items = items0.map { i ->
+            val r = if (i.waitingFor == PREV) {
+                val who = lastPerson
+                if (who == null) i.copy(waitingFor = null)
+                else i.copy(waitingFor = who, people = i.people - who,
+                    title = ("Получить " + i.title.midCase() + " от " + who.genitive()).sentence().withNames(listOf(who)))
+            } else i
+            (r.people.firstOrNull() ?: r.waitingFor ?: r.promisedTo)?.let { lastPerson = it }
+            r
+        }
         if (items.isEmpty()) return Result(emptyList(), false, "empty")
         // What someone owes, with more after a comma («Дима сделает дизайн, на мне тексты») is two matters — the AI's.
         if (items.any { it.waitingFor != null && it.title.contains(',') }) { sure = false; why = why ?: "wait-and-more" }
@@ -194,6 +216,9 @@ object LocalParser {
         return Result(items, sure, why)
     }
 
+    /** The words mid-sentence: the first letter lowered — unless the first word is an abbreviation («КП», «6-НДФЛ»). */
+    private fun String.midCase(): String { val w = substringBefore(' '); return if (w.length >= 2 && w.none { it.isLowerCase() }) this else replaceFirstChar { it.lowercase() } }
+    private val danglingTail = Regex("\\s+(?:до|с|со|к|ко|в|во|на|по|от|за|из|у|при|после|перед|через|о|об|для|под)$", RegexOption.IGNORE_CASE)
     private val pastVerb = Regex("$L{2,}(?:[аеёиоуяыю]л|[её]з|[её]с)(?:а|и|о|ся|ась|ись|ось)?", RegexOption.IGNORE_CASE)
     private val notPast = setOf("недели", "неделе", "дела", "дело", "цели", "школа", "модели", "мебели", "канал", "журнал", "сериал", "материал",
         "вокзал", "финал", "сигнал", "оригинал", "персонал", "интервал", "капитал", "стола", "пола", "села", "тела", "мыла", "пчела", "стрела",
@@ -236,6 +261,9 @@ object LocalParser {
     }
 
     /** Several matters in one message: lines, «;», sentences, «ещё», a new verb after a comma or «и». */
+    /** The matters a text holds, each its own words — for a caller that files them one by one. */
+    fun pieces(text: String): List<String> = split(text)
+
     private fun split(t0: String): List<String> {
         // «1. …», «- …», «• …» at line starts: a list typed by hand — the marks go before anything else splits the text.
         val t = t0.lines().joinToString("\n") { it.replace(Regex("^\\s*(\\d{1,2}[.)]|[-–—•*])\\s+"), "") }
@@ -255,6 +283,9 @@ object LocalParser {
                 // A piece that starts with its own verb is a matter of its own; anything else belongs to the previous one.
                 // One word is enough when it is a whole matter in itself: «…, заправиться и купить омывайку».
                 if (out.isNotEmpty() && verbStart.matches(first) && (p.trim().split(' ').size >= 2 || Regex("$L{4,}(?:ться|тись)").matches(first))) out += p.trim()
+                // «…созвон с Мариной, она пришлёт правки до среды» (the tour's own phrase; ChatGPT, 15 окт): what the person just
+                // named will give is a matter of its own — we wait for it.
+                else if (out.isNotEmpty() && pronounGives.containsMatchIn(p.trim())) out += p.trim()
                 else if (out.isEmpty()) out += p.trim()
                 else out[out.lastIndex] = out.last() + (if (part.contains(out.last() + ", " + p.trim())) ", " else " и ") + p.trim()
             }
@@ -359,10 +390,17 @@ object LocalParser {
             for ((r, f) in windows) if (due == null && cut(r, f)) Unit
         }
 
+        // «зарплата 10 и 25 числа», «15-го числа каждого месяца» (persona test, 15 окт): a monthly repeat on those days of the month.
+        if (repeat == null && due == null) cut(Regex("${B}(\\d{1,2})(?:-?го)?((?:\\s*(?:,|и)\\s*\\d{1,2}(?:-?го)?)*)\\s+числ$L*(?:\\s+кажд$L*\\s+месяц$L*)?$E", ic)) { m ->
+            val ds = Regex("\\d{1,2}").findAll(m.value).map { it.value.toInt() }.filter { it in 1..31 }.distinct().sorted().toList()
+            if (ds.isNotEmpty()) { repeat = Triple("monthly", 1, ds); due = with(ru.anjeib.margin.data.Repeat("monthly", 1, ds)) { next(today.minusDays(1)) } }
+        }
         // Several days: «в пн и чт», «во вторник и в пятницу», «12, 15 и 18 октября».
-        if (repeat == null && due == null) cut(Regex("${B}(?:в|во|на|к|до)?\\s*$WD((?:\\s*(?:,|и)\\s*(?:в|во)?\\s*$WD|\\s+$WD)+)$E", ic)) { m ->
-            days = Regex(WD, ic).findAll(m.value).mapNotNull { weekday(it.value) }.distinct().map { nextDow(today, it) to null }.sortedBy { it.first }.toList()
-            byWeekday = true
+        // Bare «вт и чт 17:30» with no «в» before (persona test, 15 окт: the family's pool) is the week's rhythm — a weekly repeat.
+        if (repeat == null && due == null) cut(Regex("${B}((?:в|во|на|к|до)\\s*)?$WD((?:\\s*(?:,|и)\\s*(?:в|во)?\\s*$WD|\\s+$WD)+)$E", ic)) { m ->
+            val wds = Regex(WD, ic).findAll(m.value).mapNotNull { weekday(it.value) }.distinct().sorted().toList()
+            if (m.groupValues[1].isBlank() && wds.size >= 2) { repeat = Triple("weekly", 1, wds); due = wds.map { nextDow(today, it) }.minOrNull() }
+            else { days = wds.map { nextDow(today, it) to null }.sortedBy { it.first }.toList(); byWeekday = true }
         }
         if (days.isEmpty() && due == null) cut(Regex("${B}(\\d{1,2})((?:\\s*(?:,|и)\\s*\\d{1,2})+)\\s+$MON$E", ic)) { m ->
             val mon = month(m.groupValues[3]) ?: return@cut
@@ -499,6 +537,23 @@ object LocalParser {
         if (waitingFor == null) cutIf(Regex("${B}(\\p{L}+)\\s+(?:\\p{L}+\\s+){0,2}?(?:должн$L*\\s+|обещал$L*\\s+)?$waitVerbs\\s+(.+)$", ic)) { m ->
             names.subject(m.groupValues[1])?.let { n -> waitingFor = n; titleOverride = m.groupValues[3]; true } ?: false
         }
+        // «она пришлёт правки до среды» after «созвон с Мариной»: the pronoun is the person just named — parse() fills it in.
+        if (waitingFor == null) cutIf(Regex("^\\s*(?:он|она|они)\\s+(?:обещал$L*\\s+|должн$L*\\s+)?$waitVerbs\\s+(.+)$", ic)) { m ->
+            waitingFor = PREV; titleOverride = m.groupValues[2]; true
+        }
+        // «ип петров пришлёт акты», «серёга обещал прислать КП» (persona test, 15 окт): a subject the dictionary doesn't know, at the
+        // start of the words, before a verb of giving — still someone we wait for. The name as said, words capitalised, short ones
+        // as initials («ИП Петров»). An infinitive alone («маме отправить») is not it: that needs «обещал» or «должен» before it.
+        if (waitingFor == null) cutIf(Regex("^\\s*((?:\\p{L}+\\s+){0,2}?\\p{L}+)\\s+((?:обещал$L*|должн$L*)\\s+)?$waitVerbs\\s+(.+)$", ic)) { m ->
+            val ws = m.groupValues[1].trim().split(Regex("\\s+"))
+            val verb = m.groupValues[3].lowercase()
+            val ok = ws.none { it.lowercase() in notSubjects || verbStart.matches(it) || names.of(it) != null || it.any { ch -> ch.isDigit() } } &&
+                (m.groupValues[2].isNotBlank() || !verb.endsWith("ть"))
+            if (!ok) false else {
+                waitingFor = ws.joinToString(" ") { w -> if (w.length <= 3) w.uppercase() else w.replaceFirstChar { it.uppercaseChar() } }
+                titleOverride = m.groupValues[4]; true
+            }
+        }
         // «Олег должен мне 5000»: he owes it — we wait for it.
         if (waitingFor == null) cutIf(Regex("${B}(\\p{L}+)\\s+(?:должн$L*|должен)\\s+мне\\s+(.+)$", ic)) { m ->
             names.subject(m.groupValues[1])?.let { n -> waitingFor = n; titleOverride = m.groupValues[2]; true } ?: false
@@ -516,7 +571,9 @@ object LocalParser {
         // The title: what's left, without fillers, starting with a capital; names capitalised.
         var title = (titleOverride ?: s).replace(Regex("\\s+"), " ").trim().trim(',', '.', '—', '–', '-', ':', ' ')
         title = title.replace(filler, "").trim().trim(',', '.', '—', '-', ':', ' ')
-        if (waitingFor != null && !asSaid) title = "Получить ${title.replaceFirstChar { it.lowercase() }} от ${waitingFor!!.genitive()}"
+        // «Сдать 6-НДФЛ до [25 октября]», «отпуск с [1 ноября]»: the date is cut out, its preposition must go with it (persona test, 15 окт).
+        repeat(2) { title = title.replace(danglingTail, "").trim() }
+        if (waitingFor != null && waitingFor != PREV && !asSaid) title = "Получить ${title.midCase()} от ${waitingFor!!.genitive()}"
         if (title.isBlank()) title = chunk.trim()
         title = title.sentence().withNames(listOfNotNull(waitingFor, promisedTo) + people).properNames(names.contacts, listOfNotNull(waitingFor, promisedTo) + people)
 

@@ -51,6 +51,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -191,7 +192,7 @@ fun TaskList(
     var weekDay by rememberSaveable { mutableStateOf<String?>(null) }
     // Swipe left asks «на когда?» instead of quietly moving a day.
     var postponing by remember { mutableStateOf<String?>(null) }
-    postponing?.let { id -> PostponeDialog(onDismiss = { postponing = null }) { day -> vm.postponeTo(id, day); postponing = null } }
+    postponing?.let { id -> PostponeDialog(onDismiss = { postponing = null }, from = data.tasks.find { it.id == id }?.dueDate) { day -> vm.postponeTo(id, day); postponing = null } }
     // «На неделе», «Без даты», «Выполнено» start folded; what the user opens or folds stays so, across launches.
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val ui = remember { ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE) }
@@ -247,7 +248,8 @@ fun TaskList(
             view == Views.TODAY -> {
                 // The calendar tab unfolds the month over the page (owner, 14 окт); a tap on a day turns the page to it.
                 // Fable, 15 окт: the tools stay where they are; the month unfolds under them, not over them.
-                if (monthOpen && plannerLook) item("tools") { PageToolsRow(calendar = true) }
+                // Persona test, 15 окт: the tools stay pinned at the top while the page scrolls (two of three couldn't find them).
+                if (plannerLook) stickyHeader("tools") { PinnedTools(calendar = true) }
                 if (monthOpen) item("month") {
                     // No fade (owner, 14 окт): a fading month lay under the matters sliding up over it — it goes at once, they close up.
                     Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)) { MonthPanel(data, vm, pageDay ?: today, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
@@ -257,7 +259,6 @@ fun TaskList(
                 if (other != null) {
                     val p = dayPlan(data, other, today, events)
                     item("o-head") {
-                        if (plannerLook && !monthOpen) PageToolsRow(calendar = true)
                         Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp), margin = { MarginDay(other.dayOfMonth, other.dayMonthShort().substringAfter(' ')) }) {
                             Column {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -289,7 +290,6 @@ fun TaskList(
                 val undated = (tasks.filter { !it.done && it.dueDate == null && it.startDate == null } + data.undatedTopicMatters())
                     .sortedByDescending { it.createdAt }
                 item("head") {
-                    if (plannerLook && !monthOpen) PageToolsRow(calendar = true)
                     Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp), margin = { MarginDay(today.dayOfMonth, today.dayMonthShort().substringAfter(' ')) }) {
                         Column {
                           Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -428,8 +428,8 @@ fun TaskList(
                 // who owes whom and by sphere.
                 fun bare(t: Task) = t.thought && t.subtasks.isEmpty()
                 fun sOk(t: Task) = monthSphere == null || (if (monthSphere == "work") t.sphere == "work" else t.sphere != "work")
+                if (plannerLook) stickyHeader("tools") { PinnedTools() }
                 item("o-head") {
-                    if (plannerLook) PageToolsRow()
                     Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp)) {
                         Column {
                             Row(verticalAlignment = Alignment.Top) {
@@ -541,18 +541,15 @@ private fun Modifier.horizontalScrollCompat(): Modifier = this.horizontalScroll(
 /** «Отложить»: tomorrow, in a week, in a month — or a day from the calendar. */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun PostponeDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
+fun PostponeDialog(onDismiss: () -> Unit, /** The matter's own day, when it is still ahead: «через неделю» counts from it (persona test, 15 окт). */ from: LocalDate? = null, onPick: (LocalDate) -> Unit) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
+    val base = from?.takeIf { it.isAfter(today) } ?: today
     var custom by remember { mutableStateOf(false) }
     if (custom) {
-        val st = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = today.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli())
-        androidx.compose.material3.DatePickerDialog(onDismissRequest = onDismiss,
-            confirmButton = { androidx.compose.material3.TextButton({ st.selectedDateMillis?.let { onPick(java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate()) } ?: onDismiss() }) { Text(s.save, color = c.link) } },
-            dismissButton = { androidx.compose.material3.TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
-            colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card),
-        ) { androidx.compose.material3.DatePicker(st, colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card, selectedDayContainerColor = c.link, todayDateBorderColor = c.link)) }
+        // Margin's own grid, not the Material picker (persona test, 15 окт).
+        DayDialog(s.postponeTitle, from ?: today.plusDays(1), onDismiss = onDismiss, onPick = onPick)
         return
     }
     androidx.compose.material3.AlertDialog(
@@ -561,7 +558,7 @@ fun PostponeDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
         text = {
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill(s.quickTomorrow, onClick = { onPick(today.plusDays(1)) })
-                Pill(s.inAWeek, onClick = { onPick(today.plusWeeks(1)) })
+                Pill(s.inAWeek, onClick = { onPick(base.plusWeeks(1)) })
                 Pill(s.pickDay, accent = true, onClick = { custom = true })
             }
         },
@@ -749,9 +746,12 @@ private fun WeekCard(w: ru.anjeib.margin.data.WeekReview, inbox: Int, onOpen: (S
  * written in lately. A tap moves it there; «Отменить» brings it back.
  */
 @Composable
-fun TopicPickDialog(data: AppData, ref: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+fun TopicPickDialog(data: AppData, ref: String, onDismiss: () -> Unit, onCreate: ((String) -> Unit)? = null, onPick: (String) -> Unit) {
     val c = M.c
     val s = M.s
+    // ChatGPT / persona test, 15 окт: with no topics yet the dialog was a dead end — a topic can be named right here.
+    var naming by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
     val matter = data.listTasks().find { it.id == ref } ?: data.undatedTopicMatters().find { it.id == ref } ?: data.tasks.find { it.id == ref }
     val own = matter?.topicId
     val likely = remember(ref) { matter?.let { data.likelyTopic(it.title, it.people + listOfNotNull(it.waitingFor, it.promisedTo), except = setOfNotNull(own)) } }
@@ -764,7 +764,26 @@ fun TopicPickDialog(data: AppData, ref: String, onDismiss: () -> Unit, onPick: (
         title = { Text(s.toTopicPick, style = Type.cardTitle.copy(color = c.ink)) },
         text = {
             Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
-                if (topics.isEmpty()) Text(s.noTopicsYet, style = Type.body.copy(color = c.graphite))
+                if (topics.isEmpty() && !naming) Text(s.noTopicsYet, style = Type.body.copy(color = c.graphite), modifier = Modifier.padding(bottom = 6.dp))
+                if (onCreate != null) {
+                    if (!naming) Text(s.newTopicRow, style = Type.body.copy(color = c.link, fontSize = 15.5.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { naming = true }.padding(vertical = 11.dp, horizontal = 4.dp))
+                    else Row(Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+                        androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+                        Box(Modifier.weight(1f).padding(end = 8.dp)) {
+                            if (newName.isEmpty()) Text(s.newTopicNameHint, style = Type.body.copy(color = c.graphite, fontSize = 15.5.sp))
+                            androidx.compose.foundation.text.BasicTextField(newName, { newName = it }, singleLine = true,
+                                textStyle = Type.body.copy(color = c.ink, fontSize = 15.5.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { newName.trim().takeIf { it.isNotBlank() }?.let(onCreate) }),
+                                modifier = Modifier.fillMaxWidth().focusRequester(focus))
+                            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(1.dp).background(c.hairline))
+                        }
+                        Box(Modifier.size(34.dp).clip(CircleShape).background(if (newName.isNotBlank()) c.sea else c.chip)
+                            .clickable(enabled = newName.isNotBlank()) { onCreate(newName.trim()) }, contentAlignment = Alignment.Center) { TickGlyph(if (newName.isNotBlank()) M.c.onAccent else c.graphite, 16.dp) }
+                    }
+                }
                 topics.forEach { t ->
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onPick(t.id) }.padding(vertical = 11.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         TopicGlyph(c.link, 16.dp)

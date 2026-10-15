@@ -211,13 +211,9 @@ private fun RemindDialog(initial: String?, onDismiss: () -> Unit, onSave: (Strin
     val start = initial?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } ?: LocalDateTime.now().plusHours(1).withMinute(0)
     var day by remember { mutableStateOf<LocalDate?>(null) }
     if (day == null) {
-        val st = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = start.toLocalDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli())
-        androidx.compose.material3.DatePickerDialog(
-            onDismissRequest = onDismiss,
-            confirmButton = { androidx.compose.material3.TextButton({ day = st.selectedDateMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() } ?: start.toLocalDate() }) { Text(s.next, color = c.link) } },
-            dismissButton = { androidx.compose.material3.TextButton({ if (initial != null) onSave(null) else onDismiss() }) { Text(if (initial != null) s.removeWord else s.cancel, color = c.graphite) } },
-            colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card),
-        ) { androidx.compose.material3.DatePicker(st, colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card, selectedDayContainerColor = c.link, todayDateBorderColor = c.link)) }
+        // Margin's own grid (persona test, 15 окт): the day first, then the hour.
+        DayDialog(s.dateWord, start.toLocalDate(), onDismiss = onDismiss,
+            dismissLabel = if (initial != null) s.removeWord else null, onDismissAction = if (initial != null) ({ onSave(null) }) else null) { d -> day = d }
     } else {
         val tp = androidx.compose.material3.rememberTimePickerState(start.hour, start.minute, is24Hour = true)
         androidx.compose.material3.AlertDialog(

@@ -16,7 +16,13 @@ fun Repeat.next(from: LocalDate): LocalDate {
             if (later != null) from.plusDays((later - from.dayOfWeek.value).toLong())
             else from.with(java.time.DayOfWeek.MONDAY).plusWeeks(n).plusDays((days.min() - 1).toLong())
         }
-        "monthly" -> from.plusMonths(n)
+        "monthly" -> if (days.isEmpty()) from.plusMonths(n) else {
+            // Pinned days of the month («10 и 25 числа»): the next one after [from]; a day past the month's end lands on its last day.
+            fun on(ym: java.time.YearMonth, d: Int) = ym.atDay(d.coerceAtMost(ym.lengthOfMonth()))
+            val sorted = days.sorted()
+            val thisMonth = java.time.YearMonth.from(from)
+            sorted.map { on(thisMonth, it) }.firstOrNull { it.isAfter(from) } ?: on(thisMonth.plusMonths(n), sorted.first())
+        }
         "yearly" -> from.plusYears(n)
         else -> from.plusDays(n)
     }
@@ -71,7 +77,11 @@ fun Repeat.label(): String {
             }
             if (d.isEmpty()) base else if (n == 1) every else "$base: $d"
         }
-        "monthly" -> if (n == 1) (if (ru) "каждый месяц" else "monthly") else (if (ru) "раз в $n мес." else "every $n months")
+        "monthly" -> when {
+            days.isNotEmpty() -> if (ru) days.sorted().joinToString(" и ") + " числа" else "on the " + days.sorted().joinToString(", ") { "$it" + when (it % 10) { 1 -> "st"; 2 -> "nd"; 3 -> "rd"; else -> "th" } }
+            n == 1 -> if (ru) "каждый месяц" else "monthly"
+            else -> if (ru) "раз в $n мес." else "every $n months"
+        }
         "yearly" -> if (ru) "каждый год" else "yearly"
         else -> ""
     }

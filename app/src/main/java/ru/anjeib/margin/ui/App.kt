@@ -179,7 +179,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     // The assistant tray is for the latest exchange — moving elsewhere tucks it away.
     LaunchedEffect(view, screen) { if (pending == null && busy == null) vm.dismissTray() }
     LaunchedEffect(personReq) { personReq?.let { openTask = null; openDeal = null; openPerson = it; vm.personOpened() } }
-    LaunchedEffect(toast) { toast?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.toastShown() } }
+    // Persona test, 15 окт: no Android toast over the keyboard — the app's own quiet bar, as «Сделано · Отменить», for a few seconds.
+    LaunchedEffect(toast) { if (toast != null) { kotlinx.coroutines.delay(2600); vm.toastShown() } }
 
     fun go(newScreen: String, newView: String? = null) {
         contents = false
@@ -193,6 +194,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     // Find on the page (owner, 14 окт): the search tab slides a field down over the page instead of opening a screen.
     val find = remember { FindState() }
     var allFor by remember { mutableStateOf("") }
+    val searchReq by vm.searchReq.collectAsState()
+    LaunchedEffect(searchReq) { searchReq?.let { allFor = it; searching = true; vm.searchOpened() } }
     fun closeFind() { keepSearch(ctx, find.query); find.open = false; find.query = ""; find.cur = 0 }
     BackHandler(find.open && !searching) { closeFind() }
     // Turned to another day with the tabs: back is today's page.
@@ -281,7 +284,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                 contents = false; openTask = null; openPerson = null; openNote = null; vm.monthOpen.value = false
                                 if (p == "topics") screen = TOPICS else { screen = TASKS; view = Views.NOTES }
                             },
-                            onAll = { allFor = find.query; searching = true })
+                            onAll = { allFor = find.query; closeFind(); searching = true })
                     }
                 } else
                 TopBar(screen, view, shown, onMenu = { scope.launch { drawer.open() } }, onTab = { i -> view = listOf(Views.TODAY, Views.WEEK, Views.ALL)[i] },
@@ -524,6 +527,15 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { vm.keepContact(n) }.padding(12.dp))
                 }
             }
+            // A word from the app («Перенесено в тему…», «Контакт заведён») — the same bar, no button.
+            AnimatedVisibility(toast != null && undoBar == null && contactOffer == null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(start = 14.dp, end = 14.dp, bottom = 84.dp)) {
+                val tt = toast
+                if (tt != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (planner) c.card else c.bubble)
+                    .then(if (planner) Modifier.border(1.dp, c.hairline, RoundedCornerShape(14.dp)) else Modifier)
+                    .padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(tt, style = Type.small.copy(color = if (planner) c.ink else c.onBubble, fontSize = 14.sp), modifier = Modifier.weight(1f))
+                }
+            }
             // «Удалено · Отменить» for a few seconds after a swipe — above whatever screen is open.
             AnimatedVisibility(undoBar != null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 84.dp)) {
                 val ub = undoBar
@@ -541,7 +553,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         }
     }
     }
-    topicFor?.let { ref -> TopicPickDialog(vm.data.value, ref, onDismiss = { topicFor = null }) { tid -> vm.intoTopic(ref, tid); topicFor = null } }
+    topicFor?.let { ref -> TopicPickDialog(vm.data.value, ref, onDismiss = { topicFor = null },
+        onCreate = { name -> vm.newTopic(name)?.let { tid -> vm.intoTopic(ref, tid) }; topicFor = null }) { tid -> vm.intoTopic(ref, tid); topicFor = null } }
 
     // «Отправить отзыв»: an e-mail to the developer with the crash and misunderstanding logs — never the records.
     LaunchedEffect(feedback) { if (feedback) { sendFeedback(ctx, vm); feedback = false } }

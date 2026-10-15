@@ -149,6 +149,25 @@ fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddi
           }
         }
         }
+        // Owner, 15 окт (all three personas asked): the people named in matters, kept as drafts, are listed quietly here —
+        // «+ контакт» by each one makes the card; the rule «a contact only by your hand» stands.
+        val mentioned = data.persons.filter { it.draft && !it.archived && !it.org }.sortedBy { it.name.lowercase().replace('ё', 'е') }
+        if (mentioned.isNotEmpty() && tab == "people") {
+            item("mh") { SectionHead(s.mentionedSection, top = if (people.isEmpty()) 10.dp else 22.dp) }
+            item("mhint") { Margined(Modifier.padding(bottom = 6.dp)) { Voice(s.mentionedHint) } }
+            mentioned.forEachIndexed { i, p ->
+                item("m" + p.id) {
+                    Margined(Modifier.animateItem()) {
+                        PanelPiece(seatOf(i, mentioned.size), bleed = false) {
+                            RowBody(mark = { Avatar(p.name, 34.dp) }, onClick = { onOpen(p.id) },
+                                trailing = { PaperLink(s.addContact) { vm.keepContact(p.name) } }) {
+                                RowTitle(p.name, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     }
 }

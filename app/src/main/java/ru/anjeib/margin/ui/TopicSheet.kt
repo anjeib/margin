@@ -913,24 +913,16 @@ internal fun QuestionDateDialog(q: Subtask, onDismiss: () -> Unit, onSave: (Stri
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
-    fun LocalDate.ms() = atStartOfDay().toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
-    val st = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = q.due?.let { LocalDate.parse(it).ms() })
-    val colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = c.card, selectedDayContainerColor = c.link, todayDateBorderColor = c.link, todayContentColor = c.link)
-    androidx.compose.material3.DatePickerDialog(
-        onDismissRequest = onDismiss, colors = colors,
-        confirmButton = { TextButton({ onSave(st.selectedDateMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString() }) }) { Text(s.save, color = c.link) } },
-        dismissButton = { TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
-    ) {
-        Column {
-            FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill(s.quickToday, onClick = { onSave(today.toString()) })
-                Pill(s.quickTomorrow, onClick = { onSave(today.plusDays(1).toString()) })
-                Pill(s.inAWeek, onClick = { onSave(today.plusWeeks(1).toString()) })
-                Pill(s.quickNone, onClick = { onSave(null) })
-            }
-            androidx.compose.material3.DatePicker(state = st, colors = colors, showModeToggle = false, title = null, headline = null)
+    val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    // Margin's own grid (persona test, 15 окт): the quick days over it, a tap on a day saves it.
+    DayDialog(s.dateWord, due, onDismiss = onDismiss, quick = {
+        FlowRow(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Pill(s.quickToday, onClick = { onSave(today.toString()) })
+            Pill(s.quickTomorrow, onClick = { onSave(today.plusDays(1).toString()) })
+            Pill(s.inAWeek, onClick = { onSave((due?.takeIf { it.isAfter(today) } ?: today).plusWeeks(1).toString()) })
+            Pill(s.quickNone, onClick = { onSave(null) })
         }
-    }
+    }) { d -> onSave(d.toString()) }
 }
 
 // ---------------- materials ----------------

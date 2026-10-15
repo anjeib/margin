@@ -265,7 +265,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** «+ тема» in the Overview: an empty topic by its name, as a project to fill — its id, to open it at once. */
     fun newTopic(name: String): String? {
-        val title = name.trim().trim('«', '»', '"').takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercaseChar() } ?: return null
+        // «#Релиз» typed as a name (ChatGPT, 15 окт): the sign is how a topic is referred to, not part of its name.
+        val title = name.trim().trimStart('#').trim().trim('«', '»', '"').takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercaseChar() } ?: return null
         val t = Task(title = title, topic = true, history = listOf(ru.anjeib.margin.data.Change(kind = "created", by = "you")))
         store.update { it.copy(tasks = it.tasks + t) }
         land(listOf(t.id))
@@ -312,7 +313,10 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private fun keepOnPhone(t: String, scope: Scope, files: List<Attachment>, userId: String?, source: String, smart: Boolean, movedHere: Boolean) {
         fun o(vararg p: Pair<String, String>) = kotlinx.serialization.json.JsonObject(p.associate { (k, v) -> k to kotlinx.serialization.json.JsonPrimitive(v) })
         if (smart || LocalParser.parse(t, data.value).why == "question") {
-            if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = L.s.askLocal)) else _toast.value = L.s.askLocal
+            // Persona test, 15 окт: «что я обещал Марине?» — no AI to answer, but search by the name (or the longest word) is the
+            // honest next best thing, opened at once instead of a note pointing at settings.
+            if (scope == Scope.Main) { addAssistant(ChatMsg(fromUser = false, text = L.s.askLocal)); _searchReq.value = searchWordsOf(t) }
+            else _toast.value = L.s.askLocal
             return
         }
         val plan = when (scope) {
@@ -350,13 +354,30 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** Words from a matter's page: is this a request to act on, or the user's comment? */
     fun isRequest(text: String) = Commands.isRequest(text)
 
-    private fun sendNow(text: String, smart: Boolean, label: String?, scope: Scope, files: List<Attachment>, asQuestion: Boolean, movedHere: Boolean) {
+    private fun sendNow(text0: String, smart: Boolean, label: String?, scope: Scope, files: List<Attachment>, asQuestion: Boolean, movedHere: Boolean) {
+        // «… до среды #Лендинг для Авиасейлс»: a topic named by several words becomes its token before anything else reads the text.
+        val text = if (scope == Scope.Main && !smart) longHash(text0, data.value)?.let { (tp, r) -> text0.replaceRange(r, " #[${tp.id}] ").replace(Regex("\\s{2,}"), " ").trim() } ?: text0 else text0
         // «в тему Ремонт ванной купить плитку» — into that topic, as «#тема» would send it (on the phone, offline too).
         if (!smart && scope == Scope.Main) Commands.intoTopic(text, data.value.tasks.filter { it.topic && !it.done }.map { it.id to it.title })?.let { (id, said) ->
             data.value.tasks.find { it.id == id }?.let { _toast.value = L.s.movedToTopic(it.title); land(listOf(it.id)) }
             // «купить плитку» (a verb first) is a matter of the topic; «хозяйка согласна» — a record in its feed.
             val deal = Regex("^\\p{L}+(?:ть|ти|чь|ться|тись)(?![\\p{L}])", RegexOption.IGNORE_CASE).containsMatchIn(said)
             return sendNow(said, false, label, Scope.InTask(id), files, asQuestion = deal, movedHere = true)
+        }
+        // «#Лендинг для Авиасейлс — бриф получила, дедлайн 30 октября» (persona test, 15 окт): the topic is made by its name and the
+        // rest goes into it — matters when the words start with a verb or carry a date, otherwise a record of its feed.
+        if (!smart && scope == Scope.Main) leadingNewTopic(text)?.let { (name, rest) ->
+            val id = newTopic(name) ?: return@let
+            data.value.tasks.find { it.id == id }?.let { _toast.value = L.s.movedToTopic(it.title) }
+            if (rest.isBlank()) return
+            // «бриф получила, дедлайн 30 октября, созвон с Катей в пн в 12»: each piece on its own — a dated or verb-first piece is a
+            // matter of the topic, the rest a record of its feed.
+            rest.split(Regex(",\\s+|;\\s*|\\n+")).map { it.trim() }.filter { it.isNotBlank() }.forEachIndexed { i, piece ->
+                val deal = Regex("^\\p{L}+(?:ть|ти|чь|ться|тись)(?![\\p{L}])", RegexOption.IGNORE_CASE).containsMatchIn(piece) ||
+                    runCatching { LocalParser.parse(piece, data.value).items.any { it.due != null || it.time != null || it.repeat != null } }.getOrDefault(false)
+                sendNow(piece, false, if (i == 0) label else null, Scope.InTask(id), if (i == 0) files else emptyList(), asQuestion = deal, movedHere = true)
+            }
+            return
         }
         // «Сделай тему Правки к приложению» — a topic now, by its name, on the phone (as «/тема Правки к приложению»).
         if (!smart && scope == Scope.Main) Commands.newTopic(text)?.let { name -> return sendNow("/" + L.s.tagTopic + " " + name, false, label ?: text, scope, files, asQuestion, movedHere) }
@@ -429,7 +450,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             // A question is for the assistant only: without it, say so rather than file the question as a matter.
             if (local.why == "question" && offline) {
                 val why = if (s.parseMode == "local") L.s.askLocal else if (Processor.ready(s) && ru.anjeib.margin.ai.Cloud.network(ctx)) L.s.askCloudOff else L.s.askOffline
-                if (scope == Scope.Main) addAssistant(ChatMsg(fromUser = false, text = why)) else _toast.value = why
+                if (scope == Scope.Main) { addAssistant(ChatMsg(fromUser = false, text = why)); if (s.parseMode == "local") _searchReq.value = searchWordsOf(t) } else _toast.value = why
                 return
             }
             // «Авто» without the internet: what the phone is unsure of waits in «Входящие» for the AI, as that screen promises —
@@ -1362,15 +1383,40 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private val hashRx = Regex("(?:^|\\s)#(\\[[^\\]]+]|[\\p{L}\\d_-]+)")
     private val atRx = Regex("(?:^|\\s)@(\\[[^\\]]+]|[\\p{L}\\d_-]+)")
 
+    /** «#Имя из нескольких слов» in the text: the open topic whose whole title the words after «#» begin with, and that span. */
+    private fun longHash(text: String, d: AppData): Pair<Task, IntRange>? {
+        val m = Regex("(?:^|(?<=\\s))#([\\p{L}\\d_-]+(?:\\s+[\\p{L}\\d_-]+){1,6})").find(text) ?: return null
+        val words = m.groupValues[1].split(Regex("\\s+"))
+        fun norm(s: String) = s.lowercase().replace('ё', 'е')
+        for (n in words.size downTo 2) {
+            val name = norm(words.take(n).joinToString(" "))
+            val hit = d.tasks.firstOrNull { it.topic && !it.done && norm(it.title) == name } ?: continue
+            val end = m.range.first + 1 + words.take(n).joinToString(" ").length + (if (m.value.startsWith("#")) 0 else 1)
+            return hit to (m.range.first..(end - 1))
+        }
+        return null
+    }
+
+    /** «#Лендинг для Авиасейлс — бриф получила, …»: a topic named first and not yet existing, then what goes into it. */
+    private fun leadingNewTopic(text: String): Pair<String, String>? {
+        val m = Regex("^#([^—:\\n]{2,60}?)\\s*(?:—|:|\\n|-\\s)\\s*(.*)$", RegexOption.DOT_MATCHES_ALL).find(text.trim()) ?: return null
+        val name = m.groupValues[1].trim().trim('«', '»', '"')
+        if (name.isBlank() || longHash("#$name", data.value) != null || (name.none { it == ' ' } && data.value.topicFor(name) != null)) return null
+        return name to m.groupValues[2].trim()
+    }
+
     fun parseTags(text: String): Tags {
         val d = data.value
         val tags = slashRx.findAll(text).map { it.groupValues[1].lowercase() }.toSet()
         fun has(vararg w: String) = tags.any { t -> w.any { t.startsWith(it) } }
-        val topic = hashRx.find(text)?.groupValues?.get(1)?.let { d.topicFor(it) }
+        // «#Лендинг для Авиасейлс» (persona test, 15 окт): a topic's name of several words — the longest title the words begin with.
+        val long = longHash(text, d)
+        val topic = long?.first ?: hashRx.find(text)?.groupValues?.get(1)?.let { d.topicFor(it) }
         val people = atRx.findAll(text).map { d.personFor(it.groupValues[1]) }.toList()
         // «позвонить @ЖЭК» keeps the name in the words; with «/жду» / «/обещал» the person is the other side, not the title.
         val sides = has("жду", "wait") || has("обеща", "promised")
-        var t = text.replace(slashRx, " ").replace(hashRx) { m -> if (d.topicFor(m.groupValues[1]) != null) " " else m.value }
+        var t = (if (long != null) text.replaceRange(long.second, " ") else text)
+            .replace(slashRx, " ").replace(hashRx) { m -> if (d.topicFor(m.groupValues[1]) != null) " " else m.value }
             .replace(atRx) { m -> if (sides) " " else " " + d.personFor(m.groupValues[1]) }
         t = t.replace(Regex("\\s{2,}"), " ").trim()
         return Tags(
@@ -1874,6 +1920,21 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- settings ----------------
+
+    private val _searchReq = MutableStateFlow<String?>(null)
+    /** A question the phone can't answer: the app opens search with these words (null — nothing pending). */
+    val searchReq: StateFlow<String?> = _searchReq
+    fun searchOpened() { _searchReq.value = null }
+    private fun searchWordsOf(q: String): String {
+        val words = Regex("[\\p{L}\\d-]+").findAll(q).map { it.value }.toList()
+        val d = data.value
+        words.firstOrNull { w -> d.persons.any { p -> !p.archived && (p.matches(w) || p.name.lowercase().startsWith(w.lowercase().trimEnd('е', 'у', 'ю', 'й', 'и', 'я', 'а'))) } }?.let { w ->
+            return d.persons.first { p -> p.matches(w) || p.name.lowercase().startsWith(w.lowercase().trimEnd('е', 'у', 'ю', 'й', 'и', 'я', 'а')) }.name
+        }
+        val stop = setOf("что", "когда", "кому", "кто", "где", "мне", "меня", "я", "у", "обещал", "обещала", "должен", "должна", "завтра", "сегодня", "есть",
+            "какие", "какой", "какая", "план", "планы", "дела", "дело", "надо", "нужно", "горит", "срочно", "неделе", "неделю", "этой", "следующей", "сейчас", "там", "это")
+        return words.filter { it.length >= 4 && it.lowercase() !in stop }.maxByOrNull { it.length } ?: ""
+    }
 
     fun updateSettings(f: (Settings) -> Settings) {
         prefs.update(f)

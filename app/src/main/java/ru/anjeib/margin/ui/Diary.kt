@@ -119,11 +119,12 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
     val find = LocalFind.current
     val found = remember { mutableListOf<FindHit>() }
     ReportFound("notes", found, list, data)
+    val plannerLook = planner
     Box(Modifier.fillMaxSize().ruledPage(pageLines).screenRule()) {
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())) {
           findable(found, find, { k -> data.taskOfKey(k)?.let { t -> find != null && findHit(find.words, t.title + " " + data.mentionsPlain(t.entries.joinToString(" ") { it.text })) } == true }) {
+            if (plannerLook) stickyHeader("tools") { PinnedTools() }
             item("head") {
-                if (planner) PageToolsRow()
                 Margined(Modifier.padding(top = if (planner) 0.dp else 8.dp)) {
                     Column {
                         Row(verticalAlignment = Alignment.Top) {

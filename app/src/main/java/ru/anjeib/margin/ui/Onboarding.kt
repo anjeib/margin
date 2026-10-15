@@ -50,9 +50,10 @@ import ru.anjeib.margin.data.questionRow
 import ru.anjeib.margin.data.shortLabel
 
 /**
- * Four quiet pages on first launch — only the basics, the rest lives in «Помощь»; skippable at any point:
- * write as you think (and the marks), a matter grows into a topic, a tap opens / a hold gives the menu / «Отменить»,
- * permissions. Each page shows the thing itself — the same rows as on «Сегодня» — not a description of it.
+ * Five quiet pages on first launch (owner, 15 окт: only what the phone does by itself, all of it) — the rest lives in «Помощь»;
+ * skippable at any point: write as you think (dates, repeats, the marks), waiting and promised, a matter grows into a topic,
+ * a tap opens / the knot / a hold / the pages, permissions and where the data lives. Each page shows the thing itself — the
+ * same rows as on «Сегодня» — not a description of it.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -60,10 +61,11 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
     val c = M.c
     val s = M.s
     // Swiped like any set of pages, or moved on with the button; «1 из 4» says how far it is.
-    val pager = androidx.compose.foundation.pager.rememberPagerState { 4 }
+    val pages = listOf(s.tourWriteTitle to s.tourWriteText, s.tourPromiseTitle to s.tourPromiseText, s.tourTopicTitle to s.tourTopicText,
+        s.tourGesturesTitle to s.tourGesturesText, s.ob4Title to s.ob4Text)
+    val pager = androidx.compose.foundation.pager.rememberPagerState { pages.size }
     val page = pager.currentPage
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val pages = listOf(s.tourWriteTitle to s.tourWriteText, s.tourTopicTitle to s.tourTopicText, s.tourGesturesTitle to s.tourGesturesText, s.ob4Title to s.ob4Text)
     val ctx = androidx.compose.ui.platform.LocalContext.current
     fun has(p: String) = androidx.core.content.ContextCompat.checkSelfPermission(ctx, p) == android.content.pm.PackageManager.PERMISSION_GRANTED
     // A pressed button shows what happened — otherwise nobody knows whether it worked.
@@ -84,6 +86,9 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
             ru.anjeib.margin.data.Subtask(id = "b", title = s.tourTopicDeals[1], due = today.plusDays(2).toString(), from = s.tourTopicWho)),
         entries = List(4) { ru.anjeib.margin.data.Entry(id = "e$it") })
     val topicRows = topic.subtasks.map { topic.questionRow(it) }
+    // «Ждём и обещали» as the top of «Сегодня» shows them: the arrow of each side on the knot, the person under the words.
+    val wait = ru.anjeib.margin.data.Task(id = "tour-wait", title = s.tourDemoWait, due = wed.toString(), waitingFor = s.tourDemoWaitWho)
+    val promise = ru.anjeib.margin.data.Task(id = "tour-promise", title = s.tourDemoPromise, due = today.plusDays(1).toString(), promisedTo = s.tourDemoPromiseWho)
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)) {
         // Its height stays when «Пропустить» goes on the last page — the title must not jump.
@@ -113,8 +118,13 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
                             s.tourMarks.forEach { Pill(it) }
                         }
                     }
-                    1 -> TourRows(topicRows, today)
-                    2 -> Column {
+                    1 -> Column {
+                        s.tourPromiseSaid.forEach { Said(it) }
+                        Text("↓", style = Type.body.copy(color = c.link, fontSize = 20.sp), modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 2.dp))
+                        TourRows(listOf(wait, promise), today)
+                    }
+                    2 -> TourRows(topicRows, today)
+                    3 -> Column {
                         // A picture of the row, not a live one: the words say what a tap and a hold do.
                         Box(Modifier.fillMaxWidth()) {
                             TourRows(listOf(call), today)

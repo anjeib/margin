@@ -168,7 +168,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 val rowActs = LocalRowActions.current
                 var more by remember(task.id) { mutableStateOf(false) }
                 var postponing by remember(task.id) { mutableStateOf(false) }
-                if (postponing) PostponeDialog(onDismiss = { postponing = false }) { d -> vm.postponeTo(task.id, d); postponing = false }
+                if (postponing) PostponeDialog(onDismiss = { postponing = false }, from = task.dueDate) { d -> vm.postponeTo(task.id, d); postponing = false }
                 // Owner, 14 окт: no ⋯ at the top — everything the matter can do is under «Ещё».
                 Spacer(Modifier.height(4.dp))
                 // v8: «когда» on the margin as on «Сегодня», the mark and the title, one line of values under it, the tools.
@@ -463,15 +463,8 @@ internal fun DaysProp(slots: List<ru.anjeib.margin.data.Slot>, onToggle: (String
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun OneDayDialog(onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
-    val c = M.c
     val s = M.s
-    val st = androidx.compose.material3.rememberDatePickerState()
-    val colors = DatePickerDefaults.colors(containerColor = c.card, selectedDayContainerColor = c.link, todayDateBorderColor = c.link, todayContentColor = c.link)
-    androidx.compose.material3.DatePickerDialog(onDismissRequest = onDismiss, colors = colors,
-        confirmButton = { TextButton({ st.selectedDateMillis?.let { onPick(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) } }) { Text(s.save, color = c.link) } },
-        dismissButton = { TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } }) {
-        androidx.compose.material3.DatePicker(state = st, colors = colors, showModeToggle = false, title = null, headline = null)
-    }
+    DayDialog(s.addDay, null, onDismiss = onDismiss, onPick = onPick)
 }
 
 @Composable
@@ -538,29 +531,16 @@ internal fun DatesDialog(task: Task, onDismiss: () -> Unit, onSave: (String?, St
     val today = LocalDate.now()
     val friday = today.with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.FRIDAY)).let { if (it == today) it.plusWeeks(1) else it }
     val nextMonday = today.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.MONDAY))
-    val single = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = (task.dueDate ?: task.startDate)?.ms())
-    val rng = rememberDateRangePickerState(
-        initialSelectedStartDateMillis = (task.startDate ?: task.dueDate)?.ms(),
-        initialSelectedEndDateMillis = task.startDate?.let { task.dueDate?.ms() },
-    )
-    val colors = DatePickerDefaults.colors(
-        containerColor = c.card, selectedDayContainerColor = c.link, todayDateBorderColor = c.link,
-        todayContentColor = c.link, dayInSelectionRangeContainerColor = c.linkSoft,
-        titleContentColor = c.graphite, headlineContentColor = c.ink,
-    )
-    androidx.compose.material3.DatePickerDialog(
-        onDismissRequest = onDismiss,
-        colors = colors,
-        confirmButton = {
-            TextButton({
-                if (range) {
-                    val a = rng.selectedStartDateMillis?.date(); val b = rng.selectedEndDateMillis?.date()
-                    if (a != null && b != null) onSave(a.toString(), b.toString()) else onSave(null, a?.toString())
-                } else onSave(null, single.selectedDateMillis?.date()?.toString())
-            }) { Text(s.save, color = c.link) }
-        },
+    // Margin's own grid (persona test, 15 окт): one tap picks a day; a range is its first and last day, two taps, then «Сохранить».
+    var month by remember { mutableStateOf(java.time.YearMonth.from(task.dueDate ?: task.startDate ?: today)) }
+    var a by remember { mutableStateOf(task.startDate?.takeIf { task.dueDate != null }) }
+    var b by remember { mutableStateOf(task.dueDate) }
+    AlertDialog(
+        onDismissRequest = onDismiss, containerColor = c.card,
+        title = { Text(s.dateWord, style = Type.cardTitle.copy(color = c.ink)) },
+        confirmButton = { if (range) TextButton({ if (a != null && b != null) onSave(a.toString(), b.toString()) else onSave(null, (b ?: a)?.toString()) }) { Text(s.save, color = c.link) } },
         dismissButton = { TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
-    ) {
+        text = {
         Column {
             FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill(s.quickToday, onClick = { onSave(null, today.toString()) })
@@ -573,10 +553,12 @@ internal fun DatesDialog(task: Task, onDismiss: () -> Unit, onSave: (String?, St
                 Pill(s.quickNone, onClick = { onSave(null, null) })
                 Pill(if (range) s.singleLink else s.rangeLink, accent = true, onClick = { range = !range })
             }
-            if (range) DateRangePicker(state = rng, colors = colors, showModeToggle = false, title = null, headline = null, modifier = Modifier.height(400.dp))
-            else androidx.compose.material3.DatePicker(state = single, colors = colors, showModeToggle = false, title = null, headline = null)
+            if (range) DayGrid(month, { month = it }, selected = null, rangeStart = a, rangeEnd = b) { d ->
+                // First tap — the first day; the second — the last (an earlier one starts over).
+                if (a == null || (a != null && b != null) || d.isBefore(a)) { a = d; b = null } else b = d
+            } else DayGrid(month, { month = it }, selected = task.dueDate ?: task.startDate) { d -> onSave(null, d.toString()) }
         }
-    }
+    })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

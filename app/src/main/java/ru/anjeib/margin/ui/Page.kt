@@ -176,6 +176,13 @@ fun PageToolsRow(calendar: Boolean = false) {
     }
 }
 
+/** The tools row as a list's sticky header: on the page's paper, with the margin's rule running through it, so nothing shows under it. */
+@Composable
+fun PinnedTools(calendar: Boolean = false) {
+    val c = M.c
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().background(c.bg).screenRule()) { PageToolsRow(calendar) }
+}
+
 /** The page edges and cover beyond the sheet. */
 private val EdgeW = 11.dp
 

@@ -52,6 +52,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -222,7 +223,7 @@ fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modif
         // «Полоса набора» (0.66): hours and dates in Commissioner, aligned right against the margin rule to share the same
         // vertical axis as the day's large number; late — in terracotta.
         Text(text, style = Type.small.copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink }, fontSize = 13.5.sp, lineHeight = 20.sp,
-            fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End), maxLines = 1, softWrap = false, modifier = modifier.fillMaxWidth())
+            fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End), maxLines = 2, modifier = modifier.fillMaxWidth())
         return
     }
     PencilText(AnnotatedString(text), style = Type.italic.copy(color = when { link -> c.link; else -> if (planner) c.ink else c.ink.copy(alpha = 0.8f) },
@@ -309,9 +310,17 @@ fun MarginTap(onTap: (() -> Unit)?, late: Boolean = false, done: Boolean = false
     val ringColor = when { done -> c.sea; late -> c.accent; else -> c.sea }
     val paper = c.bg
     val line = rowLine
-    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).drawBehind {
-        // The margin cell is [Margined]'s Box(width = MarginW).padding(end = 10.dp): its right edge + 10 dp is the rule itself.
-        val x = size.width + 10.dp.toPx()
+    // Fable, 15 окт (persona test: «кольцо не нажимается»): the margin cell ends 10 dp short of the rule, so the knot itself lay
+    // outside the tap zone. The cell is laid out [KnotReach] wider than its slot — over the rule and a little past it — and the
+    // words inside keep their old right edge.
+    val reach = KnotReach
+    Box(Modifier.fillMaxWidth().layout { m, c ->
+        val extra = reach.roundToPx()
+        val p = m.measure(c.copy(minWidth = 0, maxWidth = if (c.maxWidth == androidx.compose.ui.unit.Constraints.Infinity) c.maxWidth else c.maxWidth + extra))
+        layout(p.width - extra, p.height) { p.place(0, 0) }
+    }.heightIn(min = 48.dp).drawBehind {
+        // The cell now runs [reach] past its slot; the slot's right edge + 10 dp is the rule itself.
+        val x = size.width - reach.toPx() + 10.dp.toPx()
         // RowBody pads the words RowTop − 2 dp from the top; the knot sits on the middle of their first line.
         val y = (RowTop - 2.dp).toPx() + line.toPx() / 2
         val r = 6.dp.toPx()
@@ -320,8 +329,15 @@ fun MarginTap(onTap: (() -> Unit)?, late: Boolean = false, done: Boolean = false
         if (done) drawCircle(ringColor, radius = r, center = at)
         drawCircle(ringColor, radius = r, center = at, style = androidx.compose.ui.graphics.drawscope.Stroke(1.3.dp.toPx()))
     }.clip(RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
-        .clickable(onClickLabel = s.markDone, role = androidx.compose.ui.semantics.Role.Checkbox, onClick = onTap)) { content() }
+        // TalkBack (ChatGPT, 15 окт): a checkbox with a real state, not «checkable=false».
+        .semantics { toggleableState = androidx.compose.ui.state.ToggleableState(done) }
+        .clickable(onClickLabel = s.markDone, role = androidx.compose.ui.semantics.Role.Checkbox, onClick = onTap)) {
+        Box(Modifier.fillMaxWidth().padding(end = reach)) { content() }
+    }
 }
+
+/** How far the margin's tap cell reaches past its slot: over the 10 dp gap, the rule and the knot's far half. */
+val KnotReach = 22.dp
 
 /** The words of a row: ink, 16 sp, up to three lines. */
 @Composable
@@ -394,7 +410,7 @@ fun SectionHead(
                 Row(Modifier.fillMaxWidth().heightIn(min = 32.dp).clip(RoundedCornerShape(6.dp))
                     .then(if (onFold != null) Modifier.clickable(onClick = onFold) else Modifier), verticalAlignment = Alignment.CenterVertically) {
                     Text(label, style = androidx.compose.ui.text.TextStyle(fontFamily = Literata, fontWeight = FontWeight(500), fontSize = 17.sp,
-                        letterSpacing = 1.4.sp, fontFeatureSettings = "smcp", color = c.ink), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        letterSpacing = 1.4.sp, fontFeatureSettings = "smcp", color = c.ink), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                     action?.let { (text, act) ->
                         Text(text, style = Type.small.copy(color = c.link, fontSize = 13.5.sp, fontWeight = FontWeight.Medium),
                             modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = act).padding(horizontal = 6.dp, vertical = 6.dp))

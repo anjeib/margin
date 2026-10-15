@@ -510,7 +510,7 @@ fun SmartComposer(
                                 },
                                 textStyle = Type.body.copy(color = c.ink, fontSize = 15.sp), cursorBrush = SolidColor(c.link), maxLines = 6,
                                 visualTransformation = rememberMarkLook(vm),
-                                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                                modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics { contentDescription = hint },
                             )
                         }
                         when {
@@ -584,7 +584,7 @@ fun SmartComposer(
                         },
                         textStyle = Type.body.copy(fontFamily = rowFamily, color = c.ink), cursorBrush = SolidColor(c.link), maxLines = 6,
                         visualTransformation = rememberMarkLook(vm),
-                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics { contentDescription = hint },
                     )
                 }
                 // The microphone while nothing is typed; «send» always at the end — pale until there is something to send.

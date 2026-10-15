@@ -137,6 +137,10 @@ fun PageLine(text: androidx.compose.runtime.MutableState<String>, hint: String, 
         else if (hadIme) { hadIme = false; if (text.value.isNotBlank() || !files.isNullOrEmpty()) onKeep?.invoke() }
     }
     LaunchedEffect(focusKey) { if (focusKey != null) { kotlinx.coroutines.delay(150); runCatching { focus.requestFocus() } } }
+    // Sent (the words taken from outside, not deleted by hand): the line gives its cursor back — a blinking cursor under an empty
+    // line read as a stuck field (persona test, 15 окт).
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    LaunchedEffect(t) { if (t.isEmpty() && typed.isNotEmpty()) { typed = ""; focusManager.clearFocus() } }
     val now = nowStamp()
     // On the margin only the hour once writing begins — it is the dates' place; «+» stands just right of the rule, at the
     // start of the line, so a photo or a file lands right here, under these words (owner, 13 окт).
