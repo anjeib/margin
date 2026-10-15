@@ -82,6 +82,8 @@ interface Strings {
     val samplesRemove: String
     val samplesBack: String
     val samplesTitle: String
+    val tourAgain: String
+    val tourAgainHint: String
     val askOffline: String
     val errInvite: String
     val inviteTitle: String
@@ -1096,6 +1098,8 @@ object Ru : Strings {
     override val samplesRemove = "Убрать примеры"
     override val samplesBack = "Вернуть примеры"
     override val samplesTitle = "Примеры"
+    override val tourAgain = "Показать знакомство снова"
+    override val tourAgainHint = "Пять страниц о том, что умеет Margin"
     override val askOffline = "Чтобы помощник отвечал, нужны интернет и код приглашения."
     override val errInvite = "Код приглашения не подошёл — проверьте его в Настройках"
     override val inviteTitle = "Код приглашения"
@@ -2003,6 +2007,8 @@ object En : Strings {
     override val samplesRemove = "Remove examples"
     override val samplesBack = "Bring examples back"
     override val samplesTitle = "Examples"
+    override val tourAgain = "Show the tour again"
+    override val tourAgainHint = "Five pages on what Margin does"
     override val askOffline = "The assistant answers questions when there is internet and an invite code."
     override val errInvite = "The invite code did not work — check it in Settings"
     override val inviteTitle = "Invite code"
