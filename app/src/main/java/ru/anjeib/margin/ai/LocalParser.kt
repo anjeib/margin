@@ -336,7 +336,9 @@ object LocalParser {
         // A window said outright (owner, 13 окт): «с 9 по 11 октября», «9–11 октября», «с 28 сентября по 3 октября»,
         // «с понедельника по среду», «с 9 по 11» (without a month only with «по» — «с 9 до 11» are hours), «с 9.10 по 11.10».
         if (repeat == null) {
-            fun span(a: LocalDate?, b: LocalDate?) { if (a != null && b != null) { start = a; due = if (b.isBefore(a)) b.plusYears(1) else b } }
+            // A window that has already begun («с 10 по 17 октября» said on the 15th): dateOf pushed its first day a year on —
+            // pull it back to the year of its last day (Fable, 15 окт: the matter landed in 2027 and vanished from the page).
+            fun span(a: LocalDate?, b: LocalDate?) { if (a != null && b != null) { start = if (a.isAfter(b)) a.minusYears(1) else a; due = b } }
             val windows: List<Pair<Regex, (MatchResult) -> Unit>> = listOf(
                 Regex("${B}(?:с|со)\\s+(\\d{1,2})(?:-?го)?(?:\\s+$MON)?\\s+(?:по|до)\\s+(\\d{1,2})(?:-?(?:е|го))?\\s+$MON$E", ic) to { m ->
                     val mb = month(m.groupValues[4]); val ma = m.groupValues[2].takeIf { it.isNotBlank() }?.let { month(it) } ?: mb

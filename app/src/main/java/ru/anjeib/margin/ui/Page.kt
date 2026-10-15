@@ -337,7 +337,8 @@ inline fun androidx.compose.ui.text.AnnotatedString.Builder.pencil(block: androi
 }
 
 /** Saturday and Sunday in pale terracotta (owner, 14 окт) — a tone lighter than anything late. */
-val weekendInk: Color @Composable get() = M.c.accent.copy(alpha = if (M.c.dark) 0.7f else 0.62f)
+// Fable, 15 окт: grey, not terracotta — on this page terracotta means «просрочено», and a weekend is not late.
+val weekendInk: Color @Composable get() = M.c.graphite
 
 /** The pencil's colour: our terracotta (owner, 14 окт) — the mark of «late» as before, now as a stroke under the words. */
 val pencilInk: Color @Composable get() = M.c.accent.copy(alpha = 0.9f)

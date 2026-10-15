@@ -189,7 +189,9 @@ fun EventPaperRow(e: CalEvent, seat: Seat) {
 @Composable
 fun DonePaperRow(t: Task, seat: Seat, onToggle: () -> Unit, onOpen: () -> Unit) {
     val c = M.c
-    PaperRow(seat, mark = { CheckCircle(true, size = 21.dp, onToggle = onToggle) }, onClick = onOpen) {
+    // The planner (Fable, 15 окт): no circle in the words' column — the filled knot on the rule is the mark, and a tap on the margin takes it back.
+    PaperRow(seat, margin = if (planner) "" else null, done = true, onMargin = if (planner) onToggle else null,
+        mark = if (planner) null else ({ CheckCircle(true, size = 21.dp, onToggle = onToggle) }), onClick = onOpen) {
         StrikeText(t.title, Type.body.copy(fontFamily = rowFamily, fontSize = rowSize, lineHeight = rowLine, color = c.graphite), 1f, c.faint, maxLines = 2)
         t.topicTitle?.let { RowSub("# $it") }
     }

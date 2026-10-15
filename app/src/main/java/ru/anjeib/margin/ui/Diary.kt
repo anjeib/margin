@@ -119,7 +119,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
     val find = LocalFind.current
     val found = remember { mutableListOf<FindHit>() }
     ReportFound("notes", found, list, data)
-    Box(Modifier.fillMaxSize().ruledPage(pageLines).marginRule(c.sea, over = true)) {
+    Box(Modifier.fillMaxSize().ruledPage(pageLines).screenRule()) {
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())) {
           findable(found, find, { k -> data.taskOfKey(k)?.let { t -> find != null && findHit(find.words, t.title + " " + data.mentionsPlain(t.entries.joinToString(" ") { it.text })) } == true }) {
             item("head") {
@@ -139,6 +139,15 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
             // Owner, 14 окт: no «Сегодня» / «Суббота» line — a day is one block (its number large on the margin by its first note),
             // and the notes in it are parted by a hairline; each note's hour on the margin by it.
             byDay.forEach { (day, list) ->
+                // Owner, 15 окт: the day's number is a heading of its own — a row over the day's notes, the weekday quietly by it —
+                // so every note's hour stands on the note's own first line (the first note's hour used to hang under the number).
+                item("d" + day) {
+                    Margined(Modifier.padding(top = 18.dp, bottom = 2.dp), margin = { MarginDay(day.dayOfMonth, day.dayMonthShort().substringAfter(' ')) }) {
+                        Box(Modifier.fillMaxWidth().height(58.dp), contentAlignment = Alignment.BottomStart) {
+                            Text(day.dowFull().lowercase(), style = Type.small.copy(color = c.graphite, fontSize = 14.5.sp), modifier = Modifier.padding(bottom = 14.dp))
+                        }
+                    }
+                }
                 list.forEachIndexed { i, n ->
                     item("n" + n.id) {
                         val at = n.bornAt()
@@ -147,11 +156,8 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                         // The title only when the words don't already begin with it (a note written here is its own first line).
                         val showTitle = n.title.isNotBlank() && !plainBody.trimStart().startsWith(n.title.trimEnd('…').take(40))
                         val hour = at.drop(11).take(5)
-                        Margined(Modifier.padding(top = if (i == 0) 20.dp else 0.dp).landing(n.id in landed, 0), margin = {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (i == 0) 0.dp else 10.dp)) {
-                                if (i == 0) MarginDay(day.dayOfMonth, day.dayMonthShort().substringAfter(' '))
-                                MarginNote(hour)
-                            }
+                        Margined(Modifier.landing(n.id in landed, 0), margin = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 10.dp)) { MarginNote(hour) }
                         }) {
                             PanelPiece(seatOf(i, list.size)) {
                                 Column(Modifier.fillMaxWidth().clickable { onOpen(n.id) }.padding(horizontal = if (planner) 0.dp else 16.dp, vertical = 12.dp)) {

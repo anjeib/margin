@@ -12,7 +12,7 @@ import android.os.ParcelFileDescriptor
  */
 class MarginBackupAgent : BackupAgent() {
     override fun onFullBackup(data: FullBackupDataOutput) {
-        if (getSharedPreferences("margin", MODE_PRIVATE).getBoolean("googleBackup", true)) super.onFullBackup(data)
+        if (getSharedPreferences("margin", MODE_PRIVATE).getBoolean("googleBackup", false)) super.onFullBackup(data)
     }
 
     // Key-value backup is not used — Auto Backup only.

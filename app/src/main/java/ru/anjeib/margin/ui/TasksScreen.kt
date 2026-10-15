@@ -228,7 +228,7 @@ fun TaskList(
     val pad = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
     val pageLines = rememberPageLines()
     val plannerLook = planner
-    Box(Modifier.fillMaxSize().ruledPage(pageLines).marginRule(c.sea, over = true)) {
+    Box(Modifier.fillMaxSize().ruledPage(pageLines).screenRule()) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val listScope = androidx.compose.runtime.rememberCoroutineScope()
     // The month unfolds at the very top: the page goes up to show it.
@@ -246,6 +246,8 @@ fun TaskList(
         when {
             view == Views.TODAY -> {
                 // The calendar tab unfolds the month over the page (owner, 14 окт); a tap on a day turns the page to it.
+                // Fable, 15 окт: the tools stay where they are; the month unfolds under them, not over them.
+                if (monthOpen && plannerLook) item("tools") { PageToolsRow(calendar = true) }
                 if (monthOpen) item("month") {
                     // No fade (owner, 14 окт): a fading month lay under the matters sliding up over it — it goes at once, they close up.
                     Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)) { MonthPanel(data, vm, pageDay ?: today, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
@@ -255,7 +257,7 @@ fun TaskList(
                 if (other != null) {
                     val p = dayPlan(data, other, today, events)
                     item("o-head") {
-                        if (plannerLook) PageToolsRow(calendar = true)
+                        if (plannerLook && !monthOpen) PageToolsRow(calendar = true)
                         Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp), margin = { MarginDay(other.dayOfMonth, other.dayMonthShort().substringAfter(' ')) }) {
                             Column {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -287,7 +289,7 @@ fun TaskList(
                 val undated = (tasks.filter { !it.done && it.dueDate == null && it.startDate == null } + data.undatedTopicMatters())
                     .sortedByDescending { it.createdAt }
                 item("head") {
-                    if (plannerLook) PageToolsRow(calendar = true)
+                    if (plannerLook && !monthOpen) PageToolsRow(calendar = true)
                     Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp), margin = { MarginDay(today.dayOfMonth, today.dayMonthShort().substringAfter(' ')) }) {
                         Column {
                           Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {

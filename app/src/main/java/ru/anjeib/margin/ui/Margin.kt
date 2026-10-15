@@ -397,7 +397,12 @@ fun PageHead(title: String, subtitle: String? = null, modifier: Modifier = Modif
 
 /** The rule behind a whole screen, the same on every one. */
 @Composable
-fun Modifier.screenRule(): Modifier = marginRule(M.c.sea, over = true)
+fun Modifier.screenRule(): Modifier = marginRule(marginInk, over = !marginUnder)
+
+/** «Полоса набора» (Fable, 15 окт): one ink for every rule on the page — the same as the horizontal ones; sea elsewhere. */
+val marginInk: Color @Composable get() = if (planner) M.c.ink.copy(alpha = 0.78f) else M.c.sea
+/** The planner draws the rule behind the rows (no swipes there, nothing paints over it), so a knot on it (MarginTap) can open a gap in the line. */
+val marginUnder: Boolean @Composable get() = planner
 
 /** The same rule under the field at the bottom: drawn behind, so bubbles and pills over it keep their ground. */
 @Composable

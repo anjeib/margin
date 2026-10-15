@@ -320,7 +320,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     Column(
         Modifier.fillMaxSize().graphicsLayer {
             scaleY = 1f - 0.92f * fold.value; alpha = 1f - fold.value; transformOrigin = TransformOrigin(0.5f, 1f)
-        }.background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding().marginRule(c.sea, rule.value),
+        }.background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding().marginRule(marginInk, rule.value, over = !marginUnder),
     ) {
         // As every card (owner, 14 окт; design/v9/v9-card-topic.png): under the frame's «MARGIN», back on the margin.
         Row(Modifier.fillMaxWidth().padding(top = 18.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {

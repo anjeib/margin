@@ -129,6 +129,18 @@ class LocalParserTest {
         println("Чужие фразы: верно ${right}/${foreign.size}, отдано ИИ $toAi, ошибся уверенно $wrongSure")
     }
 
+    /** A window that has already begun, said from inside it: it stays this year (Fable, 15 окт — it had landed in 2027). */
+    @Test fun startedWindowStaysThisYear() {
+        L.lang = Lang.Ru
+        val thu = LocalDate.of(2026, 10, 15)
+        val w = LocalParser.parse("Собрать референсы для Зерна с 10 по 17 октября", base, today = thu, now = null).items.single()
+        assertTrue("window ${w.start}..${w.due}", w.start == LocalDate.of(2026, 10, 10) && w.due == LocalDate.of(2026, 10, 17))
+        val ny = LocalParser.parse("отпуск с 28 декабря по 3 января", base, today = LocalDate.of(2026, 12, 30), now = null).items.single()
+        assertTrue("new year ${ny.start}..${ny.due}", ny.start == LocalDate.of(2026, 12, 28) && ny.due == LocalDate.of(2027, 1, 3))
+        val past = LocalParser.parse("конференция с 1 по 3 марта", base, today = thu, now = null).items.single()
+        assertTrue("next spring ${past.start}..${past.due}", past.start == LocalDate.of(2027, 3, 1) && past.due == LocalDate.of(2027, 3, 3))
+    }
+
     /** Said on Thursday 8 Oct at 23:04: an hour that has passed today means the next time (review 0.13, defect 5). */
     @Test fun passedHourMovesOn() {
         L.lang = Lang.Ru

@@ -29,8 +29,8 @@ data class Settings(
     val voiceSendNow: Boolean = true,
     /** Who reads the words: local (the phone only) | auto (the phone, the AI for hard phrases when online) | cloud (the AI when online). */
     val parseMode: String = "local",
-    /** Android Auto Backup to the Google account (see MarginBackupAgent). */
-    val googleBackup: Boolean = true,
+    /** Android Auto Backup to the Google account (see MarginBackupAgent). Off by default (Fable, 15 окт): «никакого облака» means no copy leaves the phone unasked. */
+    val googleBackup: Boolean = false,
     /** Use the on-device Whisper model even when online. */
     val whisperAlways: Boolean = false,
     /** Read the phone calendar so plans see meetings. */
@@ -89,7 +89,7 @@ class Prefs private constructor(context: Context) {
         // Owner, 13 окт: no cloud AI for now — everything read on the phone. Installs from before are switched once to «Телефон».
         // Without a cloud AI in the build (owner, 14 окт) the phone reads everything, whatever was chosen before — nothing waits for it.
         parseMode = if (!ru.anjeib.margin.BuildConfig.CLOUD_AI || !sp.getBoolean("phoneFirst", false)) "local" else sp.getString("parseMode", null)?.takeIf { it in setOf("local", "auto", "cloud") } ?: "local",
-        googleBackup = sp.getBoolean("googleBackup", true),
+        googleBackup = sp.getBoolean("googleBackup", false),
         whisperAlways = sp.getBoolean("whisperAlways", false),
         calendar = sp.getBoolean("calendar", false),
         lock = sp.getBoolean("lock", false),

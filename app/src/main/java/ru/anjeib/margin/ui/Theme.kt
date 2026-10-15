@@ -166,8 +166,8 @@ object Type {
     // The planner's headings (design/v9): the regular cut, the ink spread a little as letterpress leaves it.
     val display get() = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500),
         fontSize = 40.sp, lineHeight = 46.sp, letterSpacing = (-0.5).sp)
-    /** A page's name — «Среда», «Заметки», «Содержание»: the display cut of Literata, italic (owner, 15 окт). */
-    val pageTitle get() = if (PlannerType.value) TextStyle(fontFamily = Cormorant, fontStyle = FontStyle.Italic, fontWeight = FontWeight(500), fontSize = 50.sp, lineHeight = 54.sp)
+    /** A page's name — «Среда», «Заметки», «Содержание»: Cormorant, upright (Fable, 15 окт: the italic read as a boutique, not a strict book). */
+    val pageTitle get() = if (PlannerType.value) TextStyle(fontFamily = Cormorant, fontWeight = FontWeight(600), fontSize = 50.sp, lineHeight = 54.sp)
         else display
     val title get() = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 26.sp, lineHeight = 32.sp)
     val cardTitle get() = TextStyle(fontFamily = Serif, fontWeight = FontWeight(500), fontSize = 19.sp, lineHeight = 25.sp)

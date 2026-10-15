@@ -425,6 +425,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     }
                     Spacer(Modifier.height(8.dp))
                     // Copied a message in MAX or Telegram a moment ago → one tap hands it in, with who and what.
+                    // Fable, 15 окт: the offer goes away on its own after half a minute — it hung over the field as long as the clipboard held text.
+                    LaunchedEffect(copied) { if (copied) { kotlinx.coroutines.delay(30_000); onCopiedSeen() } }
                     if (copied && !typing && busy == null && pending == null && (screen == TASKS || screen == NOTES)) {
                         Row(Modifier.fillMaxWidth().padding(start = FieldLead, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Pill(s.pasteCopied, accent = true, onClick = { copiedText = readCopied(); if (copiedText == null) onCopiedSeen() })

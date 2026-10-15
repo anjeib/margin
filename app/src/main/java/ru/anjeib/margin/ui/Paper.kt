@@ -287,16 +287,19 @@ fun PaperRow(
     trailing: (@Composable () -> Unit)? = null,
     /** On the planner page a tap on the margin's hour or date marks the entry done (owner, 15 окт). */
     onMargin: (() -> Unit)? = null,
+    /** Done: the knot on the rule is filled. */
+    done: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Margined(modifier, margin = margin?.let { m -> { MarginTap(onMargin, late = late) { RowMargin(m, late) } } }) {
+    Margined(modifier, margin = margin?.let { m -> { MarginTap(onMargin, late = late, done = done) { RowMargin(m, late) } } }) {
         PanelPiece(seat) { RowBody(mark, onClick = onClick, onLong = onLong, trailing = trailing, content = content) }
     }
 }
 
 /**
- * The margin's cell as the row's «done» (0.66): a finger-sized target over the hour or date, plus a subtle 12 dp ring node right
- * on the margin rule (`MarginW`) so the user immediately sees the interactive check target without cluttering the text column.
+ * The margin's cell as the row's «done» (0.66, Gemini): a finger-sized target over the hour or date, plus a knot — a 12 dp ring sitting
+ * on the margin rule. Fable, 15 окт: the knot is centred on the first line of words (so it stays there at any font size), the rule
+ * stops short of it on both sides (a disc of paper under the ring), and a done row's knot is filled.
  */
 @Composable
 fun MarginTap(onTap: (() -> Unit)?, late: Boolean = false, done: Boolean = false, content: @Composable () -> Unit) {
@@ -304,13 +307,18 @@ fun MarginTap(onTap: (() -> Unit)?, late: Boolean = false, done: Boolean = false
     val c = M.c
     val s = M.s
     val ringColor = when { done -> c.sea; late -> c.accent; else -> c.sea }
-    val bgColor = c.bg
+    val paper = c.bg
+    val line = rowLine
     Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).drawBehind {
-        val x = size.width + 10.dp.toPx() // aligns with MarginW (since m-left has padding(end = 10.dp))
-        val y = (RowTop + 11.dp).toPx()
+        // The margin cell is [Margined]'s Box(width = MarginW).padding(end = 10.dp): its right edge + 10 dp is the rule itself.
+        val x = size.width + 10.dp.toPx()
+        // RowBody pads the words RowTop − 2 dp from the top; the knot sits on the middle of their first line.
+        val y = (RowTop - 2.dp).toPx() + line.toPx() / 2
         val r = 6.dp.toPx()
-        drawCircle(if (done) ringColor else bgColor, radius = r, center = androidx.compose.ui.geometry.Offset(x, y))
-        drawCircle(ringColor, radius = r, center = androidx.compose.ui.geometry.Offset(x, y), style = androidx.compose.ui.graphics.drawscope.Stroke(1.3.dp.toPx()))
+        val at = androidx.compose.ui.geometry.Offset(x, y)
+        drawCircle(paper, radius = r + 3.dp.toPx(), center = at)
+        if (done) drawCircle(ringColor, radius = r, center = at)
+        drawCircle(ringColor, radius = r, center = at, style = androidx.compose.ui.graphics.drawscope.Stroke(1.3.dp.toPx()))
     }.clip(RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
         .clickable(onClickLabel = s.markDone, role = androidx.compose.ui.semantics.Role.Checkbox, onClick = onTap)) { content() }
 }
@@ -377,15 +385,16 @@ fun SectionHead(
 ) {
     val c = M.c
     if (planner) {
-        // «Полоса набора» (owner, 15 окт): a thin rule across the whole page, the margin too, then the section's name in
-        // Literata letter-spaced — the Russian way of setting a heading apart; no caps, no count (owner: «убери номера»).
+        // «Полоса набора» (owner, 15 окт): a thin rule across the whole page, the margin too, then the section's name; no count
+        // (owner: «убери номера»). Fable, 15 окт: in Literata's small caps with a little tracking — letter-spaced lowercase is the
+        // one thing a typesetter never does.
         Column(modifier.fillMaxWidth().padding(top = if (rule) top + 6.dp else 6.dp)) {
             if (rule) Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp).height(0.75.dp).background(c.hairline))
             Margined(Modifier.padding(top = if (rule) 20.dp else 0.dp, bottom = 4.dp)) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 32.dp).clip(RoundedCornerShape(6.dp))
                     .then(if (onFold != null) Modifier.clickable(onClick = onFold) else Modifier), verticalAlignment = Alignment.CenterVertically) {
-                    Text(label.replace(" ", "\u2002"), style = androidx.compose.ui.text.TextStyle(fontFamily = Literata, fontWeight = FontWeight(450), fontSize = 19.sp,
-                        letterSpacing = 3.2.sp, color = c.ink), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(label, style = androidx.compose.ui.text.TextStyle(fontFamily = Literata, fontWeight = FontWeight(500), fontSize = 17.sp,
+                        letterSpacing = 1.4.sp, fontFeatureSettings = "smcp", color = c.ink), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     action?.let { (text, act) ->
                         Text(text, style = Type.small.copy(color = c.link, fontSize = 13.5.sp, fontWeight = FontWeight.Medium),
                             modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = act).padding(horizontal = 6.dp, vertical = 6.dp))
@@ -444,8 +453,8 @@ fun TextTabs(options: List<Pair<String, String>>, selected: String, onSelect: (S
             val on = k == selected
             Column(Modifier.clip(RoundedCornerShape(6.dp)).semantics { this.selected = on }.clickable { onSelect(k) }.padding(top = 6.dp),
                 horizontalAlignment = Alignment.Start) {
-                // The planner (owner, 14 окт): tabs in the book's italic, as the index on the right.
-                Text(l, style = if (planner) Type.italic.copy(color = if (on) c.link else c.graphite, fontSize = 18.sp, fontWeight = if (on) FontWeight.SemiBold else null)
+                // «Полоса набора» (Fable, 15 окт): upright words, the chosen one in ink over its short rule — italic as a «selected» state read oddly.
+                Text(l, style = if (planner) Type.body.copy(fontFamily = rowFamily, color = if (on) c.ink else c.graphite, fontSize = 17.sp, fontWeight = if (on) FontWeight(600) else FontWeight(450))
                     else Type.body.copy(color = if (on) c.link else c.graphite, fontSize = 16.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium))
                 Spacer(Modifier.height(6.dp))
                 Box(Modifier.width(if (on) 28.dp else 0.dp).height(2.dp).clip(RoundedCornerShape(1.dp)).background(if (on) c.link else Color.Transparent))

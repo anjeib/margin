@@ -412,24 +412,19 @@ fun SmartComposer(
                 }
             }
             if (planner) {
-                // «Полоса набора» (0.66): no current-hour label on the idle margin (so it is never confused with a task's time);
-                // during dictation the margin shows the recording timer «● 0:05». Right of the rule sits one clean capsule
-                // with a hero sea button (Microphone when empty, Send when written).
+                // «Полоса набора» (0.66, Gemini): nothing on the margin — no hour (it was read as a matter's time); one capsule with
+                // a sea circle at its end (the microphone when empty, «send» when written). Fable, 15 окт: the capsule runs a little
+                // past the words' column into the margin instead of a dash there; the recording timer «● 0:05» sits inside it.
                 val pill = RoundedCornerShape(FloatH / 2)
                 val live = text.isNotBlank() || files.isNotEmpty()
                 Row(Modifier.fillMaxWidth().padding(end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.width(MarginW - edge).height(FloatH), contentAlignment = Alignment.CenterEnd) {
-                        if (rec != null) Text("● %d:%02d".format(recSec / 60, recSec % 60),
-                            style = Type.small.copy(color = c.accentText, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum"),
-                            modifier = Modifier.padding(end = 10.dp))
-                        else Box(Modifier.padding(end = 10.dp).size(12.dp, 1.5.dp).background(c.sea.copy(alpha = 0.45f)))
-                    }
-                    Spacer(Modifier.width(MarginGap))
+                    Spacer(Modifier.width(FieldStart))
                     Row(Modifier.weight(1f).heightIn(min = FloatH).clip(pill).background(c.card).border(1.dp, c.hairline, pill).padding(start = 6.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         when {
                             rec != null -> {
                                 Box(Modifier.size(FloatH - 6.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) { CloseGlyph(c.graphite, 19.dp) }
+                                RecTimer(recSec)
                                 Box(Modifier.size(8.dp).clip(CircleShape).background(c.sea.copy(alpha = 0.4f + level * 0.6f)))
                                 Spacer(Modifier.width(10.dp))
                                 LevelBars(level, Modifier.weight(1f))
@@ -479,24 +474,17 @@ fun SmartComposer(
             return@Column
         }
         if (floating) {
-            // «Полоса набора» (0.66): no current-hour label on the idle margin (so it is never confused with a task's time);
-            // during dictation the margin shows the recording timer «● 0:05». Right of the rule sits one clean capsule
-            // with a hero sea circle at its end (Microphone when empty, Send when written).
+            // «Полоса набора» (0.66, Gemini): nothing on the margin; one capsule with a sea circle at its end (the microphone when
+            // empty, «send» when written). Fable, 15 окт: the capsule runs into the margin instead of a dash there; the timer inside.
             val pill = RoundedCornerShape(FloatH / 2)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                Box(Modifier.width(MarginW - edge).height(FloatH),
-                    contentAlignment = Alignment.CenterEnd) {
-                    if (rec != null) Text("● %d:%02d".format(recSec / 60, recSec % 60),
-                        style = Type.small.copy(color = c.accentText, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum"),
-                        modifier = Modifier.padding(end = 10.dp))
-                    else Box(Modifier.padding(end = 10.dp).size(12.dp, 1.5.dp).background(c.sea.copy(alpha = 0.45f)))
-                }
-                Spacer(Modifier.width(MarginGap))
+                Spacer(Modifier.width(FieldStart))
                 Row(Modifier.weight(1f).heightIn(min = FloatH).shadow(3.dp, pill, ambientColor = c.ink.copy(alpha = 0.06f), spotColor = c.ink.copy(alpha = 0.09f))
                     .clip(pill).background(c.card).border(1.dp, c.hairline, pill).padding(start = 6.dp, end = 4.dp),
                     verticalAlignment = Alignment.Bottom) {
                     if (rec != null) {
                         Box(Modifier.size(FloatH).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) { CloseGlyph(c.graphite, 19.dp) }
+                        RecTimer(recSec)
                         Row(Modifier.weight(1f).height(FloatH), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(8.dp).clip(CircleShape).background(c.sea.copy(alpha = 0.4f + level * 0.6f)))
                             Spacer(Modifier.width(10.dp))
@@ -549,12 +537,7 @@ fun SmartComposer(
         // A light line, a little taller than the words, a hairline around it.
         val shape = RoundedCornerShape(FieldH / 2)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-            if (ruled && planner) Box(Modifier.width(MarginW - edge).height(FieldH), contentAlignment = Alignment.CenterEnd) {
-                if (rec != null) Text("● %d:%02d".format(recSec / 60, recSec % 60),
-                    style = Type.small.copy(color = c.accentText, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum"),
-                    modifier = Modifier.padding(end = 10.dp))
-                else Box(Modifier.padding(end = 10.dp).size(12.dp, 1.5.dp).background(c.sea.copy(alpha = 0.45f)))
-            }
+            if (ruled && planner) Spacer(Modifier.width(FieldStart))
             else if (ruled) Spacer(Modifier.width(MarginW - edge))
             Row(
                 // v8: the field floats a little over the page — a soft shadow, the one raised thing besides menus.
@@ -570,6 +553,7 @@ fun SmartComposer(
                     Box(Modifier.size(FieldH - 2.dp).clip(CircleShape).clickable { recorder = null; rec.cancel() }, contentAlignment = Alignment.Center) {
                         CloseGlyph(c.graphite, 20.dp)
                     }
+                    if (planner) RecTimer(recSec, FieldH - 2.dp)
                     Row(Modifier.weight(1f).height(FieldH - 2.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.4f + level * 0.6f)))
                         Spacer(Modifier.width(10.dp))
@@ -673,6 +657,15 @@ private val FieldH: Dp @Composable get() = if (planner) 37.dp else 42.dp
 private val FloatH = 44.dp
 /** The field keeps this much clear of the rule; its words then line up with the page's text. */
 private val FieldInset = 4.dp
+/** «Полоса набора» (Fable, 15 окт): the capsule starts here, left of the rule — a little into the margin, where the day's number begins. */
+private val FieldStart = 8.dp
+
+/** The seconds of a recording, inside the capsule: «● 0:05» in terracotta. */
+@Composable
+private fun RecTimer(sec: Int, height: Dp = FloatH) = Box(Modifier.height(height).padding(horizontal = 6.dp), contentAlignment = Alignment.CenterStart) {
+    Text("● %d:%02d".format(sec / 60, sec % 60),
+        style = Type.small.copy(color = M.c.accentText, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontFeatureSettings = "tnum"))
+}
 
 /** A sign at the end of the field; [filled] — the small terracotta circle of «send», pale while there is nothing to send. */
 @Composable
