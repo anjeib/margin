@@ -1363,6 +1363,10 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    /** Prototype «inline» (owner, 16 окт): what is unfolded right in its row — one at a time; null — nothing. */
+    val expanded = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    fun toggleExpanded(id: String) { expanded.value = if (expanded.value == id) null else id }
+
     /** «Заметки» narrowed to «личное» or «работа» (owner, 16 окт); a note written there then takes that sphere. */
     val diarySphere = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 

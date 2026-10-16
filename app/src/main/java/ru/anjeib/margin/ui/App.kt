@@ -229,8 +229,12 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             if (toolsMonth) { vm.monthOpen.value = false; vm.pageDay.value = null }
             else { toolsLanded?.let { d -> vm.pageDay.value = d.takeIf { it != java.time.LocalDate.now() } }; vm.monthOpen.value = true }
         })
+    // Prototype «inline»: what is unfolded in its row; «назад» folds it.
+    val expandedKey by vm.expanded.collectAsState()
+    BackHandler(expandedKey != null) { vm.expanded.value = null }
     androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.archiveMatter(it) }), LocalFind provides find,
-        LocalPeopleLinks provides tagLinks, LocalPageTools provides pageTools.takeIf { planner }) {
+        LocalPeopleLinks provides tagLinks, LocalPageTools provides pageTools.takeIf { planner },
+        LocalInline provides InlineState(expandedKey) { vm.toggleExpanded(it) }, LocalVm provides vm) {
     ModalNavigationDrawer(
         drawerState = drawer,
         // On the planner page the menu is a page of its own, not a drawer pulled from the side.
@@ -442,12 +446,15 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         }
                     }
                     val calDay by vm.calendarDay.collectAsState()
+                    // Prototype «inline»: the tools of what is unfolded, over the field; the field then writes into it.
+                    if (screen == TASKS) InlineBar(vm, onCard = { openId(it) }, onOpen = { id -> openId(id) })
+                    val inlineHint = data.inlineHint(expandedKey).takeIf { screen == TASKS }
                     SmartComposer(
                         vm,
-                        hint = if (screen == TOPICS) s.topicsHint else if (screen == NOTES) s.notesHint else if (screen == TASKS && view == Views.NOTES && !contents) s.diaryHint else calDay?.takeIf { screen == TASKS }?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
+                        hint = inlineHint ?: if (screen == TOPICS) s.topicsHint else if (screen == NOTES) s.notesHint else if (screen == TASKS && view == Views.NOTES && !contents) s.diaryHint else calDay?.takeIf { screen == TASKS }?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
                         busy = busy == (if (screen == NOTES) "notes" else "main"),
                         // «Темы»: the words start a topic — its name, and a list under it becomes its matters.
-                        onSend = { t, f -> if (screen == TOPICS) vm.send("/" + s.tagTopic + " " + t, files = f) else if (screen == TASKS && view == Views.NOTES) vm.addDiaryNote(t, f) else {
+                        onSend = { t, f -> if (screen == TASKS && inlineHint != null && vm.inlineSend(expandedKey, t, f)) Unit else if (screen == TOPICS) vm.send("/" + s.tagTopic + " " + t, files = f) else if (screen == TASKS && view == Views.NOTES) vm.addDiaryNote(t, f) else {
                             // Words taken from «Входящие» to be read here: their files go with them, and the thing leaves «Входящие».
                             val fromInbox = vm.inboxDraft.value.takeIf { screen == TASKS }
                             vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f + (fromInbox?.second ?: emptyList()))

@@ -230,7 +230,10 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                                 SoftMenuItem(s.toArchive) { menu = false; vm.archiveTopic(n.id) }
                             } } }
                             PanelPiece(seatOf(i, list.size)) {
-                                Column(Modifier.fillMaxWidth().combinedClickable(onClick = { onOpen(n.id) }, onLongClick = { menu = true }).padding(horizontal = if (planner) 0.dp else 16.dp).padding(top = if (first) 8.dp else 12.dp, bottom = 12.dp)) {
+                                // Prototype «inline»: a tap unfolds the note right here — all of it, written on in place.
+                                val inline = LocalInline.current
+                                val unfolded = inline?.open == n.id
+                                Column(Modifier.fillMaxWidth().combinedClickable(onClick = { if (inline != null) inline.toggle(n.id) else onOpen(n.id) }, onLongClick = { menu = true }).padding(horizontal = if (planner) 0.dp else 16.dp).padding(top = if (first) 8.dp else 12.dp, bottom = 12.dp)) {
                                     var titleLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
                                     var bodyLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
                                     // Three lines of a note at most (owner, 14 окт) — the whole of it is in its card.
@@ -238,13 +241,14 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                                         else Type.body.copy(color = c.ink, fontSize = 16.5.sp, lineHeight = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
                                         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                         onTextLayout = { titleLayout = it }, modifier = Modifier.foundMarks(n.title) { titleLayout })
-                                    if (body.isNotBlank()) {
+                                    if (unfolded) InlineNoteBody(n, vm)
+                                    else if (body.isNotBlank()) {
                                         val shown = mentionsText(body, data, onPerson, onOpen)
                                         Text(shown, style = Type.body.copy(color = c.ink.copy(alpha = 0.9f), fontSize = if (planner) 15.sp else 16.sp, lineHeight = if (planner) 22.sp else 23.sp), onTextLayout = { bodyLayout = it },
                                             maxLines = if (showTitle) 2 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(top = if (showTitle) 3.dp else 0.dp).foundMarks(shown.text) { bodyLayout })
                                     }
-                                    n.entries.flatMap { it.attachments }.takeIf { it.isNotEmpty() }?.let { Box(Modifier.padding(top = 8.dp)) { AttachmentsView(it) } }
+                                    if (!unfolded) n.entries.flatMap { it.attachments }.takeIf { it.isNotEmpty() }?.let { Box(Modifier.padding(top = 8.dp)) { AttachmentsView(it) } }
                                     // Who and what the note touches, quietly — when it was made in the field with marks.
                                     val tags = (n.people.map { it } + listOfNotNull(n.place?.let { "⌖ $it" })).filter { t -> !plainBody.contains(t.removePrefix("⌖ ")) }
                                     if (tags.isNotEmpty()) Text(tags.joinToString("  ·  "), style = Type.small.copy(color = c.link, fontSize = 13.5.sp), modifier = Modifier.padding(top = 4.dp))
@@ -289,9 +293,13 @@ private fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: I
                 SoftMenuItem(s.toArchive) { menu = false; vm.removeNotePiece(x.card) }
             } }
             PanelPiece(seatOf(i, n)) {
-                Column(Modifier.fillMaxWidth().combinedClickable(onClick = { onOpenNote(x.card) }, onLongClick = { menu = true })
+                val inline = LocalInline.current
+                val unfolded = inline?.open == x.card
+                Column(Modifier.fillMaxWidth().combinedClickable(onClick = { if (inline != null) inline.toggle(x.card) else onOpenNote(x.card) }, onLongClick = { menu = true })
                     .padding(horizontal = if (planner) 0.dp else 16.dp).padding(top = if (first) 8.dp else 12.dp, bottom = 12.dp).then(if (block == BlockPos.Last) Modifier.padding(bottom = 2.dp) else Modifier)) {
                     var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+                    if (unfolded) InlinePieceBody(x.card, vm)
+                    else {
                     if (x.text.isNotBlank()) {
                         val shown = mentionsText(x.text, data, onPerson, onOpen)
                         Text(shown, style = Type.body.copy(color = c.ink.copy(alpha = 0.9f), fontSize = if (planner) 15.sp else 16.sp, lineHeight = if (planner) 22.sp else 23.sp),
@@ -299,6 +307,7 @@ private fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: I
                             modifier = Modifier.foundMarks(shown.text) { layout })
                     }
                     if (x.files.isNotEmpty()) Box(Modifier.padding(top = 8.dp)) { AttachmentsView(x.files) }
+                    }
                     // Where it was written — a link to it (owner, 16 окт); in a block the head says it.
                     if (block == null) Text(x.link, style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(6.dp)).clickable { onOpen(x.open) }.padding(vertical = 2.dp))

@@ -119,6 +119,10 @@ fun MatterRow(
         scope.launch { ticking = true; strike.animateTo(1f, androidx.compose.animation.core.tween(320)); kotlinx.coroutines.delay(220); onToggle() }
     }
     var quick by remember(t.id) { mutableStateOf(false) }
+    // Prototype «inline»: a tap unfolds the matter in its row instead of opening its card.
+    val inline = LocalInline.current
+    val unfolded = inline?.open == t.id
+    val tap: () -> Unit = if (inline != null) ({ inline.toggle(t.id) }) else onOpen
     val acts = LocalRowActions.current
     val tomorrowAct = LocalTomorrow.current
     val promise = !t.done && (t.waitingFor != null || t.promisedTo != null)
@@ -149,12 +153,13 @@ fun MatterRow(
                             androidx.compose.ui.semantics.CustomAccessibilityAction(s.fieldTime) { onTime(); true },
                         )
                     },
-                    onClick = onOpen, onLong = { view.confirmTick(); quick = true },
+                    onClick = tap, onLong = { view.confirmTick(); quick = true },
                 ) {
                     StrikeText(t.title + (if (t.dropped) " · " + s.droppedMark else ""),
                         Type.body.copy(fontFamily = rowFamily, fontSize = rowSize, lineHeight = rowLine, color = if (t.done || ticking || faded) c.graphite else c.ink),
                         strike.value, c.faint, maxLines = 3, marked = note.second && !t.done && !ticking)
-                    if (!t.done) {
+                    if (unfolded) { val vm = LocalVm.current; if (vm != null) InlineMatterBody(t.id, vm) }
+                    else if (!t.done) {
                         val days = t.dayOf()?.let { (i, n) -> s.dayOfDays(i, n) }
                         TaskLine(t, null, showProject = true, today = today, tappable = true, hidePerson = hidePerson,
                             topic = t.topicTitle?.takeIf { showTopic }, extra = listOfNotNull(days, extra).joinToString("  ·  ").ifBlank { null },
@@ -240,7 +245,7 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
         mark = {
             Box(Modifier.clip(CircleShape).clickable(onClickLabel = s.markDone) { view.confirmTick(); onDone() }
                 .semantics { contentDescription = if (incoming) s.a11yWaiting else s.a11yPromised }) { PromiseMark(incoming) }
-        }, onClick = onOpen) {
+        }, onClick = LocalInline.current?.let { il -> { il.toggle(t.id) } } ?: onOpen) {
         RowTitle(t.title, marked = late)
         // Words never broken: at a large font «напомнить» goes to the next line whole (FlowRow).
         @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -259,6 +264,7 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
                     modifier = Modifier.padding(top = 3.dp).clip(RoundedCornerShape(6.dp)).clickable { remindAbout(ctx, data, t) })
             }
         }
+        if (LocalInline.current?.open == t.id) LocalVm.current?.let { InlineMatterBody(t.id, it) }
     }
 }
 
