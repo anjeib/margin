@@ -794,6 +794,11 @@ interface Strings {
     val purgeForGood: String get() = "Удалить насовсем"
     val quickNextMonth: String get() = "След. месяц"
     val rangeHint: String get() = "Нажмите число — дата. Удержите и проведите по дням — период."
+    /** «Сегодня» on a light day: the nearest matters to come (owner, 16 окт). */
+    val aheadTitle: String get() = "Дальше"
+    val introGroup: String get() = "Знакомство"
+    val welcomeTitle: String get() = "Пишите как думаете"
+    val welcomeText: String get() = "Margin — ежедневник с одним полем внизу: пишите или диктуйте простыми фразами — что, когда, кто, и всё ляжет по местам. Всё на телефоне, без облака.\n\nНа первой странице вас ждёт «Курс освоения Margin» — короткие уроки на живых делах. Освоитесь — уберите их в архив."
     val toOtherTopic: String
     val toTopicPick: String
     val recognizeWord: String
@@ -1108,7 +1113,7 @@ object Ru : Strings {
     override val samplesBack = "Вернуть примеры"
     override val samplesTitle = "Примеры"
     override val tourAgain = "Показать знакомство снова"
-    override val tourAgainHint = "Пять страниц о том, что умеет Margin"
+    override val tourAgainHint = "Приветствие и разрешения: уведомления, календарь"
     override val askOffline = "Чтобы помощник отвечал, нужны интернет и код приглашения."
     override val errInvite = "Код приглашения не подошёл — проверьте его в Настройках"
     override val inviteTitle = "Код приглашения"
@@ -2686,6 +2691,10 @@ object En : Strings {
     override val purgeForGood get() = "Delete for good"
     override val quickNextMonth get() = "Next month"
     override val rangeHint get() = "Tap a day for a date. Hold and drag across days for a period."
+    override val aheadTitle get() = "Coming up"
+    override val introGroup get() = "Getting started"
+    override val welcomeTitle get() = "Write as you think"
+    override val welcomeText get() = "Margin is a planner with one field at the bottom. On the first page a short course in Margin waits for you."
     override val toOtherTopic = "Another topic"
     override val toTopicPick = "To a topic…"
     override val recognizeWord = "Read text"

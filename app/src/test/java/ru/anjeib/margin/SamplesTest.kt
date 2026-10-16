@@ -18,62 +18,54 @@ import ru.anjeib.margin.data.withoutSamples
 import ru.anjeib.margin.i18n.Lang
 import ru.anjeib.margin.i18n.L
 
-/** «Примеры» from the designer's demo: one of each thing, come in marked, leave in one go, never mix with the user's own. */
+/**
+ * The first page (owner, 16 окт): «Курс освоения Margin» — examples that tell how Margin works and cover topics, matters, steps,
+ * notes, people, a company and files; ordinary records, not marked as examples.
+ */
 class SamplesTest {
     private val set = Samples.build()
 
-    @Test fun oneExampleOfEachThing() {
+    @Test fun aCourseThatShowsEachThing() {
         val t = set.tasks
-        assertTrue(t.all { it.sample } && set.persons.all { it.sample })
+        assertTrue("ordinary records", t.none { it.sample } && set.persons.none { it.sample })
         val topic = t.single { it.topic && !it.thought }
+        assertEquals("Курс освоения Margin", topic.title)
         assertTrue("a wait in the topic", topic.subtasks.any { it.from != null })
         assertTrue("a matter under a matter", topic.subtasks.any { q -> q.parent != null && topic.subtasks.any { it.id == q.parent } })
-        assertTrue("a matter from a record", topic.subtasks.any { q -> q.parent != null && topic.entries.any { it.id == q.parent } })
+        assertTrue("a matter from a note", topic.subtasks.any { q -> q.parent != null && topic.entries.any { it.id == q.parent } })
         assertTrue("a topic matter for today", topic.subtasks.any { it.due == java.time.LocalDate.now().toString() && it.time != null })
+        assertTrue("notes in the topic", topic.entries.size >= 3)
         assertEquals(1, t.count { it.thought })
         val simple = t.filter { !it.topic }
         assertTrue("an hour", simple.any { it.time != null && it.repeat == null })
         assertTrue("late", simple.any { !it.done && it.dueDate?.isBefore(java.time.LocalDate.now()) == true })
         assertTrue("a repeat with a place", simple.any { it.repeat != null && it.place != null })
         assertTrue("several days", simple.any { it.slots.size >= 2 })
+        assertTrue("a window", simple.any { it.startDate != null && it.dueDate != null && it.startDate!!.isBefore(it.dueDate) })
         assertTrue("a promise", simple.any { it.promisedTo != null })
         assertTrue("a wait", simple.any { it.waitingFor != null })
         assertTrue("no date", simple.any { it.dueDate == null && it.startDate == null && it.slots.isEmpty() && !it.done })
         assertTrue("done", simple.any { it.done && !it.dropped })
         assertTrue("not doing it", simple.any { it.dropped })
-        assertTrue("a person and a business", set.persons.any { !it.org } && set.persons.any { it.org })
-        // Each thing once: no two simple matters of the same kind of example.
-        assertEquals(simple.size, simple.map { it.id }.toSet().size)
+        assertTrue("a contact, a company, the mentioned", set.persons.any { !it.org && it.isContact } && set.persons.any { it.org } && set.persons.any { it.draft })
         assertTrue(simple.size <= 10)
-        // The day lists see them: the topic's matter for today, the matter with an hour.
-        assertTrue(set.listTasks().any { it.id == "q:ex-coffee:ex-c2" })
+        // The day lists see the course's lesson for today.
+        assertTrue(set.listTasks().any { it.id == "q:ex-course:ex-c2" })
+        // Files land in the notes when there are any.
+        val f = ru.anjeib.margin.data.Attachment(kind = "file", name = "x.pdf")
+        assertTrue(Samples.build(sheet = f, plan = f, photo = f).tasks.single { it.topic && !it.thought }.entries.count { it.attachments.isNotEmpty() } == 3)
     }
 
-    @Test fun examplesComeAndGoWithoutTouchingTheUsers() {
+    @Test fun theCourseDoesNotDoubleTheUsersOwn() {
         L.lang = Lang.Ru
         val mine = Task(id = "m", title = "Купить хлеб")
-        val myOleg = Person(name = "Олег", phone = "+7 900 000-00-00", kept = true)
-        val d = AppData(tasks = listOf(mine), persons = listOf(myOleg)).withSamples(set)
-        assertTrue(d.hasSamples())
-        // The user's own Олег is not doubled by the example one.
-        assertEquals(1, d.persons.count { it.matches("Олег") })
-        // Back again: a fresh set in place of the old, never twice.
-        assertEquals(d.tasks.size, d.withSamples(Samples.build()).tasks.size)
-        assertEquals(d.persons.size, d.withSamples(Samples.build()).persons.size)
-        val gone = d.withoutSamples()
-        assertFalse(gone.hasSamples())
-        assertEquals(listOf(mine), gone.tasks)
-        assertEquals(listOf(myOleg), gone.persons)
-        // «к теме …?» never points into the examples.
-        assertNull(d.likelyTopic("Олег прислал фидбек по упаковке для кофейни", listOf("Олег")))
-    }
-
-    /** «что я обещал Лёше?» — the promise reaches the AI (examples are ordinary matters to it). */
-    @Test fun aPersonsPromisesReachTheAssistant() {
-        L.lang = Lang.Ru
-        val d = AppData().withSamples(set)
-        val ctx = ru.anjeib.margin.ai.Assistant.context(d, ru.anjeib.margin.data.Settings(), query = "что я обещал Лёше?")
-        assertTrue(ctx, ctx.contains("Исходники баннеров") && ctx.contains("promised to Лёша"))
+        val myKatya = Person(name = "Катя", phone = "+7 900 000-00-00", kept = true)
+        val d = AppData(tasks = listOf(mine), persons = listOf(myKatya)).withSamples(set)
+        assertEquals(1, d.persons.count { it.matches("Катя") })
+        assertTrue(d.tasks.contains(mine))
+        // Old marked examples are replaced by the course once; the course itself is not marked.
+        val old = AppData(tasks = listOf(Task(id = "old", title = "Пример", sample = true))).withSamples(set)
+        assertTrue(old.tasks.none { it.id == "old" } && !old.hasSamples())
     }
 
     @Test fun aQuestionIsNotAMatter() {

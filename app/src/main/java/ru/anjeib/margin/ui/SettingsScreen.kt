@@ -147,13 +147,8 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         // «Примеры»: take the examples away, or bring them back to look again (Russian only, like the demo).
         // Not in the demo copy: there the whole planner is an example, and these would mix into it.
         // Owner, 15 окт: the tour shows once, by the «onboarded» flag that an update keeps — here is the way to see it again.
-        Group(s.samplesTitle) {
-            if (vm.samplesHere() && !ru.anjeib.margin.BuildConfig.DEMO) {
-                val data by vm.data.collectAsState()
-                val has = data.tasks.any { it.sample } || data.persons.any { it.sample }
-                ValueRow(if (has) s.samplesRemove else s.samplesBack, null, "", onClick = { if (has) vm.removeSamples() else vm.bringSamples() })
-                Divider()
-            }
+        // Owner, 16 окт: the first page's course is ordinary records — nothing here takes it away or brings it back.
+        Group(s.introGroup) {
             ValueRow(s.tourAgain, s.tourAgainHint, "", onClick = { vm.updateSettings { it.copy(onboarded = false) } })
         }
 

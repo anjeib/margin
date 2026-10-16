@@ -345,6 +345,20 @@ fun TaskList(
                 if (!dayEmpty) item("t-head") { SectionHead(s.today, count = dayCount.takeIf { it > 0 }, rule = promises.isNotEmpty()) }
                 if (!dayEmpty) dayPanel(dayPlanShown, today, "t", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                     doneOpen = isOpen("s-done-today"), onDoneFold = { toggle("s-done-today") })
+                // Owner, 16 окт («полезное вместо пустоты, только на «Сегодня»»): a light day shows what comes next — the two or three
+                // nearest matters with their days on the margin — instead of an empty page; «Завтра — N дел» then isn't repeated.
+                val ahead = if (dayCount > 3) emptyList() else tasks.filter { t -> !t.done && (t.startDate ?: t.dueDate)?.isAfter(today) == true && base(t.id) !in above }
+                    .distinctBy { base(it.id) }.sortedWith(compareBy({ it.startDate ?: it.dueDate }, { it.time ?: "99" })).take(3)
+                if (ahead.isNotEmpty()) {
+                    item("ahead-head") { SectionHead(s.aheadTitle) }
+                    ahead.forEachIndexed { i, t ->
+                        item("ah" + t.id) {
+                            MatterRow(t, seatOf(i, ahead.size), today, whenNote(t, today, underDay = false), modifier = Modifier.animateItem(),
+                                onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) }, onTime = { timeFor = t.id }, onLater = { postponing = t.id },
+                                lit = t.id in landed, onOpenTopic = onOpen)
+                        }
+                    }
+                }
                 if (undated.isNotEmpty()) {
                     item("u-head") {
                         SectionHead(s.noDates, count = undated.size, open = undatedOpen,
@@ -387,7 +401,7 @@ fun TaskList(
                 val tomorrowParts = listOfNotNull(tomorrowPlan.deals.size.takeIf { it > 0 }?.let { s.summaryDeals(it) },
                     tomorrowPlan.events.size.takeIf { it > 0 }?.let { s.summaryMeetings(it) })
                 // Owner, 14 окт: a tap opens tomorrow right here, under it — not the calendar.
-                if (tomorrowParts.isNotEmpty()) {
+                if (tomorrowParts.isNotEmpty() && ahead.isEmpty()) {
                     item("tomorrow") {
                         VoiceLink(s.quickTomorrow + " — " + tomorrowParts.joinToString(" · "), { tomorrowOpen = !tomorrowOpen }, quiet = true, arrow = if (tomorrowOpen) "‹" else "›")
                     }

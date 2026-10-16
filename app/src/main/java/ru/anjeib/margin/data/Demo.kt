@@ -73,6 +73,19 @@ class DemoArt(private val dir: File) {
         paint.color = Color.rgb(40, 60, 140); paint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL); paint.textSize = 54f
         listOf("Дизайн-система:", "— сетка 8 pt", "— кнопки: 3 размера", "— цвета: 6 + серые", "дедлайн → пт").forEachIndexed { i, l -> c.drawText(l, 80f, 150f + i * 120f, paint) }
     } }
+    /** The course's two files (owner, 16 окт: the first page is a course in Margin): its plan on a board and a cheat sheet. */
+    val coursePlan by lazy { jpeg("course") { c, w, h ->
+        c.drawColor(Color.rgb(250, 249, 245))
+        paint.color = Color.rgb(28, 100, 128); paint.typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD); paint.textSize = 64f
+        c.drawText("Курс Margin", 80f, 140f, paint)
+        paint.color = Color.rgb(40, 40, 40); paint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL); paint.textSize = 46f
+        listOf("1 · дела и кружок", "2 · ждём и обещали", "3 · тема голосом", "4 · поддела", "5 · заметки и файлы").forEachIndexed { i, l -> c.drawText(l, 100f, 260f + i * 110f, paint) }
+        paint.color = Color.rgb(200, 100, 59); c.drawCircle(1060f, 780f, 26f, paint)
+    } }
+    val cheatSheet by lazy { pdf("Шпаргалка_Margin", "Шпаргалка: как писать в Margin", listOf(
+        "«завтра в 15 созвон с Катей» — день и время.", "«каждый вторник в 10» — повтор.", "«с 20 по 23 октября» — период.",
+        "«Маша пришлёт договор до пятницы» — ждём от Маши.", "«обещал Лёше конспект» — мы обещали.",
+        "«Добавь в тему Курс освоения Margin …» — слова в тему.", "«/заметка …» — в Заметки.", "@ — человек, место, дело или тема.")) }
     val brief by lazy { pdf("Бриф_Зерно", "Бриф: кофейня «Зерно»", listOf("Логотип, вывеска, упаковка для зерна 250 г и 1 кг.", "Тон: тёплый, ремесленный, без хипстерских клише.", "Бюджет: 120 000 ₽. Срок: конец октября.", "Контакт: Олег, владелец.")) }
     val tickets by lazy { pdf("Билеты_Сапсан", "Электронный билет", listOf("Москва → Санкт-Петербург", "Поезд 752А «Сапсан»", "2 пассажира, вагон 5")) }
     val contract by lazy { pdf("Договор_Зерно", "Договор оказания услуг", listOf("Исполнитель: самозанятый дизайнер", "Заказчик: ООО «Зерно»", "Предмет: разработка фирменного стиля")) }

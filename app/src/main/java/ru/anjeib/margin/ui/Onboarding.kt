@@ -50,22 +50,15 @@ import ru.anjeib.margin.data.questionRow
 import ru.anjeib.margin.data.shortLabel
 
 /**
- * Five quiet pages on first launch (owner, 15 окт: only what the phone does by itself, all of it) — the rest lives in «Помощь»;
- * skippable at any point: write as you think (dates, repeats, the marks), waiting and promised, a matter grows into a topic,
- * a tap opens / the knot / a hold / the pages, permissions and where the data lives. Each page shows the thing itself — the
- * same rows as on «Сегодня» — not a description of it.
+ * One page on first launch (owner, 16 окт: «тур до одного экрана — приветствие и разрешения, остальное расскажет курс»): a word
+ * of welcome, where to begin — «Курс освоения Margin» on the first page — and the permissions the phone asks for itself
+ * (notifications with the morning summary's hour, the calendar). Everything else is learnt on living matters, not described.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun Onboarding(vm: MainVm, onDone: () -> Unit) {
     val c = M.c
     val s = M.s
-    // Swiped like any set of pages, or moved on with the button; «1 из 4» says how far it is.
-    val pages = listOf(s.tourWriteTitle to s.tourWriteText, s.tourPromiseTitle to s.tourPromiseText, s.tourTopicTitle to s.tourTopicText,
-        s.tourGesturesTitle to s.tourGesturesText, s.ob4Title to s.ob4Text)
-    val pager = androidx.compose.foundation.pager.rememberPagerState { pages.size }
-    val page = pager.currentPage
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     fun has(p: String) = androidx.core.content.ContextCompat.checkSelfPermission(ctx, p) == android.content.pm.PackageManager.PERMISSION_GRANTED
     // A pressed button shows what happened — otherwise nobody knows whether it worked.
@@ -75,133 +68,44 @@ fun Onboarding(vm: MainVm, onDone: () -> Unit) {
     val cal = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         calOk = ok; vm.updateSettings { it.copy(calendar = ok) }; vm.refreshCalendar()
     }
-    val today = java.time.LocalDate.now()
-    val wed = today.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.WEDNESDAY))
-    val call = ru.anjeib.margin.data.Task(id = "tour-call", title = s.tourDemoCall, due = today.plusDays(1).toString(), time = "15:00", people = listOf(s.tourDemoName))
-    val edits = ru.anjeib.margin.data.Task(id = "tour-edits", title = s.tourDemoEdits, due = wed.toString(), waitingFor = s.tourDemoName)
-    // A topic as it looks on «Сегодня»: its matters under its name, a quiet line of how much is written.
-    val sat = today.with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SATURDAY))
-    val topic = ru.anjeib.margin.data.Task(id = "tour-topic", title = s.tourTopicName, topic = true, createdAt = today.minusDays(12).toString(),
-        subtasks = listOf(ru.anjeib.margin.data.Subtask(id = "a", title = s.tourTopicDeals[0], due = sat.toString()),
-            ru.anjeib.margin.data.Subtask(id = "b", title = s.tourTopicDeals[1], due = today.plusDays(2).toString(), from = s.tourTopicWho)),
-        entries = List(4) { ru.anjeib.margin.data.Entry(id = "e$it") })
-    val topicRows = topic.subtasks.map { topic.questionRow(it) }
-    // «Ждём и обещали» as the top of «Сегодня» shows them: the arrow of each side on the knot, the person under the words.
-    val wait = ru.anjeib.margin.data.Task(id = "tour-wait", title = s.tourDemoWait, due = wed.toString(), waitingFor = s.tourDemoWaitWho)
-    val promise = ru.anjeib.margin.data.Task(id = "tour-promise", title = s.tourDemoPromise, due = today.plusDays(1).toString(), promisedTo = s.tourDemoPromiseWho)
-
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)) {
-        // Its height stays when «Пропустить» goes on the last page — the title must not jump.
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 40.dp), horizontalArrangement = Arrangement.End) {
-            if (page < pages.lastIndex) QuietLink(s.skip, onDone)
-        }
-        androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth()) { p ->
-            // The title stands at one height on every page (Fable, 0.35: centred pages left the top half empty and moved the title
-            // as one leafed through); a long page scrolls instead of hiding under the button on a small phone.
-            Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(top = 48.dp, bottom = 16.dp)) {
-                Text("Margin", style = Type.label.copy(color = c.accentText, fontSize = 13.sp))
-                Spacer(Modifier.height(12.dp))
-                Text(pages[p].first, style = Type.display.copy(color = c.ink, fontSize = 36.sp, lineHeight = 42.sp))
-                Spacer(Modifier.height(12.dp))
-                Text(pages[p].second, style = Type.body.copy(color = c.graphite, fontSize = 17.sp, lineHeight = 25.sp))
-                Spacer(Modifier.height(22.dp))
-                when (p) {
-                    // What you say → what it becomes; the marks for when it must be exact.
-                    0 -> Column {
-                        Said(s.tourWriteExample)
-                        Text("↓", style = Type.body.copy(color = c.link, fontSize = 20.sp), modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 2.dp))
-                        TourRows(listOf(call, edits), today)
-                        Spacer(Modifier.height(16.dp))
-                        Text(s.tourMarksText, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
-                        Spacer(Modifier.height(8.dp))
-                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            s.tourMarks.forEach { Pill(it) }
-                        }
-                    }
-                    1 -> Column {
-                        s.tourPromiseSaid.forEach { Said(it) }
-                        Text("↓", style = Type.body.copy(color = c.link, fontSize = 20.sp), modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 2.dp))
-                        TourRows(listOf(wait, promise), today)
-                    }
-                    2 -> TourRows(topicRows, today)
-                    3 -> Column {
-                        // A picture of the row, not a live one: the words say what a tap and a hold do.
-                        Box(Modifier.fillMaxWidth()) {
-                            TourRows(listOf(call), today)
-                            Box(Modifier.matchParentSize().clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {})
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Pill(s.tourSwipeDone, accent = true)
-                            Pill(s.tourSwipeLater)
-                            Pill(s.tourHold)
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        // The top bar's icons have no words on the screen: here, once, what each one is.
-                        Text(s.tourIconsText, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
-                        // 0.66: the planner's own glyphs, not Material icons; each row draws its glyph by number (a composable
-                        // lambda in a Pair loses its @Composable type at the call site).
-                        listOf(s.tourIconCalendar, s.tourIconSearch, s.tourIconOverview).forEachIndexed { i, text ->
-                            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                when (i) { 0 -> CalendarGlyph(c.ink, 20.dp); 1 -> SearchGlyph(c.ink, 20.dp); else -> MenuGlyph(c.ink) }
-                                Spacer(Modifier.width(10.dp))
-                                Text(text, style = Type.small.copy(color = c.ink, fontSize = 14.sp))
-                            }
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        Text(s.tourUndo, style = Type.small.copy(color = c.graphite, fontSize = 14.sp, lineHeight = 20.sp))
-                        Spacer(Modifier.height(8.dp))
-                        Text(s.tourMore, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
-                    }
-                    else -> Column {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            if (Build.VERSION.SDK_INT >= 33) Pill(if (notifOk) "✓ " + s.notifications else s.notifications, accent = !notifOk,
-                                onClick = if (notifOk) null else ({ notif.launch(Manifest.permission.POST_NOTIFICATIONS) }))
-                            Pill(if (calOk) "✓ " + s.calendar else s.calendar, accent = !calOk,
-                                onClick = if (calOk) null else ({ cal.launch(Manifest.permission.READ_CALENDAR) }))
-                        }
-                        // The morning summary is chosen here, with the notifications it needs — not asked later in the chat over «Сегодня».
-                        Spacer(Modifier.height(22.dp))
-                        Text(s.obBrief, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
-                        Spacer(Modifier.height(8.dp))
-                        val st by vm.settings.collectAsState()
-                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // The time already set (8:30 by default) is shown chosen, even when it is not one of the offered hours.
-                            val offered = s.setupBriefOptions.dropLast(1).map { "%02d:00".format(it.substringBefore(':').toInt()) }
-                            if (st.morningBrief && st.morningTime !in offered) Pill("✓ " + st.morningTime.removePrefix("0"), accent = true)
-                            s.setupBriefOptions.forEachIndexed { i, o ->
-                                val off = i == s.setupBriefOptions.lastIndex
-                                val time = if (off) null else "%02d:00".format(o.substringBefore(':').toInt())
-                                val on = if (off) !st.morningBrief else st.morningBrief && st.morningTime == time
-                                Pill(if (on) "✓ $o" else o, accent = on, onClick = {
-                                    vm.updateSettings { it.copy(morningBrief = !off, morningTime = time ?: it.morningTime) }
-                                })
-                            }
-                        }
-                    }
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(top = 72.dp, bottom = 16.dp)) {
+            Text("Margin", style = Type.label.copy(color = c.accentText, fontSize = 13.sp))
+            Spacer(Modifier.height(12.dp))
+            Text(s.welcomeTitle, style = Type.display.copy(color = c.ink, fontSize = 36.sp, lineHeight = 42.sp))
+            Spacer(Modifier.height(12.dp))
+            Text(s.welcomeText, style = Type.body.copy(color = c.graphite, fontSize = 17.sp, lineHeight = 25.sp))
+            Spacer(Modifier.height(28.dp))
+            Text(s.ob4Text, style = Type.small.copy(color = c.graphite, fontSize = 14.sp, lineHeight = 20.sp))
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (Build.VERSION.SDK_INT >= 33) Pill(if (notifOk) "✓ " + s.notifications else s.notifications, accent = !notifOk,
+                    onClick = if (notifOk) null else ({ notif.launch(Manifest.permission.POST_NOTIFICATIONS) }))
+                Pill(if (calOk) "✓ " + s.calendar else s.calendar, accent = !calOk,
+                    onClick = if (calOk) null else ({ cal.launch(Manifest.permission.READ_CALENDAR) }))
+            }
+            // The morning summary is chosen here, with the notifications it needs.
+            Spacer(Modifier.height(22.dp))
+            Text(s.obBrief, style = Type.small.copy(color = c.graphite, fontSize = 14.sp))
+            Spacer(Modifier.height(8.dp))
+            val st by vm.settings.collectAsState()
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // The time already set (8:30 by default) is shown chosen, even when it is not one of the offered hours.
+                val offered = s.setupBriefOptions.dropLast(1).map { "%02d:00".format(it.substringBefore(':').toInt()) }
+                if (st.morningBrief && st.morningTime !in offered) Pill("✓ " + st.morningTime.removePrefix("0"), accent = true)
+                s.setupBriefOptions.forEachIndexed { i, o ->
+                    val off = i == s.setupBriefOptions.lastIndex
+                    val time = if (off) null else "%02d:00".format(o.substringBefore(':').toInt())
+                    val on = if (off) !st.morningBrief else st.morningBrief && st.morningTime == time
+                    Pill(if (on) "✓ $o" else o, accent = on, onClick = {
+                        vm.updateSettings { it.copy(morningBrief = !off, morningTime = time ?: it.morningTime) }
+                    })
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                pages.indices.forEach { i ->
-                    Box(Modifier.size(if (i == page) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (i == page) c.link else c.hairline))
-                }
-                Spacer(Modifier.width(8.dp))
-                Text(s.pageOf(page + 1, pages.size), style = Type.small.copy(color = c.graphite, fontSize = 13.sp, fontFeatureSettings = "tnum"))
-            }
-            Pill(if (page < pages.lastIndex) s.next else s.begin, filled = true, onClick = {
-                if (page < pages.lastIndex) scope.launch { pager.animateScrollToPage(page + 1) } else onDone()
-            })
+        Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.End) {
+            Pill(s.begin, filled = true, onClick = onDone)
             Spacer(Modifier.width(2.dp))
         }
-    }
-}
-
-/** Rows of the tour as they stand on «Сегодня»: the rule, «когда» on its margin, the matters on a panel — a picture, not controls. */
-@Composable
-private fun TourRows(list: List<ru.anjeib.margin.data.Task>, today: java.time.LocalDate) {
-    Column(Modifier.fillMaxWidth().screenRule()) {
-        list.forEachIndexed { i, t -> MatterRow(t, seatOf(i, list.size), today, whenNote(t, today, underDay = false), {}, {}, {}, null, swipe = false) }
     }
 }
