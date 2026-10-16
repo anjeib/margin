@@ -74,6 +74,14 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
         }
+        // Prototype «inline» (owner, 16 окт): the same signed build as Margin, under its own id and name — next to it on the phone.
+        create("inline") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".inline"
+            versionNameSuffix = "-inline"
+            manifestPlaceholders["appLabel"] = "Margin · без карточек"
+            matchingFallbacks += listOf("release")
+        }
         // A copy to show: opens with two months of the sample designer's life already in it; sits next to Margin 2.
         create("demo") {
             initWith(getByName("release"))
