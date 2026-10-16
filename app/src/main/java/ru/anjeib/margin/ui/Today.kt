@@ -322,7 +322,7 @@ fun <T : Any> withTopicHeads(items: List<T>, min: Int = 2, topicOf: (T) -> Pair<
 }
 
 /** Where a row stands in a topic's block: the head (round top corners), inside, or the last (round bottom corners). */
-enum class BlockPos { Head, Mid, Last }
+enum class BlockPos { Head, Mid, Last, Single }
 
 /**
  * A topic in the day (owner, 16 окт): «# Тема ▸», under it how many of its matters stand here (how many late) and «открыть»;
@@ -335,12 +335,17 @@ fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<S
     val s = M.s
     val late = rows.count { !it.done && it.dueDate?.isBefore(today) == true }
     // Unfolded, its matters carry their own hours — the head doesn't repeat one.
-    Margined(Modifier.landing(lit, 0), margin = { if (!open) RowMargin(note.first, note.second) }) {
-        Box(Modifier.blockTint(if (open) BlockPos.Head else null)) {
+    Margined(Modifier.landing(lit, 0).padding(top = if (open) 0.dp else 4.dp, bottom = if (open) 0.dp else 8.dp), margin = { if (!open) RowMargin(note.first, note.second) }) {
+        // Owner, 16 окт («темы теряются в ленте»): a topic always lies on the block's light tint — folded it is a small block of
+        // its own, unfolded the tint runs on under its matters.
+        Box(Modifier.blockTint(if (open) BlockPos.Head else BlockPos.Single)) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = if (open) s.collapse else s.expandWord, onClick = onToggle)
                 .padding(top = RowTop - 2.dp, bottom = RowTop, end = 14.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
-                    Text("# $title", style = Type.body.copy(fontFamily = rowFamily, color = c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = 2,
+                    Text(androidx.compose.ui.text.buildAnnotatedString {
+                        withStyle(androidx.compose.ui.text.SpanStyle(color = c.link)) { append("# ") }
+                        append(title)
+                    }, style = Type.body.copy(fontFamily = rowFamily, color = c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(top = 2.dp))
                     Text(if (open) "▾" else "▸", style = Type.body.copy(color = c.graphite, fontSize = 15.sp), modifier = Modifier.padding(start = 8.dp, top = 4.dp))
                 }
@@ -366,8 +371,8 @@ fun Modifier.blockTint(pos: BlockPos?): Modifier = if (pos == null) this else co
     val tint = c.sea.copy(alpha = if (c.dark) 0.12f else 0.06f)
     drawBehind {
         val r = 12.dp.toPx()
-        val top = if (pos == BlockPos.Head) androidx.compose.ui.geometry.CornerRadius(r) else androidx.compose.ui.geometry.CornerRadius.Zero
-        val bottom = if (pos == BlockPos.Last) androidx.compose.ui.geometry.CornerRadius(r) else androidx.compose.ui.geometry.CornerRadius.Zero
+        val top = if (pos == BlockPos.Head || pos == BlockPos.Single) androidx.compose.ui.geometry.CornerRadius(r) else androidx.compose.ui.geometry.CornerRadius.Zero
+        val bottom = if (pos == BlockPos.Last || pos == BlockPos.Single) androidx.compose.ui.geometry.CornerRadius(r) else androidx.compose.ui.geometry.CornerRadius.Zero
         val path = androidx.compose.ui.graphics.Path().apply {
             addRoundRect(androidx.compose.ui.geometry.RoundRect(-BlockBleed.toPx(), 0f, size.width + BlockBleed.toPx(), size.height, top, top, bottom, bottom))
         }
