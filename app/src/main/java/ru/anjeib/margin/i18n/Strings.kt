@@ -785,6 +785,11 @@ interface Strings {
     fun progressOf(d: Int, n: Int): String
     fun progressSolved(d: Int, n: Int): String
     fun movedToTopic(t: String): String
+    /** «Добавь в тему / в дело X …» said and done (owner, 16 окт). */
+    fun addedTo(t: String): String = "Добавлено в «$t»"
+    /** A note's card: the way to where it lives (owner, 16 окт). */
+    val toTheTopic: String get() = "К теме"
+    val toTheMatter: String get() = "К делу"
     val toOtherTopic: String
     val toTopicPick: String
     val recognizeWord: String
@@ -2671,6 +2676,9 @@ object En : Strings {
     override fun progressOf(d: Int, n: Int) = "$d of $n"
     override fun progressSolved(d: Int, n: Int) = "$d of $n done"
     override fun movedToTopic(t: String) = "Moved to “$t”"
+    override fun addedTo(t: String) = "Added to “$t”"
+    override val toTheTopic get() = "To the topic"
+    override val toTheMatter get() = "To the to-do"
     override val toOtherTopic = "Another topic"
     override val toTopicPick = "To a topic…"
     override val recognizeWord = "Read text"

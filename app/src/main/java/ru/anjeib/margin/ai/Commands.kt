@@ -76,29 +76,55 @@ object Commands {
         return clean.takeIf { it.length >= 2 }?.replaceFirstChar { it.uppercaseChar() }
     }
 
+    /** «Добавь», «запиши», «внеси»… before «в тему / в дело» — said by voice, the same as without them. */
+    private const val PUT = "(?:(?:добавь|добавить|добавьте|запиши|записать|запишите|напиши|написать|внеси|внести|занеси|занести|положи|положить|сохрани|сохранить)\\s+)?"
+    private val intoRx = Regex("^$PUT(?:в|во|к|для)\\s+(тем[уеы]|дел[оау]|задач[уеи])\\s+(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+
+    /** Where the words after «в тему / в дело» go: [id] — a topic, a matter, or a topic's matter («q:<тема>:<дело>»), and what to write. */
+    data class Into(val id: String, val said: String, val topic: Boolean)
+
     /**
-     * «в тему Ремонт ванной купить плитку», «В теме ремонт ванной: купить плитку», «к теме ремонт ванной добавь смету»:
-     * the words go into an existing topic named by the words after «тему», as «#тема» would send them. [topics] — (id, title)
-     * of open topics; the longest name that fits wins; a word of the name may be in another case («ремонта ванной»).
-     * Returns the topic's id and what to write there, or null.
+     * The name said after «тему» or «дело» among [names] (id, title): the longest that fits wins; a word of it may be in another
+     * case («списка дел по Дмитрову»), quotes and a colon around it don't matter. Returns the id, how many words, where the name ends.
      */
-    fun intoTopic(text: String, topics: List<Pair<String, String>>): Pair<String, String>? {
-        val m = Regex("^(?:в|во|к|для)\\s+тем[уеы]\\s+(.+)$", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(text.trim()) ?: return null
-        val rest = m.groupValues[1]
+    private fun named(rest: String, names: List<Pair<String, String>>): Triple<String, Int, Int>? {
         val words = Regex("[\\p{L}\\d]+").findAll(rest).toList()
         fun same(a: String, b: String): Boolean {
             val x = a.lowercase().replace('ё', 'е'); val y = b.lowercase().replace('ё', 'е')
             val stem = (minOf(x.length, y.length) - 2).coerceAtLeast(3)
             return x == y || (x.length >= 4 && y.length >= 4 && x.take(stem) == y.take(stem))
         }
-        val hit = topics.mapNotNull { (id, title) ->
+        return names.mapNotNull { (id, title) ->
             val tw = Regex("[\\p{L}\\d]+").findAll(title).map { it.value }.toList()
             if (tw.isEmpty() || tw.size > words.size || !tw.indices.all { same(tw[it], words[it].value) }) null else Triple(id, tw.size, words[tw.size - 1].range.last + 1)
-        }.maxByOrNull { it.second } ?: return null
-        val said = rest.substring(hit.third).trim().trimStart(':', ',', '—', '–', '-', '.', ' ')
-            .replace(Regex("^(?:добавь|добавить|запиши|записать)\\s+", RegexOption.IGNORE_CASE), "").trim()
-        return if (said.isBlank()) null else hit.first to said
+        }.maxByOrNull { it.second }
     }
+
+    /**
+     * «Добавь в тему "Список дел по Дмитрову" купить краску», «в дело позвонить в банк: номер договора 123», «запиши в задачу
+     * ремонт — мастер придёт в 10» (owner, 16 окт): the words go exactly there. The word said (тема / дело) is looked up first,
+     * the other kind after it — a topic called a matter is still found. [topics] and [matters] — (id, title) of the open ones;
+     * a topic's matter has the id «q:<тема>:<дело>».
+     */
+    fun intoPlace(text: String, topics: List<Pair<String, String>>, matters: List<Pair<String, String>>): Into? {
+        val m = intoRx.find(text.trim()) ?: return null
+        val wantTopic = m.groupValues[1].lowercase().startsWith("тем")
+        val rest = m.groupValues[2]
+        val first = if (wantTopic) topics else matters
+        val second = if (wantTopic) matters else topics
+        val (hit, isTopic) = named(rest, first)?.let { it to wantTopic } ?: named(rest, second)?.let { it to !wantTopic } ?: return null
+        val said = rest.substring(hit.third).trim().trimStart('»', '"', '”', ':', ',', '—', '–', '-', '.', ' ')
+            .replace(Regex("^(?:добавь|добавить|запиши|записать|напиши|написать)\\s+", RegexOption.IGNORE_CASE), "").trim()
+        return if (said.isBlank()) null else Into(hit.first, said, isTopic)
+    }
+
+    /**
+     * «в тему Ремонт ванной купить плитку», «Добавь в тему ремонт ванной: купить плитку», «к теме ремонт ванной добавь смету»:
+     * the words go into an existing topic named by the words after «тему», as «#тема» would send them. Returns the topic's id
+     * and what to write there, or null.
+     */
+    fun intoTopic(text: String, topics: List<Pair<String, String>>): Pair<String, String>? =
+        intoPlace(text, topics, emptyList())?.takeIf { it.topic }?.let { it.id to it.said }
 
     /**
      * Words sent from a matter's own page: a request — a mark, a command («место: …», «добавь шаг …»),

@@ -357,13 +357,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private fun sendNow(text0: String, smart: Boolean, label: String?, scope: Scope, files: List<Attachment>, asQuestion: Boolean, movedHere: Boolean) {
         // «… до среды #Лендинг для Авиасейлс»: a topic named by several words becomes its token before anything else reads the text.
         val text = if (scope == Scope.Main && !smart) longHash(text0, data.value)?.let { (tp, r) -> text0.replaceRange(r, " #[${tp.id}] ").replace(Regex("\\s{2,}"), " ").trim() } ?: text0 else text0
-        // «в тему Ремонт ванной купить плитку» — into that topic, as «#тема» would send it (on the phone, offline too).
-        if (!smart && scope == Scope.Main) Commands.intoTopic(text, data.value.tasks.filter { it.topic && !it.done }.map { it.id to it.title })?.let { (id, said) ->
-            data.value.tasks.find { it.id == id }?.let { _toast.value = L.s.movedToTopic(it.title); land(listOf(it.id)) }
-            // «купить плитку» (a verb first) is a matter of the topic; «хозяйка согласна» — a record in its feed.
-            val deal = Regex("^\\p{L}+(?:ть|ти|чь|ться|тись)(?![\\p{L}])", RegexOption.IGNORE_CASE).containsMatchIn(said)
-            return sendNow(said, false, label, Scope.InTask(id), files, asQuestion = deal, movedHere = true)
-        }
+        // «в тему Ремонт ванной купить плитку», «Добавь в дело "Список дел по Дмитрову" …» — exactly there (on the phone, offline too).
+        if (!smart && scope == Scope.Main && intoPlace(text, files, label)) return
         // «#Лендинг для Авиасейлс — бриф получила, дедлайн 30 октября» (persona test, 15 окт): the topic is made by its name and the
         // rest goes into it — matters when the words start with a verb or carry a date, otherwise a record of its feed.
         if (!smart && scope == Scope.Main) leadingNewTopic(text)?.let { (name, rest) ->
@@ -1320,12 +1315,43 @@ class MainVm(app: Application) : AndroidViewModel(app) {
      * A note written straight in the diary (owner, 14 окт): the words as they are, mentions kept as marks — @[Имя], @[p:место],
      * @[d:дело], #[тема]; the people and the place go onto the note too, so their cards see it. Nothing is parsed out of it.
      */
+    /**
+     * «Добавь в тему X …», «в дело X …», «запиши в задачу X …» (owner, 16 окт: said by voice, it must land exactly there): a topic
+     * gets the words as from its own field — a verb first makes a matter of it, anything else a note; a matter (a simple one or a
+     * topic's) gets them as its note, files as a record. True when the words named such a place and went there.
+     */
+    fun intoPlace(text: String, files: List<Attachment> = emptyList(), label: String? = null): Boolean {
+        val d = data.value
+        fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it) + flat(it.children) }
+        val topics = d.tasks.filter { it.topic && !it.thought && !it.done }.map { it.id to it.title }
+        val matters = d.tasks.filter { !it.topic && !it.done }.map { it.id to it.title } +
+            d.tasks.filter { it.topic && !it.thought && !it.done }.flatMap { t -> flat(t.subtasks).filter { !it.done }.map { "q:${t.id}:${it.id}" to it.title } }
+        val into = Commands.intoPlace(text, topics, matters) ?: return false
+        if (into.topic) {
+            d.tasks.find { it.id == into.id }?.let { _toast.value = L.s.addedTo(it.title); land(listOf(it.id)) }
+            // «купить плитку» (a verb first) is a matter of the topic; «хозяйка согласна» — a note of it.
+            val deal = Regex("^\\p{L}+(?:ть|ти|чь|ться|тись)(?![\\p{L}])", RegexOption.IGNORE_CASE).containsMatchIn(into.said)
+            sendNow(into.said, false, label, Scope.InTask(into.id), files, asQuestion = deal, movedHere = true)
+            return true
+        }
+        val title = matters.find { it.first == into.id }?.second ?: return false
+        val ref = ru.anjeib.margin.data.questionRef(into.id)
+        addComment(into.id, into.said.sentence(), ru.anjeib.margin.data.nowStamp())
+        // Files said with it go to the matter's records (a topic's matter keeps them in its topic).
+        if (files.isNotEmpty()) insertEntry("task:" + (ref?.first ?: into.id), null, Entry(text = "", attachments = files))
+        _toast.value = L.s.addedTo(title)
+        land(listOf(ref?.first ?: into.id))
+        return true
+    }
+
     /** «Заметки» narrowed to «личное» or «работа» (owner, 16 окт); a note written there then takes that sphere. */
     val diarySphere = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
     fun addDiaryNote(text0: String, files: List<Attachment>) {
         val text = text0.trim()
         if (text.isEmpty() && files.isEmpty()) return
+        // «Добавь в тему X …» said here too goes exactly there, not into the diary as words about it.
+        if (intoPlace(text, files)) return
         val d = data.value
         val plain = d.mentionsPlain(text)
         val first = plain.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()

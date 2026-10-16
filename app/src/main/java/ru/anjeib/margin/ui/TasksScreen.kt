@@ -249,7 +249,10 @@ fun TaskList(
                 // The calendar tab unfolds the month over the page (owner, 14 окт); a tap on a day turns the page to it.
                 // Fable, 15 окт: the tools stay where they are; the month unfolds under them, not over them.
                 // Persona test, 15 окт: the tools stay pinned at the top while the page scrolls (two of three couldn't find them).
-                if (plannerLook) stickyHeader("tools") { PinnedTools(calendar = true) }
+                if (plannerLook) stickyHeader("tools") {
+                    val shownDay = pageDay?.takeIf { it != today } ?: today
+                    PinnedTools(calendar = true, list = listState, title = shownDay.dowFull(), day = shownDay, headKey = if (shownDay != today) "o-head" else "head")
+                }
                 if (monthOpen) item("month") {
                     // No fade (owner, 14 окт): a fading month lay under the matters sliding up over it — it goes at once, they close up.
                     Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)) { MonthPanel(data, vm, pageDay ?: today, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
@@ -394,7 +397,7 @@ fun TaskList(
                 // who owes whom and by sphere.
                 fun bare(t: Task) = t.thought && t.subtasks.isEmpty()
                 fun sOk(t: Task) = monthSphere == null || (if (monthSphere == "work") t.sphere == "work" else t.sphere != "work")
-                if (plannerLook) stickyHeader("tools") { PinnedTools() }
+                if (plannerLook) stickyHeader("tools") { PinnedTools(list = listState, title = if (topicsOnly) s.topicsPage else s.overviewWord, headKey = "o-head") }
                 item("o-head") {
                     Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp)) {
                         Column {
@@ -479,8 +482,17 @@ fun TaskList(
 }
 
 /** A topic in a panel: its feed mark, the title, how much is open and written; settled — «в архив». */
+/** A topic's own day or window («Когда», owner 16 окт) as the margin says it: «20 окт», «9–11 окт»; null — none set. */
+fun Task.topicWhen(): String? {
+    val d = dueDate; val st = startDate
+    return when {
+        d != null && st != null && st.isBefore(d) -> spanWord(st, d)
+        else -> (d ?: st)?.let { dayWord(it) }
+    }
+}
+
 @Composable
-fun TopicPaperRow(t: Task, seat: Seat, onOpen: () -> Unit, onArchive: (() -> Unit)? = null, margin: String? = (t.lastActivity() ?: runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull())?.let { dayWord(it) },
+fun TopicPaperRow(t: Task, seat: Seat, onOpen: () -> Unit, onArchive: (() -> Unit)? = null, margin: String? = t.topicWhen() ?: (t.lastActivity() ?: runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull())?.let { dayWord(it) },
                   /** In search: the matter of the topic the words were found in. */
                   found: String? = null, trailing: (@Composable () -> Unit)? = null) {
     val c = M.c

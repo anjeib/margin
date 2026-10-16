@@ -324,11 +324,11 @@ fun Modifier.blockTint(pos: BlockPos?): Modifier = if (pos == null) this else co
 }
 
 @Composable
-fun TopicBlockHead(title: String, onOpen: () -> Unit) {
+fun TopicBlockHead(title: String, raw: Boolean = false, top: androidx.compose.ui.unit.Dp = 14.dp, onOpen: () -> Unit) {
     val c = M.c
-    Margined(Modifier.padding(top = 14.dp)) {
+    Margined(Modifier.padding(top = top)) {
         Box(Modifier.fillMaxWidth().blockTint(BlockPos.Head).padding(top = 4.dp)) {
-            Text("# $title", style = Type.small.copy(color = c.link, fontSize = 14.5.sp, fontWeight = FontWeight.Medium), maxLines = 1,
+            Text(if (raw) title else "# $title", style = Type.small.copy(color = c.link, fontSize = 14.5.sp, fontWeight = FontWeight.Medium), maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpen).padding(vertical = 6.dp))
         }

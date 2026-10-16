@@ -258,6 +258,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     var dealsOnly by remember(task.id) { mutableStateOf(false) }
     /** A matter opened in its own card, over the feed. */
     var dealQ by remember(task.id) { mutableStateOf<String?>(null) }
+    /** A note opened in its own card, over the feed (owner, 16 окт). */
+    var noteK by remember(task.id) { mutableStateOf<String?>(null) }
     /** Only the records (what was written), as «5 записей» in the summary asks. */
     var saidOnly by remember(task.id) { mutableStateOf(false) }
     val feedState = rememberLazyListState()
@@ -368,7 +370,13 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         val note = task.thought && task.subtasks.isEmpty()
         val bornDay = runCatching { LocalDate.parse(task.createdAt.take(10)) }.getOrNull()
         // Since when, on the margin as a day of the diary (owner, 14 окт): «с» over the day it was begun.
-        Margined(margin = if (folded) null else ({ CardMargin(bornDay, prefix = if (note) null else s.sinceWord) })) {
+        // Owner, 16 окт: a topic can be given a day or a window («Когда») — then that stands on the margin instead of «с …».
+        val tDue = task.dueDate
+        val tStart = task.startDate
+        Margined(margin = if (folded) null else ({
+            if (!note && (tDue != null || tStart != null)) CardMargin(tDue ?: tStart, prefix = windowPrefix(tStart.takeIf { tDue != null }, tDue), onDay = { dialog = "dates" })
+            else CardMargin(bornDay, prefix = if (note) null else s.sinceWord)
+        })) {
             Column(Modifier.animateContentSize(tween(220))) {
                 // The name is written right here (owner, 13 окт): a tap puts the cursor in it, «Готово» or leaving keeps it.
                 if (folded) Text(task.title, style = Type.cardTitle.copy(color = c.ink, fontSize = 19.sp, lineHeight = 24.sp),
@@ -391,7 +399,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                     MetaItem(Meta.plain(if (note) s.cardKindNote else s.cardKindTopic), Meta.quiet()) {},
                     // Only the matters still open (owner, 14 окт): what is done is not counted up here.
                     open.takeIf { it > 0 }?.let { MetaItem(Meta.plain(s.tasksCount(it)), Meta.quiet()) { dealsOnly = true; saidOnly = false; materialsMode = false } },
-                    task.entries.size.takeIf { it > 0 }?.let { MetaItem(Meta.plain(s.entriesCount(it)), Meta.quiet()) { saidOnly = true; dealsOnly = false; materialsMode = false } },
+                    // The notes the page shows (words that only named a matter are that matter), as the section below counts them.
+                    feedAll.count { it is FeedLine.Said && !it.removed }.takeIf { it > 0 }?.let { MetaItem(Meta.plain(s.entriesCount(it)), Meta.quiet()) { saidOnly = true; dealsOnly = false; materialsMode = false } },
                 ))
                 }
                 SphereIcons(task.sphere, { k -> k?.let { vm.setSphere(task.id, it) } }, Modifier.padding(start = 6.dp)) }
@@ -406,6 +415,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                         Action(s.dealsBadge, tab == "deals", { pick("deals") }) { DealGlyph(it, 22.dp) },
                         Action(s.records, tab == "said", { pick("said") }) { NoteGlyph(it, 22.dp) },
                         Action(s.filesWord, tab == "files", { pick("files") }) { ClipGlyph(it, 20.dp) },
+                        if (!note) Action(s.actWhen, false, { dialog = "dates" }) { CalendarGlyph(it, 22.dp) } else null,
                         Action(s.actMore, menu, { menu = !menu }) { MoreGlyph(it, 23.dp) },
                     ), slots = 5)
                     androidx.compose.animation.AnimatedVisibility(menu) {
@@ -438,7 +448,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                         select = { k -> selected = if (k.isBlank() || selected == k) null else k },
                         addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
                         editDeal = { editQ = it }, dateDeal = { dateQ = it }, editNote = { editNote = it }, view = { viewing = it }, timeDeal = { timeQ = it },
-                        openDeal = { dealQ = it.id },
+                        openDeal = { dealQ = it.id }, openNote = { noteK = entryKey(task.id, it.id) },
                     ), onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
                 }
             }
@@ -484,6 +494,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             dismissButton = { TextButton({ dialog = null }) { Text(s.cancel, color = c.graphite) } },
         )
         "rename" -> TextDialog(s.edit, task.title, "", onDismiss = { dialog = null }) { v -> if (v.isNotBlank()) vm.saveTask(task.copy(title = v.trim().sentence())); dialog = null }
+        // A day or a window of the topic itself (owner, 16 окт): the same choice as a matter's «Когда».
+        "dates" -> DatesDialog(task, onDismiss = { dialog = null }) { st, du -> vm.saveTask(task.copy(start = st, due = du)); dialog = null }
         "label" -> TextDialog(s.labelWord, task.project.orEmpty(), "дом", onDismiss = { dialog = null }) { v -> vm.setTopicLabel(task.id, v); dialog = null }
         "delete" -> AlertDialog(
             onDismissRequest = { dialog = null }, containerColor = c.card,
@@ -500,6 +512,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             dismissButton = { TextButton({ vm.misparsed(task.source.orEmpty(), "card", listOfNotNull(task.title, task.whenLabel()).joinToString(" · ")); dialog = null }) { Text(s.misparsed, color = c.link) } },
         )
     }
+    noteK?.let { k -> NoteCard(k, data, vm, onClose = { noteK = null }, onOpen = { noteK = null }) }
     dealQ?.let { id -> DealSheet(task, id, vm, onClose = { dealQ = null }, onOpenTopic = null, onOpenPerson = { dealQ = null; onOpenPerson(it) }, onOpenParent = { dealQ = it }) }
     editNote?.let { e -> TextDialog(s.edit, e.text, "", onDismiss = { editNote = null }) { v -> vm.editEntryText("task:${task.id}", e.id, v); editNote = null } }
     editQ?.let { q -> TextDialog(s.edit, q.title, "", onDismiss = { editQ = null }) { v -> vm.renameSubtask(task.id, q.id, v); editQ = null } }
@@ -583,6 +596,8 @@ private class FeedActions(
     val timeDeal: (Subtask) -> Unit = {},
     /** A tap on a matter: its own card. */
     val openDeal: (Subtask) -> Unit = {},
+    /** A tap on a note: its own card (owner, 16 окт), not editing in place. */
+    val openNote: (Entry) -> Unit = {},
 )
 
 @Composable
@@ -710,7 +725,7 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin:
         Box {
         Box {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(sel)
-                .combinedClickable(onClick = { if (removed) menu = true else editing = true }, onLongClick = { if (removed) menu = true else tools = true }).padding(end = 8.dp, top = 6.dp, bottom = 8.dp)) {
+                .combinedClickable(onClick = { if (removed) menu = true else act.openNote(e) }, onLongClick = { if (removed) menu = true else tools = true }).padding(end = 8.dp, top = 6.dp, bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
                         if (editing) androidx.compose.foundation.text.BasicTextField(draftValue, { draftValue = continueList(draftValue, it) },

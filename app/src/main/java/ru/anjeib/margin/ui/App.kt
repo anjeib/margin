@@ -151,6 +151,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         if (q != null) openDeal = id else { openTask = id; openTab = 0; openHl = null }
     }
     var openNote by rememberSaveable { mutableStateOf<String?>(null) }
+    /** A note of a matter or a topic opened from «Заметки» in its own card (owner, 16 окт): its [NoteCard] key. */
+    var openPiece by rememberSaveable { mutableStateOf<String?>(null) }
     var openPerson by rememberSaveable { mutableStateOf<String?>(null) }
     var searching by rememberSaveable { mutableStateOf(false) }
     var typing by rememberSaveable { mutableStateOf(false) }
@@ -321,7 +323,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                     vm.updateSettings { it.copy(devMode = on) }
                                     if (on) android.widget.Toast.makeText(ctx, s.devUnlocked, android.widget.Toast.LENGTH_SHORT).show()
                                 })
-                            TASKS -> if (k.view == Views.NOTES) DiaryPage(data, vm, onOpen = { openId(it) }, onPerson = { n -> data.persons.find { it.matches(n) }?.let { openPerson = it.id } }, contentPadding = pad)
+                            TASKS -> if (k.view == Views.NOTES) DiaryPage(data, vm, onOpen = { openId(it) }, onPerson = { n -> data.persons.find { it.matches(n) }?.let { openPerson = it.id } }, contentPadding = pad,
+                                onOpenNote = { openPiece = it })
                                 else if (k.view == Views.WEEK) CalendarScreen(shown, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
                                 else TaskList(
                                     k.view, shown, settings, working, vm, if (feedFilter == "all" || feedFilter == "deals") events else emptyList(),
@@ -512,6 +515,14 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         onOpenTask = { openTask = it },
                     )
                 }
+            }
+            // A note of a matter or a topic, opened from «Заметки»: a page of its own; its link goes where it lives.
+            var lastPiece by remember { mutableStateOf<String?>(null) }
+            if (openPiece != null) lastPiece = openPiece
+            AnimatedVisibility(openPiece != null,
+                enter = androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { it / 3 } + fadeIn(androidx.compose.animation.core.tween(220)),
+                exit = androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(220)) { it / 3 } + fadeOut(androidx.compose.animation.core.tween(180))) {
+                (openPiece ?: lastPiece)?.let { k -> NoteCard(k, data, vm, onClose = { openPiece = null }, onOpen = { id -> openPiece = null; openId(id) }) }
             }
             // A name that isn't a contact was tapped: «Марина · + контакт», quietly, for a few seconds.
             AnimatedVisibility(contactOffer != null && undoBar == null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 84.dp)) {

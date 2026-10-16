@@ -32,6 +32,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.anjeib.margin.data.dayMonthShort
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
@@ -176,11 +177,38 @@ fun PageToolsRow(calendar: Boolean = false) {
     }
 }
 
-/** The tools row as a list's sticky header: on the page's paper, with the margin's rule running through it, so nothing shows under it. */
+/**
+ * The tools row as a list's sticky header: on the page's paper, with the margin's rule running through it, so nothing shows under it.
+ * Owner, 16 окт: the page's name stays pinned too — once its big head has gone under the row, the row shows the name small on
+ * the left ([title], the day on the margin for a day's page) with the double rule under it; scrolled back up, it steps aside.
+ */
 @Composable
-fun PinnedTools(calendar: Boolean = false) {
+fun PinnedTools(calendar: Boolean = false, list: androidx.compose.foundation.lazy.LazyListState? = null, title: String? = null,
+                day: java.time.LocalDate? = null, headKey: Any = "head") {
     val c = M.c
-    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().background(c.bg).screenRule()) { PageToolsRow(calendar) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val compact by androidx.compose.runtime.remember(list, headKey) { androidx.compose.runtime.derivedStateOf {
+        val l = list ?: return@derivedStateOf false
+        val head = l.layoutInfo.visibleItemsInfo.find { it.key == headKey }
+        if (head == null) l.firstVisibleItemIndex > 0 && l.layoutInfo.visibleItemsInfo.isNotEmpty()
+        else head.offset + head.size < with(density) { 96.dp.roundToPx() }
+    } }
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().background(c.bg).screenRule()) {
+        androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth()) {
+            androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.CenterStart) {
+                PageToolsRow(calendar)
+                androidx.compose.animation.AnimatedVisibility(compact && title != null, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+                    Margined(margin = day?.let { d -> { MarginNote(d.dayMonthShort()) } }) {
+                        androidx.compose.material3.Text(title.orEmpty(), style = Type.pageTitle.copy(color = c.ink, fontSize = 27.sp, lineHeight = 32.sp), maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(end = if (calendar) 150.dp else 104.dp))
+                    }
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(compact && title != null, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+                DoubleRule(Modifier.padding(top = 4.dp, bottom = 2.dp))
+            }
+        }
+    }
 }
 
 /** The page edges and cover beyond the sheet. */
