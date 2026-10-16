@@ -136,8 +136,8 @@ class LocalParserTest {
         val thu = LocalDate.of(2026, 10, 15)
         fun p(s: String) = LocalParser.parse(s, base, today = thu, now = java.time.LocalTime.of(14, 38)).items
         val tour = p("Завтра в 15 созвон с Мариной, она пришлёт правки до среды")
-        assertTrue("tour: $tour", tour.size == 2 && tour[0].title == "Созвон с Мариной" && tour[0].due == thu.plusDays(1) && tour[0].time == "15:00" && tour[0].waitingFor == null &&
-            tour[1].waitingFor == "Марина" && tour[1].due == LocalDate.of(2026, 10, 21) && tour[1].title == "Получить правки от Марины")
+        // Owner, 16 окт: one message is one matter — the tour's phrase is no longer split into the call and the wait.
+        assertTrue("tour: $tour", tour.size == 1 && tour[0].due == thu.plusDays(1) && tour[0].time == "15:00")
         val kp = p("Серёга обещал прислать КП до среды").single()
         assertTrue("kp: $kp", kp.waitingFor == "Серёга" && kp.due == LocalDate.of(2026, 10, 21) && kp.title == "Получить КП от Серёги")
         val acts = p("ип петров пришлёт акты до пятницы").single()
@@ -148,7 +148,7 @@ class LocalParserTest {
         assertTrue("pay: $pay", pay.repeat == Triple("monthly", 1, listOf(10, 25)) && pay.due == LocalDate.of(2026, 10, 25) && pay.title == "Зарплата ип ивановой")
         assertTrue(p("сдать 6-ндфл до 25 октября").single().title == "Сдать 6-ндфл")
         assertTrue(p("Авиасейлс должны оплатить 60 тысяч до 20 октября").single().title == "Авиасейлс должны оплатить 60 тысяч")
-        assertTrue(p("Олег бариста просит отпуск с 1 ноября, решить до вторника").first().title == "Олег бариста просит отпуск")
+        p("Олег бариста просит отпуск с 1 ноября, решить до вторника").let { assertTrue("$it", it.size == 1 && it[0].title.startsWith("Олег бариста просит отпуск")) }
         // Not a wait: an errand of my own, a plain plan, and the dictionary's own rule stays.
         assertTrue(p("маме отправить фото в субботу").single().waitingFor == null)
         assertTrue(p("Игорь пришлёт правки по лендингу к среде").single().waitingFor == "Игорь")

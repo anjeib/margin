@@ -236,7 +236,7 @@ fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modif
 /** The margin of a panel row: the note on the line of the row's first words. */
 @Composable
 fun RowMargin(text: String?, late: Boolean = false, link: Boolean = false) {
-    if (text == null) return
+    if (text.isNullOrBlank()) return
     MarginNote(text, late, link, Modifier.padding(top = RowTop + 2.dp))
 }
 

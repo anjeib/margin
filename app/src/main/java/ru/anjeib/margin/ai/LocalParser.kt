@@ -264,7 +264,13 @@ object LocalParser {
     /** The matters a text holds, each its own words — for a caller that files them one by one. */
     fun pieces(text: String): List<String> = split(text)
 
-    private fun split(t0: String): List<String> {
+    // Owner, 16 окт: the phone no longer splits one message into several matters — what is written at once is one matter
+    // (lines, «;», «, позвонить…», «ещё» included). The old splitter is kept below, unused, should it be asked for again.
+    private fun split(t0: String): List<String> =
+        listOf(t0.lines().map { it.replace(Regex("^\\s*(\\d{1,2}[.)]|[-–—•*])\\s+"), "").trim().trimEnd(';', ',') }.filter { it.isNotBlank() }.joinToString(", ")).filter { it.isNotBlank() }
+
+    @Suppress("unused")
+    private fun splitSeveral(t0: String): List<String> {
         // «1. …», «- …», «• …» at line starts: a list typed by hand — the marks go before anything else splits the text.
         val t = t0.lines().joinToString("\n") { it.replace(Regex("^\\s*(\\d{1,2}[.)]|[-–—•*])\\s+"), "") }
         // «ещё» starts a new matter only after a whole one («купить хлеб, ещё позвонить»), not after «для vuzburo ещё…».

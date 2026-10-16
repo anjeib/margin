@@ -103,15 +103,50 @@ private fun Task.bornAt(): String = entries.minOfOrNull { it.at } ?: history.fir
  * the weekday in the planner's italic; each note written straight on the page — its hour on the margin, its words, mentions as
  * links — no panels, as in a notebook. Notes from the main field land here too; the field below writes here directly.
  */
+/**
+ * A note written inside a matter or a topic, shown in «Заметки» too (owner, 16 окт): its words, its files, and a link to where it
+ * lives — «# Тема», «○ Дело», «○ Дело · # Тема». [open] — what a tap opens.
+ */
+private class LinkedNote(val key: String, val at: String, val text: String, val files: List<ru.anjeib.margin.data.Attachment>,
+                         val link: String, val open: String, val sphere: String?)
+
+/** Every note written in a matter or a topic: the topics' records, the matters' comments and records, a topic's matters' comments. */
+private fun AppData.linkedNotes(): List<LinkedNote> {
+    val out = mutableListOf<LinkedNote>()
+    fun flat(l: List<ru.anjeib.margin.data.Subtask>): List<ru.anjeib.margin.data.Subtask> = l.flatMap { listOf(it) + flat(it.children) }
+    tasks.filter { !it.thought }.forEach { t ->
+        // An archived topic is put away with what is in it.
+        if (t.topic && t.done) return@forEach
+        val own = if (t.topic) "# " + t.title else "○ " + t.title
+        t.entries.filter { it.text.isNotBlank() || it.attachments.isNotEmpty() }.forEach { e ->
+            out += LinkedNote("e" + e.id, e.at, e.text, e.attachments, own, t.id, t.sphere)
+        }
+        t.comments.filter { it.text.isNotBlank() }.forEach { cm -> out += LinkedNote("c" + cm.id, cm.at, cm.text, emptyList(), own, t.id, t.sphere) }
+        if (t.topic) flat(t.subtasks).forEach { q ->
+            q.comments.filter { it.text.isNotBlank() }.forEach { cm ->
+                out += LinkedNote("c" + cm.id, cm.at, cm.text, emptyList(), "○ " + q.title + "  ·  # " + t.title, "q:${t.id}:${q.id}", t.sphere)
+            }
+        }
+    }
+    return out
+}
+
 @Composable
 fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (String) -> Unit, contentPadding: PaddingValues) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
-    val notes = remember(data) {
-        data.tasks.filter { it.thought && it.subtasks.isEmpty() && !it.done }.sortedBy { it.bornAt() }
+    // «личное / работа» (owner, 16 окт): the same two marks as on «Темы»; chosen again — all of them.
+    val sphere by vm.diarySphere.collectAsState()
+    fun sOk(x: String?) = sphere == null || (if (sphere == "work") x == "work" else x != "work")
+    val notes = remember(data, sphere) {
+        data.tasks.filter { it.thought && it.subtasks.isEmpty() && !it.done && sOk(it.sphere) }.sortedBy { it.bornAt() }
     }
-    val byDay = remember(notes) { notes.groupBy { runCatching { LocalDate.parse(it.bornAt().take(10)) }.getOrDefault(today) }.toSortedMap(compareByDescending { it }) }
+    val linked = remember(data, sphere) { data.linkedNotes().filter { sOk(it.sphere) } }
+    // Both kinds in one diary, by the time they were written.
+    val lines: List<Pair<String, Any>> = remember(notes, linked) { (notes.map { it.bornAt() to (it as Any) } + linked.map { it.at to (it as Any) }).sortedBy { it.first } }
+    val byDay = remember(lines) { lines.groupBy { runCatching { LocalDate.parse(it.first.take(10)) }.getOrDefault(today) }.mapValues { e -> e.value.map { it.second } }.toSortedMap(compareByDescending { it }) }
+    val linkedText = remember(linked) { linked.associate { "l" + it.key to data.mentionsPlain(it.text) + " " + it.link } }
     val pageLines = rememberPageLines()
     val landed = vm.landed.collectAsState().value
     // Found on this page by the find bar: a note by its words.
@@ -122,7 +157,8 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
     val plannerLook = planner
     Box(Modifier.fillMaxSize().ruledPage(pageLines).screenRule()) {
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())) {
-          findable(found, find, { k -> data.taskOfKey(k)?.let { t -> find != null && findHit(find.words, t.title + " " + data.mentionsPlain(t.entries.joinToString(" ") { it.text })) } == true }) {
+          findable(found, find, { k -> (k as? String)?.let { linkedText[it] }?.let { find != null && findHit(find.words, it) }
+              ?: (data.taskOfKey(k)?.let { t -> find != null && findHit(find.words, t.title + " " + data.mentionsPlain(t.entries.joinToString(" ") { it.text })) } == true) }) {
             if (plannerLook) stickyHeader("tools") { PinnedTools() }
             item("head") {
                 Margined(Modifier.padding(top = if (planner) 0.dp else 8.dp)) {
@@ -131,12 +167,15 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                             Text(s.diaryTitle, style = Type.pageTitle.copy(color = c.ink), modifier = Modifier.weight(1f))
                             if (!planner) PageToolIcons()
                         }
-                        Voice(s.diarySub, Modifier.padding(top = 2.dp))
+                        Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Voice(s.diarySub, Modifier.weight(1f))
+                            SphereIcons(sphere, { vm.diarySphere.value = it }, clearable = true)
+                        }
                     }
                 }
                 if (planner) DoubleRule(Modifier.padding(top = 18.dp, bottom = 6.dp))
             }
-            if (notes.isEmpty()) item("empty") { Margined(Modifier.padding(top = 18.dp)) { Empty(s.diaryEmpty, s.diaryEmptyHint) } }
+            if (lines.isEmpty()) item("empty") { Margined(Modifier.padding(top = 18.dp)) { Empty(s.diaryEmpty, s.diaryEmptyHint) } }
             // Owner, 14 окт: no «Сегодня» / «Суббота» line — a day is one block (its number large on the margin by its first note),
             // and the notes in it are parted by a hairline; each note's hour on the margin by it.
             byDay.forEach { (day, list) ->
@@ -149,7 +188,9 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                         }
                     }
                 }
-                list.forEachIndexed { i, n ->
+                list.forEachIndexed { i, x ->
+                    if (x is LinkedNote) { item("l" + x.key) { LinkedNoteRow(x, data, i, list.size, false, onOpen, onPerson) }; return@forEachIndexed }
+                    val n = x as Task
                     item("n" + n.id) {
                         val at = n.bornAt()
                         val body = n.entries.filter { it.text.isNotBlank() }.joinToString("\n\n") { it.text }
@@ -188,6 +229,31 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
             item("end") { PageEnd(pageLines) }
             item("tail") { Box(Modifier.width(1.dp).height(40.dp)) }
           }
+        }
+    }
+}
+
+/** A note written in a matter or a topic: the hour on the margin, its words (three lines at most), its files, where it lives. */
+@Composable
+private fun LinkedNoteRow(x: LinkedNote, data: AppData, i: Int, n: Int, lit: Boolean, onOpen: (String) -> Unit, onPerson: (String) -> Unit) {
+    val c = M.c
+    Margined(Modifier.landing(lit, 0), margin = {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 10.dp)) { MarginNote(x.at.drop(11).take(5)) }
+    }) {
+        PanelPiece(seatOf(i, n)) {
+            Column(Modifier.fillMaxWidth().clickable { onOpen(x.open) }.padding(horizontal = if (planner) 0.dp else 16.dp, vertical = 12.dp)) {
+                var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+                if (x.text.isNotBlank()) {
+                    val shown = mentionsText(x.text, data, onPerson, onOpen)
+                    Text(shown, style = Type.body.copy(color = c.ink.copy(alpha = 0.9f), fontSize = if (planner) 15.sp else 16.sp, lineHeight = if (planner) 22.sp else 23.sp),
+                        onTextLayout = { layout = it }, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.foundMarks(shown.text) { layout })
+                }
+                if (x.files.isNotEmpty()) Box(Modifier.padding(top = 8.dp)) { AttachmentsView(x.files) }
+                // Where it was written — a link to it (owner, 16 окт).
+                Text(x.link, style = Type.small.copy(color = c.link, fontSize = 13.5.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp))
+            }
         }
     }
 }

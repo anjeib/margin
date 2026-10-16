@@ -222,8 +222,10 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         }
                     }
                 }
+                // Owner, 16 окт: what is written in the matter is its «Заметки» (they show in «Заметки» too, with a link here);
+                // added only from the field below.
                 WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
-                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "deal:${task.id}", plus = Plus.Marks,
+                    canAdd = false, heading = s.records, vm = vm,
                     onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
                     onAdd = { t, at -> vm.addComment(task.id, t, at); savedAt = System.currentTimeMillis() })
                 // Where it came from — below the shared part of every matter's card, quietly.
@@ -287,7 +289,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
 
                 // Records: dated blocks — a photo of the receipt, a voice note after the call, the contract.
                 if (task.entries.isNotEmpty()) {
-                    SectionHead(s.records, count = task.entries.size)
+                    if (task.comments.isEmpty()) SectionHead(s.records, count = task.entries.size)
                     val shown = if (showAllEntries) task.entries else task.entries.takeLast(3)
                     Margined {
                         Column {
@@ -345,9 +347,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     },
                     prefill = fill?.prefill, onPrefillUsed = {},
                     modeLabel = modeLabel, onModeClose = { mode = null; fill = null }, focusKey = modeTick.takeIf { it > 0 },
-                    // A mode (a step, a place…) is a one-line answer in the bar; otherwise the words are on the page.
-                    pageText = pageDraft.takeIf { modeLabel == null }, onWrite = { writeTick++ }, slash = true, pageSend = pageSend, pageFiles = pageFiles.takeIf { modeLabel == null },
-                    marksOnPlus = true,
+                    // Owner, 16 окт: a real field — the only way to add to the matter — drawn as the main one.
+                    slash = true, floating = planner,
                 )
             }
         }

@@ -345,60 +345,26 @@ fun TaskList(
                             onFold = { undatedOpen = !undatedOpen; ui.edit().putBoolean("undatedOpen", undatedOpen).apply() })
                     }
                     fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
-                    if (undatedOpen) undated.forEachIndexed { i, t ->
+                    // Owner, 16 окт: a topic's matters together, under its name.
+                    val blocks = withTopicHeads(undated) { t -> t.topicId?.let { it to (t.topicTitle ?: "") } }
+                    val inBlock = blocks.filterIsInstance<TopicHead>().map { it.id }.toSet()
+                    val pos = blockPositions(blocks) { (it as? Task)?.topicId }
+                    var i = -1
+                    if (undatedOpen) blocks.forEachIndexed { bi, b ->
+                        if (b is TopicHead) { item("ug" + b.id) { Box(Modifier.animateItem()) { TopicBlockHead(b.title) { onOpen(b.id) } } }; return@forEachIndexed }
+                        val t = b as Task
+                        i++
+                        val seat = seatOf(i, undated.size)
                         item("u" + t.id) {
                             val since = born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() }
-                            MatterRow(t, seatOf(i, undated.size), today, (if (planner) since else null) to false, modifier = Modifier.animateItem(),
+                            MatterRow(t, seat, today, (if (planner) since else null) to false, modifier = Modifier.animateItem(),
                                 onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) }, onTime = { timeFor = t.id }, onLater = { postponing = t.id },
                                 faded = born(t)?.isBefore(today.minusDays(7)) == true, lit = t.id in landed, onOpenTopic = onOpen,
-                                extra = since.takeIf { !planner })
+                                extra = since.takeIf { !planner }, showTopic = t.topicId !in inBlock, block = pos[bi])
                         }
                     }
                 }
-                // Owner, 13 окт: whatever was written today shows on «Сегодня», even when it isn't for today — a new topic,
-                // a matter for another day (its day on the margin), an idea. What the sections above already hold isn't repeated.
-                val todayStr = today.toString()
-                // A topic written in today (owner, 14 окт): not the topic itself — what was written, under it «# Тема»; a topic begun
-                // today with nothing in it yet is itself what was written.
-                val topicsAll = data.tasks.filter { t -> t.topic && !t.thought && !t.done && !t.sample }
-                val recordsToday = topicsAll.flatMap { t -> t.entries.filter { it.at.startsWith(todayStr) && (it.text.isNotBlank() || it.attachments.isNotEmpty()) }.map { t to it } }
-                val topicsToday = topicsAll.filter { t -> t.createdAt == todayStr && recordsToday.none { it.first.id == t.id } }
-                val laterToday = data.tasks.filter { t -> !t.topic && !t.done && !t.sample && t.createdAt == todayStr && t.anchor?.isAfter(today) == true }
-                    .sortedWith(compareBy({ it.anchor }, { it.time ?: "99" }))
-                val ideasToday = data.tasks.filter { t -> t.thought && !t.done && (t.createdAt == todayStr || t.entries.any { it.at.startsWith(todayStr) }) }
-                val written = topicsToday.map { "t" to it } + laterToday.map { "d" to it } + ideasToday.map { "i" to it }
-                val writtenRecords = recordsToday.sortedBy { it.second.at }
-                val writtenAll = written.size + writtenRecords.size
-                if (writtenAll > 0) {
-                    item("i-head") { SectionHead(s.writtenToday) }
-                    writtenRecords.forEachIndexed { i, (t, e) ->
-                        item("wr" + e.id) {
-                            PaperRow(seatOf(i, writtenAll), margin = e.at.drop(11).take(5).takeIf { it.length == 5 && it != "00:00" },
-                                mark = { NoteGlyph(c.graphite, 20.dp) }, onClick = { onOpen(t.id) }) {
-                                RowTitle(e.text.ifBlank { e.attachments.firstOrNull()?.let { a -> a.caption ?: a.name } ?: "" }, maxLines = 2)
-                                RowSub("# " + t.title, link = true)
-                            }
-                        }
-                    }
-                    written.forEachIndexed { i0, (kind, t) ->
-                        val i = i0 + writtenRecords.size
-                        item("w" + t.id) {
-                            val seat = seatOf(i, writtenAll)
-                            Box(Modifier.animateItem().landing(t.id in landed, 0)) {
-                                when (kind) {
-                                    "t" -> TopicPaperRow(t, seat, onOpen = { onOpen(t.id) })
-                                    "d" -> MatterRow(t, seat, today, whenNote(t, today, underDay = false), onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) },
-                                        onTime = { timeFor = t.id }, onLater = { postponing = t.id }, lit = t.id in landed, onOpenTopic = onOpen)
-                                    // Ideas each by its bulb — the bulb says «идея», no badge over them.
-                                    else -> PaperRow(seat, mark = { IdeaMark(26.dp) }, onClick = { onOpen(t.id) }) {
-                                        RowTitle(t.title.ifBlank { s.untitled }, maxLines = 2)
-                                        t.entries.size.takeIf { it > 0 }?.let { RowSub(s.nEntries(it)) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                // Owner, 16 окт: no «Записано сегодня» — what was written lives in its topic, its matter and «Заметки».
                 // Sunday: the week in one quiet panel — gathered by code, gone until next Sunday.
                 val wk = today.minusDays(today.dayOfWeek.value - 1L).toString()
                 val weekShown = (today.dayOfWeek == java.time.DayOfWeek.SUNDAY || settings.devMode) && weekSeen != wk

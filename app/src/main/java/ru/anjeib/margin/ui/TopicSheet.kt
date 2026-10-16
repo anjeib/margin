@@ -154,7 +154,7 @@ private fun norm(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
 private sealed interface FeedRow {
     val key: String
     data class Head(override val key: String, val deals: Boolean, val count: Int, val first: Boolean) : FeedRow
-    data class Fold(override val key: String, val n: Int, val open: Boolean) : FeedRow
+    data class Fold(override val key: String, val n: Int, val open: Boolean, val archive: Boolean = false) : FeedRow
     data class Line(val line: FeedLine, val seat: Seat, val byDue: Boolean, val dayFirst: Boolean, val firstInSection: Boolean) : FeedRow { override val key get() = line.key }
 }
 
@@ -163,35 +163,52 @@ private sealed interface FeedRow {
  * it, the settled ones folded into «сделано · N» — then the records in the order written, a day on the margin once. Otherwise
  * (one kind only) the lines in the order they came, a day's lines one panel.
  */
-private fun arrange(feed: List<FeedLine>, grouped: Boolean, showDone: Boolean): List<FeedRow> {
+private fun arrange(feed: List<FeedLine>, grouped: Boolean, opened: Set<String>): List<FeedRow> {
     fun seats(n: Int, i: Int) = when { n == 1 -> Seat.Single; i == 0 -> Seat.First; i == n - 1 -> Seat.Last; else -> Seat.Middle }
+    fun FeedLine.gone() = when (this) { is FeedLine.Said -> removed; is FeedLine.Deal -> removed }
     val out = mutableListOf<FeedRow>()
+    // Owner, 16 окт: what was removed is not left struck through among the rest — it folds into «Архив · N» at the end of its
+    // block (the matters, the notes), the way the done ones fold into «Сделано · N».
+    fun archive(key: String, lines: List<FeedLine>, byDue: Boolean) {
+        if (lines.isEmpty()) return
+        val open = key in opened
+        out += FeedRow.Fold(key, lines.size, open, archive = true)
+        if (open) lines.forEachIndexed { i, l -> out += FeedRow.Line(l, seats(lines.size, i), byDue = byDue, dayFirst = false, firstInSection = i == 0) }
+    }
     if (!grouped) {
-        val days = feed.map { dateOfStamp(it.at) }
-        feed.forEachIndexed { i, l ->
+        val live = feed.filter { !it.gone() }
+        val days = live.map { dateOfStamp(it.at) }
+        live.forEachIndexed { i, l ->
             val first = i == 0 || days[i - 1] != days[i]
-            val last = i == feed.lastIndex || days[i + 1] != days[i]
+            val last = i == live.lastIndex || days[i + 1] != days[i]
             val seat = when { first && last -> Seat.Single; first -> Seat.First; last -> Seat.Last; else -> Seat.Middle }
             out += FeedRow.Line(l, seat, byDue = false, dayFirst = first, firstInSection = i == 0)
         }
+        archive("f:arch", feed.filter { it.gone() }, byDue = false)
         return out
     }
     // The matters, each with the ones hung under it (the feed already has a child right after its parent).
+    val dealsAll = feed.filterIsInstance<FeedLine.Deal>()
     val groups = mutableListOf<MutableList<FeedLine.Deal>>()
-    feed.filterIsInstance<FeedLine.Deal>().forEach { d -> if (d.depth == 0 || groups.isEmpty()) groups += mutableListOf(d) else groups.last() += d }
-    val (open, settled) = groups.partition { !it.first().q.done && !it.first().removed }
+    dealsAll.filter { !it.removed }.forEach { d -> if (d.depth == 0 || groups.isEmpty()) groups += mutableListOf(d) else groups.last() += d }
+    val (open, settled) = groups.partition { !it.first().q.done }
     val openLines = open.sortedBy { it.first().q.due ?: "9999" }.flatten()
+    val archD = dealsAll.filter { it.removed }
     // The same count as the topic's line says: every matter still open, the ones hung under others too.
-    if (groups.isNotEmpty()) out += FeedRow.Head("h:deals", deals = true, count = groups.flatten().count { !it.q.done && !it.removed }, first = true)
+    if (dealsAll.isNotEmpty()) out += FeedRow.Head("h:deals", deals = true, count = groups.flatten().count { !it.q.done }, first = true)
     openLines.forEachIndexed { i, d -> out += FeedRow.Line(d, seats(openLines.size, i), byDue = true, dayFirst = false, firstInSection = i == 0) }
     if (settled.isNotEmpty()) {
+        val showDone = "f:done" in opened
         out += FeedRow.Fold("f:done", settled.size, showDone)
         if (showDone) { val l = settled.flatten(); l.forEachIndexed { i, d -> out += FeedRow.Line(d, seats(l.size, i), byDue = true, dayFirst = false, firstInSection = i == 0) } }
     }
-    val said = feed.filterIsInstance<FeedLine.Said>()
-    if (said.isNotEmpty()) out += FeedRow.Head("h:said", deals = false, count = said.count { !it.removed }, first = groups.isEmpty())
+    archive("f:arch-d", archD, byDue = true)
+    val saidAll = feed.filterIsInstance<FeedLine.Said>()
+    val said = saidAll.filter { !it.removed }
+    if (saidAll.isNotEmpty()) out += FeedRow.Head("h:said", deals = false, count = said.size, first = dealsAll.isEmpty())
     val days = said.map { dateOfStamp(it.at) }
     said.forEachIndexed { i, l -> out += FeedRow.Line(l, Seat.Single, byDue = false, dayFirst = i == 0 || days[i - 1] != days[i], firstInSection = i == 0) }
+    archive("f:arch-s", saidAll.filter { it.removed }, byDue = false)
     return out
 }
 
@@ -272,8 +289,9 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     val feedAll = remember(task) { feedOf(task) }
     val feed = when { dealsOnly -> feedAll.filter { it is FeedLine.Deal }; saidOnly -> feedAll.filter { it is FeedLine.Said }; else -> feedAll }
     // «Всё» in sections (owner, 14 окт): the matters together at the top, the records under them on the page — each file in its record.
-    var showDone by remember(task.id) { mutableStateOf(false) }
-    val rows = arrange(feed, grouped = !dealsOnly && !saidOnly, showDone = showDone)
+    // Which folds are open: «Сделано · N», «Архив · N» of the matters and of the notes.
+    var opened by remember(task.id) { mutableStateOf(emptySet<String>()) }
+    val rows = arrange(feed, grouped = !dealsOnly && !saidOnly, opened = opened)
 
     // The task just grew into a topic: the thread grows down the margin and its lines arrive one by one.
     // Played once per topic in a run of the app (event times are kept to the minute, so «just now» is a two-minute window).
@@ -415,7 +433,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             run {
                 androidx.compose.animation.Crossfade(materialsMode, animationSpec = tween(240), label = "materials") { m ->
                     if (m) MaterialsFeed(task, onView = { viewing = it })
-                    else FeedPage(task, rows, { showDone = !showDone }, feedState, hl, seenAtOpen, working, selected, vm, pageDraft.takeIf { addUnder == null }, pageFiles, writeTick.takeIf { it > 0 },
+                    else FeedPage(task, rows, { k -> opened = if (k in opened) opened - k else opened + k }, feedState, hl, seenAtOpen, working, selected, vm, pageDraft.takeIf { addUnder == null }, pageFiles, writeTick.takeIf { it > 0 },
                         if (dealsOnly) s.newQuestionHint else s.writeInTopic, { pageSend.send() }, FeedActions(
                         select = { k -> selected = if (k.isBlank() || selected == k) null else k },
                         addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
@@ -446,15 +464,12 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                     if (under != null) { vm.addChildDeal(task.id, under.first, t); addUnder = null }
                     else vm.send(t, scope = Scope.InTask(task.id), files = f, asQuestion = dealsOnly)
                 },
-                modeLabel = under?.let { s.underLine }, onModeClose = { addUnder = null }, focusKey = focusTick.takeIf { it > 0 }, slash = true,
+                modeLabel = under?.let { s.underLine }, onModeClose = { addUnder = null }, focusKey = focusTick.takeIf { it > 0 }, slash = true, floating = planner,
                 // Owner, 14 окт: as in a card — marks with the page's «+», files with the paperclip, only «@» typed.
-                marksOnPlus = under == null && !materialsMode,
-                // A tap on the bar (or words just dictated): to the end of the page, the cursor in its line.
-                pageText = pageDraft.takeIf { under == null && !materialsMode }, pageFiles = pageFiles.takeIf { under == null && !materialsMode }, pageSend = pageSend,
+                // Owner, 16 окт: the field below is the only way to add — a real field again, not a pointer to a line on the page.
                 // What the phone reads in the words being written, quietly over the microphone: «дело · пт 16 окт · ждём от Марины».
                 // In a topic plain words become a record, so only a reading with something in it (a day, a person, a wait) is said.
                 preview = { vm.previewOf(it)?.takeIf { p -> p.contains("·") } },
-                onWrite = { scope.launch { feedState.layoutInfo.totalItemsCount.takeIf { it > 0 }?.let { feedState.animateScrollToItem(it - 1) }; writeTick++ } },
             )
         }
     }
@@ -571,7 +586,7 @@ private class FeedActions(
 )
 
 @Composable
-private fun FeedPage(task: Task, rows: List<FeedRow>, onFoldDone: () -> Unit, state: androidx.compose.foundation.lazy.LazyListState, hl: String?, seen: Set<String>, working: Set<String>,
+private fun FeedPage(task: Task, rows: List<FeedRow>, onFold: (String) -> Unit, state: androidx.compose.foundation.lazy.LazyListState, hl: String?, seen: Set<String>, working: Set<String>,
                      selected: String?, vm: MainVm, draft: androidx.compose.runtime.MutableState<String>?,
                      files: androidx.compose.runtime.snapshots.SnapshotStateList<Attachment>, writeKey: Any?, writeHint: String, onKeep: () -> Unit,
                      act: FeedActions, onArchive: () -> Unit, onSource: () -> Unit) {
@@ -589,7 +604,7 @@ private fun FeedPage(task: Task, rows: List<FeedRow>, onFoldDone: () -> Unit, st
                     SectionHead(if (row.deals) s.dealsBadge else s.records, count = row.count.takeIf { it > 0 }, top = if (row.first) 6.dp else 22.dp)
                 }
                 is FeedRow.Fold -> item(row.key) {
-                    Margined(Modifier.padding(top = 4.dp)) { QuietLink(s.doneCount(row.n) + if (row.open) " ▾" else " ▸", onClick = onFoldDone) }
+                    Margined(Modifier.padding(top = 4.dp)) { QuietLink((if (row.archive) s.archiveCount(row.n) else s.doneCount(row.n)) + if (row.open) " ▾" else " ▸", onClick = { onFold(row.key) }) }
                 }
                 is FeedRow.Line -> {
                     val line = row.line
@@ -630,7 +645,8 @@ private fun FeedPage(task: Task, rows: List<FeedRow>, onFoldDone: () -> Unit, st
             }
         }
         // The page goes on below the last day: write here, the bar sends it (as the old field did: records, matters, marks).
-        if (draft != null) item("write") { PageLine(draft, writeHint, writeKey, Modifier.padding(top = 10.dp), after = feed.lastOrNull()?.at, vm = vm, files = files, pasteTo = "task:${task.id}", onKeep = onKeep, plus = Plus.Marks) }
+        // Owner, 16 окт: nothing is added from the page's body — only from the field below.
+        item("write") { Spacer(Modifier.height(18.dp)) }
         // At the foot, as in every card: when it began — and, made from words in the field, those words on a tap (owner, 14 окт).
         item("created") { Margined { CreatedLine(task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt, onClick = if (task.source != null) onSource else null) } }
     }
@@ -704,14 +720,14 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin:
                                 if (f.isFocused) hadFocus = true else if (editing && hadFocus) { save(); editing = false; hadFocus = false }
                             })
                         else if (e.text.isNotBlank()) ListAwareText(e.text, Type.body.copy(color = if (removed) c.faint else c.ink.copy(alpha = 0.9f), fontSize = 16.sp, lineHeight = 23.sp,
-                            textDecoration = if (removed) androidx.compose.ui.text.style.TextDecoration.LineThrough else null))
+                            textDecoration = null))
                         // A list in a record is a list of thoughts, not matters: bullets, no ticks.
                         e.items.forEach { Row(Modifier.padding(vertical = 1.dp)) {
                             Text("•", style = Type.body.copy(color = c.graphite, fontSize = 15.5.sp), modifier = Modifier.width(22.dp))
                             Text(it.title, style = Type.body.copy(color = if (removed) c.faint else c.ink, fontSize = 15.5.sp), modifier = Modifier.weight(1f))
                         } }
                     }
-                    if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 3.dp))
+                    // In «Архив · N» (owner, 16 окт) the fold says it is removed — the words stay plain, only paler.
                     // Long press (owner, 13 окт): copy, move, delete — a tap already edits it in place.
                     Box {
                         SoftMenu(tools, { tools = false }) {
@@ -745,8 +761,8 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
     val motion = motionOn()
     var menu by remember(q.id) { mutableStateOf(false) }
     var tools by remember(q.id) { mutableStateOf(false) }
-    val strike = remember(q.id) { Animatable(if (q.done || removed) 1f else 0f) }
-    LaunchedEffect(q.done, removed) { strike.animateTo(if (q.done || removed) 1f else 0f, tween(if (motion) 320 else 0, easing = FastOutSlowInEasing)) }
+    val strike = remember(q.id) { Animatable(if (q.done && !removed) 1f else 0f) }
+    LaunchedEffect(q.done, removed) { strike.animateTo(if (q.done && !removed) 1f else 0f, tween(if (motion) 320 else 0, easing = FastOutSlowInEasing)) }
     val sel by androidx.compose.animation.animateColorAsState(if (tools) c.chip else Color.Transparent, tween(180), label = "sel")
     val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     val today = LocalDate.now()
@@ -759,9 +775,13 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
     }
     // A matter under a matter (owner, 14 окт: the elbow and guide looked wrong) — a sub-item as in a notebook: its smaller
     // circle stands under where the words above begin, no line between them; it reads as part of the one above.
-    val indent = (if (planner) 18.dp else MarkCol / 2 + 21.dp) * depth
     val plannerLook = planner
-    Margined(margin = if (plannerLook && !removed) ({ MarginTap(::tick, late = late, done = q.done) { margin?.invoke() ?: RowMargin("—") } }) else margin) {
+    // Owner, 16 окт («как красиво обозначить поддело»): on the planner a matter under a matter has no knot of its own on the margin
+    // rule — that read as one more matter of the topic. It is a point of the one above: a small ring right under where the words
+    // above begin, its words after it, a size smaller; its day, if any, in its quiet line. The ring is its «done».
+    val sub = plannerLook && depth > 0
+    val indent = if (sub) 26.dp * (depth - 1) else (if (planner) 18.dp else MarkCol / 2 + 21.dp) * depth
+    Margined(margin = when { sub -> null; plannerLook && !removed -> ({ MarginTap(::tick, late = late, done = q.done) { margin?.invoke() ?: RowMargin(null) } }); else -> margin }) {
         PanelPiece(seat, divider = depth == 0) {
         Box {
             Row(Modifier.fillMaxWidth().background(sel).padding(start = indent)
@@ -778,11 +798,17 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
                     }
                     Spacer(Modifier.width(12.dp))
                 }
+                if (sub) {
+                    Box(Modifier.padding(top = 1.dp).size(26.dp).clip(CircleShape).clickable(enabled = !removed, onClickLabel = s.markDone, onClick = ::tick),
+                        contentAlignment = Alignment.Center) { if (!removed) SubRing(q.done, late) }
+                    Spacer(Modifier.width(6.dp))
+                }
                 Column(Modifier.weight(1f).padding(top = 2.dp)) {
                     Text(q.title, style = Type.body.copy(fontFamily = rowFamily, fontSize = if (plannerLook) (if (depth == 0) 17.sp else 15.5.sp) else if (depth == 0) 16.sp else 15.sp, lineHeight = if (plannerLook) 24.sp else 22.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.drawWithContent {
                             drawContent()
-                            if (strike.value > 0f) { val y = 11.dp.toPx(); drawLine(c.faint, Offset(0f, y), Offset(size.width * strike.value, y), strokeWidth = 1.3.dp.toPx()) }
+                            // Through the middle of the first line, whatever its size.
+                            if (strike.value > 0f) { val y = (if (plannerLook) 24.sp else 22.sp).toPx() / 2 + 1.dp.toPx(); drawLine(c.faint, Offset(0f, y), Offset(size.width * strike.value, y), strokeWidth = 1.3.dp.toPx()) }
                         })
                     // Several days: each, ticked ones struck.
                     if (q.slots.isNotEmpty() && !removed) Text(buildAnnotatedString {
@@ -806,7 +832,6 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
                         }, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))
                     }
                 }
-                if (removed) Text(s.removedWord, style = Type.small.copy(color = c.faint, fontSize = 12.sp), modifier = Modifier.padding(start = 8.dp, top = 3.dp))
                 // Long press: a small bubble — a matter under it, edit, the day, remove.
                 Box {
                     SoftMenu(tools, { tools = false }) {
@@ -821,6 +846,18 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
         }
         }
     }
+}
+
+/** The ring of a matter under a matter: smaller than the knot on the margin, sea ink, filled when done, terracotta when late. */
+@Composable
+private fun SubRing(done: Boolean, late: Boolean) {
+    val c = M.c
+    val col = if (late && !done) c.accent else c.sea
+    Box(Modifier.size(10.dp).drawBehind {
+        val r = size.minDimension / 2
+        if (done) drawCircle(col, radius = r)
+        drawCircle(col, radius = r - 0.6.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(1.2.dp.toPx()))
+    })
 }
 
 /** Photos and files of one record. A new photo comes into focus; one being read gets a passing scan line. */

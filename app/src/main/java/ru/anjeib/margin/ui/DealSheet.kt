@@ -174,7 +174,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 }
                 val born = topic.events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at ?: topic.createdAt
                 WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
-                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "comment:$ref", plus = Plus.Marks,
+                    canAdd = false, heading = s.records, vm = vm,
                     onEdit = { id, t -> vm.editComment(ref, id, t); saved() }, onAdd = { t, at -> vm.addComment(ref, t, at); saved() })
                 // Their day has come: «напомнить» here too, the same as on a simple matter (one behaviour for every wait).
                 // Owner, 14 окт: no «напомнить» inside the card — it is on the row on «Сегодня».
@@ -212,8 +212,8 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                     mode = null
                 },
                 modeLabel = modeLabel, onModeClose = { mode = null }, focusKey = modeTick.takeIf { it > 0 }?.toLong(),
-                pageText = pageDraft.takeIf { modeLabel == null }, onWrite = { writeTick++ }, slash = true, pageSend = pageSend, pageFiles = pageFiles.takeIf { modeLabel == null },
-                marksOnPlus = true,
+                // Owner, 16 окт: a real field — the only way to add to the matter — drawn as the main one.
+                slash = true, floating = planner,
               )
             }
         }

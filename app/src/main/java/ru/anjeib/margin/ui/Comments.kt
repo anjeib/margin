@@ -50,13 +50,21 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
                 pasteTo: String? = null, onKeep: (() -> Unit)? = null,
                 /** A card: the line's «+» chooses marks (files come with the paperclip in the bar); null — no «+» at all. */
                 plus: Plus = Plus.Files,
+                /**
+                 * Owner, 16 окт: nothing is added from a card's body — only from the field below. Then the lane shows what is
+                 * written (still edited in place) under [heading], and nothing at all while it is empty.
+                 */
+                canAdd: Boolean = true,
+                heading: String? = null,
                 onEdit: (String, String) -> Unit, onAdd: (String, String) -> Unit) {
     val c = M.c
     val text = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp)
+    if (!canAdd && items.isEmpty()) return
     // Owner, 10 окт: no field in a frame and no label over it — the card's own page is written on, like a text editor;
     // each piece gets its day and hour on the margin when its writing begins. [label] is kept for old call sites and not shown.
     Column(modifier.fillMaxWidth()) {
-        Margined(Modifier.padding(top = 6.dp, bottom = 4.dp)) { Box(Modifier.fillMaxWidth().height(1.dp).background(c.hairline)) }
+        if (heading != null) SectionHead(heading)
+        else Margined(Modifier.padding(top = 6.dp, bottom = 4.dp)) { Box(Modifier.fillMaxWidth().height(1.dp).background(c.hairline)) }
         // The day is written once: a piece of the same day as the one above it shows only its hour ([after] — what stands above the lane).
         items.forEachIndexed { i, item ->
             val above = if (i == 0) after else items[i - 1].at
@@ -78,6 +86,7 @@ fun WrittenLane(items: List<LaneItem>, hint: String, modifier: Modifier = Modifi
                 }
             }
         }
+        if (!canAdd) return@Column
         // The page's writing line is the bar's words ([draft]): «send» down there decides what they become.
         if (draft != null) {
             val add by rememberUpdatedState(onAdd)

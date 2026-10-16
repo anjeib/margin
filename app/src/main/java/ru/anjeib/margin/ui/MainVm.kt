@@ -370,9 +370,9 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             val id = newTopic(name) ?: return@let
             data.value.tasks.find { it.id == id }?.let { _toast.value = L.s.movedToTopic(it.title) }
             if (rest.isBlank()) return
-            // «бриф получила, дедлайн 30 октября, созвон с Катей в пн в 12»: each piece on its own — a dated or verb-first piece is a
-            // matter of the topic, the rest a record of its feed.
-            rest.split(Regex(",\\s+|;\\s*|\\n+")).map { it.trim() }.filter { it.isNotBlank() }.forEachIndexed { i, piece ->
+            // Owner, 16 окт: what is written after the name is one thing, not split by commas — a matter when it starts with a verb
+            // or carries a date, otherwise a note of the topic.
+            listOf(rest.trim()).filter { it.isNotBlank() }.forEachIndexed { i, piece ->
                 val deal = Regex("^\\p{L}+(?:ть|ти|чь|ться|тись)(?![\\p{L}])", RegexOption.IGNORE_CASE).containsMatchIn(piece) ||
                     runCatching { LocalParser.parse(piece, data.value).items.any { it.due != null || it.time != null || it.repeat != null } }.getOrDefault(false)
                 sendNow(piece, false, if (i == 0) label else null, Scope.InTask(id), if (i == 0) files else emptyList(), asQuestion = deal, movedHere = true)
@@ -1320,6 +1320,9 @@ class MainVm(app: Application) : AndroidViewModel(app) {
      * A note written straight in the diary (owner, 14 окт): the words as they are, mentions kept as marks — @[Имя], @[p:место],
      * @[d:дело], #[тема]; the people and the place go onto the note too, so their cards see it. Nothing is parsed out of it.
      */
+    /** «Заметки» narrowed to «личное» or «работа» (owner, 16 окт); a note written there then takes that sphere. */
+    val diarySphere = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
     fun addDiaryNote(text0: String, files: List<Attachment>) {
         val text = text0.trim()
         if (text.isEmpty() && files.isEmpty()) return
@@ -1329,7 +1332,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val title = (if (first.length > 70) first.take(70).substringBeforeLast(' ') + "…" else first).ifBlank { L.s.diaryTitle }.sentence()
         val people = Regex("@\\[([^\\]]+)]").findAll(text).map { it.groupValues[1] }.filter { !it.startsWith("p:") && !it.startsWith("d:") }.map { d.personFor(it) }.distinct().toList()
         val place = Regex("@\\[p:([^\\]]+)]").find(text)?.groupValues?.get(1)
-        val t = Task(title = title, topic = true, thought = true, people = people, place = place,
+        val t = Task(title = title, topic = true, thought = true, people = people, place = place, sphere = diarySphere.value,
             entries = listOf(Entry(text = text, attachments = files)), history = listOf(ru.anjeib.margin.data.Change(kind = "created", by = "you")))
         store.update { it.copy(tasks = it.tasks + t).withMentionsOf(t, L.s.me) }
         land(listOf(t.id))

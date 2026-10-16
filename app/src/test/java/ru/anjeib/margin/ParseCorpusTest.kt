@@ -354,6 +354,8 @@ class ParseCorpusTest {
         L.lang = Lang.Ru
         var correct = 0; var confident = 0; var unnecessaryAi = 0; var shouldAsk = 0
         val lines = mutableListOf<String>()
+        // Owner, 16 окт: the phone no longer splits a message into several matters — phrases that expected several are not counted.
+        val corpus = corpus.filter { (_, e) -> e.n <= 1 }
         corpus.forEach { (text, e) ->
             val phrase = text.replace("\n", " / ")
             val r = runCatching { LocalParser.parse(text, base, today = today, now = now) }.getOrElse {

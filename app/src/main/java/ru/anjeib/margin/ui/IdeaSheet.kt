@@ -87,7 +87,7 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
                 }
                 // Everything of the note is here (owner, 14 окт: no second, «whole» view of it) — each file in its own record.
                 WrittenLane(task.entries.filter { it.text.isNotBlank() || it.attachments.isNotEmpty() }.map { LaneItem(it.id, it.at, it.text, it.attachments) }, s.ideaHint, Modifier.padding(top = 10.dp), after = null, label = s.records,
-                    draft = pageDraft, focusKey = writeTick.takeIf { it > 0 }, vm = vm, files = pageFiles, onKeep = { pageSend.send() }, pasteTo = "task:${task.id}", plus = Plus.None,
+                    canAdd = false, vm = vm,
                     onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
                     onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
                 // Begun when its first words were written (owner, 14 окт: it said «создано» on the day it was last touched).
@@ -98,7 +98,7 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
                 SmartComposer(vm, s.cardNoteHint, false, onSend = { t, f ->
                     // An idea's words stay words: a record with its photos and files, nothing parsed out of them.
                     if (t.isNotBlank() || f.isNotEmpty()) vm.insertEntry(owner, null, Entry(text = t.trim(), attachments = f))
-                }, pageText = pageDraft, onWrite = { writeTick++ }, pageSend = pageSend, pageFiles = pageFiles, slash = false, marksOnPlus = true)
+                }, slash = false, floating = planner)
             }
         }
     }
