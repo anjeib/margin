@@ -27,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
@@ -287,13 +289,13 @@ data class TopicHead(val id: String, val title: String)
  * Owner, 16 окт: a topic's matters standing in one list are one block under the topic's name, not scattered rows each with its
  * own «# Тема». The block stands where the topic's first matter stood; a topic with one matter keeps the link under its words.
  */
-fun <T : Any> withTopicHeads(items: List<T>, topicOf: (T) -> Pair<String, String>?): List<Any> {
+fun <T : Any> withTopicHeads(items: List<T>, min: Int = 2, topicOf: (T) -> Pair<String, String>?): List<Any> {
     val counts = items.mapNotNull { topicOf(it)?.first }.groupingBy { it }.eachCount()
     val placed = mutableSetOf<String>()
     val out = mutableListOf<Any>()
     items.forEach { x ->
         val tp = topicOf(x)
-        if (tp == null || (counts[tp.first] ?: 0) < 2) out.add(x)
+        if (tp == null || (counts[tp.first] ?: 0) < min) out.add(x)
         else if (placed.add(tp.first)) { out.add(TopicHead(tp.first, tp.second)); out.addAll(items.filter { topicOf(it)?.first == tp.first }) }
     }
     return out
@@ -301,6 +303,36 @@ fun <T : Any> withTopicHeads(items: List<T>, topicOf: (T) -> Pair<String, String
 
 /** Where a row stands in a topic's block: the head (round top corners), inside, or the last (round bottom corners). */
 enum class BlockPos { Head, Mid, Last }
+
+/**
+ * A topic in the day (owner, 16 окт): «# Тема ▸», under it how many of its matters stand here (how many late) and «открыть»;
+ * on the margin the nearest of them — late since, or its hour. A tap unfolds its matters right here, on the block's tint.
+ */
+@Composable
+fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<String?, Boolean>, open: Boolean, onToggle: () -> Unit, onOpen: () -> Unit,
+                 lit: Boolean = false) {
+    val c = M.c
+    val s = M.s
+    val late = rows.count { !it.done && it.dueDate?.isBefore(today) == true }
+    // Unfolded, its matters carry their own hours — the head doesn't repeat one.
+    Margined(Modifier.landing(lit, 0), margin = { if (!open) RowMargin(note.first, note.second) }) {
+        Box(Modifier.blockTint(if (open) BlockPos.Head else null)) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = if (open) s.collapse else s.expandWord, onClick = onToggle)
+                .padding(top = RowTop - 2.dp, bottom = RowTop, end = 14.dp)) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Text("# $title", style = Type.body.copy(fontFamily = rowFamily, color = c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(top = 2.dp))
+                    Text(if (open) "▾" else "▸", style = Type.body.copy(color = c.graphite, fontSize = 15.sp), modifier = Modifier.padding(start = 8.dp, top = 4.dp))
+                }
+                Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(s.summaryDeals(rows.size) + (if (late > 0) ", " + s.lateOfDay(late) else "") + "  ·  ", style = Type.small.copy(color = subInk, fontSize = subSize))
+                    Text(s.openTopicLink, style = Type.small.copy(color = c.link, fontSize = subSize, fontWeight = FontWeight.Medium),
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpen).padding(vertical = 2.dp))
+                }
+            }
+        }
+    }
+}
 
 /** How far a block's tint reaches past the words on each side. */
 private val BlockBleed = 10.dp
@@ -353,6 +385,11 @@ fun LazyListScope.dayPanel(
     plan: DayPlan, today: LocalDate, keyPrefix: String, landed: Set<String>,
     onOpen: (String) -> Unit, onDone: (String) -> Unit, onLater: (String) -> Unit, onTime: (String) -> Unit,
     doneOpen: Boolean = true, onDoneFold: (() -> Unit)? = null,
+    /**
+     * Owner, 16 окт: a topic stands in the day as itself — one row, folded by default; its matters are not shown apart. Which
+     * topics are unfolded; null — the older blocks.
+     */
+    openTopics: Set<String>? = null, onTopicFold: (String) -> Unit = {},
 ) {
     val all = dayItems(plan, today)
     val doneAll = all.filterIsInstance<DayItem.Done>()
@@ -361,13 +398,25 @@ fun LazyListScope.dayPanel(
     val foldDone = foldable && !doneOpen
     val shown = if (foldDone) all.filter { it !is DayItem.Done } else all
     val n = shown.size + (if (foldable) 1 else 0)
-    val blocks = withTopicHeads(shown) { d -> (d as? DayItem.Matter)?.t?.let { t -> t.topicId?.let { it to (t.topicTitle ?: "") } } }
+    val fold = openTopics != null
+    val blocks = withTopicHeads(shown, if (fold) 1 else 2) { d -> (d as? DayItem.Matter)?.t?.let { t -> t.topicId?.let { it to (t.topicTitle ?: "") } } }
     val inBlock = blocks.filterIsInstance<TopicHead>().map { it.id }.toSet()
     val pos = blockPositions(blocks) { (it as? DayItem.Matter)?.t?.topicId }
     var i = -1
     blocks.forEachIndexed { bi, b ->
-        if (b is TopicHead) { item(keyPrefix + "g" + b.id) { Box(Modifier.animateItem()) { TopicBlockHead(b.title) { onOpen(b.id) } } }; return@forEachIndexed }
+        if (b is TopicHead) {
+            if (fold) {
+                val rows = shown.filterIsInstance<DayItem.Matter>().map { it.t }.filter { it.topicId == b.id }
+                val open = b.id in openTopics!!
+                item(keyPrefix + "g" + b.id) { Box(Modifier.animateItem()) {
+                    TopicFoldRow(b.title, rows, today, whenNote(rows.first(), today, underDay = true), open, { onTopicFold(b.id) }, { onOpen(b.id) }, lit = b.id in landed)
+                } }
+            } else item(keyPrefix + "g" + b.id) { Box(Modifier.animateItem()) { TopicBlockHead(b.title) { onOpen(b.id) } } }
+            return@forEachIndexed
+        }
         val it = b as DayItem
+        // A folded topic keeps its matters inside it.
+        if (fold && it is DayItem.Matter && it.t.topicId != null && it.t.topicId !in openTopics!!) return@forEachIndexed
         i++
         val seat = seatOf(i, n)
         item(keyPrefix + it.key) {

@@ -797,6 +797,8 @@ interface Strings {
     /** «Сегодня» on a light day: the nearest matters to come (owner, 16 окт). */
     val aheadTitle: String get() = "Дальше"
     val introGroup: String get() = "Знакомство"
+    val openTopicLink: String get() = "открыть тему ›"
+    val expandWord: String get() = "Раскрыть"
     val welcomeTitle: String get() = "Пишите как думаете"
     val welcomeText: String get() = "Margin — ежедневник с одним полем внизу: пишите или диктуйте простыми фразами — что, когда, кто, и всё ляжет по местам. Всё на телефоне, без облака.\n\nНа первой странице вас ждёт «Курс освоения Margin» — короткие уроки на живых делах. Освоитесь — уберите их в архив."
     val toOtherTopic: String
@@ -2693,6 +2695,8 @@ object En : Strings {
     override val rangeHint get() = "Tap a day for a date. Hold and drag across days for a period."
     override val aheadTitle get() = "Coming up"
     override val introGroup get() = "Getting started"
+    override val openTopicLink get() = "open the topic ›"
+    override val expandWord get() = "Expand"
     override val welcomeTitle get() = "Write as you think"
     override val welcomeText get() = "Margin is a planner with one field at the bottom. On the first page a short course in Margin waits for you."
     override val toOtherTopic = "Another topic"

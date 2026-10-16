@@ -225,6 +225,9 @@ fun TaskList(
     var askTopic by remember { mutableStateOf(false) }
     var tomorrowOpen by rememberSaveable { mutableStateOf(false) }
     var archOpen by rememberSaveable { mutableStateOf(false) }
+    // Owner, 16 окт: topics in the day are folded rows; these are unfolded (for as long as the screen lives).
+    val openTopics = rememberSaveable(saver = setSaver) { mutableStateOf(emptySet<String>()) }
+    fun foldTopic(id: String) { openTopics.value = if (id in openTopics.value) openTopics.value - id else openTopics.value + id }
     if (askTopic) TextDialog(s.newTopicTitle, "", s.newTopicHint, onDismiss = { askTopic = false }) { v -> askTopic = false; vm.newTopic(v)?.let(onOpen) }
     // «Поля и панели» (v8): the rule runs behind the whole list; rows sit on panels right of it, «когда» on the margin.
     val pad = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
@@ -278,7 +281,7 @@ fun TaskList(
                     monthItem()
                     if (!p.quiet) {
                         item("o-sec") { SectionHead(dayTalk(other, today), rule = false, count = (p.deals.size + p.events.size).takeIf { it > 0 }) }
-                        dayPanel(p, today, "o", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it })
+                        dayPanel(p, today, "o", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it }, openTopics = openTopics.value, onTopicFold = ::foldTopic)
                     }
                     item("page-end-o") { PageEnd(pageLines) }
                     return@findable
@@ -344,10 +347,11 @@ fun TaskList(
                 val dayEmpty = dayPlanShown.deals.isEmpty() && dayPlanShown.events.isEmpty() && dayPlanShown.done.isEmpty()
                 if (!dayEmpty) item("t-head") { SectionHead(s.today, count = dayCount.takeIf { it > 0 }, rule = promises.isNotEmpty()) }
                 if (!dayEmpty) dayPanel(dayPlanShown, today, "t", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
-                    doneOpen = isOpen("s-done-today"), onDoneFold = { toggle("s-done-today") })
+                    doneOpen = isOpen("s-done-today"), onDoneFold = { toggle("s-done-today") }, openTopics = openTopics.value, onTopicFold = ::foldTopic)
                 // Owner, 16 окт («полезное вместо пустоты, только на «Сегодня»»): a light day shows what comes next — the two or three
                 // nearest matters with their days on the margin — instead of an empty page; «Завтра — N дел» then isn't repeated.
-                val ahead = if (dayCount > 3) emptyList() else tasks.filter { t -> !t.done && (t.startDate ?: t.dueDate)?.isAfter(today) == true && base(t.id) !in above }
+                // A topic's matters stay inside their topic (owner, 16 окт), not one by one here.
+                val ahead = if (dayCount > 3) emptyList() else tasks.filter { t -> !t.done && t.topicId == null && (t.startDate ?: t.dueDate)?.isAfter(today) == true && base(t.id) !in above }
                     .distinctBy { base(it.id) }.sortedWith(compareBy({ it.startDate ?: it.dueDate }, { it.time ?: "99" })).take(3)
                 if (ahead.isNotEmpty()) {
                     item("ahead-head") { SectionHead(s.aheadTitle) }
@@ -366,13 +370,22 @@ fun TaskList(
                     }
                     fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
                     // Owner, 16 окт: a topic's matters together, under its name.
-                    val blocks = withTopicHeads(undated) { t -> t.topicId?.let { it to (t.topicTitle ?: "") } }
+                    // Owner, 16 окт: a topic is one folded row here too; unfolded, its matters stand under it on the block's tint.
+                    val blocks = withTopicHeads(undated, 1) { t -> t.topicId?.let { it to (t.topicTitle ?: "") } }
                     val inBlock = blocks.filterIsInstance<TopicHead>().map { it.id }.toSet()
                     val pos = blockPositions(blocks) { (it as? Task)?.topicId }
                     var i = -1
                     if (undatedOpen) blocks.forEachIndexed { bi, b ->
-                        if (b is TopicHead) { item("ug" + b.id) { Box(Modifier.animateItem()) { TopicBlockHead(b.title) { onOpen(b.id) } } }; return@forEachIndexed }
+                        if (b is TopicHead) {
+                            val rows = undated.filter { it.topicId == b.id }
+                            val since = rows.mapNotNull { born(it) }.minOrNull()?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() }
+                            item("ug" + b.id) { Box(Modifier.animateItem()) {
+                                TopicFoldRow(b.title, rows, today, since to false, b.id in openTopics.value, { foldTopic(b.id) }, { onOpen(b.id) }, lit = b.id in landed)
+                            } }
+                            return@forEachIndexed
+                        }
                         val t = b as Task
+                        if (t.topicId != null && t.topicId !in openTopics.value) return@forEachIndexed
                         i++
                         val seat = seatOf(i, undated.size)
                         item("u" + t.id) {
@@ -405,7 +418,8 @@ fun TaskList(
                     item("tomorrow") {
                         VoiceLink(s.quickTomorrow + " — " + tomorrowParts.joinToString(" · "), { tomorrowOpen = !tomorrowOpen }, quiet = true, arrow = if (tomorrowOpen) "‹" else "›")
                     }
-                    if (tomorrowOpen) dayPanel(tomorrowPlan.copy(doneCount = 0, done = emptyList()), today, "tm", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it })
+                    if (tomorrowOpen) dayPanel(tomorrowPlan.copy(doneCount = 0, done = emptyList()), today, "tm", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
+                        openTopics = openTopics.value, onTopicFold = ::foldTopic)
                 }
                 // Owner, 16 окт: the page's archive at its end — matters put away, folded; «Удалить» only here.
                 archiveFold("arch", data.archived.sortedByDescending { it.doneAt }.map { t ->
