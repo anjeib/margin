@@ -12,4 +12,4 @@
 
 Старые ветки удалены и сохранены тегами: `archive/margin-3` (Margin 3.x), `archive/polya` (эксперимент «Поля», отвергнут владельцем), `archive/redesign-v8`, `archive/fix-029`. Посмотреть: `git log archive/polya`.
 
-Вне git — `~/Desktop/Архив/Margin/`: APK Margin 2, 3.21, polya и демо-сборок, исходники Whisper (удалён в 0.42), коды старого посредника Яндекса.
+Вне git — `archive/local/` (закрыта в `.gitignore`: внутри APK и секреты): APK Margin 2, 3.21, polya и демо-сборок, исходники Whisper (удалён в 0.42), коды старого посредника Яндекса.

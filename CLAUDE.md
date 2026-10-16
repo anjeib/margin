@@ -10,7 +10,8 @@
 - **Текущий дизайн — «Полоса набора»** (с 0.65): раздел «Дизайн «Планер» → «Полоса набора»» ниже — читать с последних пунктов (0.65–0.68 главнее ранних), снимки 0.69 — `design/current/`. Шрифты Literata (записи), Commissioner (служебное), Cormorant Garamond (число дня, названия страниц).
 - **ИИ**: облачный ИИ выключен (`BuildConfig.CLOUD_AI = false`, с 0.63), разбор и речь — на телефоне (GigaAM, `third_party/`). Посредник — Cloud.ru (`server/cloudru/`, ключ `server/cloudru/env.local`), посредник Яндекса удалён (код — `archive/server-yandex/`).
 - **Сборка и выпуск** — разделы «Сборка» и «Версии и откат»; выпуск только по команде владельца, каждый билд — новый номер, тег и push. APK — `~/Desktop/Margin-<версия>.apk`, все версии — `releases/` (вне git).
-- **Архив**: старые макеты (v2–v9), отчёты, TODO эпохи Margin 2 — `archive/` в репозитории (`archive/README.md`); старые ветки — теги `archive/margin-3`, `archive/polya` (эксперимент «Поля», отвергнут), `archive/redesign-v8`, `archive/fix-029`; APK других сборок, Whisper и коды старого посредника — `~/Desktop/Архив/Margin/`.
+- **Архив**: старые макеты (v2–v9), отчёты, TODO эпохи Margin 2 — `archive/` в репозитории (`archive/README.md`); старые ветки — теги `archive/margin-3`, `archive/polya` (эксперимент «Поля», отвергнут), `archive/redesign-v8`, `archive/fix-029`; APK других сборок, Whisper и коды старого посредника — `archive/local/` (вне git).
+- **Все файлы Margin — только в этой папке** (владелец, 16 окт 2026): архивы, макеты, скрипты, материалы — внутри проекта; что не должно уходить на GitHub — в `archive/local/` или другие папки из `.gitignore`. Исключение — APK для телефона на рабочем столе (`~/Desktop/Margin-<версия>.apk`).
 - Разделы ниже — накопленная история: модель данных и принципы в них актуальны, но описания дизайна до 0.65 устарели, если противоречат «Полосе набора».
 
 ## История и модель данных: «Темы вместо задач» (с 9 окт 2026; заметки о дизайне здесь устарели)
@@ -251,7 +252,7 @@ git push origin main && git push origin v<версия>
 ```
 - `releases/` — архив APK по версиям (в git не входит: внутри зашиты ключи).
 - Откат кода: `git checkout v3.5 -- .` (или `git log --oneline`, `git diff v3.5`). Старый APK ставится из `releases/` без пересборки; поверх более новой версии — только через удаление приложения (Android не даёт понизить versionCode), данные перед этим выгрузить архивом.
-- В git не входят: ключи (`secrets.properties`, `keystore.properties`, `*.jks`, `server/cloudru/env.local`), `releases/`, `third_party/` (`sherpa-onnx/` — движок речи, `speech-model/` — модель GigaAM; как скачать — раздел «Речь на телефоне»). Whisper удалён в 0.42, его исходники — `~/Desktop/Архив/Margin/third_party-old/`.
+- В git не входят: ключи (`secrets.properties`, `keystore.properties`, `*.jks`, `server/cloudru/env.local`), `releases/`, `third_party/` (`sherpa-onnx/` — движок речи, `speech-model/` — модель GigaAM; как скачать — раздел «Речь на телефоне»). Whisper удалён в 0.42, его исходники — `archive/local/third_party-old/` (вне git).
 - `release.jks` + `keystore.properties` существуют в одном экземпляре — их копия должна храниться вне этого Mac.
 
 ## Проверка

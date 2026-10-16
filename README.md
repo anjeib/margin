@@ -15,7 +15,7 @@
 | Все выпущенные APK | `releases/` (вне git); последний — `~/Desktop/Margin-<версия>.apk` |
 | Движок и модель речи | `third_party/` (вне git) |
 | Ключ подписи | `release.jks` + `keystore.properties` — не трогать, копия должна быть вне Mac |
-| Устаревшее | `archive/` (см. `archive/README.md`), теги `archive/*`, `~/Desktop/Архив/Margin/` |
+| Устаревшее | `archive/` (см. `archive/README.md`), теги `archive/*`, `archive/local/` (вне git) |
 
 Сборка: `JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew assembleRelease` (подробно — `CLAUDE.md`, «Сборка» и «Версии и откат»). Выпуск — только по команде владельца.
 
