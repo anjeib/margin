@@ -446,8 +446,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         }
                     }
                     val calDay by vm.calendarDay.collectAsState()
-                    // Prototype «inline»: the tools of what is unfolded, over the field; the field then writes into it.
-                    if (screen == TASKS) InlineBar(vm, onCard = { openId(it) }, onOpen = { id -> openId(id) })
+                    // «Inline»: the field writes into what is unfolded; what is done with it is in its long-press menu.
                     val inlineHint = data.inlineHint(expandedKey).takeIf { screen == TASKS }
                     SmartComposer(
                         vm,

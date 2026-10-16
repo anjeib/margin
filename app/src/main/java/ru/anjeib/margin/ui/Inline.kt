@@ -1,6 +1,7 @@
 package ru.anjeib.margin.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicTextField
@@ -81,7 +82,8 @@ fun InlineText(key: String, text: String, size: Float = 15.5f, onSave: (String) 
 
 /** A matter unfolded in its row: its marks in one quiet line, then its notes, each editable in place. */
 @Composable
-fun InlineMatterBody(rowId: String, vm: MainVm) {
+fun InlineMatterBody(rowId: String, vm: MainVm,
+                     /** The line over it already says them (a topic's own line): no marks repeated. */ marks: Boolean = true) {
     val c = M.c
     val s = M.s
     val data by vm.data.collectAsState()
@@ -92,24 +94,37 @@ fun InlineMatterBody(rowId: String, vm: MainVm) {
         else -> return
     }
     Column(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 10.dp)) {
-        val marks = listOfNotNull(
-            row.whenLabel(), row.repeat?.let { "↻ " + it.label() }, row.place,
+        // Owner, 16 окт: no day or hour here — the row and its margin already say them.
+        val shown = if (!marks) emptyList() else listOfNotNull(
+            row.repeat?.let { "↻ " + it.label() }, row.place,
             row.people.takeIf { it.isNotEmpty() }?.joinToString(", "),
             row.waitingFor?.let { s.promiseToYou(it) }, row.promisedTo?.let { "обещали " + it },
         )
-        if (marks.isNotEmpty()) Text(marks.joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp))
+        if (shown.isNotEmpty()) Text(shown.joinToString("  ·  "), style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp))
         if (comments.isEmpty()) Text(s.inlineNoNotes, style = Type.small.copy(color = c.faint, fontSize = 13.5.sp), modifier = Modifier.padding(top = 6.dp))
         comments.forEach { cm -> InlineComment(cm, ref, vm) }
     }
 }
 
+/** A note of the matter: read here; a hold — change it or put it away (owner, 16 окт: changes only from the long press). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun InlineComment(cm: Comment, ref: String, vm: MainVm) {
     val c = M.c
-    Column(Modifier.padding(top = 8.dp)) {
-        Text(stampWords(cm.at), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
-        InlineText("c" + cm.id, cm.text) { vm.editComment(ref, cm.id, it) }
+    val s = M.s
+    var menu by remember(cm.id) { mutableStateOf(false) }
+    var edit by remember(cm.id) { mutableStateOf(false) }
+    androidx.compose.foundation.layout.Box {
+        Column(Modifier.fillMaxWidth().padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { menu = true })) {
+            Text(stampWords(cm.at), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp))
+            Text(cm.text, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp, lineHeight = 22.sp))
+        }
+        SoftMenu(menu, { menu = false }) {
+            SoftMenuItem(s.edit) { menu = false; edit = true }
+            SoftMenuItem(s.toArchive) { menu = false; vm.archiveComment(ref, cm.id) }
+        }
     }
+    if (edit) TextDialog(s.edit, cm.text, "", onDismiss = { edit = false }) { v -> if (v.isNotBlank()) vm.editComment(ref, cm.id, v.trim()); edit = false }
 }
 
 /** «16 окт, 11:00» — when a piece was written, said inside the row. */
@@ -124,7 +139,7 @@ fun InlineNoteBody(t: Task, vm: MainVm) {
     Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 10.dp)) {
         t.entries.filter { it.text.isNotBlank() || it.attachments.isNotEmpty() }.forEach { e ->
             Column(Modifier.padding(top = 4.dp)) {
-                if (e.text.isNotBlank()) InlineText("e" + e.id, e.text) { vm.editEntryText("task:${t.id}", e.id, it) }
+                if (e.text.isNotBlank()) Text(vm.data.value.mentionsPlain(e.text), style = Type.body.copy(color = M.c.ink, fontSize = 15.5.sp, lineHeight = 22.sp))
                 if (e.attachments.isNotEmpty()) androidx.compose.foundation.layout.Box(Modifier.padding(top = 6.dp)) { AttachmentsView(e.attachments) }
             }
         }
@@ -138,80 +153,46 @@ fun InlinePieceBody(key: String, vm: MainVm) {
     val p = data.notePiece(key) ?: return
     val (kind, ref, id) = key.split('|')
     Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        if (p.text.isNotBlank()) InlineText(key, p.text) { v -> if (kind == "e") vm.editEntryText("task:$ref", id, v) else vm.editComment(ref, id, v) }
+        if (p.text.isNotBlank()) Text(data.mentionsPlain(p.text), style = Type.body.copy(color = M.c.ink, fontSize = 15.5.sp, lineHeight = 22.sp))
         if (p.files.isNotEmpty()) androidx.compose.foundation.layout.Box(Modifier.padding(top = 6.dp)) { AttachmentsView(p.files) }
     }
 }
 
 /**
- * The one row of tools over the field (prototype): what can be done with what is unfolded — a matter, a topic's matter, a note,
- * a note of a matter; [onCard] opens its old card, still there while the prototype is tried.
+ * The windows a matter's long-press menu opens (owner, 16 окт: no tools under the page — everything is in the hold): its day or
+ * window, its hour, its words. [what] — "dates", "time", "title"; null — none.
  */
 @Composable
-fun InlineBar(vm: MainVm, onCard: (String) -> Unit, onOpen: (String) -> Unit) {
+fun MatterDialog(rowId: String, what: String?, onDismiss: () -> Unit) {
+    val vm = LocalVm.current ?: return
     val s = M.s
     val data by vm.data.collectAsState()
-    val key = vm.expanded.collectAsState().value
-    val o = data.opened(key) ?: return
-    var dialog by remember(key) { mutableStateOf<String?>(null) }
-    val rowActs = LocalRowActions.current
-    fun close() { vm.expanded.value = null }
-    val actions = when (o) {
-        is Opened.Matter -> listOfNotNull(
-            Action(s.markDone, o.t.done, { vm.completeWithUndo(o.t.id); close() }) { TickGlyph(it, 22.dp) },
-            Action(s.actWhen, false, { dialog = "dates" }) { CalendarGlyph(it, 22.dp) },
-            Action(s.fieldTime, false, { dialog = "time" }) { ClockGlyph(it, 22.dp) },
-            Action(s.inlineRename, false, { dialog = "title" }) { EditGlyph(it, 21.dp) },
-            rowActs?.let { r -> Action(s.actToTopic, false, { r.toTopic(o.t.id); close() }) { TopicGlyph(it, 19.dp) } },
-            Action(s.toArchive, false, { vm.archiveMatter(o.t.id); close() }) { ArchiveGlyph(it, 22.dp) },
-        )
-        is Opened.Deal -> listOfNotNull(
-            Action(s.markDone, o.q.done, { vm.completeWithUndo(o.ref); close() }) { TickGlyph(it, 22.dp) },
-            Action(s.actWhen, false, { dialog = "dates" }) { CalendarGlyph(it, 22.dp) },
-            Action(s.fieldTime, false, { dialog = "time" }) { ClockGlyph(it, 22.dp) },
-            Action(s.inlineRename, false, { dialog = "title" }) { EditGlyph(it, 21.dp) },
-            Action(s.toTheTopic, false, { close(); onOpen(o.topic.id) }) { TopicGlyph(it, 19.dp) },
-            Action(s.toArchive, false, { vm.archiveMatter(o.ref); close() }) { ArchiveGlyph(it, 22.dp) },
-        )
-        is Opened.Note -> listOfNotNull(
-            Action(s.actToMatter, false, { vm.ideaToMatter(o.t.id); close() }) { DealGlyph(it, 22.dp) },
-            rowActs?.let { r -> Action(s.actToTopic, false, { r.toTopic(o.t.id); close() }) { TopicGlyph(it, 19.dp) } },
-            Action(s.toArchive, false, { vm.archiveTopic(o.t.id); close() }) { ArchiveGlyph(it, 22.dp) },
-            Action(s.inlineCard, false, { close(); onCard(o.t.id) }) { MoreGlyph(it, 23.dp) },
-        )
-        is Opened.Piece -> listOfNotNull(
-            Action(if (o.p.trail.last().second.startsWith("#")) s.toTheTopic else s.toTheMatter, false, { close(); onOpen(o.p.ownerId) }) {
-                if (o.p.trail.last().second.startsWith("#")) TopicGlyph(it, 19.dp) else DealGlyph(it, 22.dp)
-            },
-            Action(s.toArchive, false, { vm.removeNotePiece(o.p.key); close() }) { ArchiveGlyph(it, 22.dp) },
-        )
-    }
-    Column(Modifier.fillMaxWidth().padding(start = FieldLead - 6.dp, end = 8.dp, bottom = 6.dp)) { ActionBar(actions, slots = maxOf(5, actions.size)) }
-    when (dialog) {
+    val o = data.opened(rowId) ?: return
+    when (what) {
         "dates" -> {
-            val row = when (o) { is Opened.Matter -> o.t; is Opened.Deal -> o.topic.questionRow(o.q); else -> null }
-            if (row != null) DatesDialog(row, onDismiss = { dialog = null }) { st, du ->
+            val row = when (o) { is Opened.Matter -> o.t; is Opened.Deal -> o.topic.questionRow(o.q); else -> null } ?: return
+            DatesDialog(row, onDismiss = onDismiss) { st, du ->
                 when (o) {
                     is Opened.Matter -> vm.saveTask(o.t.copy(start = st, due = du, remindAt = null))
                     is Opened.Deal -> vm.setQuestionDue(o.topic.id, o.q.id, du ?: st, start = st.takeIf { du != null })
                     else -> {}
                 }
-                dialog = null
+                onDismiss()
             }
         }
         "time" -> {
             val cur = when (o) { is Opened.Matter -> o.t.time; is Opened.Deal -> o.q.time; else -> null }
-            TimeDialog(cur, onDismiss = { dialog = null }) { tm -> vm.setTime(if (o is Opened.Deal) o.ref else (o as Opened.Matter).t.id, tm); dialog = null }
+            TimeDialog(cur, onDismiss = onDismiss) { tm -> vm.setTime(if (o is Opened.Deal) o.ref else rowId, tm); onDismiss() }
         }
         "title" -> {
             val cur = when (o) { is Opened.Matter -> o.t.title; is Opened.Deal -> o.q.title; else -> "" }
-            TextDialog(s.edit, cur, "", onDismiss = { dialog = null }) { v ->
+            TextDialog(s.edit, cur, "", onDismiss = onDismiss) { v ->
                 if (v.isNotBlank()) when (o) {
                     is Opened.Matter -> vm.saveTask(o.t.copy(title = v.trim()))
                     is Opened.Deal -> vm.renameSubtask(o.topic.id, o.q.id, v.trim())
                     else -> {}
                 }
-                dialog = null
+                onDismiss()
             }
         }
     }

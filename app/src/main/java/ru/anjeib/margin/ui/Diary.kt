@@ -221,10 +221,16 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (first) 6.dp else 10.dp)) { MarginNote(hour) }
                         }) {
                             var menu by remember(n.id) { mutableStateOf(false) }
+                            var edit by remember(n.id) { mutableStateOf(false) }
+                            val firstWords = n.entries.firstOrNull { it.text.isNotBlank() }
+                            if (edit && firstWords != null) TextDialog(s.edit, firstWords.text, "", onDismiss = { edit = false }) { v ->
+                                if (v.isNotBlank()) vm.editEntryText("task:${n.id}", firstWords.id, v.trim()); edit = false
+                            }
                             val rowActs = LocalRowActions.current
                             // Owner, 16 окт: a long press offers what the note's card does.
                             Box(Modifier.fillMaxWidth()) { Box(Modifier.align(Alignment.TopEnd).padding(top = 8.dp)) { SoftMenu(menu, { menu = false }) {
-                                SoftMenuItem(s.openWord) { menu = false; onOpen(n.id) }
+                                // Owner, 16 окт: changes from the hold; a tap only unfolds it.
+                                if (firstWords != null) SoftMenuItem(s.edit) { menu = false; edit = true }
                                 SoftMenuItem(s.actToMatter) { menu = false; vm.ideaToMatter(n.id) }
                                 rowActs?.let { r -> SoftMenuItem(s.actToTopic) { menu = false; r.toTopic(n.id) } }
                                 SoftMenuItem(s.toArchive) { menu = false; vm.archiveTopic(n.id) }
@@ -282,13 +288,19 @@ private fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: I
     val c = M.c
     val s = M.s
     var menu by remember(x.key) { mutableStateOf(false) }
+    var edit by remember(x.key) { mutableStateOf(false) }
+    if (edit) TextDialog(M.s.edit, x.text, "", onDismiss = { edit = false }) { v ->
+        val (kind, ref, id) = x.card.split('|')
+        if (v.isNotBlank()) { if (kind == "e") vm.editEntryText("task:$ref", id, v.trim()) else vm.editComment(ref, id, v.trim()) }
+        edit = false
+    }
     val toTopic = x.link.startsWith("#")
     Margined(if (block == BlockPos.Last) Modifier.padding(bottom = 8.dp) else Modifier, margin = {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (first) 6.dp else 10.dp)) { MarginNote(x.at.drop(11).take(5)) }
     }) {
         Box(Modifier.blockTint(block)) {
             Box(Modifier.align(Alignment.TopEnd).padding(top = 8.dp)) { SoftMenu(menu, { menu = false }) {
-                SoftMenuItem(s.openWord) { menu = false; onOpenNote(x.card) }
+                SoftMenuItem(s.edit) { menu = false; edit = true }
                 SoftMenuItem(if (toTopic) s.toTheTopic else s.toTheMatter) { menu = false; onOpen(x.open) }
                 SoftMenuItem(s.toArchive) { menu = false; vm.removeNotePiece(x.card) }
             } }

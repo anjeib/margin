@@ -119,7 +119,9 @@ fun MatterRow(
         scope.launch { ticking = true; strike.animateTo(1f, androidx.compose.animation.core.tween(320)); kotlinx.coroutines.delay(220); onToggle() }
     }
     var quick by remember(t.id) { mutableStateOf(false) }
-    // Prototype «inline»: a tap unfolds the matter in its row instead of opening its card.
+    var dlg by remember(t.id) { mutableStateOf<String?>(null) }
+    MatterDialog(t.id, dlg) { dlg = null }
+    // «Inline» (owner, 16 окт): a tap unfolds the matter in its row instead of opening its card.
     val inline = LocalInline.current
     val unfolded = inline?.open == t.id
     val tap: () -> Unit = if (inline != null) ({ inline.toggle(t.id) }) else onOpen
@@ -130,9 +132,11 @@ fun MatterRow(
         PanelPiece(seat, bleed = !swipe || planner) {
             Box {
                 SoftMenu(quick, { quick = false }) {
-                    // Everything a row can do, the swipes included — not everyone finds a gesture.
+                    // Everything a row can do (owner, 16 окт: all of it in the hold — no tools under the page).
                     onLater?.let { f -> SoftMenuItem(s.postponeMenu) { quick = false; f() } }
+                    if (inline != null) SoftMenuItem(s.actWhen) { quick = false; dlg = "dates" }
                     SoftMenuItem(s.fieldTime) { quick = false; onTime() }
+                    if (inline != null) SoftMenuItem(s.edit) { quick = false; dlg = "title" }
                     if (acts != null) {
                         SoftMenuItem(if (t.topicId != null) s.toOtherTopic else s.toTopicPick) { quick = false; acts.toTopic(t.id) }
                         SoftMenuItem(s.toArchive) { quick = false; acts.remove(t.id) }
@@ -240,12 +244,22 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
     val who = t.waitingFor ?: t.promisedTo ?: ""
     val nudge = incoming && (d?.let { !it.isAfter(today) } ?: (runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()?.isBefore(today.minusDays(7)) == true))
     val arrow = if (planner) (if (incoming) " ←" else " →") else ""
+    var menu by remember(t.id) { mutableStateOf(false) }
+    var dlg by remember(t.id) { mutableStateOf<String?>(null) }
+    MatterDialog(t.id, dlg) { dlg = null }
     PaperRow(seat, margin = (d?.let { if (late) s.sinceWord + " " + it.dayMonthShort() else dayWord(it, today) } ?: (if (planner) "" else null))?.plus(arrow)?.trim(), late = late,
         onMargin = { view.confirmTick(); onDone() },
         mark = {
             Box(Modifier.clip(CircleShape).clickable(onClickLabel = s.markDone) { view.confirmTick(); onDone() }
                 .semantics { contentDescription = if (incoming) s.a11yWaiting else s.a11yPromised }) { PromiseMark(incoming) }
-        }, onClick = LocalInline.current?.let { il -> { il.toggle(t.id) } } ?: onOpen) {
+        }, onClick = LocalInline.current?.let { il -> { il.toggle(t.id) } } ?: onOpen, onLong = { menu = true }) {
+        // The hold (owner, 16 окт): what is done with it.
+        Box { SoftMenu(menu, { menu = false }) {
+            SoftMenuItem(s.actWhen) { menu = false; dlg = "dates" }
+            SoftMenuItem(s.fieldTime) { menu = false; dlg = "time" }
+            SoftMenuItem(s.edit) { menu = false; dlg = "title" }
+            LocalRowActions.current?.let { r -> SoftMenuItem(s.toArchive) { menu = false; r.remove(t.id) } }
+        } }
         RowTitle(t.title, marked = late)
         // Words never broken: at a large font «напомнить» goes to the next line whole (FlowRow).
         @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)

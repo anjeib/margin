@@ -449,7 +449,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                         select = { k -> selected = if (k.isBlank() || selected == k) null else k },
                         addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
                         editDeal = { editQ = it }, dateDeal = { dateQ = it }, editNote = { editNote = it }, view = { viewing = it }, timeDeal = { timeQ = it },
-                        openDeal = { dealQ = it.id }, openNote = { noteK = entryKey(task.id, it.id) },
+                        // Owner, 16 окт: no cards here — a tap unfolds a matter in its line, selects a note; changes are in the hold.
+                        openDeal = { vm.toggleExpanded("q:${task.id}:${it.id}") }, openNote = { vm.toggleExpanded(entryKey(task.id, it.id)) },
                     ), onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
                 }
             }
@@ -469,10 +470,14 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         Column(Modifier.fillMaxWidth().background(c.bg).padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)) {
             notice?.takeIf { it.scopeKey == scopeKey }?.let { nt -> Box(Modifier.padding(start = FieldLead)) { NoticeLine(nt, vm) } }
             val under = addUnder
+            // What is unfolded or selected in this topic: the field writes into it.
+            val openKey = vm.expanded.collectAsState().value
+            val mine = openKey?.takeIf { it.startsWith("q:${task.id}:") || it.startsWith("e|${task.id}|") }
             SmartComposer(
-                vm, if (under != null) "«" + under.second.take(40) + "»" else s.topicWriteHint, busy == scopeKey,
+                vm, if (under != null) "«" + under.second.take(40) + "»" else data.inlineHint(mine) ?: s.topicWriteHint, busy == scopeKey,
                 onSend = { t, f ->
                     if (under != null) { vm.addChildDeal(task.id, under.first, t); addUnder = null }
+                    else if (mine != null && vm.inlineSend(mine, t, f)) Unit
                     else vm.send(t, scope = Scope.InTask(task.id), files = f, asQuestion = dealsOnly)
                 },
                 modeLabel = under?.let { s.underLine }, onModeClose = { addUnder = null }, focusKey = focusTick.takeIf { it > 0 }, slash = true, floating = planner,
@@ -720,7 +725,9 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin:
     LaunchedEffect(editing) { if (editing) runCatching { focus.requestFocus() } }
     LaunchedEffect(draft) { if (editing && draft != e.text) { kotlinx.coroutines.delay(900); save() } }
     androidx.compose.runtime.DisposableEffect(e.id) { onDispose { save() } }
-    val sel by androidx.compose.animation.animateColorAsState(if (tools) c.chip else Color.Transparent, tween(180), label = "sel")
+    // Selected by a tap (owner, 16 окт): marked softly; the field below then writes into this note.
+    val picked = LocalInline.current?.open == entryKey(task.id, e.id)
+    val sel by androidx.compose.animation.animateColorAsState(if (tools) c.chip else if (picked) c.linkSoft else Color.Transparent, tween(180), label = "sel")
     // Written straight on the page, as in the diary (owner, 14 окт; design/v9/v9-card-topic.png) — no panel; the matters keep theirs.
     Margined(margin = margin) {
         Box {
@@ -747,6 +754,7 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin:
                     // Long press (owner, 13 окт): copy, move, delete — a tap already edits it in place.
                     Box {
                         SoftMenu(tools, { tools = false }) {
+                            if (e.text.isNotBlank()) ToolItem(Icons.Outlined.Build, s.edit) { tools = false; act.editNote(e) }
                             ToolItem(Icons.Outlined.ContentCopy, s.copyWord) { tools = false; vm.copyRecord("task:${task.id}", e.id) }
                             ToolItem(Icons.AutoMirrored.Outlined.DriveFileMove, s.moveWord) { tools = false; vm.moveRecord("task:${task.id}", e.id) }
                             ToolItem(Icons.Rounded.Remove, s.toArchive) { tools = false; vm.removeRecord(task.id, e.id) }
@@ -847,6 +855,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
                             append(rest.joinToString("  ·  "))
                         }, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))
                     }
+                    if (!removed && LocalInline.current?.open == "q:${task.id}:${q.id}") InlineMatterBody("q:${task.id}:${q.id}", vm, marks = false)
                 }
                 // Long press: a small bubble — a matter under it, edit, the day, remove.
                 Box {
@@ -854,6 +863,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
                         ToolItem(Icons.Rounded.Add, s.underLine) { tools = false; act.addUnder(q.id, q.title) }
                         ToolItem(Icons.Outlined.Build, s.edit) { tools = false; act.editDeal(q) }
                         ToolItem(Icons.Outlined.CalendarToday, s.dueWord) { tools = false; act.dateDeal(q) }
+                        ToolItem(Icons.Outlined.CalendarToday, s.fieldTime) { tools = false; act.timeDeal(q) }
                         ToolItem(Icons.Rounded.Remove, s.toArchive) { tools = false; vm.removeDeal(task.id, q.id) }
                     }
                 }
