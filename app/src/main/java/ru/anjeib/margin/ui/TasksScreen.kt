@@ -224,6 +224,7 @@ fun TaskList(
     // «+ тема»: a topic by its name at once — a project to fill (owner, 12 окт).
     var askTopic by remember { mutableStateOf(false) }
     var tomorrowOpen by rememberSaveable { mutableStateOf(false) }
+    var archOpen by rememberSaveable { mutableStateOf(false) }
     if (askTopic) TextDialog(s.newTopicTitle, "", s.newTopicHint, onDismiss = { askTopic = false }) { v -> askTopic = false; vm.newTopic(v)?.let(onOpen) }
     // «Поля и панели» (v8): the rule runs behind the whole list; rows sit on panels right of it, «когда» on the margin.
     val pad = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
@@ -249,19 +250,19 @@ fun TaskList(
                 // The calendar tab unfolds the month over the page (owner, 14 окт); a tap on a day turns the page to it.
                 // Fable, 15 окт: the tools stay where they are; the month unfolds under them, not over them.
                 // Persona test, 15 окт: the tools stay pinned at the top while the page scrolls (two of three couldn't find them).
-                if (plannerLook) stickyHeader("tools") {
-                    val shownDay = pageDay?.takeIf { it != today } ?: today
-                    PinnedTools(calendar = true, list = listState, title = shownDay.dowFull(), day = shownDay, headKey = if (shownDay != today) "o-head" else "head")
-                }
-                if (monthOpen) item("month") {
-                    // No fade (owner, 14 окт): a fading month lay under the matters sliding up over it — it goes at once, they close up.
-                    Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)) { MonthPanel(data, vm, pageDay ?: today, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
+                // Owner, 16 окт: the whole head — tools, the day, its summary, the double rule — stays put; only the list scrolls.
+                // The month unfolds under it.
+                val monthItem: () -> Unit = {
+                    if (monthOpen) item("month") {
+                        // No fade (owner, 14 окт): a fading month lay under the matters sliding up over it — it goes at once, they close up.
+                        Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)) { MonthPanel(data, vm, pageDay ?: today, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
+                    }
                 }
                 // The planner's tabs turned the page to another day: that day alone — its name, its summary, its matters.
                 val other = pageDay?.takeIf { it != today }
                 if (other != null) {
                     val p = dayPlan(data, other, today, events)
-                    item("o-head") {
+                    pinnedHead("o-head", plannerLook, calendar = true) {
                         Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp), margin = { MarginDay(other.dayOfMonth, other.dayMonthShort().substringAfter(' ')) }) {
                             Column {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -274,6 +275,7 @@ fun TaskList(
                         }
                         if (planner) DoubleRule(Modifier.padding(top = 16.dp, bottom = 4.dp))
                     }
+                    monthItem()
                     if (!p.quiet) {
                         item("o-sec") { SectionHead(dayTalk(other, today), rule = false, count = (p.deals.size + p.events.size).takeIf { it > 0 }) }
                         dayPanel(p, today, "o", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it })
@@ -292,7 +294,7 @@ fun TaskList(
                 // Undated matters — simple ones and topics' — live at the end of today, newest first.
                 val undated = (tasks.filter { !it.done && it.dueDate == null && it.startDate == null } + data.undatedTopicMatters())
                     .sortedByDescending { it.createdAt }
-                item("head") {
+                pinnedHead("head", plannerLook, calendar = true) {
                     Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp), margin = { MarginDay(today.dayOfMonth, today.dayMonthShort().substringAfter(' ')) }) {
                         Column {
                           Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -311,7 +313,7 @@ fun TaskList(
                             val lateIds = plan.deals.filter { it.dueDate?.isBefore(today) == true }.map { it.id }
                             Voice(daySummary(plan, today, away), Modifier.padding(top = 2.dp), onClick = if (lateIds.isEmpty()) null else ({
                                 // «Сегодня» stands after the head and the promises (their head and rows).
-                                val i = 1 + if (promises.isNotEmpty()) 1 + (if (allPromises) promises.size else minOf(3, promises.size)) else 0
+                                val i = (if (monthOpen) 2 else 1) + (if (promises.isNotEmpty()) 1 + (if (allPromises) promises.size else minOf(3, promises.size)) else 0)
                                 listScope.launch { listState.animateScrollToItem(i) }
                                 vm.lightUp(lateIds)
                             }))
@@ -319,6 +321,7 @@ fun TaskList(
                     }
                     if (planner) DoubleRule(Modifier.padding(top = 16.dp, bottom = 4.dp))
                 }
+                monthItem()
                 if (promises.isNotEmpty()) {
                     val shownP = if (allPromises) promises else promises.take(3)
                     item("p-head") {
@@ -390,6 +393,10 @@ fun TaskList(
                     }
                     if (tomorrowOpen) dayPanel(tomorrowPlan.copy(doneCount = 0, done = emptyList()), today, "tm", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it })
                 }
+                // Owner, 16 окт: the page's archive at its end — matters put away, folded; «Удалить» only here.
+                archiveFold("arch", data.archived.sortedByDescending { it.doneAt }.map { t ->
+                    ArchItem(t.id, t.title, t.doneAt, restore = { vm.restoreMatter(t.id) }, purge = { vm.purgeMatter(t.id) })
+                }, archOpen) { archOpen = !archOpen }
             }
 
             view == Views.ALL -> {
@@ -397,8 +404,8 @@ fun TaskList(
                 // who owes whom and by sphere.
                 fun bare(t: Task) = t.thought && t.subtasks.isEmpty()
                 fun sOk(t: Task) = monthSphere == null || (if (monthSphere == "work") t.sphere == "work" else t.sphere != "work")
-                if (plannerLook) stickyHeader("tools") { PinnedTools(list = listState, title = if (topicsOnly) s.topicsPage else s.overviewWord, headKey = "o-head") }
-                item("o-head") {
+                // Owner, 16 окт: the head stays put; only the list scrolls.
+                pinnedHead("o-head", plannerLook) {
                     Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp)) {
                         Column {
                             Row(verticalAlignment = Alignment.Top) {
@@ -472,6 +479,10 @@ fun TaskList(
                         }
                     }
                 }
+                // Owner, 16 окт: archived topics at the end of «Темы», folded; a tap opens one («Вернуть», «Удалить» are there).
+                if (topicsOnly) archiveFold("arch", data.tasks.filter { it.topic && it.done && !it.thought && sOk(it) }.sortedByDescending { it.doneAt }.map { t ->
+                    ArchItem(t.id, t.title, t.doneAt, open = { onOpen(t.id) }, restore = { vm.reviveTopic(t.id) }, purge = { vm.removeMatter(t.id) })
+                }, archOpen) { archOpen = !archOpen }
             }
         }
         item("page-end") { PageEnd(pageLines) }

@@ -66,33 +66,40 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
         Column(Modifier.weight(1f).fillMaxWidth()) {
             val scroll = rememberScrollState()
             val pageLines = rememberPageLines()
-            Column(Modifier.weight(1f).fillMaxWidth().ruledPage(pageLines).screenRule().verticalScroll(scroll).padding(bottom = 24.dp)) {
+            Column(Modifier.weight(1f).fillMaxWidth().screenRule()) {
                 // When it was begun — its first record — on the margin as a day of the diary, the weekday under it.
                 val bornAt = task.entries.minOfOrNull { it.at } ?: task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
                 val bornDay = runCatching { java.time.LocalDate.parse(bornAt.take(10)) }.getOrNull()
                 androidx.compose.foundation.layout.Spacer(Modifier.size(4.dp))
-                CardHead(title, { title = it }, false, onToggle = {}, margin = { CardMargin(bornDay, under = bornDay?.weekdayWord()) }, meta = emptyList(),
-                    noMark = true, kind = s.cardKindNote, sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) })
-                Margined(Modifier.padding(top = 10.dp)) {
-                    Column {
+                // Owner, 16 окт: the head shows what is about the note, not its words again — a title only when it isn't their beginning.
+                val words = task.entries.firstOrNull { it.text.isNotBlank() }?.text?.trim().orEmpty()
+                val ownTitle = title.isNotBlank() && !words.startsWith(title.trimEnd('…', '.').take(40))
+                NoteHead(bornDay, emptyList(), {}, task.sphere, { vm.setSphere(task.id, it) }, title = if (!ownTitle) null else ({
+                    BasicTextField(title, { title = it.replace("\n", " ") }, textStyle = Type.display.copy(color = c.ink, fontSize = 27.sp, lineHeight = 32.sp),
+                        cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
+                }), tools = {
                         // Owner, 14 окт: the same row of tools as every card; three things, so no «Ещё».
                         ActionBar(listOfNotNull(
                             Action(s.actToMatter, false, { commitTitle(); vm.ideaToMatter(task.id); onClose() }) { DealGlyph(it, 22.dp) },
                             rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } },
                             // Owner, 14 окт: put away (it stays in «Архив», with «Отменить») before deleting.
-                            Action(s.toArchive, false, { commitTitle(); vm.archiveTopic(task.id); onClose() }) { ArchiveGlyph(it, 22.dp) },
-                            Action(s.delete, false, { vm.removeMatter(task.id); onClose() }) { TrashGlyph(it, 22.dp) },
-                        ), slots = 5)
-                    }
-                }
+                            // Owner, 16 окт: «В архив»; an archived note — «Вернуть» and only then «Удалить».
+                            if (!task.done) Action(s.toArchive, false, { commitTitle(); vm.archiveTopic(task.id); onClose() }) { ArchiveGlyph(it, 22.dp) }
+                            else Action(s.bringBack, false, { vm.reviveTopic(task.id) }) { ArchiveGlyph(it, 22.dp) },
+                            if (task.done) Action(s.delete, false, { vm.removeMatter(task.id); onClose() }) { TrashGlyph(it, 22.dp) } else null,
+                        ), slots = 4)
+                })
+                // Owner, 16 окт: the head (day, title, marks, tools) stays put; only what is under it scrolls.
+                Column(Modifier.weight(1f).fillMaxWidth().ruledPage(pageLines).verticalScroll(scroll).padding(bottom = 24.dp)) {
                 // Everything of the note is here (owner, 14 окт: no second, «whole» view of it) — each file in its own record.
-                WrittenLane(task.entries.filter { it.text.isNotBlank() || it.attachments.isNotEmpty() }.map { LaneItem(it.id, it.at, it.text, it.attachments) }, s.ideaHint, Modifier.padding(top = 10.dp), after = null, label = s.records,
+                WrittenLane(task.entries.filter { it.text.isNotBlank() || it.attachments.isNotEmpty() }.map { LaneItem(it.id, it.at, it.text, it.attachments) }, s.ideaHint, Modifier.padding(top = 0.dp), after = null, label = s.records,
                     canAdd = false, vm = vm,
                     onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
                     onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
                 // Begun when its first words were written (owner, 14 окт: it said «создано» on the day it was last touched).
                 bornDay?.let { d -> Margined { Voice(s.begunOn(d.dayMonthShort()), Modifier.padding(top = 22.dp, bottom = 6.dp)) } }
                 PageEnd(pageLines)
+                }
             }
             Column(Modifier.fillMaxWidth().background(c.bg).padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)) {
                 SmartComposer(vm, s.cardNoteHint, false, onSend = { t, f ->

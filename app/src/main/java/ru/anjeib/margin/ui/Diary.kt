@@ -148,6 +148,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
     val today = LocalDate.now()
     // «личное / работа» (owner, 16 окт): the same two marks as on «Темы»; chosen again — all of them.
     val sphere by vm.diarySphere.collectAsState()
+    var archOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     fun sOk(x: String?) = sphere == null || (if (sphere == "work") x == "work" else x != "work")
     val notes = remember(data, sphere) {
         data.tasks.filter { it.thought && it.subtasks.isEmpty() && !it.done && sOk(it.sphere) }.sortedBy { it.bornAt() }
@@ -169,8 +170,8 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())) {
           findable(found, find, { k -> (k as? String)?.let { linkedText[it] }?.let { find != null && findHit(find.words, it) }
               ?: (data.taskOfKey(k)?.let { t -> find != null && findHit(find.words, t.title + " " + data.mentionsPlain(t.entries.joinToString(" ") { it.text })) } == true) }) {
-            if (plannerLook) stickyHeader("tools") { PinnedTools(list = list, title = s.diaryTitle) }
-            item("head") {
+            // Owner, 16 окт: the head stays put; only the diary scrolls.
+            pinnedHead("head", plannerLook) {
                 Margined(Modifier.padding(top = if (planner) 0.dp else 8.dp)) {
                     Column {
                         Row(verticalAlignment = Alignment.Top) {
@@ -227,7 +228,6 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                                 SoftMenuItem(s.actToMatter) { menu = false; vm.ideaToMatter(n.id) }
                                 rowActs?.let { r -> SoftMenuItem(s.actToTopic) { menu = false; r.toTopic(n.id) } }
                                 SoftMenuItem(s.toArchive) { menu = false; vm.archiveTopic(n.id) }
-                                SoftMenuItem(s.delete, danger = true) { menu = false; vm.removeMatter(n.id) }
                             } } }
                             PanelPiece(seatOf(i, list.size)) {
                                 Column(Modifier.fillMaxWidth().combinedClickable(onClick = { onOpen(n.id) }, onLongClick = { menu = true }).padding(horizontal = if (planner) 0.dp else 16.dp).padding(top = if (first) 8.dp else 12.dp, bottom = 12.dp)) {
@@ -254,6 +254,11 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                     }
                 }
             }
+            // Owner, 16 окт: archived notes at the end of the page, folded — the diary's own and those of matters and topics.
+            val archived = data.tasks.filter { it.thought && it.done && it.subtasks.isEmpty() && sOk(it.sphere) }.map { t ->
+                ArchItem(t.id, t.title.ifBlank { t.entries.firstOrNull()?.text.orEmpty() }, t.doneAt, open = { onOpen(t.id) }, restore = { vm.reviveTopic(t.id) }, purge = { vm.removeMatter(t.id) })
+            } + data.archivedNotes(vm, onOpenNote) { sOk(it) }
+            archiveFold("arch", archived, archOpen) { archOpen = !archOpen }
             item("end") { PageEnd(pageLines) }
             item("tail") { Box(Modifier.width(1.dp).height(40.dp)) }
           }
@@ -281,7 +286,7 @@ private fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: I
             Box(Modifier.align(Alignment.TopEnd).padding(top = 8.dp)) { SoftMenu(menu, { menu = false }) {
                 SoftMenuItem(s.openWord) { menu = false; onOpenNote(x.card) }
                 SoftMenuItem(if (toTopic) s.toTheTopic else s.toTheMatter) { menu = false; onOpen(x.open) }
-                SoftMenuItem(s.delete, danger = true) { menu = false; vm.removeNotePiece(x.card) }
+                SoftMenuItem(s.toArchive) { menu = false; vm.removeNotePiece(x.card) }
             } }
             PanelPiece(seatOf(i, n)) {
                 Column(Modifier.fillMaxWidth().combinedClickable(onClick = { onOpenNote(x.card) }, onLongClick = { menu = true })

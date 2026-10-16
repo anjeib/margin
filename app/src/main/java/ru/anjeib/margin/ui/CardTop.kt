@@ -160,7 +160,12 @@ fun CardHead(title: String, onTitle: (String) -> Unit, done: Boolean, onToggle: 
              /** What the card is, first in the line under the title; null — no mark column either (a note has none). */
              kind: String? = null, noMark: Boolean = false,
              /** Where it belongs, over the title in one line (owner, 14 окт): «# Тема   ○ Дело», each cut short to fit. */
-             trail: List<MetaItem> = emptyList()) {
+             trail: List<MetaItem> = emptyList(),
+             /**
+              * Owner, 16 окт («как в заметках»): the head is only about the matter — where, what kind, the marks, the tools — and the
+              * matter itself stands under the card's rule ([MatterTitle]); then no title here and the tools close the head.
+              */
+             showTitle: Boolean = true, tools: (@Composable () -> Unit)? = null) {
     val c = M.c
     val s = M.s
     val titleStyle = Type.display.copy(color = if (done) c.graphite else c.ink, fontSize = 27.sp, lineHeight = 32.sp)
@@ -176,7 +181,7 @@ fun CardHead(title: String, onTitle: (String) -> Unit, done: Boolean, onToggle: 
                         modifier = Modifier.weight(1f, fill = false).clip(RoundedCornerShape(6.dp)).clickable(onClick = it.onClick).padding(vertical = 6.dp))
                 }
             }
-            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.Top) {
+            if (showTitle) androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.Top) {
                 if (!noMark) {
                     androidx.compose.foundation.layout.Box(Modifier.size(MarkCol - PanelBleed, 34.dp), contentAlignment = Alignment.CenterStart) {
                         if (mark != null) mark() else CheckCircle(done, size = 22.dp, onToggle = onToggle)
@@ -199,6 +204,34 @@ fun CardHead(title: String, onTitle: (String) -> Unit, done: Boolean, onToggle: 
             androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(start = if (noMark) 0.dp else MarkCol), verticalAlignment = Alignment.Top) {
                 androidx.compose.foundation.layout.Box(Modifier.weight(1f)) { if (line.isNotEmpty()) MetaLine(line) }
                 if (onSphere != null) SphereIcons(sphere, { k -> k?.let(onSphere) }, Modifier.padding(start = 6.dp))
+            }
+            tools?.let { androidx.compose.foundation.layout.Box(Modifier.padding(top = 12.dp)) { it() } }
+        }
+    }
+}
+
+/**
+ * The matter itself under the card's rule (owner, 16 окт): its hour on the margin (a tap sets it; «+ время» when it has a day
+ * and no hour), its words in the row face, written right here; a promise wears its hand before them.
+ */
+@Composable
+fun MatterTitle(title: String, onTitle: (String) -> Unit, done: Boolean, hour: String?, onHour: (() -> Unit)?, late: Boolean = false,
+                mark: (@Composable () -> Unit)? = null, hint: String? = null) {
+    val c = M.c
+    val s = M.s
+    Margined(margin = {
+        val label = hour ?: if (onHour != null) s.addTime else null
+        if (label != null) MarginNote(label, late = late && hour != null, modifier = Modifier.padding(top = 9.dp).clip(RoundedCornerShape(6.dp))
+            .then(if (onHour != null) Modifier.clickable(onClickLabel = s.fieldTime, onClick = onHour) else Modifier).padding(vertical = 2.dp))
+    }) {
+        androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 6.dp)) {
+            if (mark != null) { androidx.compose.foundation.layout.Box(Modifier.padding(top = 2.dp, end = 8.dp)) { mark() } }
+            val style = Type.body.copy(fontFamily = rowFamily, color = if (done) c.graphite else c.ink, fontSize = 20.sp, lineHeight = 27.sp,
+                textDecoration = if (done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)
+            androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+                if (title.isEmpty() && hint != null) Text(hint, style = style.copy(color = c.graphite))
+                androidx.compose.foundation.text.BasicTextField(title, onTitle, textStyle = style,
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link), modifier = Modifier.fillMaxWidth())
             }
         }
     }

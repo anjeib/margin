@@ -67,12 +67,16 @@ fun CardPage(onClose: () -> Unit, trailing: (@Composable () -> Unit)? = null, co
  */
 @Composable
 fun CardMargin(day: LocalDate?, hour: String? = null, late: Boolean = false, prefix: String? = null, under: String? = null,
-               onDay: (() -> Unit)? = null, onHour: (() -> Unit)? = null) {
+               onDay: (() -> Unit)? = null, onHour: (() -> Unit)? = null,
+               /** The window's first day («19 –»), not a word like «с»: set in the day's own face, clearly (owner, 16 окт). */
+               strongPrefix: Boolean = false) {
     val c = M.c
     val s = M.s
     val ink = pencilInk
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 2.dp)) {
-        if (prefix != null) Text(prefix, style = Type.italic.copy(color = c.ink.copy(alpha = 0.75f), fontSize = 14.sp, lineHeight = 16.sp))
+        if (prefix != null && strongPrefix && planner) Text(prefix, style = androidx.compose.ui.text.TextStyle(fontFamily = Cormorant, fontWeight = androidx.compose.ui.text.font.FontWeight(600),
+            fontSize = 30.sp, lineHeight = 30.sp, fontFeatureSettings = "lnum", color = c.ink), modifier = Modifier.padding(bottom = 2.dp))
+        else if (prefix != null) Text(prefix, style = Type.italic.copy(color = c.ink.copy(alpha = 0.75f), fontSize = 14.sp, lineHeight = 16.sp))
         if (day == null) MarginNote(s.noDateShort, modifier = Modifier.clip(RoundedCornerShape(6.dp)).then(if (onDay != null) Modifier.clickable(onClickLabel = s.dateWord, onClick = onDay) else Modifier).padding(vertical = 4.dp))
         else Box(Modifier.clip(RoundedCornerShape(6.dp)).then(if (onDay != null) Modifier.clickable(onClickLabel = s.dateWord, onClick = onDay) else Modifier)
             // Late: a highlighter stroke across the number (owner, 14 окт: along the line, as everywhere — not up the whole date).

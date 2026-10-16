@@ -790,6 +790,10 @@ interface Strings {
     /** A note's card: the way to where it lives (owner, 16 окт). */
     val toTheTopic: String get() = "К теме"
     val toTheMatter: String get() = "К делу"
+    /** Archived notes of a matter, folded (owner, 16 окт). */
+    val purgeForGood: String get() = "Удалить насовсем"
+    val quickNextMonth: String get() = "След. месяц"
+    val rangeHint: String get() = "Нажмите число — дата. Удержите и проведите по дням — период."
     val toOtherTopic: String
     val toTopicPick: String
     val recognizeWord: String
@@ -2679,6 +2683,9 @@ object En : Strings {
     override fun addedTo(t: String) = "Added to “$t”"
     override val toTheTopic get() = "To the topic"
     override val toTheMatter get() = "To the to-do"
+    override val purgeForGood get() = "Delete for good"
+    override val quickNextMonth get() = "Next month"
+    override val rangeHint get() = "Tap a day for a date. Hold and drag across days for a period."
     override val toOtherTopic = "Another topic"
     override val toTopicPick = "To a topic…"
     override val recognizeWord = "Read text"

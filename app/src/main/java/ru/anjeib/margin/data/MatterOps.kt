@@ -386,3 +386,46 @@ fun AppData.intoTopic(ref: String, topicId: String): AppData {
             events = x.events + TopicEvent(at = stamp, kind = if (sub.from != null) "wait" else "q", ref = sub.id))
     })
 }
+
+
+// ---- the archive (owner, 16 окт): «В архив» everywhere, «Удалить» only on what is done or already archived ----
+
+/** A simple matter into the archive, out of every list; a topic's matter into its topic's «Архив»; a note or a topic — archived. */
+fun AppData.archiveMatter(ref: String): AppData {
+    questionRef(slotRef(ref)?.first ?: ref)?.let { (tid, qid) -> return removeDeal(tid, qid) }
+    val id = slotRef(ref)?.first ?: ref
+    val t = tasks.find { it.id == id } ?: return this
+    if (t.topic) return archiveTopic(id)
+    return copy(tasks = tasks - t, archived = archived + t.copy(doneAt = t.doneAt ?: LocalDate.now().toString()))
+}
+
+/** Back from the archive, as it was. */
+fun AppData.restoreMatter(id: String): AppData {
+    val t = archived.find { it.id == id } ?: return this
+    return copy(archived = archived - t, tasks = tasks + t.copy(doneAt = if (t.done) t.doneAt else null))
+}
+
+/** Gone for good — only from the archive. */
+fun AppData.purgeMatter(id: String): AppData = copy(archived = archived.filterNot { it.id == id })
+
+private fun AppData.editRemovedComments(ref: String, f: (List<Comment>, List<Comment>) -> Pair<List<Comment>, List<Comment>>): AppData {
+    questionRef(slotRef(ref)?.first ?: ref)?.let { (tid, qid) ->
+        return copy(tasks = tasks.map { t -> if (t.id != tid) t else t.copy(subtasks = t.subtasks.mapTree(qid) { q -> f(q.comments, q.removedComments).let { (a, b) -> q.copy(comments = a, removedComments = b) } }) })
+    }
+    return copy(tasks = tasks.map { if (it.id == ref) f(it.comments, it.removedComments).let { (a, b) -> it.copy(comments = a, removedComments = b) } else it })
+}
+
+/** A matter's note into its «Архив». */
+fun AppData.archiveComment(ref: String, id: String): AppData = editRemovedComments(ref) { live, gone ->
+    val c = live.find { it.id == id } ?: return@editRemovedComments live to gone
+    (live - c) to (gone + c)
+}
+
+/** A matter's note back from its «Архив». */
+fun AppData.restoreComment(ref: String, id: String): AppData = editRemovedComments(ref) { live, gone ->
+    val c = gone.find { it.id == id } ?: return@editRemovedComments live to gone
+    (live + c).sortedBy { it.at } to (gone - c)
+}
+
+/** A matter's archived note gone for good. */
+fun AppData.purgeComment(ref: String, id: String): AppData = editRemovedComments(ref) { live, gone -> live to gone.filterNot { it.id == id } }

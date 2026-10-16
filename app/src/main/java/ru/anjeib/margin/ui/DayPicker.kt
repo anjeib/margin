@@ -27,6 +27,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -45,7 +48,12 @@ import java.time.format.TextStyle
  * today ringed, the chosen day filled; a range is a soft band between its two ends. A tap on a day is the choice.
  */
 @Composable
-fun DayGrid(month: YearMonth, onMonth: (YearMonth) -> Unit, selected: LocalDate?, rangeStart: LocalDate? = null, rangeEnd: LocalDate? = null, onDay: (LocalDate) -> Unit) {
+fun DayGrid(month: YearMonth, onMonth: (YearMonth) -> Unit, selected: LocalDate?, rangeStart: LocalDate? = null, rangeEnd: LocalDate? = null,
+            /**
+             * Owner, 16 окт: a tap on a number is that day; a press held and drawn across the days — a window (or held on one day,
+             * then a tap on another). Null — days only.
+             */
+            onRange: ((LocalDate, LocalDate) -> Unit)? = null, onDay: (LocalDate) -> Unit) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
@@ -70,6 +78,32 @@ fun DayGrid(month: YearMonth, onMonth: (YearMonth) -> Unit, selected: LocalDate?
         val first = month.atDay(1)
         val lead = first.dayOfWeek.value - 1
         val cells = lead + month.lengthOfMonth()
+        // The window being drawn: its first day (held) and where the finger is now.
+        var held by remember(month) { mutableStateOf<LocalDate?>(null) }
+        var over by remember(month) { mutableStateOf<LocalDate?>(null) }
+        val rowPx = with(androidx.compose.ui.platform.LocalDensity.current) { 38.dp.toPx() }
+        fun dayAt(o: androidx.compose.ui.geometry.Offset, width: Int): LocalDate? {
+            val col = (o.x / (width / 7f)).toInt().coerceIn(0, 6)
+            val n = (o.y / rowPx).toInt() * 7 + col - lead + 1
+            return if (n in 1..month.lengthOfMonth()) month.atDay(n) else null
+        }
+        fun done(a: LocalDate, b: LocalDate) { held = null; over = null; if (a == b) onDay(a) else onRange?.invoke(minOf(a, b), maxOf(a, b)) }
+        @Suppress("NAME_SHADOWING") val rangeStart = held?.let { h -> minOf(h, over ?: h) } ?: rangeStart
+        @Suppress("NAME_SHADOWING") val rangeEnd = held?.let { h -> maxOf(h, over ?: h) } ?: rangeEnd
+        @Suppress("NAME_SHADOWING") val selected = if (held != null) null else selected
+        Column(Modifier.fillMaxWidth().then(if (onRange == null) Modifier else Modifier
+            .pointerInput(month) {
+                detectTapGestures(onTap = { o -> dayAt(o, size.width)?.let { d -> val h = held; if (h != null) done(h, d) else onDay(d) } })
+            }
+            .pointerInput(month) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { o -> dayAt(o, size.width)?.let { held = it; over = it } },
+                    onDrag = { ch, _ -> dayAt(ch.position, size.width)?.let { over = it } },
+                    // Held on one day and let go: it waits for a tap on the window's other end.
+                    onDragEnd = { val h = held; val o = over; if (h != null && o != null && o != h) done(h, o) },
+                    onDragCancel = { held = null; over = null },
+                )
+            })) {
         (0 until (cells + 6) / 7).forEach { w ->
             Row(Modifier.fillMaxWidth()) {
                 (0..6).forEach { i ->
@@ -83,7 +117,7 @@ fun DayGrid(month: YearMonth, onMonth: (YearMonth) -> Unit, selected: LocalDate?
                             Box(Modifier.fillMaxSize().background(if (inRange && !sel) c.linkSoft else Color.Transparent)
                                 .padding(horizontal = 2.dp).clip(RoundedCornerShape(8.dp)).background(if (sel) c.link else Color.Transparent)
                                 .then(if (d == today && !sel) Modifier.border(1.dp, c.link, RoundedCornerShape(8.dp)) else Modifier)
-                                .clickable { onDay(d) }, contentAlignment = Alignment.Center) {
+                                .then(if (onRange == null) Modifier.clickable { onDay(d) } else Modifier), contentAlignment = Alignment.Center) {
                                 Text("$n", style = Type.body.copy(color = when { sel -> c.bg; d.isBefore(today) -> c.graphite; weekend -> c.graphite; else -> c.ink }, fontSize = 15.sp, lineHeight = 17.sp,
                                     fontWeight = if (sel || d == today) FontWeight.SemiBold else FontWeight.Normal, fontFeatureSettings = "tnum"))
                             }
@@ -91,6 +125,7 @@ fun DayGrid(month: YearMonth, onMonth: (YearMonth) -> Unit, selected: LocalDate?
                     }
                 }
             }
+        }
         }
     }
 }

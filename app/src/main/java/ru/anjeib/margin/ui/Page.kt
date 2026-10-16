@@ -442,3 +442,21 @@ fun PencilText(text: androidx.compose.ui.text.AnnotatedString, style: androidx.c
     }
     androidx.compose.material3.Text(shown, style = if (whole) style.copy(color = late) else style, maxLines = maxLines, overflow = overflow, inlineContent = inlineContent, modifier = modifier)
 }
+
+/**
+ * A page's head that stays put (owner, 16 окт: «шапка не меняется и не уезжает при скроллинге»): on the planner the tools row and
+ * the whole head — the name, its line, the double rule — are one sticky header on the page's paper with the margin's rule through
+ * it; only what is under it scrolls. Elsewhere just the first item.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun androidx.compose.foundation.lazy.LazyListScope.pinnedHead(key: String, pinned: Boolean, calendar: Boolean = false, content: @Composable () -> Unit) {
+    if (pinned) stickyHeader(key) {
+        androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().background(M.c.bg).screenRule()) { PinnedTools(calendar); content() }
+    } else item(key) { content() }
+}
+
+/** A section's name ([PageHead]) that stays put on the planner while the list under it scrolls (owner, 16 окт). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun androidx.compose.foundation.lazy.LazyListScope.pageHeadItem(key: String, content: @Composable () -> Unit) {
+    stickyHeader(key) { androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().background(M.c.bg).screenRule()) { content() } }
+}

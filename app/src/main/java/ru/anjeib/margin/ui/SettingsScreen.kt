@@ -77,9 +77,14 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         vm.updateSettings { it.copy(calendar = ok) }; vm.refreshCalendar()
     }
 
-    Column(Modifier.fillMaxSize().screenRule().verticalScroll(rememberScrollState()).padding(contentPadding.vertical()).padding(start = MarginW + MarginGap, end = 16.dp)) {
-        Text(s.settings, style = Type.pageTitle.copy(color = c.ink), modifier = Modifier.padding(top = 14.dp, bottom = if (planner) 0.dp else 18.dp))
-        if (planner) DoubleRule(Modifier.pageWide().padding(top = 18.dp, bottom = 10.dp))
+    // Owner, 16 окт: the page's name stays put; only the settings under it scroll.
+    Column(Modifier.fillMaxSize().screenRule().padding(contentPadding.vertical())) {
+        Column(Modifier.padding(start = MarginW + MarginGap, end = 16.dp)) {
+            Text(s.settings, style = Type.pageTitle.copy(color = c.ink), modifier = Modifier.padding(top = 14.dp, bottom = if (planner) 0.dp else 18.dp))
+            if (planner) DoubleRule(Modifier.pageWide().padding(top = 18.dp, bottom = 10.dp))
+        }
+        // The rules across the page stay whole: the column scrolls at full width, its words padded inside.
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = MarginW + MarginGap, end = 16.dp)) {
 
         Group(s.voiceSection, first = true) {
             // Russian speech is read on the phone (GigaAM) whenever its model is here; the switch keeps the voice there even before
@@ -269,6 +274,7 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
         // The version (and the long press into the developer section) lives once — under the menu.
         Spacer(Modifier.height(20.dp))
         Spacer(Modifier.height(24.dp))
+            }
     }
 
     keyDraft?.let { draft ->
@@ -315,8 +321,10 @@ private fun Group(label: String, first: Boolean = false, content: @Composable ()
         // «Полоса набора» (owner, 15 окт): a section as on every page — a rule across the page, the name letter-spaced — and its
         // rows on the paper itself.
         if (!first) Box(Modifier.pageWide().padding(horizontal = 14.dp).fillMaxWidth().height(0.75.dp).background(c.hairline))
-        Text(label.lowercase().replaceFirstChar { it.uppercase() }.replace(" ", "\u2002"), style = androidx.compose.ui.text.TextStyle(fontFamily = Literata, fontWeight = androidx.compose.ui.text.font.FontWeight(450),
-            fontSize = 19.sp, letterSpacing = 3.2.sp, color = c.ink), modifier = Modifier.padding(top = 18.dp, bottom = 6.dp))
+        // Owner, 16 окт («странная разлиновка»): the name as every section's — Literata small caps, a little tracking — not
+        // letter-spaced lowercase.
+        Text(label.lowercase().replaceFirstChar { it.uppercase() }, style = androidx.compose.ui.text.TextStyle(fontFamily = Literata, fontWeight = androidx.compose.ui.text.font.FontWeight(500),
+            fontSize = 17.sp, letterSpacing = 1.4.sp, fontFeatureSettings = "smcp", color = c.ink), modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
         Column(Modifier.fillMaxWidth()) { content() }
         Spacer(Modifier.height(22.dp))
         return
@@ -327,8 +335,9 @@ private fun Group(label: String, first: Boolean = false, content: @Composable ()
     Spacer(Modifier.height(22.dp))
 }
 
+/** Between rows of a group: on the planner only air (owner, 16 окт: a short offset hairline read as stray ruling). */
 @Composable
-private fun Divider() = Hairline(Modifier.padding(start = 16.dp))
+private fun Divider() { if (planner) Spacer(Modifier.height(4.dp)) else Hairline(Modifier.padding(start = 16.dp)) }
 
 @Composable
 private fun ValueRow(label: String, hint: String?, value: String, chevron: Boolean = true, onClick: () -> Unit) {

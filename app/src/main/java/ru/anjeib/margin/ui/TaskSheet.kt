@@ -161,7 +161,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
             // «Поля»: the rule down the card, the day and hour on the margin, everything else right of it.
             // At least half the screen with the field right under it; a longer card grows, the field stays below.
             val pageLines = rememberPageLines()
-            Column(Modifier.weight(1f).ruledPage(pageLines).screenRule().verticalScroll(rememberScrollState())) {
+            Column(Modifier.weight(1f).screenRule()) {
                 // The card (owner's call, 10 окт): ⋯ for the matter as a whole; the title with its bagel in the sphere's colour;
                 // «когда» as a plaque; three tools (place, people, repeat) and ⋯ for the rest; then the comments.
                 val ctxOpen = androidx.compose.ui.platform.LocalContext.current
@@ -191,15 +191,12 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     task.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
                     remind?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) { dialog = "time" }) }
                 }
+                // Owner, 16 окт («как в заметках»): on top what is about the matter — its day, kind, marks, tools; the matter itself
+                // under the rule with its hour on the margin.
                 CardHead(title, { title = it }, task.done, onToggle = { vm.toggleTask(task.id) }, sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) }, kind = s.cardKindDeal.takeIf { owes == null },
-                    margin = if (task.slots.isEmpty()) ({ CardMargin(due, task.time, late, prefix = windowPrefix(task.startDate.takeIf { task.dueDate != null }, due),
-                        onDay = { dialog = "dates" }, onHour = if (due != null) ({ dialog = "time" }) else null) }) else null,
-                    meta = meta,
-                    mark = if (!task.done && (task.waitingFor != null || task.promisedTo != null)) ({
-                        Box(Modifier.clip(CircleShape).clickable { vm.toggleTask(task.id) }) { PromiseMark(incoming = task.waitingFor != null, size = 32.dp) }
-                    }) else null)
-                if (task.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) }) }
-                Margined(Modifier.padding(top = 10.dp)) {
+                    margin = if (task.slots.isEmpty()) ({ CardMargin(due, null, late, prefix = windowPrefix(task.startDate.takeIf { task.dueDate != null }, due), strongPrefix = true,
+                        under = due?.weekdayWord(), onDay = { dialog = "dates" }) }) else null,
+                    meta = meta, showTitle = false, tools = {
                     Column {
                         // Owner, 14 окт: the tools are not lit by what is set — that is said on the margin and in the line above.
                         // «Полоса набора» (owner, 15 окт): no circle by the title — «Готово» is the first of the card's tools.
@@ -217,17 +214,30 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                                 Action(s.actPromised, false, { dialog = "promised" }) { HandGlyph(it, 23.dp) },
                                 if (!task.done) rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } } else null,
                                 Action(s.actToIdea, false, { commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }) { NoteGlyph(it, 21.dp) },
-                                Action(s.delete, false, { dialog = "delete" }) { TrashGlyph(it, 22.dp) },
+                                // Owner, 16 окт: «В архив»; «Удалить» only for what is done.
+                                if (task.done) Action(s.delete, false, { dialog = "delete" }) { TrashGlyph(it, 22.dp) }
+                                else Action(s.toArchive, false, { commitTitle(); onClose(); vm.archiveMatter(task.id) }) { ArchiveGlyph(it, 22.dp) },
                             ))
                         }
                     }
-                }
+                })
+                if (task.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) }) }
+                // Owner, 16 окт: the head (day, title, marks, tools) stays put; only what is under it scrolls.
+                Column(Modifier.weight(1f).fillMaxWidth().ruledPage(pageLines).verticalScroll(rememberScrollState())) {
+                CardRule()
+                MatterTitle(title, { title = it }, task.done, task.time, if (task.slots.isEmpty() && due != null) ({ dialog = "time" }) else null, late,
+                    mark = if (!task.done && (task.waitingFor != null || task.promisedTo != null)) ({
+                        Box(Modifier.clip(CircleShape).clickable { vm.toggleTask(task.id) }) { PromiseMark(incoming = task.waitingFor != null, size = 28.dp) }
+                    }) else null)
                 // Owner, 16 окт: what is written in the matter is its «Заметки» (they show in «Заметки» too, with a link here);
                 // added only from the field below.
                 WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
                     canAdd = false, heading = s.records, vm = vm,
                     onEdit = { id, t -> vm.editComment(task.id, id, t); savedAt = System.currentTimeMillis() },
                     onAdd = { t, at -> vm.addComment(task.id, t, at); savedAt = System.currentTimeMillis() })
+                // Owner, 16 окт: notes put away stay here, folded — «Вернуть» or «Удалить насовсем».
+                ArchiveBlock(task.removedComments.map { cm -> ArchItem(cm.id, cm.text, cm.at, restore = { vm.restoreComment(task.id, cm.id) }, purge = { vm.purgeComment(task.id, cm.id) }) } +
+                    task.removedEntries.map { e -> ArchItem(e.id, e.text.ifBlank { e.attachments.firstOrNull()?.name.orEmpty() }, e.at, restore = { vm.restoreRecord(task.id, e.id) }, purge = { vm.purgeRecord(task.id, e.id) }) })
                 // Where it came from — below the shared part of every matter's card, quietly.
                 Margined(Modifier.padding(top = 6.dp)) {
                     Column {
@@ -316,6 +326,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 Margined { CreatedLine(task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt, onClick = if (task.source != null && task.noteId == null) ({ dialog = "source" }) else null) }
                 PageEnd(pageLines)
                 Spacer(Modifier.height(8.dp))
+                }
             }
 
             // Scoped composer — everything about this task is said here.
@@ -525,39 +536,34 @@ fun NoticeLine(nt: Notice, vm: MainVm) {
 internal fun DatesDialog(task: Task, onDismiss: () -> Unit, onSave: (String?, String?) -> Unit) {
     val c = M.c
     val s = M.s
-    fun LocalDate.ms() = atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
-    fun Long.date() = Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()
-    // Most dates are one day: quick choices first, a single-day calendar, a range only on request.
-    var range by remember { mutableStateOf(task.startDate != null && task.dueDate != null) }
     val today = LocalDate.now()
-    val friday = today.with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.FRIDAY)).let { if (it == today) it.plusWeeks(1) else it }
     val nextMonday = today.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.MONDAY))
-    // Margin's own grid (persona test, 15 окт): one tap picks a day; a range is its first and last day, two taps, then «Сохранить».
+    val nextMonth = java.time.YearMonth.from(today).plusMonths(1)
     var month by remember { mutableStateOf(java.time.YearMonth.from(task.dueDate ?: task.startDate ?: today)) }
-    var a by remember { mutableStateOf(task.startDate?.takeIf { task.dueDate != null }) }
-    var b by remember { mutableStateOf(task.dueDate) }
+    val window = task.startDate != null && task.dueDate != null && task.startDate!!.isBefore(task.dueDate)
+    // Owner, 16 окт: two windows as pills, then the month — a tap on a number is the day, a press drawn across days the window.
     AlertDialog(
         onDismissRequest = onDismiss, containerColor = c.card,
         title = { Text(s.dateWord, style = Type.cardTitle.copy(color = c.ink)) },
-        confirmButton = { if (range) TextButton({ if (a != null && b != null) onSave(a.toString(), b.toString()) else onSave(null, (b ?: a)?.toString()) }) { Text(s.save, color = c.link) } },
-        dismissButton = { TextButton(onDismiss) { Text(s.cancel, color = c.graphite) } },
+        confirmButton = {},
+        dismissButton = {
+            Row {
+                TextButton({ onSave(null, null) }) { Text(s.quickNone, color = c.graphite) }
+                TextButton(onDismiss) { Text(s.cancel, color = c.graphite) }
+            }
+        },
         text = {
         Column {
-            FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill(s.quickToday, onClick = { onSave(null, today.toString()) })
-                Pill(s.quickTomorrow, onClick = { onSave(null, today.plusDays(1).toString()) })
-                Pill(friday.dowShort(), onClick = { onSave(null, friday.toString()) })
-                Pill(nextMonday.dowShort(), onClick = { onSave(null, nextMonday.toString()) })
+            FlowRow(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill(s.quickNextWeek, onClick = { onSave(nextMonday.toString(), nextMonday.plusDays(6).toString()) })
+                Pill(s.quickNextMonth, onClick = { onSave(nextMonth.atDay(1).toString(), nextMonth.atEndOfMonth().toString()) })
                 // A repeating task: skip this one and go straight to the next time.
                 task.repeat?.let { r -> val cur = task.dueDate ?: today; Pill(s.skipOnce, onClick = { onSave(null, r.next(cur).let { n -> if (n.isBefore(today)) r.next(today) else n }.toString()) }) }
-                Pill(s.quickNone, onClick = { onSave(null, null) })
-                Pill(if (range) s.singleLink else s.rangeLink, accent = true, onClick = { range = !range })
             }
-            if (range) DayGrid(month, { month = it }, selected = null, rangeStart = a, rangeEnd = b) { d ->
-                // First tap — the first day; the second — the last (an earlier one starts over).
-                if (a == null || (a != null && b != null) || d.isBefore(a)) { a = d; b = null } else b = d
-            } else DayGrid(month, { month = it }, selected = task.dueDate ?: task.startDate) { d -> onSave(null, d.toString()) }
+            DayGrid(month, { month = it }, selected = if (window) null else task.dueDate ?: task.startDate,
+                rangeStart = task.startDate.takeIf { window }, rangeEnd = task.dueDate.takeIf { window },
+                onRange = { a, b -> onSave(a.toString(), b.toString()) }) { d -> onSave(null, d.toString()) }
+            Text(s.rangeHint, style = Type.small.copy(color = c.graphite, fontSize = 13.sp), modifier = Modifier.padding(top = 10.dp))
         }
     })
 }

@@ -1,6 +1,8 @@
 package ru.anjeib.margin.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,7 +42,9 @@ import ru.anjeib.margin.data.questionRef
  */
 data class NotePiece(val key: String, val at: String, val text: String, val files: List<Attachment>, val removed: Boolean,
                      /** Where it lives: what opens it, and its links over the title — «# Тема», «○ Дело». */
-                     val ownerId: String, val trail: List<Pair<String, String>>, val topicOwned: Boolean)
+                     val ownerId: String, val trail: List<Pair<String, String>>, val topicOwned: Boolean,
+                     /** Whose «личное / работа» the note shows: the topic's or the matter's. */
+                     val sphereOf: String = ownerId, val sphere: String? = null)
 
 fun entryKey(taskId: String, entryId: String) = "e|$taskId|$entryId"
 fun commentKey(ref: String, commentId: String) = "c|$ref|$commentId"
@@ -55,24 +59,61 @@ fun AppData.notePiece(key: String): NotePiece? {
             val t = tasks.find { it.id == ref } ?: return null
             val live = t.entries.find { it.id == id }
             val e = live ?: t.removedEntries.find { it.id == id } ?: return null
-            NotePiece(key, e.at, e.text, e.attachments, live == null, t.id, listOf(t.id to ((if (t.topic) "# " else "○ ") + t.title)), t.topic)
+            NotePiece(key, e.at, e.text, e.attachments, live == null, t.id, listOf(t.id to ((if (t.topic) "# " else "○ ") + t.title)), t.topic, t.id, t.sphere)
         }
         "c" -> {
             val q = questionRef(ref)
             if (q != null) {
                 val t = tasks.find { it.id == q.first } ?: return null
                 val sub = flat(t.subtasks).find { it.id == q.second } ?: return null
-                val cm = sub.comments.find { it.id == id } ?: return null
-                NotePiece(key, cm.at, cm.text, emptyList(), false, ref, listOf(t.id to "# " + t.title, ref to "○ " + sub.title), false)
+                val live = sub.comments.find { it.id == id }
+                val cm = live ?: sub.removedComments.find { it.id == id } ?: return null
+                NotePiece(key, cm.at, cm.text, emptyList(), live == null, ref, listOf(t.id to "# " + t.title, ref to "○ " + sub.title), false, t.id, t.sphere)
             } else {
                 val t = tasks.find { it.id == ref } ?: return null
-                val cm = t.comments.find { it.id == id } ?: return null
-                NotePiece(key, cm.at, cm.text, emptyList(), false, t.id, listOf(t.id to "○ " + t.title), false)
+                val live = t.comments.find { it.id == id }
+                val cm = live ?: t.removedComments.find { it.id == id } ?: return null
+                NotePiece(key, cm.at, cm.text, emptyList(), live == null, t.id, listOf(t.id to "○ " + t.title), false, t.id, t.sphere)
             }
         }
         else -> null
     }
 }
+
+/**
+ * The head of every note's card (owner, 16 окт: «Одиссея» and «МАП» looked different — one look, after the diary's own note): the
+ * day large on the margin with its weekday; right of the rule where it lives («# Тема  ○ Дело»), a title only when it is not
+ * the words' own beginning, «заметка» and «личное / работа». The words themselves are under the tools, never repeated up here.
+ */
+@Composable
+fun NoteHead(day: java.time.LocalDate?, trail: List<Pair<String, String>>, onTrail: (String) -> Unit, sphere: String?, onSphere: ((String) -> Unit)?,
+             title: (@Composable () -> Unit)? = null,
+             /** The card's tools, under the marks — beside the day on the margin, so no gap opens under a short head. */
+             tools: (@Composable () -> Unit)? = null) {
+    val c = M.c
+    val s = M.s
+    Margined(margin = { CardMargin(day, under = day?.weekdayWord()) }) {
+        Column {
+            if (trail.isNotEmpty()) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                trail.forEachIndexed { i, (to, label) ->
+                    if (i > 0) Spacer(Modifier.size(10.dp))
+                    Text(label, style = Type.italic.copy(color = c.link, fontSize = 15.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false).clip(RoundedCornerShape(6.dp)).clickable { onTrail(to) }.padding(vertical = 6.dp))
+                }
+            }
+            title?.invoke()
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(s.cardKindNote, style = Type.italic.copy(color = c.graphite, fontSize = 16.sp), modifier = Modifier.weight(1f))
+                if (onSphere != null) SphereIcons(sphere, { k -> k?.let(onSphere) })
+            }
+            tools?.let { Box(Modifier.padding(top = 12.dp)) { it() } }
+        }
+    }
+}
+
+/** The line between a card's tools and its words. */
+@Composable
+fun CardRule() = Margined(Modifier.padding(top = 6.dp, bottom = 4.dp)) { Box(Modifier.fillMaxWidth().height(1.dp).background(M.c.hairline)) }
 
 @Composable
 fun NoteCard(key: String, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen: (String) -> Unit) {
@@ -85,59 +126,74 @@ fun NoteCard(key: String, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     fun save() {
         val v = text.text
         if (v.trim() == n.text.trim() || n.removed) return
-        // An emptied note isn't deleted by accident: only «Удалить» removes it.
+        // An emptied note isn't deleted by accident: only «В архив» puts it away.
         if (v.isBlank()) return
         if (kind == "e") vm.editEntryText("task:$ref", id, v.trim()) else vm.editComment(ref, id, v.trim())
     }
     LaunchedEffect(text.text) { if (text.text != n.text) { kotlinx.coroutines.delay(800); save() } }
     DisposableEffect(key) { onDispose { save() } }
     fun remove() { vm.removeNotePiece(key); onClose() }
+    val dt = runCatching { java.time.LocalDateTime.parse(n.at.take(16)) }.getOrNull()
     CardPage(onClose = { save(); onClose() }) {
-        Column(Modifier.weight(1f).fillMaxWidth().screenRule().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            val dt = runCatching { java.time.LocalDateTime.parse(n.at.take(16)) }.getOrNull()
-            Spacer(Modifier.size(4.dp))
-            Margined(margin = { CardMargin(dt?.toLocalDate(), under = dt?.toLocalTime()?.toString()?.take(5)) }) {
-                Column {
-                    // Where it lives, over the words — a tap goes there.
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        n.trail.forEachIndexed { i, (to, label) ->
-                            if (i > 0) Spacer(Modifier.size(10.dp))
-                            Text(label, style = Type.italic.copy(color = c.link, fontSize = 15.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false).clip(RoundedCornerShape(6.dp)).clickable { save(); onOpen(to) }.padding(vertical = 6.dp))
+        Column(Modifier.weight(1f).fillMaxWidth()) {
+            Column(Modifier.weight(1f).fillMaxWidth().screenRule()) {
+                Spacer(Modifier.size(4.dp))
+                NoteHead(dt?.toLocalDate(), n.trail, { to -> save(); onOpen(to) }, n.sphere, if (n.removed) null else ({ k -> vm.setSphere(n.sphereOf, k) }), tools = {
+                    ActionBar(listOfNotNull(
+                        Action(if (n.trail.last().second.startsWith("#")) s.toTheTopic else s.toTheMatter, false, { save(); onOpen(n.ownerId) }) {
+                            if (n.trail.last().second.startsWith("#")) TopicGlyph(it, 20.dp) else DealGlyph(it, 22.dp)
+                        },
+                        // Owner, 16 окт: «В архив»; «Удалить» only once it is there (with «Вернуть»).
+                        if (!n.removed) Action(s.toArchive, false, { remove() }) { ArchiveGlyph(it, 22.dp) } else null,
+                        if (n.removed) Action(s.bringBack, false, { vm.restoreNotePiece(key); onClose() }) { ArchiveGlyph(it, 22.dp) } else null,
+                        if (n.removed) Action(s.delete, false, { vm.purgeNotePiece(key); onClose() }) { TrashGlyph(it, 22.dp) } else null,
+                    ), slots = 4)
+                })
+                // Owner, 16 окт: the head (day, where it lives, marks, tools) stays put; only the words under it scroll.
+                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+                    CardRule()
+                    // The words, written right here, their day and hour on the margin — as in the diary's own note.
+                    Margined(margin = { Box(Modifier.padding(top = 9.dp)) { Stamp(n.at) } }) {
+                        Column {
+                            if (n.text.isNotBlank() || n.files.isEmpty())
+                                BasicTextField(text, { text = continueList(text, it) }, readOnly = n.removed,
+                                    textStyle = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp), cursorBrush = SolidColor(c.link),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                            if (n.files.isNotEmpty()) Box(Modifier.padding(top = 4.dp, bottom = 8.dp)) { AttachmentsView(n.files) }
                         }
                     }
-                    Text(s.cardKindNote + if (n.removed) " · " + s.removedWord else "", style = Type.italic.copy(color = c.graphite, fontSize = 16.sp), modifier = Modifier.padding(top = 2.dp))
                 }
             }
-            Margined(Modifier.padding(top = 10.dp)) {
-                ActionBar(listOfNotNull(
-                    Action(if (n.trail.last().second.startsWith("#")) s.toTheTopic else s.toTheMatter, false, { save(); onOpen(n.ownerId) }) {
-                        if (n.trail.last().second.startsWith("#")) TopicGlyph(it, 20.dp) else DealGlyph(it, 22.dp)
-                    },
-                    if (!n.removed) Action(s.delete, false, { remove() }) { TrashGlyph(it, 22.dp) } else null,
-                ), slots = 5)
-            }
-            // The words, written right here, as on every page.
-            Margined(Modifier.padding(top = 8.dp)) {
-                Column {
-                    if (n.text.isNotBlank() || n.files.isEmpty())
-                        BasicTextField(text, { text = continueList(text, it) }, readOnly = n.removed,
-                            textStyle = Type.body.copy(color = c.ink, fontSize = 17.sp, lineHeight = 25.sp), cursorBrush = SolidColor(c.link),
-                            modifier = Modifier.fillMaxWidth().heightIn(min = if (n.files.isEmpty()) 120.dp else 0.dp))
-                    if (n.files.isNotEmpty()) Box(Modifier.padding(top = 10.dp)) { AttachmentsView(n.files) }
-                }
+            // The same field as in the diary's note: what is written goes on in this note.
+            if (!n.removed) Column(Modifier.fillMaxWidth().background(c.bg).padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)) {
+                SmartComposer(vm, s.cardNoteHint, false, onSend = { t, f ->
+                    if (t.isNotBlank()) {
+                        val next = (text.text.trimEnd() + "\n" + t.trim()).trim()
+                        text = androidx.compose.ui.text.input.TextFieldValue(next, androidx.compose.ui.text.TextRange(next.length))
+                        if (kind == "e") vm.editEntryText("task:$ref", id, next) else vm.editComment(ref, id, next)
+                    }
+                    if (kind == "e") f.forEach { a -> vm.insertAttachment("task:$ref", id, a) }
+                }, slash = false, floating = planner)
             }
         }
     }
 }
 
-/** Removes a note by its card key: a topic's note goes to its «Архив», a matter's record and note are deleted (with «Отменить» for records). */
+/** A note into the «Архив» of where it lives (owner, 16 окт: nothing is deleted outright). */
 fun MainVm.removeNotePiece(key: String) {
-    val n = data.value.notePiece(key) ?: return
+    data.value.notePiece(key) ?: return
     val (kind, ref, id) = key.split('|')
-    when {
-        kind == "c" -> editComment(ref, id, "")
-        n.topicOwned -> removeRecord(ref, id)
-        else -> removeEntry("task:$ref", id)
-    }
+    if (kind == "c") archiveComment(ref, id) else removeRecord(ref, id)
+}
+
+fun MainVm.restoreNotePiece(key: String) {
+    val (kind, ref, id) = key.split('|')
+    if (kind == "c") restoreComment(ref, id) else restoreRecord(ref, id)
+}
+
+/** Gone for good — only a note already in the archive. */
+fun MainVm.purgeNotePiece(key: String) {
+    if (data.value.notePiece(key)?.removed != true) return
+    val (kind, ref, id) = key.split('|')
+    if (kind == "c") purgeComment(ref, id) else purgeRecord(ref, id)
 }

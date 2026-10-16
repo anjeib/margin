@@ -107,7 +107,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
         Column(Modifier.weight(1f).fillMaxWidth()) {
             // At least half the screen with the field right under it — the same as a simple matter's card.
             val pageLines = rememberPageLines()
-            Column(Modifier.weight(1f).ruledPage(pageLines).screenRule().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
+            Column(Modifier.weight(1f).screenRule()) {
                 // The same card as a simple matter (owner's call, 10 окт), with its topic above the title.
                 val row = topic.questionRow(q)
                 val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
@@ -146,11 +146,9 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                     ),
                     // A topic's matter is in its topic's sphere: the same two marks set it for the topic.
                     sphere = topic.sphere, onSphere = { vm.setSphere(topic.id, it) },
-                    margin = if (q.slots.isEmpty()) ({ CardMargin(due, q.time, late, prefix = windowPrefix(start, due), onDay = { dialog = "date" }, onHour = if (due != null) ({ dialog = "time" }) else null) }) else null,
-                    meta = meta,
-                    mark = if ((q.from != null || q.promisedTo != null) && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = q.from != null, size = 32.dp) } }) else null)
-                if (q.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(q.slots, onToggle = { vm.toggleSlot(ref, it) }, onRemove = { vm.removeSlot(ref, it) }) }
-                Margined(Modifier.padding(top = 10.dp)) {
+                    // Owner, 16 окт («как в заметках»): the head is about the matter; the matter itself is under the rule.
+                    margin = if (q.slots.isEmpty()) ({ CardMargin(due, null, late, prefix = windowPrefix(start, due), strongPrefix = true, under = due?.weekdayWord(), onDay = { dialog = "date" }) }) else null,
+                    meta = meta, showTitle = false, tools = {
                     Column {
                         // Owner, 14 окт: the tools are not lit by what is set — that is said on the margin and in the line above.
                         ActionBar(listOfNotNull(
@@ -167,19 +165,28 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                                 Action(s.actPromised, false, { dialog = "promised" }) { HandGlyph(it, 23.dp) },
                                 if (!q.done) rowActs?.let { r -> Action(s.actToTopic, false, { commit(); onClose(); r.toTopic(ref) }) { TopicGlyph(it, 19.dp) } } else null,
                                 Action(s.actToIdea, false, { commit(); vm.dealToIdea(topic.id, q.id); onClose() }) { NoteGlyph(it, 21.dp) },
-                                Action(s.delete, false, { vm.removeDeal(topic.id, q.id); onClose() }) { TrashGlyph(it, 22.dp) },
+                                // Owner, 16 окт: into the topic's «Архив», not deleted.
+                                Action(s.toArchive, false, { vm.archiveMatter(ref); onClose() }) { ArchiveGlyph(it, 22.dp) },
                             ))
                         }
                     }
-                }
+                })
+                if (q.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(q.slots, onToggle = { vm.toggleSlot(ref, it) }, onRemove = { vm.removeSlot(ref, it) }) }
+                // Owner, 16 окт: the head (day, title, marks, tools) stays put; only what is under it scrolls.
+                Column(Modifier.weight(1f).fillMaxWidth().ruledPage(pageLines).verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
+                CardRule()
+                MatterTitle(title, { title = it }, q.done, q.time, if (q.slots.isEmpty() && due != null) ({ dialog = "time" }) else null, late,
+                    mark = if ((q.from != null || q.promisedTo != null) && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = q.from != null, size = 28.dp) } }) else null)
                 val born = topic.events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at ?: topic.createdAt
                 WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
                     canAdd = false, heading = s.records, vm = vm,
                     onEdit = { id, t -> vm.editComment(ref, id, t); saved() }, onAdd = { t, at -> vm.addComment(ref, t, at); saved() })
+                ArchiveBlock(q.removedComments.map { cm -> ArchItem(cm.id, cm.text, cm.at, restore = { vm.restoreComment(ref, cm.id) }, purge = { vm.purgeComment(ref, cm.id) }) })
                 // Their day has come: «напомнить» here too, the same as on a simple matter (one behaviour for every wait).
                 // Owner, 14 окт: no «напомнить» inside the card — it is on the row on «Сегодня».
                 Margined { CreatedLine(born) }
                 PageEnd(pageLines)
+                }
             }
             // Changes in words go to the topic, said about this matter; «+ дело» puts a matter under it.
             val scopeKey = MainVm.key(Scope.InTask(topic.id))

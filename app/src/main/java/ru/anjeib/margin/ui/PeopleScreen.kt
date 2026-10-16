@@ -93,7 +93,7 @@ fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddi
     fun used(p: Person) = data.tasks.count { t -> t.involves(p) && (!t.done || (t.doneAt ?: "") >= since || t.createdAt >= since) }
     Box(Modifier.fillMaxSize().screenRule()) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
-        item("h") { PageHead(s.peopleTitle, s.peopleSub) }
+        pageHeadItem("h") { PageHead(s.peopleTitle, s.peopleSub) }
         if (people.isEmpty()) item("empty") { Margined(Modifier.padding(top = 8.dp)) { Voice(s.emptyPeople) } }
         // People and companies on two tabs, as «Темы · Дела · Идеи» in «Обзор».
         val orgs = people.filter { it.org }
@@ -135,7 +135,7 @@ fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddi
             val line = listOfNotNull(p.about, p.company, wait?.let { s.waitLine(mid(it)) }, promise?.let { s.promiseLine(mid(it)) })
                 .joinToString(" · ").ifBlank { listOfNotNull(p.phone, p.email).joinToString(" · ") }
             Margined(Modifier.animateItem()) {
-                SwipeActions(left = s.toArchive to { vm.archivePerson(p.id) }, right = s.delete to { vm.removePerson(p.id) }, modifier = Modifier.bleed(if (planner) 0.dp else PanelBleed), shape = seat.shape(), enabled = !planner) {
+                SwipeActions(left = s.toArchive to { vm.archivePerson(p.id) }, right = if (p.archived) s.delete to { vm.removePerson(p.id) } else null, modifier = Modifier.bleed(if (planner) 0.dp else PanelBleed), shape = seat.shape(), enabled = !planner) {
                     PanelPiece(seat, bleed = false) {
                         RowBody(mark = { Avatar(p.name, 34.dp) }, onClick = { onOpen(p.id) },
                             trailing = if (open > listOfNotNull(wait, promise).size) ({ Text(s.tasksCount(open), style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp, fontFeatureSettings = "tnum")) }) else null) {
@@ -217,7 +217,9 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                         ActionBar(listOf(
                             Action(s.actName, false, { dialog = "rename" }) { EditGlyph(it, 21.dp) },
                             if (person.org) Action(s.actIsPerson, false, { vm.setOrg(person.id, false) }) { PersonGlyph(it, 21.dp) } else Action(s.actIsOrg, false, { vm.setOrg(person.id, true) }) { WorkGlyph(it, 21.dp) },
-                            Action(s.delete, false, { vm.deletePerson(person.id); onBack() }) { TrashGlyph(it, 21.dp) },
+                            // Owner, 16 окт: «В архив»; «Удалить» only for one already archived.
+                            if (person.archived) Action(s.delete, false, { vm.deletePerson(person.id); onBack() }) { TrashGlyph(it, 21.dp) }
+                            else Action(s.toArchive, false, { vm.archivePerson(person.id); onBack() }) { ArchiveGlyph(it, 21.dp) },
                             Action(s.actMore, more, { more = !more }) { MoreGlyph(it, 23.dp) },
                         ), slots = 4)
                         androidx.compose.animation.AnimatedVisibility(more) {

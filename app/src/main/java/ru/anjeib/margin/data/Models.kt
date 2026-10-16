@@ -39,6 +39,8 @@ data class Subtask(
     val note: String? = null,
     /** The user's own comments, each with when it was written — «код домофона 45», «взять чек». No AI. */
     val comments: List<Comment> = emptyList(),
+    /** Notes put into the matter's «Архив» (owner, 16 окт: nothing is deleted outright — only from the archive). */
+    val removedComments: List<Comment> = emptyList(),
     /** The same card as a simple matter: it can repeat, happen somewhere, involve people. */
     val repeat: Repeat? = null,
     val place: String? = null,
@@ -252,6 +254,8 @@ data class Task(
     val note: String? = null,
     /** The user's own comments, each with when it was written; no AI. A small mark in the lists says they are there. */
     val comments: List<Comment> = emptyList(),
+    /** Notes put into the matter's «Архив» (owner, 16 окт). */
+    val removedComments: List<Comment> = emptyList(),
     val subtasks: List<Subtask> = emptyList(),
     val repeat: Repeat? = null,
     /** How many times the task was pushed to a later day — lets reviews spot what never happens. */
@@ -337,6 +341,11 @@ data class AppData(
     val persons: List<Person> = emptyList(),
     val projects: List<String> = emptyList(),
     val queue: List<Queued> = emptyList(),
+    /**
+     * Simple matters put into the archive (owner, 16 окт: «Удалить» only for what is done or archived) — kept apart from [tasks],
+     * so no list, count, reminder or search sees them; «Архив» brings them back or deletes them for good.
+     */
+    val archived: List<Task> = emptyList(),
     /** Schema version of the file ([Store.SCHEMA]); 0 = written before versions existed. */
     val v: Int = 0,
 ) {

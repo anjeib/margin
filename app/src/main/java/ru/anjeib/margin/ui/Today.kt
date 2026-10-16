@@ -129,7 +129,7 @@ fun MatterRow(
                     SoftMenuItem(s.fieldTime) { quick = false; onTime() }
                     if (acts != null) {
                         SoftMenuItem(if (t.topicId != null) s.toOtherTopic else s.toTopicPick) { quick = false; acts.toTopic(t.id) }
-                        SoftMenuItem(s.delete, danger = true) { quick = false; acts.remove(t.id) }
+                        SoftMenuItem(s.toArchive) { quick = false; acts.remove(t.id) }
                     }
                 }
                 RowBody(

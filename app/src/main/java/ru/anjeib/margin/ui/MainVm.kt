@@ -913,6 +913,25 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     /** Removed from a list or a card: a simple matter or a topic's one — with «Отменить», like a swipe. */
+    /** «В архив» (owner, 16 окт): out of every list, with a moment to take it back; deleted only from «Архив». */
+    fun archiveMatter(ref: String) {
+        val before = data.value
+        store.update { it.archiveMatter(ref) }
+        offerUndo(before, L.s.archivedOne)
+    }
+    fun restoreMatter(id: String) = store.update { it.restoreMatter(id) }
+    fun purgeMatter(id: String) {
+        data.value.archived.find { it.id == id }?.let { t -> (t.entries + t.removedEntries).flatMap { it.attachments }.forEach { Files.delete(ctx, it) } }
+        store.update { it.purgeMatter(id) }
+    }
+    fun archiveComment(ref: String, id: String) {
+        val before = data.value
+        store.update { it.archiveComment(ref, id) }
+        offerUndo(before, L.s.archivedOne)
+    }
+    fun restoreComment(ref: String, id: String) = store.update { it.restoreComment(ref, id) }
+    fun purgeComment(ref: String, id: String) = store.update { it.purgeComment(ref, id) }
+
     fun removeMatter(ref: String) {
         val before = data.value
         val q = questionRef(ref)

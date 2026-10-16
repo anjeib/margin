@@ -73,7 +73,14 @@ fun Task.questionRow(q: Subtask) = Task(
 
 /** Open matters of topics that have no day yet — they wait at the end of today, with their age. */
 fun AppData.undatedTopicMatters(): List<Task> =
-    tasks.filter { it.topic && !it.done && !it.thought }.flatMap { t -> t.subtasks.filter { !it.done && it.due == null && !it.isWait && it.parent == null }.map { t.questionRow(it) } }
+    // A topic with a day or a window of its own (owner, 16 окт): its undated matters stand in those days, not «Без даты».
+    tasks.filter { it.topic && !it.done && !it.thought && !it.hasWhen }.flatMap { t -> t.subtasks.filter { !it.done && it.due == null && !it.isWait && it.parent == null }.map { t.questionRow(it) } }
+
+/** The topic was given a day or a window («Когда»). */
+val Task.hasWhen: Boolean get() = topic && (due != null || start != null)
+
+/** A topic's undated matter in the topic's own day or window. */
+private fun Task.inTopicWhen(row: Task): Task = row.copy(start = start.takeIf { due != null && it != due }, due = due ?: start)
 
 /**
  * What the day lists show: simple tasks as they are, and for each open topic its dated questions —
@@ -84,7 +91,7 @@ fun AppData.listTasks(): List<Task> =
         t.subtasks.filter { !it.done && it.due != null }.flatMap { q ->
             val row = t.questionRow(q)
             if (q.slots.isEmpty()) listOf(row) else q.slots.filter { !it.done }.map { s -> row.copy(id = row.id + "@" + s.id, due = s.date, time = s.time, slots = q.slots) }
-        }
+        } + (if (t.hasWhen && !t.thought) t.subtasks.filter { !it.done && it.due == null && !it.isWait && it.parent == null }.map { t.inTopicWhen(t.questionRow(it)) } else emptyList())
     }
 
 object Topics {

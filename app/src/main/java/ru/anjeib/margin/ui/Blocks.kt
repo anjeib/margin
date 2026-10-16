@@ -139,7 +139,8 @@ fun BlockStream(
             val newSession = i == 0 || e.session == null || e.session != entries[i - 1].session
             if (newSession && i > 0) Hairline(Modifier.padding(top = 6.dp, bottom = 2.dp))
             // Swipe a block left to delete it (with «Отменить»).
-            SwipeActions(left = s.delete to { if (active == e.id) active = null; vm.removeEntry(owner, e.id) }, right = null, radius = 12) {
+            // Owner, 16 окт: a matter's record goes to its «Архив», not deleted.
+            SwipeActions(left = (if (owner.startsWith("task:")) s.toArchive else s.delete) to { if (active == e.id) active = null; if (owner.startsWith("task:")) vm.removeRecord(owner.removePrefix("task:"), e.id) else vm.removeEntry(owner, e.id) }, right = null, radius = 12) {
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                     .background(if (on) c.chip.copy(alpha = 0.45f) else c.bg)
@@ -182,7 +183,8 @@ fun BlockStream(
                     DropdownMenuItem(text = { Text(s.insertBelow, style = Type.body) }, onClick = { menuFor = null; active = e.id; inserting = e.id })
                     if (i > 0) DropdownMenuItem(text = { Text(s.moveUp, style = Type.body) }, onClick = { menuFor = null; vm.moveEntry(owner, e.id, -1) })
                     if (i < entries.lastIndex) DropdownMenuItem(text = { Text(s.moveDown, style = Type.body) }, onClick = { menuFor = null; vm.moveEntry(owner, e.id, 1) })
-                    DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accentText)) }, onClick = { menuFor = null; active = null; vm.removeEntry(owner, e.id) })
+                    if (owner.startsWith("task:")) DropdownMenuItem(text = { Text(s.toArchive, style = Type.body) }, onClick = { menuFor = null; active = null; vm.removeRecord(owner.removePrefix("task:"), e.id) })
+                    else DropdownMenuItem(text = { Text(s.delete, style = Type.body.copy(color = c.accentText)) }, onClick = { menuFor = null; active = null; vm.removeEntry(owner, e.id) })
                 }
             }
             }

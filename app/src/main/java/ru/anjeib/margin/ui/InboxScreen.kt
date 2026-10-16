@@ -88,7 +88,7 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
     fun dayOf(at: String) = runCatching { LocalDate.parse(at.take(10)) }.getOrNull()
     Box(Modifier.fillMaxSize().screenRule()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
-            item("h") { PageHead(s.inboxNote, s.inboxHint) }
+            pageHeadItem("h") { PageHead(s.inboxNote, s.inboxHint) }
             if (data.queue.isEmpty() && note?.entries.isNullOrEmpty()) item("empty") { Margined { Empty(s.inboxEmpty, s.inboxEmptyHint) } }
             if (data.queue.isNotEmpty()) {
                 item("q-h") { SectionHead(s.waitingNet, count = data.queue.size, top = 10.dp) }

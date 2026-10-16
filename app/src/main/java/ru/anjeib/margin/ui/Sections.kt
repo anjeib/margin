@@ -206,7 +206,7 @@ fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpe
     val topics = data.tasks.filter { it.topic && it.done }.sortedByDescending { it.doneAt }
     Box(Modifier.fillMaxSize().screenRule()) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
-        item("h") { PageHead(s.archiveTitle, s.archiveSub) }
+        pageHeadItem("h") { PageHead(s.archiveTitle, s.archiveSub) }
         if (notes.isEmpty() && people.isEmpty() && topics.isEmpty()) item("empty") {
             Margined(Modifier.padding(top = 8.dp)) { Voice(s.archiveEmpty) }
         }

@@ -61,7 +61,7 @@ fun HelpScreen(contentPadding: PaddingValues) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
             val g = group
             if (g != null) {
-                item("h") {
+                pageHeadItem("h") {
                     Column {
                         Margined(Modifier.padding(top = 8.dp)) { Voice("‹  " + s.helpTitle, link = true, onClick = { group = null }) }
                         PageHead(g, null)
@@ -69,7 +69,7 @@ fun HelpScreen(contentPadding: PaddingValues) {
                 }
                 items(sectionsOf(g), key = { it.title }) { HelpCard(it) { zoom = it } }
             } else {
-                item("h") { PageHead(s.helpTitle, s.helpIntro) }
+                pageHeadItem("h") { PageHead(s.helpTitle, s.helpIntro) }
                 item("q") {
                     Margined(Modifier.padding(bottom = 12.dp)) { androidx.compose.foundation.layout.Box(Modifier.bleed(PanelBleed)) { SearchField(q, { q = it }, s.helpSearch) } }
                 }

@@ -229,7 +229,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             if (toolsMonth) { vm.monthOpen.value = false; vm.pageDay.value = null }
             else { toolsLanded?.let { d -> vm.pageDay.value = d.takeIf { it != java.time.LocalDate.now() } }; vm.monthOpen.value = true }
         })
-    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.removeMatter(it) }), LocalFind provides find,
+    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.archiveMatter(it) }), LocalFind provides find,
         LocalPeopleLinks provides tagLinks, LocalPageTools provides pageTools.takeIf { planner }) {
     ModalNavigationDrawer(
         drawerState = drawer,
@@ -621,7 +621,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     )
 
     // The cards get the same «В тему…» / «Удалить» as the rows (their sheets live outside the drawer).
-    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.removeMatter(it) })) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.archiveMatter(it) })) {
     // The cards are pages now (owner, 14 окт) — opened over the diary, above (see «cardKey»).
     openTask?.let { id -> if (data.tasks.none { it.id == id }) openTask = null }
     }

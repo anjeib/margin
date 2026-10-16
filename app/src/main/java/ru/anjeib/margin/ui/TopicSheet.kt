@@ -366,7 +366,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
             else if (t != cur.title) vm.saveTask(cur.copy(title = t.sentence()))
         }
         // Scrolled into the feed, the header folds to one line — the title — and gives the feed the screen; back at the start it opens again.
-        val folded by remember { androidx.compose.runtime.derivedStateOf { feedState.firstVisibleItemIndex > 0 || feedState.firstVisibleItemScrollOffset > 60 } }
+        // Owner, 16 окт: the head doesn't fold or move while the page scrolls — only the feed under it does.
+        val folded = false
         val note = task.thought && task.subtasks.isEmpty()
         val bornDay = runCatching { LocalDate.parse(task.createdAt.take(10)) }.getOrNull()
         // Since when, on the margin as a day of the diary (owner, 14 окт): «с» over the day it was begun.
@@ -374,7 +375,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         val tDue = task.dueDate
         val tStart = task.startDate
         Margined(margin = if (folded) null else ({
-            if (!note && (tDue != null || tStart != null)) CardMargin(tDue ?: tStart, prefix = windowPrefix(tStart.takeIf { tDue != null }, tDue), onDay = { dialog = "dates" })
+            if (!note && (tDue != null || tStart != null)) CardMargin(tDue ?: tStart, prefix = windowPrefix(tStart.takeIf { tDue != null }, tDue), onDay = { dialog = "dates" }, strongPrefix = true)
             else CardMargin(bornDay, prefix = if (note) null else s.sinceWord)
         })) {
             Column(Modifier.animateContentSize(tween(220))) {
@@ -748,7 +749,7 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin:
                         SoftMenu(tools, { tools = false }) {
                             ToolItem(Icons.Outlined.ContentCopy, s.copyWord) { tools = false; vm.copyRecord("task:${task.id}", e.id) }
                             ToolItem(Icons.AutoMirrored.Outlined.DriveFileMove, s.moveWord) { tools = false; vm.moveRecord("task:${task.id}", e.id) }
-                            ToolItem(Icons.Rounded.Remove, s.delete, danger = true) { tools = false; vm.removeRecord(task.id, e.id) }
+                            ToolItem(Icons.Rounded.Remove, s.toArchive) { tools = false; vm.removeRecord(task.id, e.id) }
                         }
                     }
                 }
@@ -853,7 +854,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
                         ToolItem(Icons.Rounded.Add, s.underLine) { tools = false; act.addUnder(q.id, q.title) }
                         ToolItem(Icons.Outlined.Build, s.edit) { tools = false; act.editDeal(q) }
                         ToolItem(Icons.Outlined.CalendarToday, s.dueWord) { tools = false; act.dateDeal(q) }
-                        ToolItem(Icons.Rounded.Remove, s.delete, danger = true) { tools = false; vm.removeDeal(task.id, q.id) }
+                        ToolItem(Icons.Rounded.Remove, s.toArchive) { tools = false; vm.removeDeal(task.id, q.id) }
                     }
                 }
             }
