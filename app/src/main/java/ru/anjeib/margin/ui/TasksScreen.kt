@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.topicOn
+
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import ru.anjeib.margin.data.likelyTopic
@@ -176,6 +178,7 @@ fun TaskList(
     /** The find bar's name for this page («today», «topics»): its matches are counted and scrolled to; null — just marked. */
     findPage: String? = null,
 ) {
+    val framed = LocalFramed.current
     val landed by vm.landed.collectAsState()
     val monthOpen by vm.monthOpen.collectAsState()
     val c = M.c
@@ -250,132 +253,53 @@ fun TaskList(
       findable(found, find?.takeIf { findPage != null }, { k -> (k as? String)?.let { ks -> findable.firstOrNull { ks.endsWith(it.id) } }?.let { t -> find != null && findHit(find.words, t.findText()) } == true }) {
         when {
             view == Views.TODAY -> {
-                // The calendar tab unfolds the month over the page (owner, 14 окт); a tap on a day turns the page to it.
-                // Fable, 15 окт: the tools stay where they are; the month unfolds under them, not over them.
-                // Persona test, 15 окт: the tools stay pinned at the top while the page scrolls (two of three couldn't find them).
-                // Owner, 16 окт: the whole head — tools, the day, its summary, the double rule — stays put; only the list scrolls.
-                // The month unfolds under it.
+                // Owner, 16 окт («максимально эффективный core»): one page per day and nothing but the day — its matters, then what has
+                // no day (on today and the days ahead, until it is done). No «Ждём и обещали», «Сегодня», «Дальше» or «Без даты»
+                // sections; a swipe across the page turns the day (App), the month unfolds under the pinned head.
+                val day = pageDay ?: today
                 val monthItem: () -> Unit = {
                     if (monthOpen) item("month") {
                         // No fade (owner, 14 окт): a fading month lay under the matters sliding up over it — it goes at once, they close up.
-                        Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)) { MonthPanel(data, vm, pageDay ?: today, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
+                        Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)) { MonthPanel(data, vm, day, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
                     }
                 }
-                // The planner's tabs turned the page to another day: that day alone — its name, its summary, its matters.
-                val other = pageDay?.takeIf { it != today }
-                if (other != null) {
-                    val p = dayPlan(data, other, today, events)
-                    pinnedHead("o-head", plannerLook, calendar = true) {
-                        Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp), margin = { MarginDay(other.dayOfMonth, other.dayMonthShort().substringAfter(' ')) }) {
-                            Column {
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                                    BasicText(other.dowFull(), style = Type.pageTitle.copy(color = c.ink), maxLines = 1, modifier = Modifier.weight(1f),
-                                        autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 52.sp else 40.sp, stepSize = 1.sp))
-                                }
-                                Voice(daySummary(p, other), Modifier.padding(top = 2.dp))
-                                Voice(s.backToToday, Modifier.padding(top = 6.dp), link = true, onClick = { vm.pageDay.value = null })
-                            }
-                        }
-                        if (planner) DoubleRule(Modifier.padding(top = 16.dp, bottom = 4.dp))
-                    }
-                    monthItem()
-                    if (!p.quiet) {
-                        item("o-sec") { SectionHead(dayTalk(other, today), rule = false, count = (p.deals.size + p.events.size).takeIf { it > 0 }) }
-                        dayPanel(p, today, "o", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it }, openTopics = openTopics.value, onTopicFold = ::foldTopic)
-                    }
-                    item("page-end-o") { PageEnd(pageLines) }
-                    return@findable
-                }
-                val plan = dayPlan(data, today, today, events)
-                val tomorrowPlan = dayPlan(data, today.plusDays(1), today, events)
-                // Who owes what: late, within three days, or without a day — gathered here, still in their days below.
-                val topicWaits = data.tasks.filter { it.topic && !it.done }.flatMap { t -> t.subtasks.filter { !it.done && it.due == null && it.from != null }.map { t.questionRow(it) } }
-                val promises = (tasks + topicWaits).filter { !it.done && (it.waitingFor != null || it.promisedTo != null) }
-                    .filter { t -> (t.dueDate ?: t.startDate).let { it == null || !it.isAfter(today.plusDays(3)) } }
-                    .distinctBy { ru.anjeib.margin.data.slotRef(it.id)?.first ?: it.id }
-                    .sortedWith(compareBy({ (it.dueDate ?: it.startDate) ?: LocalDate.MAX }, { it.title }))
-                // Undated matters — simple ones and topics' — live at the end of today, newest first.
-                val undated = (tasks.filter { !it.done && it.dueDate == null && it.startDate == null } + data.undatedTopicMatters())
+                val plan = dayPlan(data, day, today, events)
+                // What has no day stands in every day from today on, at the day's end, newest first — gone once done.
+                val undated = if (day.isBefore(today)) emptyList() else (tasks.filter { !it.done && it.dueDate == null && it.startDate == null } + data.undatedTopicMatters())
                     .sortedByDescending { it.createdAt }
-                pinnedHead("head", plannerLook, calendar = true) {
-                    Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp), margin = { MarginDay(today.dayOfMonth, today.dayMonthShort().substringAfter(' ')) }) {
+                // In the diary's frame the head is the frame's (Frame.kt).
+                if (!framed) pinnedHead("head", plannerLook, calendar = true) {
+                    val away by vm.away.collectAsState()
+                    // «2 просрочены» leads to them (ChatGPT's review, owner, 14 окт): the late ones light up.
+                    val lateIds = plan.deals.filter { it.dueDate?.isBefore(today) == true }.map { it.id }
+                    val summary: @Composable () -> Unit = {
+                        Voice(daySummary(plan, today, away.takeIf { day == today }), Modifier.padding(top = 2.dp), onClick = if (lateIds.isEmpty()) null else ({
+                            listScope.launch { listState.animateScrollToItem(if (monthOpen) 2 else 1) }
+                            vm.lightUp(lateIds)
+                        }))
+                        if (day != today) Voice(s.backToToday, Modifier.padding(top = 4.dp), link = true, onClick = { vm.pageDay.value = null })
+                    }
+                    Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp), margin = { MarginDay(day.dayOfMonth, day.dayMonthShort().substringAfter(' ')) }) {
                         Column {
-                          Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                            BasicText(today.dowFull(), style = Type.pageTitle.copy(color = c.ink), maxLines = 1, modifier = Modifier.weight(1f),
+                            BasicText(day.dowFull(), style = Type.pageTitle.copy(color = c.ink), maxLines = 1, modifier = Modifier.fillMaxWidth(),
                                 autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = if (planner) 52.sp else 40.sp, stepSize = 1.sp))
-                            // Owner, 14 окт: the calendar right by the day too, under «MARGIN» — the month unfolds above.
-                            // With the month open the tab on the right folds it; the icon by the day steps aside (owner, 14 окт).
-                            if (!planner && !monthOpen) Box(Modifier.size(40.dp).clip(CircleShape).background(if (monthOpen) c.linkSoft else Color.Transparent)
-                                .clickable(onClickLabel = s.calendarTitle) { vm.monthOpen.value = !monthOpen }
-                                .semantics { contentDescription = s.calendarTitle }, contentAlignment = Alignment.Center) {
-                                CalendarGlyph(if (monthOpen) c.link else c.ink.copy(alpha = 0.7f), 21.dp)
-                            }
-                          }
-                            val away by vm.away.collectAsState()
-                            // «2 просрочены» leads to them (ChatGPT's review, owner, 14 окт): the list turns to today's matters, the late ones light up.
-                            val lateIds = plan.deals.filter { it.dueDate?.isBefore(today) == true }.map { it.id }
-                            Voice(daySummary(plan, today, away), Modifier.padding(top = 2.dp), onClick = if (lateIds.isEmpty()) null else ({
-                                // «Сегодня» stands after the head and the promises (their head and rows).
-                                val i = (if (monthOpen) 2 else 1) + (if (promises.isNotEmpty()) 1 + (if (allPromises) promises.size else minOf(3, promises.size)) else 0)
-                                listScope.launch { listState.animateScrollToItem(i) }
-                                vm.lightUp(lateIds)
-                            }))
+                            summary()
                         }
                     }
                     if (planner) DoubleRule(Modifier.padding(top = 16.dp, bottom = 4.dp))
                 }
                 monthItem()
-                if (promises.isNotEmpty()) {
-                    val shownP = if (allPromises) promises else promises.take(3)
-                    item("p-head") {
-                        SectionHead(s.promisesTitle, top = 16.dp, rule = false,
-                            action = if (promises.size > 3) (if (allPromises) s.collapse else s.more(promises.size - 3)) to { allPromises = !allPromises } else null)
-                    }
-                    shownP.forEachIndexed { i, t ->
-                        item("p" + t.id) {
-                            Box(Modifier.animateItem()) { PromisePaperRow(t, seatOf(i, shownP.size), today, data, onOpen = { onOpen(t.id) }, onDone = { vm.completeWithUndo(t.id) }) }
-                        }
-                    }
-                }
-                // Owner, 14 окт: what «Ждём и обещали» shows at the top is not repeated in the day below (the day's summary still counts it).
-                fun base(id: String) = ru.anjeib.margin.data.slotRef(id)?.first ?: id
-                val above = promises.map { base(it.id) }.toSet()
-                val dayPlanShown = plan.copy(deals = plan.deals.filter { base(it.id) !in above })
-                // Owner, 15 окт: no «всё на сегодня» by the section's name — a late matter is moved by itself (long press · «Отложить…»).
-                val dayCount = dayPlanShown.deals.size + dayPlanShown.events.size
-                // Owner, 14 окт: an empty day says «Свободный день» once — under its name; no empty «Сегодня» repeating it.
-                val dayEmpty = dayPlanShown.deals.isEmpty() && dayPlanShown.events.isEmpty() && dayPlanShown.done.isEmpty()
-                if (!dayEmpty) item("t-head") { SectionHead(s.today, count = dayCount.takeIf { it > 0 }, rule = promises.isNotEmpty()) }
-                if (!dayEmpty) dayPanel(dayPlanShown, today, "t", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
+                val dayEmpty = plan.deals.isEmpty() && plan.events.isEmpty() && plan.done.isEmpty()
+                if (!dayEmpty) dayPanel(plan, today, "t", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                     doneOpen = isOpen("s-done-today"), onDoneFold = { toggle("s-done-today") }, openTopics = openTopics.value, onTopicFold = ::foldTopic)
-                // Owner, 16 окт («полезное вместо пустоты, только на «Сегодня»»): a light day shows what comes next — the two or three
-                // nearest matters with their days on the margin — instead of an empty page; «Завтра — N дел» then isn't repeated.
-                // A topic's matters stay inside their topic (owner, 16 окт), not one by one here.
-                val ahead = if (dayCount > 3) emptyList() else tasks.filter { t -> !t.done && t.topicId == null && (t.startDate ?: t.dueDate)?.isAfter(today) == true && base(t.id) !in above }
-                    .distinctBy { base(it.id) }.sortedWith(compareBy({ it.startDate ?: it.dueDate }, { it.time ?: "99" })).take(3)
-                if (ahead.isNotEmpty()) {
-                    item("ahead-head") { SectionHead(s.aheadTitle) }
-                    ahead.forEachIndexed { i, t ->
-                        item("ah" + t.id) {
-                            MatterRow(t, seatOf(i, ahead.size), today, whenNote(t, today, underDay = false), modifier = Modifier.animateItem(),
-                                onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) }, onTime = { timeFor = t.id }, onLater = { postponing = t.id },
-                                lit = t.id in landed, onOpenTopic = onOpen)
-                        }
-                    }
-                }
                 if (undated.isNotEmpty()) {
-                    item("u-head") {
-                        SectionHead(s.noDates, count = undated.size, open = undatedOpen,
-                            onFold = { undatedOpen = !undatedOpen; ui.edit().putBoolean("undatedOpen", undatedOpen).apply() })
-                    }
                     fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
-                    // Owner, 16 окт: a topic's matters together, under its name.
-                    // Owner, 16 окт: a topic is one folded row here too; unfolded, its matters stand under it on the block's tint.
+                    // A topic is one folded row here too; unfolded, its matters stand under it on the block's tint.
                     val blocks = withTopicHeads(undated, 1) { t -> t.topicId?.let { it to (t.topicTitle ?: "") } }
                     val inBlock = blocks.filterIsInstance<TopicHead>().map { it.id }.toSet()
                     val pos = blockPositions(blocks) { (it as? Task)?.topicId }
                     var i = -1
-                    if (undatedOpen) blocks.forEachIndexed { bi, b ->
+                    blocks.forEachIndexed { bi, b ->
                         if (b is TopicHead) {
                             val rows = undated.filter { it.topicId == b.id }
                             val since = rows.mapNotNull { born(it) }.minOrNull()?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() }
@@ -397,34 +321,23 @@ fun TaskList(
                         }
                     }
                 }
-                // Owner, 16 окт: no «Записано сегодня» — what was written lives in its topic, its matter and «Заметки».
-                // Sunday: the week in one quiet panel — gathered by code, gone until next Sunday.
-                val wk = today.minusDays(today.dayOfWeek.value - 1L).toString()
-                val weekShown = (today.dayOfWeek == java.time.DayOfWeek.SUNDAY || settings.devMode) && weekSeen != wk
-                if (weekShown) {
-                    item("w-head") { SectionHead(s.weekTitle, action = s.dismiss.lowercase() to { weekSeen = wk; ui.edit().putString("weekSeen", wk).apply() }) }
-                    item("week") { Margined { WeekCard(data.weekReview(today), data.inboxNote()?.entries?.size ?: 0, onOpen, onOpenInbox) } }
-                }
-                // Owner, 14 окт: no examples on a clean page — not even phrases to try (the tour shows how to write).
-                // Shared or saved without a place: one line while there is something to put away (the week's panel says it too).
-                val unplaced = data.inboxNote()?.entries?.size ?: 0
-                if (unplaced > 0 && !weekShown) item("inbox") { VoiceLink(s.inboxLine(unplaced), onOpenInbox) }
-                if (data.queue.isNotEmpty()) item("queue") { VoiceLink(s.queuedLine(data.queue.size), onOpenInbox, quiet = true) }
-                // One look ahead for the evening: tomorrow's count, a tap opens the calendar.
-                val tomorrowParts = listOfNotNull(tomorrowPlan.deals.size.takeIf { it > 0 }?.let { s.summaryDeals(it) },
-                    tomorrowPlan.events.size.takeIf { it > 0 }?.let { s.summaryMeetings(it) })
-                // Owner, 14 окт: a tap opens tomorrow right here, under it — not the calendar.
-                if (tomorrowParts.isNotEmpty() && ahead.isEmpty()) {
-                    item("tomorrow") {
-                        VoiceLink(s.quickTomorrow + " — " + tomorrowParts.joinToString(" · "), { tomorrowOpen = !tomorrowOpen }, quiet = true, arrow = if (tomorrowOpen) "‹" else "›")
+                if (day == today) {
+                    // Sunday: the week in one quiet panel — gathered by code, gone until next Sunday.
+                    val wk = today.minusDays(today.dayOfWeek.value - 1L).toString()
+                    val weekShown = (today.dayOfWeek == java.time.DayOfWeek.SUNDAY || settings.devMode) && weekSeen != wk
+                    if (weekShown) {
+                        item("w-head") { SectionHead(s.weekTitle, action = s.dismiss.lowercase() to { weekSeen = wk; ui.edit().putString("weekSeen", wk).apply() }) }
+                        item("week") { Margined { WeekCard(data.weekReview(today), data.inboxNote()?.entries?.size ?: 0, onOpen, onOpenInbox) } }
                     }
-                    if (tomorrowOpen) dayPanel(tomorrowPlan.copy(doneCount = 0, done = emptyList()), today, "tm", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
-                        openTopics = openTopics.value, onTopicFold = ::foldTopic)
+                    // Shared or saved without a place: one line while there is something to put away.
+                    val unplaced = data.inboxNote()?.entries?.size ?: 0
+                    if (unplaced > 0 && !weekShown) item("inbox") { VoiceLink(s.inboxLine(unplaced), onOpenInbox) }
+                    if (data.queue.isNotEmpty()) item("queue") { VoiceLink(s.queuedLine(data.queue.size), onOpenInbox, quiet = true) }
+                    // Owner, 16 окт: the page's archive at its end — matters put away, folded; «Удалить» only here.
+                    archiveFold("arch", data.archived.sortedByDescending { it.doneAt }.map { t ->
+                        ArchItem(t.id, t.title, t.doneAt, restore = { vm.restoreMatter(t.id) }, purge = { vm.purgeMatter(t.id) })
+                    }, archOpen) { archOpen = !archOpen }
                 }
-                // Owner, 16 окт: the page's archive at its end — matters put away, folded; «Удалить» only here.
-                archiveFold("arch", data.archived.sortedByDescending { it.doneAt }.map { t ->
-                    ArchItem(t.id, t.title, t.doneAt, restore = { vm.restoreMatter(t.id) }, purge = { vm.purgeMatter(t.id) })
-                }, archOpen) { archOpen = !archOpen }
             }
 
             view == Views.ALL -> {
@@ -433,7 +346,7 @@ fun TaskList(
                 fun bare(t: Task) = t.thought && t.subtasks.isEmpty()
                 fun sOk(t: Task) = monthSphere == null || (if (monthSphere == "work") t.sphere == "work" else t.sphere != "work")
                 // Owner, 16 окт: the head stays put; only the list scrolls.
-                pinnedHead("o-head", plannerLook) {
+                if (!(framed && topicsOnly)) pinnedHead("o-head", plannerLook) {
                     Margined(Modifier.padding(top = if (plannerLook) 0.dp else 8.dp)) {
                         Column {
                             Row(verticalAlignment = Alignment.Top) {
@@ -463,7 +376,13 @@ fun TaskList(
                 val tab = if (topicsOnly) "topics" else overviewTab
                 fun wants(k: String) = tab == "all" || tab == k
                 fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
-                val topics = if (owe == null && wants("topics")) data2.tasks.filter { it.topic && !it.done && !bare(it) }.sortedByDescending { it.lastActivity() ?: born(it) } else emptyList()
+                // On «Темы» the page is a day (owner, 17 окт): the topics that stand on it — from their start or birth, to their period's end or being done.
+                val topicDay = pageDay ?: today
+                val topics = if (owe == null && wants("topics")) data2.tasks.filter { it.topic && !bare(it) && (if (topicsOnly) it.topicOn(topicDay) else !it.done) }
+                    .sortedByDescending { it.lastActivity() ?: born(it) } else emptyList()
+                if (topicsOnly && monthOpen) item("month") {
+                    Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null)) { MonthPanel(data, vm, topicDay, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
+                }
                 val ideas = if (owe == null && wants("ideas")) data2.tasks.filter { bare(it) && !it.done }.sortedByDescending { it.lastActivity() ?: born(it) } else emptyList()
                 // Every open matter, with a day or without: the dated ones by their day (late first), then the undated, newest first.
                 val deals = if (wants("deals")) (data2.listTasks().filter { !it.done && !it.topic || it.topicId != null } + data2.undatedTopicMatters())
@@ -473,7 +392,7 @@ fun TaskList(
                     else emptyList()
                 if (topics.isEmpty() && ideas.isEmpty() && deals.isEmpty()) item("o-none") {
                     // Owner, 14 окт: one plain line, no examples — the field below starts a topic.
-                    Margined(Modifier.padding(top = 18.dp)) { Voice(if (topicsOnly) s.topicsEmpty else s.emptyAll) }
+                    Margined(Modifier.padding(top = 18.dp)) { Voice(if (topicsOnly) (if (topicDay != today && data.tasks.any { it.topic }) s.topicsNoneThisDay else s.topicsEmpty) else s.emptyAll) }
                 }
                 if (topics.isNotEmpty() || (owe == null && tab == "topics" && !topicsOnly)) {
                     // Owner, 14 окт: no «+ тема» here — a new topic is written in the field below («Новая тема…»).
@@ -508,7 +427,7 @@ fun TaskList(
                     }
                 }
                 // Owner, 16 окт: archived topics at the end of «Темы», folded; a tap opens one («Вернуть», «Удалить» are there).
-                if (topicsOnly) archiveFold("arch", data.tasks.filter { it.topic && it.done && !it.thought && sOk(it) }.sortedByDescending { it.doneAt }.map { t ->
+                if (topicsOnly && topicDay == today) archiveFold("arch", data.tasks.filter { it.topic && it.done && !it.thought && sOk(it) }.sortedByDescending { it.doneAt }.map { t ->
                     ArchItem(t.id, t.title, t.doneAt, open = { onOpen(t.id) }, restore = { vm.reviveTopic(t.id) }, purge = { vm.removeMatter(t.id) })
                 }, archOpen) { archOpen = !archOpen }
             }
@@ -806,7 +725,7 @@ fun TopicPickDialog(data: AppData, ref: String, onDismiss: () -> Unit, onCreate:
                         TopicGlyph(c.link, 16.dp)
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(t.title, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            WordText(t.title, style = Type.body.copy(color = c.ink, fontSize = 15.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
                             if (t.id == likely?.id) Text(s.likelyWord, style = Type.small.copy(color = c.link, fontSize = 12.5.sp))
                         }
                     }

@@ -24,6 +24,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.blur
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.border
+import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.contentDescription
@@ -37,26 +42,66 @@ import java.time.LocalDate
 // ---------------- the cards as pages of the planner (owner, 14 окт; design/v9/v9-card-deal|note|topic.png) ----------------
 
 /**
- * A card — a matter, a note, a topic — opened as a page of the same book: it lies over the diary's page, the index stays on
- * the right; back on the margin at the top, [trailing] (a topic's ⋯) on the right. No sheet rising from below.
+ * Owner, 16 окт («core»): a card — a matter, a topic's matter, a note, an idea — opens over the page as a window: the page dims
+ * under it, the card is as tall as what is in it, scrolls when it is more than the screen; a tap beside it or «назад» closes it.
  */
+val LocalPopupCard = androidx.compose.runtime.compositionLocalOf { true }
+
+/**
+ * What lies under an open window goes out of focus (owner, 16 окт: «как за толстым стеклом, чтобы не отвлекал»): blurred and
+ * washed with the paper, so its words can't be read. Where blur is not there (before Android 12), the wash is thicker.
+ */
+@Composable
+fun Modifier.frosted(on: Boolean): Modifier {
+    val r by androidx.compose.animation.core.animateDpAsState(if (on) 24.dp else 0.dp, androidx.compose.animation.core.tween(240), label = "frost")
+    return if (r > 0.dp) this.blur(r) else this
+}
+
+/** The glass's wash over the blurred page. */
+val glassWash: androidx.compose.ui.graphics.Color @Composable get() =
+    M.c.bg.copy(alpha = if (android.os.Build.VERSION.SDK_INT >= 31) (if (M.c.dark) 0.5f else 0.58f) else 0.88f)
+
+/** The card's parts fill the page only when it is a page; in the window they take what they need. */
+val cardFill: Boolean @Composable get() = !LocalPopupCard.current
+
 @Composable
 fun CardPage(onClose: () -> Unit, trailing: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     val c = M.c
     val s = M.s
     BackHandler(onBack = onClose)
-    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding()) {
-        // Under the printed frame's top line («MARGIN»), as a page of the diary starts.
-        Row(Modifier.fillMaxWidth().screenRule().padding(top = 18.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(MarginW), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.backWord, onClick = onClose), contentAlignment = Alignment.Center) {
-                    BackGlyph(c.ink.copy(alpha = 0.8f), 21.dp)
+    if (!LocalPopupCard.current) {
+        Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding()) {
+            // Under the printed frame's top line («MARGIN»), as a page of the diary starts.
+            Row(Modifier.fillMaxWidth().screenRule().padding(top = 18.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(MarginW), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.backWord, onClick = onClose), contentAlignment = Alignment.Center) {
+                        BackGlyph(c.ink.copy(alpha = 0.8f), 21.dp)
+                    }
                 }
+                Spacer(Modifier.weight(1f))
+                trailing?.invoke()
             }
-            Spacer(Modifier.weight(1f))
-            trailing?.invoke()
+            content()
         }
-        content()
+        return
+    }
+    val shape = RoundedCornerShape(22.dp)
+    val quiet = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    Box(Modifier.fillMaxSize().background(glassWash).clickable(quiet, null, onClick = onClose)
+        .statusBarsPadding().navigationBarsPadding().imePadding().padding(horizontal = 10.dp, vertical = 20.dp), contentAlignment = Alignment.Center) {
+        Column(Modifier.fillMaxWidth().shadow(20.dp, shape).clip(shape).background(c.bg).border(1.dp, c.hairline, shape)
+            .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) {}) {
+            Row(Modifier.fillMaxWidth().screenRule().padding(top = 6.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(MarginW), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.close, onClick = onClose), contentAlignment = Alignment.Center) {
+                        CloseGlyph(c.ink.copy(alpha = 0.7f), 16.dp)
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                trailing?.invoke()
+            }
+            content()
+        }
     }
 }
 

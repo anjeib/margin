@@ -346,7 +346,7 @@ fun RowTitle(text: String, faded: Boolean = false, maxLines: Int = 3, marked: Bo
     var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
     val marker = pencilInk
     val showMarker = marked && !planner
-    Text(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis,
+    WordText(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis,
         onTextLayout = { layout = it }, modifier = Modifier.foundMarks(text) { layout }.then(if (showMarker) Modifier.drawBehind {
             layout?.let { l -> for (i in 0 until l.lineCount) markerBand(l.getLineLeft(i), l.getLineRight(i), l.getLineTop(i), l.getLineBottom(i), marker, text.hashCode() + i) }
         } else Modifier))
@@ -356,7 +356,7 @@ fun RowTitle(text: String, faded: Boolean = false, maxLines: Int = 3, marked: Bo
 fun RowTitle(text: AnnotatedString, faded: Boolean = false, maxLines: Int = 3) {
     val c = M.c
     var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
-    Text(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis,
+    WordText(text, style = Type.body.copy(fontFamily = rowFamily, color = if (faded) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = maxLines, overflow = TextOverflow.Ellipsis,
         onTextLayout = { layout = it }, modifier = Modifier.foundMarks(text.text) { layout })
 }
 

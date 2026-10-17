@@ -891,6 +891,7 @@ interface Strings {
     val backToToday: String
     val contentsTitle: String
     val diaryTitle: String
+    val notesNoneThisDay: String
     val topicsEmpty: String
     val topicsHint: String
     val diarySub: String
@@ -899,6 +900,9 @@ interface Strings {
     val diaryEmptyHint: String
     val topicsPage: String
     val topicsSub: String
+    val todayWordLink: String
+    val topicsNoneThisDay: String
+    val contentsSub: String
     val fieldLabel: String
     val lookPlanner: String
     val lookWord: String
@@ -1868,6 +1872,7 @@ object Ru : Strings {
     override val backToToday = "к сегодняшнему дню ›"
     override val contentsTitle = "Содержание"
     override val diaryTitle = "Заметки"
+    override val notesNoneThisDay = "В этот день заметок нет"
     override val topicsEmpty = "Тем пока нет. Начните новую тему со списком дел."
     override val topicsHint = "Новая тема…"
     override val diarySub = "мысли и заметки из дел и тем"
@@ -1875,7 +1880,10 @@ object Ru : Strings {
     override val diaryEmpty = "Дневник пока пуст"
     override val diaryEmptyHint = "Пишите сюда что угодно — мысль, итоги встречи, впечатление. Заметки, написанные в деле или теме, тоже встают сюда со ссылкой на них. Через @ можно отметить человека, компанию, место, дело или тему."
     override val topicsPage = "Темы"
-    override val topicsSub = "всё, что растёт: дела, заметки и файлы вокруг одного"
+    override val topicsSub = "когда дело становится большим"
+    override val todayWordLink = "сегодня ›"
+    override val topicsNoneThisDay = "В этот день тем нет"
+    override val contentsSub = "входящие, материалы, контакты, архив"
     override val fieldLabel = "запись"
     override val lookPlanner = "Вид: планер"
     override val lookWord = "Вид"
@@ -2792,6 +2800,7 @@ object En : Strings {
     override val backToToday = "back to today ›"
     override val contentsTitle = "Contents"
     override val diaryTitle = "Notes"
+    override val notesNoneThisDay = "No notes on this day"
     override val topicsEmpty = "No topics yet. Start a new topic with a list of to-dos."
     override val topicsHint = "A new topic…"
     override val diarySub = "a diary: thoughts, outcomes, notes from the feed"
@@ -2799,7 +2808,10 @@ object En : Strings {
     override val diaryEmpty = "The diary is empty"
     override val diaryEmptyHint = "Write anything here. Notes from the feed come here too."
     override val topicsPage = "Topics"
-    override val topicsSub = "what grows: to-dos, records and files around one thing"
+    override val topicsSub = "when a matter grows big"
+    override val todayWordLink = "today ›"
+    override val topicsNoneThisDay = "No topics on this day"
+    override val contentsSub = "inbox, materials, contacts, archive"
     override val fieldLabel = "write"
     override val lookPlanner = "Look: planner"
     override val lookWord = "Look"

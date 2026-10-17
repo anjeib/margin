@@ -395,9 +395,9 @@ fun PageHead(title: String, subtitle: String? = null, modifier: Modifier = Modif
     }
 }
 
-/** The rule behind a whole screen, the same on every one. */
+/** The rule behind a whole screen, the same on every one; inside the diary's frame the frame draws it, once, standing still. */
 @Composable
-fun Modifier.screenRule(): Modifier = marginRule(marginInk, over = !marginUnder)
+fun Modifier.screenRule(): Modifier = if (LocalFramed.current) this else marginRule(marginInk, over = !marginUnder)
 
 /** «Полоса набора» (Fable, 15 окт): one ink for every rule on the page — the same as the horizontal ones; sea elsewhere. */
 val marginInk: Color @Composable get() = if (planner) M.c.ink.copy(alpha = 0.78f) else M.c.sea

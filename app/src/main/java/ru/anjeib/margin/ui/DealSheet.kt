@@ -104,10 +104,10 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
             Text("✓ " + s.savedTick, style = Type.small.copy(color = c.ok, fontSize = 12.5.sp))
         }
     }) {
-        Column(Modifier.weight(1f).fillMaxWidth()) {
+        Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth()) {
             // At least half the screen with the field right under it — the same as a simple matter's card.
             val pageLines = rememberPageLines()
-            Column(Modifier.weight(1f).screenRule()) {
+            Column(Modifier.weight(1f, fill = cardFill).screenRule()) {
                 // The same card as a simple matter (owner's call, 10 окт), with its topic above the title.
                 val row = topic.questionRow(q)
                 val due = q.due?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
@@ -173,7 +173,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 })
                 if (q.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(q.slots, onToggle = { vm.toggleSlot(ref, it) }, onRemove = { vm.removeSlot(ref, it) }) }
                 // Owner, 16 окт: the head (day, title, marks, tools) stays put; only what is under it scrolls.
-                Column(Modifier.weight(1f).fillMaxWidth().ruledPage(pageLines).verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
+                Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().ruledPage(pageLines).verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
                 CardRule()
                 MatterTitle(title, { title = it }, q.done, q.time, if (q.slots.isEmpty() && due != null) ({ dialog = "time" }) else null, late,
                     mark = if ((q.from != null || q.promisedTo != null) && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = q.from != null, size = 28.dp) } }) else null)

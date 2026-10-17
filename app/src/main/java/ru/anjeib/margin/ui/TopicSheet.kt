@@ -340,7 +340,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     Column(
         Modifier.fillMaxSize().graphicsLayer {
             scaleY = 1f - 0.92f * fold.value; alpha = 1f - fold.value; transformOrigin = TransformOrigin(0.5f, 1f)
-        }.background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding().marginRule(marginInk, rule.value, over = !marginUnder),
+        }.frosted(dealQ != null || noteK != null).background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding().marginRule(marginInk, rule.value, over = !marginUnder),
     ) {
         // As every card (owner, 14 окт; design/v9/v9-card-topic.png): under the frame's «MARGIN», back on the margin.
         Row(Modifier.fillMaxWidth().padding(top = 18.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -380,7 +380,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         })) {
             Column(Modifier.animateContentSize(tween(220))) {
                 // The name is written right here (owner, 13 окт): a tap puts the cursor in it, «Готово» or leaving keeps it.
-                if (folded) Text(task.title, style = Type.cardTitle.copy(color = c.ink, fontSize = 19.sp, lineHeight = 24.sp),
+                if (folded) WordText(task.title, style = Type.cardTitle.copy(color = c.ink, fontSize = 19.sp, lineHeight = 24.sp),
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 8.dp))
                 else Row(verticalAlignment = Alignment.Top) {
                   // «#» — the sign a topic goes by everywhere (its tab, its mentions); a note has none.
@@ -449,8 +449,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                         select = { k -> selected = if (k.isBlank() || selected == k) null else k },
                         addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
                         editDeal = { editQ = it }, dateDeal = { dateQ = it }, editNote = { editNote = it }, view = { viewing = it }, timeDeal = { timeQ = it },
-                        // Owner, 16 окт: no cards here — a tap unfolds a matter in its line, selects a note; changes are in the hold.
-                        openDeal = { vm.toggleExpanded("q:${task.id}:${it.id}") }, openNote = { vm.toggleExpanded(entryKey(task.id, it.id)) },
+                        // Owner, 16 окт («core»): a tap opens the matter's or the note's card as a window; changes are in the hold too.
+                        openDeal = { dealQ = it.id }, openNote = { noteK = entryKey(task.id, it.id) },
                     ), onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
                 }
             }
@@ -828,7 +828,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
                     Spacer(Modifier.width(6.dp))
                 }
                 Column(Modifier.weight(1f).padding(top = 2.dp)) {
-                    Text(q.title, style = Type.body.copy(fontFamily = rowFamily, fontSize = if (plannerLook) (if (depth == 0) 17.sp else 15.5.sp) else if (depth == 0) 16.sp else 15.sp, lineHeight = if (plannerLook) 24.sp else 22.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    WordText(q.title, style = Type.body.copy(fontFamily = rowFamily, fontSize = if (plannerLook) (if (depth == 0) 17.sp else 15.5.sp) else if (depth == 0) 16.sp else 15.sp, lineHeight = if (plannerLook) 24.sp else 22.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.drawWithContent {
                             drawContent()
                             // Through the middle of the first line, whatever its size.

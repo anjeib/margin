@@ -63,10 +63,10 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
     var more by remember(task.id) { mutableStateOf(false) }
     // A page of the planner, as every card (owner, 14 окт; design/v9/v9-card-note.png).
     CardPage(onClose = { commitTitle(); onClose() }) {
-        Column(Modifier.weight(1f).fillMaxWidth()) {
+        Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth()) {
             val scroll = rememberScrollState()
             val pageLines = rememberPageLines()
-            Column(Modifier.weight(1f).fillMaxWidth().screenRule()) {
+            Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().screenRule()) {
                 // When it was begun — its first record — on the margin as a day of the diary, the weekday under it.
                 val bornAt = task.entries.minOfOrNull { it.at } ?: task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
                 val bornDay = runCatching { java.time.LocalDate.parse(bornAt.take(10)) }.getOrNull()
@@ -90,7 +90,7 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
                         ), slots = 4)
                 })
                 // Owner, 16 окт: the head (day, title, marks, tools) stays put; only what is under it scrolls.
-                Column(Modifier.weight(1f).fillMaxWidth().ruledPage(pageLines).verticalScroll(scroll).padding(bottom = 24.dp)) {
+                Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().ruledPage(pageLines).verticalScroll(scroll).padding(bottom = 24.dp)) {
                 // Everything of the note is here (owner, 14 окт: no second, «whole» view of it) — each file in its own record.
                 WrittenLane(task.entries.filter { it.text.isNotBlank() || it.attachments.isNotEmpty() }.map { LaneItem(it.id, it.at, it.text, it.attachments) }, s.ideaHint, Modifier.padding(top = 0.dp), after = null, label = s.records,
                     canAdd = false, vm = vm,

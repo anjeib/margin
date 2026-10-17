@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.sp
 import ru.anjeib.margin.data.dayMonthShort
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloat
@@ -52,6 +54,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.drawText
 import ru.anjeib.margin.data.dowShort
+import ru.anjeib.margin.data.dowFull
+import ru.anjeib.margin.data.dayMonth
 
 /**
  * The screen as a page of a paper diary (owner, 14 окт, variants to choose from — Settings → developer → «Страница»):
@@ -135,55 +139,78 @@ val rowLine: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 
 val subInk: Color @Composable get() = M.c.graphite
 val subSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 13.sp else 13.5.sp
 
-/** The calendar and the search at the top right of a diary page (owner, 14 окт); null off the planner. */
+/**
+ * The diary's head (owner, 16 окт, «core»): the four sections by name on the left — Сегодня · Заметки · Темы · Содержание, a tap
+ * or a swipe across them turns to the next one — and on the right the calendar and the search, on every section. Null off the planner.
+ */
 class PageTools(val searchOn: Boolean, val monthOpen: Boolean, val landed: java.time.LocalDate?, val menuOn: Boolean,
-                val search: () -> Unit, val calendar: () -> Unit, val menu: () -> Unit)
+                val search: () -> Unit, val calendar: () -> Unit, val menu: () -> Unit,
+                /** The section in front: 0 Сегодня, 1 Заметки, 2 Темы, 3 Содержание. */
+                val section: Int = 0, val onSection: (Int) -> Unit = {})
 val LocalPageTools = compositionLocalOf<PageTools?> { null }
 
-/** The page's tools as drawn marks — the search and ≡ (the contents); [calendar] — on a day's page, where the month unfolds. */
+/** The calendar and the search as drawn marks. */
 @Composable
-fun PageToolIcons(calendar: Boolean = false) {
+fun PageToolIcons(@Suppress("UNUSED_PARAMETER") calendar: Boolean = false) {
     val t = LocalPageTools.current ?: return
     val c = M.c
     val s = M.s
     @Composable fun tool(label: String, on: Boolean, onClick: () -> Unit, glyph: @Composable (Color) -> Unit) {
-        Box(Modifier.size(42.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (on) c.linkSoft else Color.Transparent)
+        Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (on) c.linkSoft else Color.Transparent)
             .clickable(onClickLabel = label, onClick = onClick).semanticsLabel(label), contentAlignment = androidx.compose.ui.Alignment.Center) {
             glyph(if (on) c.link else c.ink.copy(alpha = 0.7f))
         }
     }
     androidx.compose.foundation.layout.Row {
-        if (calendar) tool(s.calendarTitle, t.monthOpen, t.calendar) { ink ->
+        tool(s.calendarTitle, t.monthOpen, t.calendar) { ink ->
             // Something just went to another day: its number stands on the calendar, a tap opens the month there.
             if (t.landed != null && !t.monthOpen) androidx.compose.material3.Text(t.landed.dayOfMonth.toString(),
                 style = Type.small.copy(color = c.accentText, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
             else CalendarGlyph(ink, 21.dp)
         }
         tool(s.search, t.searchOn, t.search) { ink -> SearchGlyph(ink, 21.dp) }
-        // ≡ — the contents, where every section is (owner, 14 окт: instead of the tabs at the foot)
-        tool(s.contentsTitle, t.menuOn, t.menu) { ink -> MenuGlyph(ink) }
     }
 }
 
+/** The sections as they lie in the carousel, left to right (owner, 16 окт): Содержание · Сегодня · Заметки · Темы. */
+val SectionOrder = listOf(3, 0, 1, 2)
+
 /**
- * The page's tools in a line of their own above its name (owner, 15 окт: «Понедельник» ran into them) — the name gets the
- * whole width.
+ * A swipe across a page's head turns to the next section (owner, 16 окт: no carousel — the pages simply turn), in the order
+ * [SectionOrder]: Содержание · Сегодня · Заметки · Темы. A swipe across the page under it turns the day (App).
  */
 @Composable
-fun PageToolsRow(calendar: Boolean = false) {
+fun Modifier.sectionSwipe(): Modifier {
+    val t = LocalPageTools.current ?: return this
+    val go by androidx.compose.runtime.rememberUpdatedState(t.onSection)
+    val now by androidx.compose.runtime.rememberUpdatedState(t.section)
+    return this.pointerInput(Unit) {
+        var dx = 0f
+        detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = {
+            val step = when { dx < -56.dp.toPx() -> 1; dx > 56.dp.toPx() -> -1; else -> 0 }
+            val to = SectionOrder.indexOf(now) + step
+            if (step != 0 && to in SectionOrder.indices) go(SectionOrder[to])
+        }) { ch, d -> dx += d; ch.consume() }
+    }
+}
+
+/** The calendar and the search, small, on the right above the page's name. */
+@Composable
+fun PageToolsRow(@Suppress("UNUSED_PARAMETER") calendar: Boolean = false) {
     if (LocalPageTools.current == null) return
-    androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(end = 6.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
-        PageToolIcons(calendar)
+    androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(end = 4.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
+        PageToolIcons()
     }
 }
 
+
 /**
- * The tools row as a list's sticky header: on the page's paper, with the margin's rule running through it, so nothing shows under it.
- * Owner, 16 окт: the page's name stays pinned too — once its big head has gone under the row, the row shows the name small on
- * the left ([title], the day on the margin for a day's page) with the double rule under it; scrolled back up, it steps aside.
+ * The head's line as a list's sticky header: on the page's paper, with the margin's rule running through it, so nothing shows under it.
+ * Owner, 16 окт: the page's name stays pinned too — once its big head has gone under the line, the page's name stands small under
+ * it ([title], the day on the margin for a day's page) with the double rule; scrolled back up, it steps aside.
  */
 @Composable
-fun PinnedTools(calendar: Boolean = false, list: androidx.compose.foundation.lazy.LazyListState? = null, title: String? = null,
+fun PinnedTools(@Suppress("UNUSED_PARAMETER") calendar: Boolean = false, list: androidx.compose.foundation.lazy.LazyListState? = null, title: String? = null,
                 day: java.time.LocalDate? = null, headKey: Any = "head") {
     val c = M.c
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -193,19 +220,18 @@ fun PinnedTools(calendar: Boolean = false, list: androidx.compose.foundation.laz
         if (head == null) l.firstVisibleItemIndex > 0 && l.layoutInfo.visibleItemsInfo.isNotEmpty()
         else head.offset + head.size < with(density) { 96.dp.roundToPx() }
     } }
-    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().background(c.bg).screenRule()) {
+    // The margin's rule starts under the sections' line: it would run through «Заметки».
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().background(c.bg)) {
         androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth()) {
-            androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.CenterStart) {
-                PageToolsRow(calendar)
-                androidx.compose.animation.AnimatedVisibility(compact && title != null, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+            PageToolsRow()
+            androidx.compose.animation.AnimatedVisibility(compact && title != null, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+                androidx.compose.foundation.layout.Column {
                     Margined(margin = day?.let { d -> { MarginNote(d.dayMonthShort()) } }) {
                         androidx.compose.material3.Text(title.orEmpty(), style = Type.pageTitle.copy(color = c.ink, fontSize = 27.sp, lineHeight = 32.sp), maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(end = if (calendar) 150.dp else 104.dp))
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
+                    DoubleRule(Modifier.padding(top = 4.dp, bottom = 2.dp))
                 }
-            }
-            androidx.compose.animation.AnimatedVisibility(compact && title != null, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
-                DoubleRule(Modifier.padding(top = 4.dp, bottom = 2.dp))
             }
         }
     }
@@ -326,7 +352,7 @@ fun Modifier.paperGrain(): Modifier {
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun PlannerPager(page: Int, onPage: (Int) -> Unit, count: Int = 3, content: @Composable (Int) -> Unit) {
+fun PlannerPager(page: Int, onPage: (Int) -> Unit, count: Int = 3, swipe: Boolean = true, content: @Composable (Int) -> Unit) {
     val c = M.c
     val state = androidx.compose.foundation.pager.rememberPagerState(initialPage = page) { count }
     val motion = motionOn()
@@ -340,7 +366,7 @@ fun PlannerPager(page: Int, onPage: (Int) -> Unit, count: Int = 3, content: @Com
     androidx.compose.runtime.LaunchedEffect(state) {
         androidx.compose.runtime.snapshotFlow { state.settledPage }.collect { if (it != curPage) tell(it) }
     }
-    androidx.compose.foundation.pager.HorizontalPager(state, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { p ->
+    androidx.compose.foundation.pager.HorizontalPager(state, Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = swipe) { p ->
         // Owner, 14 окт: the 3D leaf looked clumsy — the pages simply slide side by side.
         Box(Modifier.fillMaxSize().background(c.bg)) { content(p) }
     }
@@ -426,6 +452,40 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.pencilLine(x0: Float, x1: F
 }
 
 /**
+ * Text that, when it doesn't fit, ends on a whole word and «…» (owner, 16 окт: not «удержите стро…» in the middle of a word).
+ * The cut is found from the layout: back from the last visible letter to a space, then the stops before it are dropped.
+ */
+@Composable
+fun WordText(text: androidx.compose.ui.text.AnnotatedString, modifier: Modifier = Modifier, style: androidx.compose.ui.text.TextStyle = androidx.compose.ui.text.TextStyle.Default,
+             maxLines: Int = Int.MAX_VALUE, @Suppress("UNUSED_PARAMETER") overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+             inlineContent: Map<String, androidx.compose.foundation.text.InlineTextContent> = emptyMap(),
+             onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {}) {
+    var cut by remember(text, maxLines) { mutableStateOf<Int?>(null) }
+    val shown = cut?.let { n -> androidx.compose.ui.text.buildAnnotatedString { append(text.subSequence(0, n)); append("…") } } ?: text
+    androidx.compose.material3.Text(shown, modifier, style = style, maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+        inlineContent = inlineContent, onTextLayout = { l ->
+            if (l.hasVisualOverflow) {
+                val limit = cut ?: text.length
+                val end = l.getLineEnd(l.lineCount - 1, visibleEnd = true).coerceIn(1, limit)
+                // The line already broke between words: the cut goes there, else back to the last space.
+                var i = if (end < text.length && (text[end].isWhitespace() || text[end - 1].isWhitespace())) end else end - 1
+                if (i == end - 1) while (i > 0 && !text[i].isWhitespace()) i--
+                // One word longer than the line: it is cut after all.
+                if (i <= 0) i = (end - 1).coerceAtLeast(1)
+                while (i > 1 && (text[i - 1].isWhitespace() || text[i - 1] in ",;:—–-·(«\"")) i--
+                if (i < limit) cut = i
+            }
+            onTextLayout(l)
+        })
+}
+
+@Composable
+fun WordText(text: String, modifier: Modifier = Modifier, style: androidx.compose.ui.text.TextStyle = androidx.compose.ui.text.TextStyle.Default,
+             maxLines: Int = Int.MAX_VALUE, overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+             onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {}) =
+    WordText(androidx.compose.ui.text.AnnotatedString(text), modifier, style, maxLines, overflow, onTextLayout = onTextLayout)
+
+/**
  * Text whose [PENCIL]-annotated words get a pencil line under them (each line of a wrapped run its own stroke); [whole] —
  * the whole text is underlined (a late day on the margin).
  */
@@ -440,7 +500,9 @@ fun PencilText(text: androidx.compose.ui.text.AnnotatedString, style: androidx.c
         append(text)
         text.getStringAnnotations(PENCIL, 0, text.length).forEach { addStyle(androidx.compose.ui.text.SpanStyle(color = late), it.start, it.end) }
     }
-    androidx.compose.material3.Text(shown, style = if (whole) style.copy(color = late) else style, maxLines = maxLines, overflow = overflow, inlineContent = inlineContent, modifier = modifier)
+    if (overflow == androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        WordText(shown, modifier, style = if (whole) style.copy(color = late) else style, maxLines = maxLines, inlineContent = inlineContent)
+    else androidx.compose.material3.Text(shown, style = if (whole) style.copy(color = late) else style, maxLines = maxLines, overflow = overflow, inlineContent = inlineContent, modifier = modifier)
 }
 
 /**
@@ -451,7 +513,8 @@ fun PencilText(text: androidx.compose.ui.text.AnnotatedString, style: androidx.c
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 fun androidx.compose.foundation.lazy.LazyListScope.pinnedHead(key: String, pinned: Boolean, calendar: Boolean = false, content: @Composable () -> Unit) {
     if (pinned) stickyHeader(key) {
-        androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().background(M.c.bg).screenRule()) { PinnedTools(calendar); content() }
+        androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().background(M.c.bg).sectionSwipe()) { PinnedTools(calendar)
+            androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().screenRule()) { content() } }
     } else item(key) { content() }
 }
 

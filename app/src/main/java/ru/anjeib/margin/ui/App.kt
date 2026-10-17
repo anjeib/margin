@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.dowFull
+
 import androidx.compose.ui.input.pointer.pointerInput
 
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -201,7 +203,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     fun closeFind() { keepSearch(ctx, find.query); find.open = false; find.query = ""; find.cur = 0 }
     BackHandler(find.open && !searching) { closeFind() }
     // Turned to another day with the tabs: back is today's page.
-    BackHandler(!drawer.isOpen && vm.pageDay.collectAsState().value != null && screen == TASKS && view == Views.TODAY) { vm.pageDay.value = null }
+    BackHandler(!drawer.isOpen && vm.pageDay.collectAsState().value != null && !contents && (screen == TOPICS || screen == TASKS && (view == Views.TODAY || view == Views.NOTES))) { vm.pageDay.value = null }
     val plannerLook = planner
     BackHandler(!drawer.isOpen && openNote == null && openPerson == null && !searching && (screen != TASKS || view != Views.TODAY)) {
         // A section goes back to the contents it was opened from (owner, 14 окт); «Темы» and «Заметки» — to «Сегодня».
@@ -226,15 +228,24 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             if (find.open) closeFind() else find.open = true
         },
         calendar = {
-            if (toolsMonth) { vm.monthOpen.value = false; vm.pageDay.value = null }
+            // Owner, 16 окт: the calendar on every section — on «Темы» and «Содержание» it turns to the day's page and opens the month there.
+            val dayPage = !contents && (screen == TOPICS || screen == TASKS && (view == Views.TODAY || view == Views.NOTES))
+            if (!dayPage) { contents = false; screen = TASKS; view = Views.TODAY; vm.monthOpen.value = true }
+            else if (toolsMonth) { vm.monthOpen.value = false; vm.pageDay.value = null }
             else { toolsLanded?.let { d -> vm.pageDay.value = d.takeIf { it != java.time.LocalDate.now() } }; vm.monthOpen.value = true }
+        },
+        section = when { contents -> 3; screen == TOPICS -> 2; screen == TASKS && view == Views.NOTES -> 1; else -> 0 },
+        onSection = { p ->
+            openTask = null; fullIdea = null; openPerson = null; openNote = null; searching = false
+            when (p) { 3 -> contents = true; 0 -> { contents = false; screen = TASKS; view = Views.TODAY }; 1 -> { contents = false; screen = TASKS; view = Views.NOTES }
+                else -> { contents = false; screen = TOPICS } }
         })
     // Prototype «inline»: what is unfolded in its row; «назад» folds it.
     val expandedKey by vm.expanded.collectAsState()
     BackHandler(expandedKey != null) { vm.expanded.value = null }
     androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.archiveMatter(it) }), LocalFind provides find,
         LocalPeopleLinks provides tagLinks, LocalPageTools provides pageTools.takeIf { planner },
-        LocalInline provides InlineState(expandedKey) { vm.toggleExpanded(it) }, LocalVm provides vm) {
+        LocalVm provides vm) {
     ModalNavigationDrawer(
         drawerState = drawer,
         // On the planner page the menu is a page of its own, not a drawer pulled from the side.
@@ -265,8 +276,11 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         // A card (a matter, a note, a topic) is a page of the book (owner, 14 окт): the frame stays over it.
         val overlay = searching || openPerson != null || openNote != null
         // Owner, 14 окт: no tabs at the foot — the sections are in the contents, opened by ≡ at the top by the search.
+        // A card's window open: the page under it out of focus.
+        val cardOver = openDeal != null || openPiece != null ||
+            openTask?.let { id -> data.tasks.find { it.id == id }?.let { !it.topic || (it.thought && fullIdea != id) } } == true
         PageSheet(frame = !overlay) {
-            Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
+            Column(Modifier.fillMaxSize().frosted(cardOver).statusBarsPadding().imePadding()) {
                 fun bare(t: ru.anjeib.margin.data.Task) = t.thought && t.subtasks.isEmpty()
                 val shown = remember(data, feedFilter) {
                     when (feedFilter) {
@@ -275,6 +289,13 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         "ideas" -> data.copy(tasks = data.tasks.filter { bare(it) })
                         else -> data
                     }
+                }
+                // «личное / работа» (owner, 16 окт): one choice for the whole diary — «Сегодня», «Заметки», «Темы».
+                val sphereNow by vm.diarySphere.collectAsState()
+                val onPlanner = planner
+                val sphereShown = remember(shown, sphereNow, onPlanner) {
+                    val sp = sphereNow
+                    if (sp == null || !onPlanner) shown else shown.copy(tasks = shown.tasks.filter { if (sp == "work") it.sphere == "work" else it.sphere != "work" })
                 }
                 // The printed page's head: just the room under the frame's top rule.
                 if (plannerPage) {
@@ -302,7 +323,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     @Composable fun otherScreen(sc: String) {
                         when (sc) {
                             PEOPLE -> PeopleList(data, vm, onOpen = { openPerson = it }, contentPadding = pad)
-                            TOPICS -> TaskList(Views.ALL, data, settings, working, vm, emptyList(), onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
+                            TOPICS -> TaskList(Views.ALL, sphereShown, settings, working, vm, events, onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
                                 contentPadding = pad, topicsOnly = true, findPage = "topics")
                             CALENDAR -> CalendarScreen(data, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
                             ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad, onOpenTask = { openId(it) })
@@ -327,33 +348,63 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                     vm.updateSettings { it.copy(devMode = on) }
                                     if (on) android.widget.Toast.makeText(ctx, s.devUnlocked, android.widget.Toast.LENGTH_SHORT).show()
                                 })
-                            TASKS -> if (k.view == Views.NOTES) DiaryPage(data, vm, onOpen = { openId(it) }, onPerson = { n -> data.persons.find { it.matches(n) }?.let { openPerson = it.id } }, contentPadding = pad,
+                            TASKS -> if (k.view == Views.NOTES) DiaryPage(data, vm, day = k.day ?: LocalDate.now(), events = events, onOpen = { openId(it) }, onPerson = { n -> data.persons.find { it.matches(n) }?.let { openPerson = it.id } }, contentPadding = pad,
                                 onOpenNote = { openPiece = it })
                                 else if (k.view == Views.WEEK) CalendarScreen(shown, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
                                 else TaskList(
-                                    k.view, shown, settings, working, vm, if (feedFilter == "all" || feedFilter == "deals") events else emptyList(),
+                                    k.view, sphereShown, settings, working, vm, if (feedFilter == "all" || feedFilter == "deals") events else emptyList(),
                                     onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
                                     onOpenNotes = { screen = NOTES }, onOpenInbox = { screen = INBOX },
                                     onTry = { prefill = it; focusKey = System.currentTimeMillis() }, contentPadding = pad, pageDay = k.day,
                                     findPage = if (k.view == Views.TODAY) "today" else null,
                                 )
+                            // «Темы» turn by days too (owner, 17 окт): the topics that stand on that day.
+                            TOPICS -> TaskList(Views.ALL, sphereShown, settings, working, vm, events, onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
+                                contentPadding = pad, topicsOnly = true, findPage = "topics", pageDay = k.day)
                             else -> otherScreen(k.screen)
                         }
                     }
                     // The diary's three pages lie side by side — Содержание · Сегодня · Обзор — and turn under the finger (owner, 14 окт);
                     // a day of «Сегодня» turns within its own page; the other sections are pages turned to from the contents.
-                    if (planner && (screen == TASKS || screen == TOPICS)) PlannerPager(
-                        // Сегодня · Заметки · Темы · Содержание (owner, 14 окт).
-                        page = when { contents -> 3; screen == TOPICS -> 2; view == Views.NOTES -> 1; else -> 0 },
-                        onPage = { p -> when (p) { 3 -> contents = true; 0 -> { contents = false; screen = TASKS; view = Views.TODAY }; 1 -> { contents = false; screen = TASKS; view = Views.NOTES }
-                            else -> { contents = false; screen = TOPICS } } },
-                        count = 4,
-                    ) { p ->
-                        when (p) {
-                            3 -> page(PageKey(MENU, view, null))
-                            0 -> PageTurn(pageDay, order = { (it ?: LocalDate.now()).toEpochDay() }) { d -> page(PageKey(TASKS, Views.TODAY, d)) }
-                            1 -> page(PageKey(TASKS, Views.NOTES, null))
-                            else -> page(PageKey(TOPICS, view, null))
+                    // Owner, 16 окт: a swipe across a day's page (Сегодня, Заметки) turns the day; the sections turn from the head.
+                    @Composable fun daySwipe(content: @Composable () -> Unit) = Box(Modifier.fillMaxSize().pointerInput(Unit) {
+                        var dx = 0f
+                        detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = {
+                            val step = when { dx < -72.dp.toPx() -> 1L; dx > 72.dp.toPx() -> -1L; else -> 0L }
+                            if (step != 0L) { val now = LocalDate.now(); val d = (vm.pageDay.value ?: now).plusDays(step); vm.pageDay.value = d.takeIf { it != now } }
+                        }) { ch, d -> dx += d; ch.consume() }
+                    }) { content() }
+                    // The diary's four sections in one frame (owner, 16 окт): the head, the date, the rules and the field stay put;
+                    // only the name, its line and the rows turn — sections by a swipe across the head, days across the page.
+                    if (planner && (screen == TASKS || screen == TOPICS)) {
+                        val todayF = LocalDate.now()
+                        val fp = FramePage(when { contents -> 3; screen == TOPICS -> 2; view == Views.NOTES -> 1; else -> 0 }, pageDay ?: todayF)
+                        Column(Modifier.fillMaxSize().screenRule()) {
+                            FrameHead(fp, vm) { p ->
+                                when (p.section) {
+                                    0 -> {
+                                        val plan = dayPlan(sphereShown, p.day, todayF, events)
+                                        val away by vm.away.collectAsState()
+                                        // «2 просрочены» lights the late ones up (ChatGPT's review, owner, 14 окт).
+                                        val late = plan.deals.filter { it.dueDate?.isBefore(todayF) == true }.map { it.id }
+                                        Voice(daySummary(plan, todayF, away.takeIf { p.day == todayF }), onClick = if (late.isEmpty()) null else ({ vm.lightUp(late) }))
+                                    }
+                                    1 -> Voice(s.diarySub)
+                                    2 -> Voice(s.topicsSub)
+                                    else -> Voice(s.contentsSub)
+                                }
+                            }
+                            Box(Modifier.weight(1f).fillMaxWidth()) {
+                                FramedPages(fp) { p ->
+                                    val d = p.day.takeIf { it != todayF }
+                                    when (p.section) {
+                                        3 -> page(PageKey(MENU, view, null))
+                                        0 -> daySwipe { page(PageKey(TASKS, Views.TODAY, d)) }
+                                        1 -> daySwipe { page(PageKey(TASKS, Views.NOTES, d)) }
+                                        else -> daySwipe { page(PageKey(TOPICS, view, d)) }
+                                    }
+                                }
+                            }
                         }
                     }
                     // A section (settings, inbox, materials, contacts, archive, help) goes back to the contents with a swipe to the right
@@ -378,9 +429,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         }
                     }
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(20.dp).background(Brush.verticalGradient(listOf(Color.Transparent, c.bg))).fieldRule())
-                    // The way out, on the margin at the top as on every card (owner, 14 окт): from the contents — to «Сегодня»;
-                    // from a section — back to the contents it was opened from.
-                    if (planner && (contents || (screen != TASKS && screen != TOPICS))) Box(Modifier.align(Alignment.TopStart).width(MarginW).padding(top = 4.dp), contentAlignment = Alignment.Center) {
+                    // The way out, on the margin at the top as on every card (owner, 14 окт): from a section — back to the contents
+                    // it was opened from. The contents is a page of the frame: its margin holds the date.
+                    if (planner && !contents && screen != TASKS && screen != TOPICS) Box(Modifier.align(Alignment.TopStart).width(MarginW).padding(top = 4.dp), contentAlignment = Alignment.Center) {
                         Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.backWord) { if (contents) contents = false else { screen = TASKS; contents = true } },
                             contentAlignment = Alignment.Center) { BackGlyph(c.ink.copy(alpha = 0.8f), 21.dp) }
                     }
@@ -482,6 +533,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             }
             // v2: a topic on the whole screen, sliding in from the side; when a task grows into one, its sheet gives way to it.
             // An idea opens as a half-page notebook card; «Открыть целиком» gives it the whole screen like any topic.
+            val cardKey0 = openDeal ?: openPiece
             val topicId = openTask?.takeIf { id -> data.tasks.find { it.id == id }?.let { it.topic && (!it.thought || fullIdea == id) } == true }
             var lastTopic by remember { mutableStateOf<String?>(null) }
             if (topicId != null) lastTopic = topicId
@@ -489,18 +541,17 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                 enter = androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { it / 3 } + fadeIn(androidx.compose.animation.core.tween(220)),
                 exit = androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(220)) { it / 3 } + fadeOut(androidx.compose.animation.core.tween(180))) {
                 data.tasks.find { it.id == (topicId ?: lastTopic) }?.let { t ->
-                    Box(Modifier.fillMaxSize().background(c.bg).paperGrain()) { TopicScreen(t, data, vm, openTab, openHl, onClose = { openTask = null; openHl = null; openTab = 0; fullIdea = null },
+                    Box(Modifier.fillMaxSize().background(c.bg).paperGrain().frosted(cardKey0 != null)) { TopicScreen(t, data, vm, openTab, openHl, onClose = { openTask = null; openHl = null; openTab = 0; fullIdea = null },
                         onOpenPerson = { openTask = null; openPerson = it }) }
                 }
             }
-            // A matter, a topic's matter or a note opens as a page too (owner, 14 окт; design/v9/v9-card-*.png): it slides in like
-            // the topic, over the diary's page; the index stays on the right.
+            // A matter, a topic's matter, an idea or a note opens as a window over the page (owner, 16 окт, «core»; see CardPage).
             val cardKey = openDeal ?: openTask?.takeIf { id -> data.tasks.find { it.id == id }?.let { !it.topic || (it.thought && fullIdea != id) } == true }
             var lastCard by remember { mutableStateOf<String?>(null) }
             if (cardKey != null) lastCard = cardKey
             AnimatedVisibility(cardKey != null,
-                enter = androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { it / 3 } + fadeIn(androidx.compose.animation.core.tween(220)),
-                exit = androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(220)) { it / 3 } + fadeOut(androidx.compose.animation.core.tween(180))) {
+                enter = fadeIn(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(220), initialScale = 0.96f),
+                exit = fadeOut(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(160), targetScale = 0.97f)) {
                 val k = cardKey ?: lastCard
                 val qr = k?.let { ru.anjeib.margin.data.questionRef(it) }
                 if (qr != null) {
@@ -526,8 +577,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             var lastPiece by remember { mutableStateOf<String?>(null) }
             if (openPiece != null) lastPiece = openPiece
             AnimatedVisibility(openPiece != null,
-                enter = androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { it / 3 } + fadeIn(androidx.compose.animation.core.tween(220)),
-                exit = androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(220)) { it / 3 } + fadeOut(androidx.compose.animation.core.tween(180))) {
+                enter = fadeIn(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(220), initialScale = 0.96f),
+                exit = fadeOut(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(160), targetScale = 0.97f)) {
                 (openPiece ?: lastPiece)?.let { k -> NoteCard(k, data, vm, onClose = { openPiece = null }, onOpen = { id -> openPiece = null; openId(id) }) }
             }
             // A name that isn't a contact was tapped: «Марина · + контакт», quietly, for a few seconds.
@@ -811,20 +862,26 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
     val s = M.s
     @Composable fun line(label: String, count: String, active: Boolean, small: Boolean = false, onClick: () -> Unit) {
         Margined {
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(vertical = if (small) 10.dp else 13.dp),
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(vertical = 10.dp),
                 verticalAlignment = Alignment.Bottom) {
-                Text(label, style = Type.body.copy(fontFamily = Book, fontSize = if (small) 17.sp else 21.sp, color = if (active) c.accentText else c.ink))
+                // One size for one kind of thing (owner, 16 окт): a line of the contents is a row like any other.
+                Text(label, style = Type.body.copy(fontFamily = rowFamily, fontSize = rowSize, lineHeight = rowLine, color = if (active) c.accentText else c.ink))
                 // the dotted leader of a contents page
                 Box(Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 6.dp).height(1.dp).drawBehind {
                     var x = 0f; val step = 5.dp.toPx()
                     while (x < size.width) { drawCircle(c.graphite.copy(alpha = 0.45f), 0.8.dp.toPx(), Offset(x, size.height / 2)); x += step }
                 })
-                Text(count, style = Type.body.copy(fontFamily = Book, fontSize = if (small) 15.sp else 17.sp, color = c.graphite))
+                Text(count, style = Type.small.copy(fontSize = subSize, color = c.graphite))
             }
         }
     }
+    Column(Modifier.fillMaxSize()) {
+    // The head stays put and a swipe across it turns the sections, as on every page; in the diary's frame it is the frame's.
+    if (!LocalFramed.current) Column(Modifier.fillMaxWidth().sectionSwipe()) {
+        PinnedTools()
+        Box(Modifier.screenRule()) { PageHead(s.contentsTitle, null) }
+    }
     Column(Modifier.fillMaxSize().screenRule().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-        PageHead(s.contentsTitle, null, trailing = { PageToolIcons() })
         Spacer(Modifier.height(8.dp))
         line(s.feedTitle, "", screen == TASKS) { onGo(TASKS, Views.TODAY) }
         line(s.diaryTitle, "", false) { onGo(TASKS, Views.NOTES) }
@@ -851,5 +908,6 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
                 }
             }
         }
+    }
     }
 }

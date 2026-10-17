@@ -135,8 +135,8 @@ fun NoteCard(key: String, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     fun remove() { vm.removeNotePiece(key); onClose() }
     val dt = runCatching { java.time.LocalDateTime.parse(n.at.take(16)) }.getOrNull()
     CardPage(onClose = { save(); onClose() }) {
-        Column(Modifier.weight(1f).fillMaxWidth()) {
-            Column(Modifier.weight(1f).fillMaxWidth().screenRule()) {
+        Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth()) {
+            Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().screenRule()) {
                 Spacer(Modifier.size(4.dp))
                 NoteHead(dt?.toLocalDate(), n.trail, { to -> save(); onOpen(to) }, n.sphere, if (n.removed) null else ({ k -> vm.setSphere(n.sphereOf, k) }), tools = {
                     ActionBar(listOfNotNull(
@@ -150,7 +150,7 @@ fun NoteCard(key: String, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     ), slots = 4)
                 })
                 // Owner, 16 окт: the head (day, where it lives, marks, tools) stays put; only the words under it scroll.
-                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+                Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
                     CardRule()
                     // The words, written right here, their day and hour on the margin — as in the diary's own note.
                     Margined(margin = { Box(Modifier.padding(top = 9.dp)) { Stamp(n.at) } }) {

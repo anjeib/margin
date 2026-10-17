@@ -342,12 +342,12 @@ fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<S
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = if (open) s.collapse else s.expandWord, onClick = onToggle)
                 .padding(top = RowTop - 2.dp, bottom = RowTop, end = 14.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
-                    Text(androidx.compose.ui.text.buildAnnotatedString {
+                    WordText(androidx.compose.ui.text.buildAnnotatedString {
                         withStyle(androidx.compose.ui.text.SpanStyle(color = c.link)) { append("# ") }
                         append(title)
                     }, style = Type.body.copy(fontFamily = rowFamily, color = c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(top = 2.dp))
-                    Text(if (open) "▾" else "▸", style = Type.body.copy(color = c.graphite, fontSize = 15.sp), modifier = Modifier.padding(start = 8.dp, top = 4.dp))
+                    Text(if (open) "▾" else "▸", style = Type.body.copy(color = c.graphite, fontSize = subSize), modifier = Modifier.padding(start = 8.dp, top = 4.dp))
                 }
                 Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(s.summaryDeals(rows.size) + (if (late > 0) ", " + s.lateOfDay(late) else "") + "  ·  ", style = Type.small.copy(color = subInk, fontSize = subSize))
@@ -385,7 +385,12 @@ fun TopicBlockHead(title: String, raw: Boolean = false, top: androidx.compose.ui
     val c = M.c
     Margined(Modifier.padding(top = top)) {
         Box(Modifier.fillMaxWidth().blockTint(BlockPos.Head).padding(top = 4.dp)) {
-            Text(if (raw) title else "# $title", style = Type.small.copy(color = c.link, fontSize = 14.5.sp, fontWeight = FontWeight.Medium), maxLines = 1,
+            // As a topic's row in the day (owner, 16 окт: one size for one kind of thing): the book face, the mark in petrol.
+            val full = if (raw) title else "# $title"
+            val mark = listOf("# ", "○ ").firstOrNull { full.startsWith(it) }
+            WordText(androidx.compose.ui.text.buildAnnotatedString {
+                if (mark != null) { withStyle(androidx.compose.ui.text.SpanStyle(color = c.link)) { append(mark) }; append(full.removePrefix(mark)) } else append(full)
+            }, style = Type.body.copy(fontFamily = rowFamily, color = c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpen).padding(vertical = 6.dp))
         }

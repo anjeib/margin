@@ -157,11 +157,11 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
             Text("✓ " + s.savedTick, style = Type.small.copy(color = c.ok, fontSize = 12.5.sp))
         }
     }) {
-        Column(Modifier.weight(1f).fillMaxWidth()) {
+        Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth()) {
             // «Поля»: the rule down the card, the day and hour on the margin, everything else right of it.
             // At least half the screen with the field right under it; a longer card grows, the field stays below.
             val pageLines = rememberPageLines()
-            Column(Modifier.weight(1f).screenRule()) {
+            Column(Modifier.weight(1f, fill = cardFill).screenRule()) {
                 // The card (owner's call, 10 окт): ⋯ for the matter as a whole; the title with its bagel in the sphere's colour;
                 // «когда» as a plaque; three tools (place, people, repeat) and ⋯ for the rest; then the comments.
                 val ctxOpen = androidx.compose.ui.platform.LocalContext.current
@@ -223,7 +223,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 })
                 if (task.slots.isNotEmpty()) Margined(Modifier.padding(top = 4.dp)) { DaysProp(task.slots, onToggle = { vm.toggleSlot(task.id, it) }, onRemove = { vm.removeSlot(task.id, it) }) }
                 // Owner, 16 окт: the head (day, title, marks, tools) stays put; only what is under it scrolls.
-                Column(Modifier.weight(1f).fillMaxWidth().ruledPage(pageLines).verticalScroll(rememberScrollState())) {
+                Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().ruledPage(pageLines).verticalScroll(rememberScrollState())) {
                 CardRule()
                 MatterTitle(title, { title = it }, task.done, task.time, if (task.slots.isEmpty() && due != null) ({ dialog = "time" }) else null, late,
                     mark = if (!task.done && (task.waitingFor != null || task.promisedTo != null)) ({
