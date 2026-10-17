@@ -177,6 +177,9 @@ fun TaskList(
     topicsOnly: Boolean = false,
     /** The find bar's name for this page («today», «topics»): its matches are counted and scrolled to; null — just marked. */
     findPage: String? = null,
+    /** A note of a matter or a topic in the diary's feed: its own card. */
+    onOpenPiece: (String) -> Unit = {},
+    onPerson: (String) -> Unit = {},
 ) {
     val framed = LocalFramed.current
     val landed by vm.landed.collectAsState()
@@ -240,12 +243,41 @@ fun TaskList(
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val listScope = androidx.compose.runtime.rememberCoroutineScope()
     // The month unfolds at the very top: the page goes up to show it.
-    // The calendar on the diary's frame: every day in one feed under the pinned month (owner, 17 окт).
-    val feed = framed && monthOpen && view == Views.TODAY
-    val feedDays = if (feed) remember(data, events, today) {
+    // One screen (owner, 17 окт): the diary is a feed of every day — its matters, the notes of matters and topics written on it,
+    // and a topic on the days something happens to it (made, begins, ends, its deadline). The head (App) holds the week.
+    val feed = framed && view == Views.TODAY
+    val kind by vm.kindFilter.collectAsState()
+    val feedDays = if (feed) remember(data, events, today, kind) {
+        fun dayOf(x: String?) = x?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
+        val notesByDay = data.linkedNotes().groupBy { dayOf(it.at) ?: today }
+        val topics = data.tasks.filter { it.topic && !it.thought && !it.done }
         (-120L..120L).map { today.plusDays(it) }.mapNotNull { d ->
             val p = dayPlan(data, d, today, events)
-            if (d == today || p.deals.isNotEmpty() || p.events.isNotEmpty() || p.done.isNotEmpty()) d to p else null
+            val notes = notesByDay[d].orEmpty()
+            val inPlan = p.deals.mapNotNull { it.topicId }.toSet()
+            val inNotes = notes.map { it.open.removePrefix("q:").substringBefore(':') }.toSet()
+            val tops = topics.mapNotNull { t ->
+                val word = when {
+                    t.dueDate == d -> if (t.startDate != null) s.topicEndsWord else s.topicDueWord
+                    t.startDate == d -> s.topicStartsWord
+                    dayOf(t.createdAt) == d -> s.topicBornWord
+                    else -> null
+                }
+                when {
+                    // Only topics: every topic that has something on the day.
+                    kind == "topics" -> if (word != null || t.id in inPlan || t.id in inNotes) t to word else null
+                    // Everything: a topic stands as its own row only where it isn't there already by its matters or notes.
+                    word != null && t.id !in inPlan && t.id !in inNotes -> t to word
+                    else -> null
+                }
+            }
+            val has = when (kind) {
+                "deals" -> p.deals.isNotEmpty() || p.done.isNotEmpty()
+                "topics" -> tops.isNotEmpty()
+                "notes" -> notes.isNotEmpty()
+                else -> p.deals.isNotEmpty() || p.events.isNotEmpty() || p.done.isNotEmpty() || notes.isNotEmpty() || tops.isNotEmpty()
+            }
+            if (d == today || has) FeedDay(d, p, notes, tops) else null
         }
     } else emptyList()
     val feedStarts = remember { HashMap<LocalDate, Int>() }
@@ -329,21 +361,28 @@ fun TaskList(
                     if (planner) DoubleRule(Modifier.padding(top = 16.dp, bottom = 4.dp))
                 }
                 if (feed) {
-                    // Every day at once, the month pinned over them; a day picked in it comes up under it.
+                    // Every day at once; a day picked in the head's week or month comes up to the top.
                     feedStarts.clear()
                     val cs = CountingScope(this)
-                    cs.stickyHeader("month") {
-                        Box(Modifier.background(c.bg).marginRule(marginInk)) {
-                            MonthPanel(data, vm, day, events) { d -> vm.pageDay.value = d.takeIf { it != today }; vm.feedJump.value++ }
-                        }
-                    }
-                    cs.n++
-                    feedDays.forEach { (d, p) ->
+                    feedDays.forEach { f ->
+                        val d = f.day
                         feedStarts[d] = cs.n
                         cs.item("fd$d") { FeedDayHead(d, today) }
-                        cs.dayPanel(p, today, "f$d", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
+                        if (kind == null || kind == "deals") cs.dayPanel(f.plan, today, "f$d", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                             doneOpen = isOpen("s-done-$d"), onDoneFold = { toggle("s-done-$d") }, openTopics = openTopics.value, onTopicFold = ::foldTopic)
-                        if (d == today && undated.isNotEmpty()) cs.undatedRows(undated)
+                        if (kind == null || kind == "topics") f.topics.forEachIndexed { i, (t, word) ->
+                            cs.item("ft$d" + t.id) { TopicPaperRow(t, seatOf(i, f.topics.size), onOpen = { onOpen(t.id) }, margin = word ?: "") }
+                        }
+                        if (kind == null || kind == "notes") cs.linkedNotesOfDay(d, f.notes, data, vm, onOpen, onOpenPiece, onPerson)
+                        if (d == today) {
+                            if ((kind == null || kind == "deals") && undated.isNotEmpty()) cs.undatedRows(undated)
+                            if (kind == null) {
+                                // Shared or saved without a place: one line while there is something to put away.
+                                val unplaced = data.inboxNote()?.entries?.size ?: 0
+                                if (unplaced > 0) cs.item("inbox") { VoiceLink(s.inboxLine(unplaced), onOpenInbox) }
+                                if (data.queue.isNotEmpty()) cs.item("queue") { VoiceLink(s.queuedLine(data.queue.size), onOpenInbox, quiet = true) }
+                            }
+                        }
                     }
                     // Room after the last day, so even it can come up under the month.
                     item("feed-end") { Box(Modifier.fillParentMaxHeight()) }
@@ -770,3 +809,5 @@ fun TopicPickDialog(data: AppData, ref: String, onDismiss: () -> Unit, onCreate:
     )
 }
 
+/** A day of the diary's feed: its plan, the notes written on it, the topics with something on it (and what — «начало», «срок»…). */
+internal class FeedDay(val day: LocalDate, val plan: DayPlan, val notes: List<LinkedNote>, val topics: List<Pair<Task, String?>>)

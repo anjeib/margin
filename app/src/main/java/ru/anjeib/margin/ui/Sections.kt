@@ -247,7 +247,9 @@ fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpe
  * on the day the page shows; a tap on a cell turns the page to that day, ‹ › go by months. Folded again by the same tab.
  */
 @Composable
-fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib.margin.data.CalEvent>, onPick: (LocalDate) -> Unit) {
+fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib.margin.data.CalEvent>,
+               /** What stands on the margin by the month's name (the diary's head: «ОКТ ▴», to fold it back into the week). */
+               margin: (@Composable () -> Unit)? = null, onPick: (LocalDate) -> Unit) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
@@ -265,7 +267,7 @@ fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib
         (0L until 42L).associate { val d = from.plusDays(it); d to dayPlan(data, d, today, monthEvents) }
     }
     val loc = if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) java.util.Locale.forLanguageTag("ru") else java.util.Locale.ENGLISH
-    Margined(Modifier.padding(top = 0.dp, bottom = 2.dp)) {
+    Margined(Modifier.padding(top = 0.dp, bottom = 2.dp), margin = margin) {
         Column {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(month.month.getDisplayName(TextStyle.FULL_STANDALONE, loc).replaceFirstChar { it.uppercase() } + if (month.year != today.year) " ${month.year}" else "",

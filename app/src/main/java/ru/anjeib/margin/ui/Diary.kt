@@ -112,13 +112,13 @@ private fun Task.bornAt(): String = entries.minOfOrNull { it.at } ?: history.fir
  * A note written inside a matter or a topic, shown in «Заметки» too (owner, 16 окт): its words, its files, and a link to where it
  * lives — «# Тема», «○ Дело», «○ Дело · # Тема». [open] — what a tap opens.
  */
-private class LinkedNote(val key: String, val at: String, val text: String, val files: List<ru.anjeib.margin.data.Attachment>,
+internal class LinkedNote(val key: String, val at: String, val text: String, val files: List<ru.anjeib.margin.data.Attachment>,
                          val link: String, val open: String, val sphere: String?,
                          /** The note's own card ([NoteCard]): a tap opens the note itself, the link — where it lives. */
                          val card: String)
 
 /** Every note written in a matter or a topic: the topics' records, the matters' comments and records, a topic's matters' comments. */
-private fun AppData.linkedNotes(): List<LinkedNote> {
+internal fun AppData.linkedNotes(): List<LinkedNote> {
     val out = mutableListOf<LinkedNote>()
     fun flat(l: List<ru.anjeib.margin.data.Subtask>): List<ru.anjeib.margin.data.Subtask> = l.flatMap { listOf(it) + flat(it.children) }
     tasks.filter { !it.thought }.forEach { t ->
@@ -130,16 +130,17 @@ private fun AppData.linkedNotes(): List<LinkedNote> {
         val titles = flat(t.subtasks).map { norm(it.title) }.filter { it.isNotEmpty() }
         fun echo(e: ru.anjeib.margin.data.Entry) = e.attachments.isEmpty() && norm(e.text).let { w -> titles.any { q -> w == q || (w.contains(q) && w.length <= q.length + 12) } }
         t.entries.filter { (it.text.isNotBlank() || it.attachments.isNotEmpty()) && !echo(it) }.forEach { e ->
-            out += LinkedNote("e" + e.id, e.at, e.text, e.attachments, own, t.id, t.sphere, entryKey(t.id, e.id))
+            out += LinkedNote(entryKey(t.id, e.id), e.at, e.text, e.attachments, own, t.id, t.sphere, entryKey(t.id, e.id))
         }
-        t.comments.filter { it.text.isNotBlank() }.forEach { cm -> out += LinkedNote("c" + cm.id, cm.at, cm.text, emptyList(), own, t.id, t.sphere, commentKey(t.id, cm.id)) }
+        t.comments.filter { it.text.isNotBlank() }.forEach { cm -> out += LinkedNote(commentKey(t.id, cm.id), cm.at, cm.text, emptyList(), own, t.id, t.sphere, commentKey(t.id, cm.id)) }
         if (t.topic) flat(t.subtasks).forEach { q ->
             q.comments.filter { it.text.isNotBlank() }.forEach { cm ->
-                out += LinkedNote("c" + cm.id, cm.at, cm.text, emptyList(), "○ " + q.title + "  ·  # " + t.title, "q:${t.id}:${q.id}", t.sphere, commentKey("q:${t.id}:${q.id}", cm.id))
+                out += LinkedNote(commentKey("q:${t.id}:${q.id}", cm.id), cm.at, cm.text, emptyList(), "○ " + q.title + "  ·  # " + t.title, "q:${t.id}:${q.id}", t.sphere, commentKey("q:${t.id}:${q.id}", cm.id))
             }
         }
     }
-    return out
+    // A note copied into the next occurrence of a repeating matter (before 0.77) is one note: shown once, under the first.
+    return out.distinctBy { it.card.substringAfterLast('|') + "|" + it.at + "|" + it.text }
 }
 
 @Composable
@@ -147,18 +148,23 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
               /** A note of a matter or a topic: its own card ([NoteCard]). */
               onOpenNote: (String) -> Unit = {},
               /** Owner, 16 окт («core»): the page holds one day's notes; a swipe across it turns the day (App). */
-              day: LocalDate = LocalDate.now(), events: List<ru.anjeib.margin.data.CalEvent> = emptyList()) {
+              day: LocalDate = LocalDate.now(), events: List<ru.anjeib.margin.data.CalEvent> = emptyList(),
+              /**
+               * «Дневник» (owner, 17 окт): only the free notes, every day in one feed, newest first; nothing of the diary's
+               * matters and topics comes here, and nothing written here goes there.
+               */
+              journal: Boolean = false) {
     val c = M.c
     val s = M.s
     val today = LocalDate.now()
     // «личное / работа» (owner, 16 окт): the same two marks as on «Темы»; chosen again — all of them.
     val sphere by vm.diarySphere.collectAsState()
     var archOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    fun sOk(x: String?) = sphere == null || (if (sphere == "work") x == "work" else x != "work")
+    fun sOk(x: String?) = journal || sphere == null || (if (sphere == "work") x == "work" else x != "work")
     val notes = remember(data, sphere) {
         data.tasks.filter { it.thought && it.subtasks.isEmpty() && !it.done && sOk(it.sphere) }.sortedBy { it.bornAt() }
     }
-    val linked = remember(data, sphere) { data.linkedNotes().filter { sOk(it.sphere) } }
+    val linked = remember(data, sphere, journal) { if (journal) emptyList() else data.linkedNotes().filter { sOk(it.sphere) } }
     // Both kinds in one diary, by the time they were written.
     val lines: List<Pair<String, Any>> = remember(notes, linked) { (notes.map { it.bornAt() to (it as Any) } + linked.map { it.at to (it as Any) }).sortedBy { it.first } }
     val byDay = remember(lines) { lines.groupBy { runCatching { LocalDate.parse(it.first.take(10)) }.getOrDefault(today) }.mapValues { e -> e.value.map { it.second } }.toSortedMap(compareByDescending { it }) }
@@ -171,10 +177,12 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
     val found = remember { mutableListOf<FindHit>() }
     ReportFound("notes", found, list, data)
     // The calendar on the diary's frame: all days' notes in one feed (owner, 17 окт).
-    val feed = LocalFramed.current && vm.monthOpen.collectAsState().value
+    // Under the diary's head «Дневник» is a feed the head's calendar moves too.
+    val journalFeed = journal && LocalFramed.current
+    val feed = LocalFramed.current && vm.monthOpen.collectAsState().value && !journal
     val feedStarts = remember { HashMap<LocalDate, Int>() }
     val feedJump by vm.feedJump.collectAsState()
-    FeedFollow(feed, list, feedStarts, day, feedJump) { vm.feedDay.value = it }
+    FeedFollow(feed || journalFeed, list, feedStarts, day, feedJump) { vm.feedDay.value = it }
     val plannerLook = planner
     val framed = LocalFramed.current
     val monthOpen by vm.monthOpen.collectAsState()
@@ -184,7 +192,21 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
               ?: (data.taskOfKey(k)?.let { t -> find != null && findHit(find.words, t.title + " " + data.mentionsPlain(t.entries.joinToString(" ") { it.text })) } == true) }) {
             // Owner, 16 окт: the head stays put; only the diary scrolls.
             // In the diary's frame the head is the frame's (Frame.kt).
-            if (!framed) pinnedHead("head", plannerLook, calendar = true) {
+            // «Дневник»: its name and line, the way back on the margin (App); no calendar, no spheres.
+            // Under the diary's head the journal's name stands in the head itself (Frame.kt).
+            if (journalFeed) Unit
+            else if (journal) pageHeadItem("head") {
+                Column {
+                    Margined(Modifier.padding(top = 40.dp)) {
+                        Column {
+                            Text(s.journalTitle, style = Type.pageTitle.copy(color = c.ink))
+                            Voice(s.journalSub, Modifier.padding(top = 2.dp))
+                        }
+                    }
+                    DoubleRule(Modifier.padding(top = 14.dp, bottom = 4.dp))
+                }
+            }
+            else if (!framed) pinnedHead("head", plannerLook, calendar = true) {
                 Margined(Modifier.padding(top = if (planner) 0.dp else 8.dp), margin = { MarginDay(day.dayOfMonth, day.dayMonthShort().substringAfter(' ')) }) {
                     Column {
                         Row(verticalAlignment = Alignment.Top) {
@@ -264,7 +286,34 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                     }
                 }
             }
-            if (feed) {
+            if (journalFeed) {
+                // Under the diary's head: every day with notes, in the order of days like the diary (today always), so the
+                // head's week and month move it the same way.
+                feedStarts.clear()
+                val cs = CountingScope(this)
+                if (byDay.isEmpty()) cs.item("empty") { Margined(Modifier.padding(top = 18.dp)) { Voice(s.journalEmpty) } }
+                (byDay.keys + today).toSortedSet().forEach { d ->
+                    feedStarts[d] = cs.n
+                    cs.item("jd$d") { FeedDayHead(d, today) }
+                    byDay[d]?.let { cs.dayNotes(d, it) }
+                }
+                val archivedOwn = data.tasks.filter { it.thought && it.done && it.subtasks.isEmpty() }.map { t ->
+                    ArchItem(t.id, t.title.ifBlank { t.entries.firstOrNull()?.text.orEmpty() }, t.doneAt, open = { onOpen(t.id) }, restore = { vm.reviveTopic(t.id) }, purge = { vm.removeMatter(t.id) })
+                }
+                archiveFold("arch", archivedOwn, archOpen) { archOpen = !archOpen }
+                item("feed-end") { Box(Modifier.fillParentMaxHeight(0.6f)) }
+            } else if (journal) {
+                // Every day's notes, the newest day first, its number large on the margin.
+                if (byDay.isEmpty()) item("empty") { Margined(Modifier.padding(top = 18.dp)) { Voice(s.journalEmpty) } }
+                byDay.forEach { (d, l) ->
+                    item("jd$d") { FeedDayHead(d, today) }
+                    dayNotes(d, l)
+                }
+                val archivedOwn = data.tasks.filter { it.thought && it.done && it.subtasks.isEmpty() }.map { t ->
+                    ArchItem(t.id, t.title.ifBlank { t.entries.firstOrNull()?.text.orEmpty() }, t.doneAt, open = { onOpen(t.id) }, restore = { vm.reviveTopic(t.id) }, purge = { vm.removeMatter(t.id) })
+                }
+                archiveFold("arch", archivedOwn, archOpen) { archOpen = !archOpen }
+            } else if (feed) {
                 // The calendar open: every day's notes in one feed under the pinned month (owner, 17 окт).
                 feedStarts.clear()
                 val cs = CountingScope(this)
@@ -307,7 +356,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: Int, block: BlockPos?, onOpen: (String) -> Unit, onOpenNote: (String) -> Unit, onPerson: (String) -> Unit,
+internal fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: Int, block: BlockPos?, onOpen: (String) -> Unit, onOpenNote: (String) -> Unit, onPerson: (String) -> Unit,
                           /** The day's first: close under the day's number. */ first: Boolean = false) {
     val c = M.c
     val s = M.s
@@ -350,5 +399,20 @@ private fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: I
                 }
             }
         }
+    }
+}
+
+/**
+ * The notes of matters and topics written on [d], for the diary's feed (owner, 17 окт): those of one matter or topic together
+ * under its link, on one light tint — as they stood in «Заметки».
+ */
+internal fun androidx.compose.foundation.lazy.LazyListScope.linkedNotesOfDay(d: LocalDate, list: List<LinkedNote>, data: AppData, vm: MainVm,
+    onOpen: (String) -> Unit, onOpenNote: (String) -> Unit, onPerson: (String) -> Unit) {
+    val blocks = withTopicHeads(list) { (it as? LinkedNote)?.let { l -> l.open to l.link } }
+    val pos = blockPositions(blocks) { (it as? LinkedNote)?.open }
+    blocks.forEachIndexed { i, x ->
+        if (x is TopicHead) { item("lg" + d + x.id) { TopicBlockHead(x.title, raw = true, top = 14.dp) { onOpen(x.id) } }; return@forEachIndexed }
+        val n = x as LinkedNote
+        item("l" + n.key) { LinkedNoteRow(n, data, vm, i, blocks.size, pos[i], onOpen, onOpenNote, onPerson) }
     }
 }

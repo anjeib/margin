@@ -36,7 +36,7 @@ object Samples {
             subtasks = listOf(
                 Subtask(id = "ex-c1", title = "Урок 0 · Установить Margin", done = true, doneAt = d(-1)),
                 Subtask(id = "ex-c2", title = "Урок 1 · Нажать на кружок на линии — дело сделано", due = d(0), time = "10:00"),
-                Subtask(id = "ex-c3", title = "Урок 2 · Домашнее задание от Кати — то, что ждём, видно сверху «Сегодня»", from = "Катя", due = d(1)),
+                Subtask(id = "ex-c3", title = "Урок 2 · Домашнее задание от Кати — то, что ждём, помечено «ждём» под делом", from = "Катя", due = d(1)),
                 Subtask(id = "ex-c4", title = "Урок 3 · Сказать голосом: «Добавь в тему Курс освоения Margin…»", due = d(2), parent = "ex-c-e3"),
                 Subtask(id = "ex-c5", title = "Урок 4 · Поддела: разбить дело на шаги", due = d(3)),
                 Subtask(id = "ex-c6", title = "Шаг · поддело — маленькое кольцо под своим делом", parent = "ex-c5"),
@@ -62,15 +62,15 @@ object Samples {
             deal("promise", "Конспект для Лёши — мы обещали, ладонь к нему", -1).copy(promisedTo = "Лёша", due = d(1)),
             deal("wait", "Оплата за курс от Маши — ждём, «напомнить» напишет ей", -4).copy(waitingFor = "Маша", due = d(0)),
             deal("break", "Каникулы курса: дело на период, стоит в каждом его дне", -1).copy(start = d(4), due = d(7)),
-            deal("nodate", "Без даты — тоже нормально: такие дела ждут внизу «Сегодня»", -5),
+            deal("nodate", "Без даты — тоже нормально: такие дела стоят под сегодняшним днём, пока не сделаны", -5),
             deal("done", "Сделанное зачёркнуто; нажмите на кружок — вернётся", -3).copy(due = d(-1), done = true, doneAt = d(-1)),
             deal("drop", "«Не буду» — закрыто без выполнения, честно", -6).copy(done = true, dropped = true, doneAt = d(-2)),
         )
 
         val note = Task(
-            id = "ex-note", title = "Заметки — мысли без срока", topic = true, thought = true, sphere = "personal", createdAt = d(0),
-            entries = listOf(Entry(id = "ex-n-e1", at = at(0, "09:00"), text = "Заметки — мысли без срока. Пишите их на странице «Заметки». " +
-                "Заметки, написанные в деле или теме, тоже собираются там, со ссылкой на своё место. «@» отметит человека: @[Катя].")),
+            id = "ex-note", title = "Дневник — только для себя", topic = true, thought = true, sphere = "personal", createdAt = d(0),
+            entries = listOf(Entry(id = "ex-n-e1", at = at(0, "09:00"), text = "Это дневник: записи только для себя — мысли, впечатления, итоги дня. " +
+                "Он отдельный: дела и темы сюда не попадают, а то, что здесь, не появляется в «Делах». «@» отметит человека: @[Катя].")),
         )
 
         // People: a contact with a card and her company; those only mentioned wait under «Упомянуты» in «Контакты».
@@ -93,6 +93,27 @@ object Samples {
         }.getOrNull()
         return build(today, runCatching { art.cheatSheet }.getOrNull(), runCatching { art.coursePlan }.getOrNull(), photo)
     }
+}
+
+/**
+ * The examples' words from before the one screen (17 окт): «сверху «Сегодня»», «внизу «Сегодня»», the page «Заметки». Where an
+ * example still has those very words, they become the new ones; anything the user changed is left as it is.
+ */
+fun AppData.retextSamples(): AppData {
+    val words = mapOf(
+        "Урок 2 · Домашнее задание от Кати — то, что ждём, видно сверху «Сегодня»" to "Урок 2 · Домашнее задание от Кати — то, что ждём, помечено «ждём» под делом",
+        "Без даты — тоже нормально: такие дела ждут внизу «Сегодня»" to "Без даты — тоже нормально: такие дела стоят под сегодняшним днём, пока не сделаны",
+        "Заметки — мысли без срока" to "Дневник — только для себя",
+        "Заметки — мысли без срока. Пишите их на странице «Заметки». Заметки, написанные в деле или теме, тоже собираются там, со ссылкой на своё место. «@» отметит человека: @[Катя]."
+            to "Это дневник: записи только для себя — мысли, впечатления, итоги дня. Он отдельный: дела и темы сюда не попадают, а то, что здесь, не появляется в «Делах». «@» отметит человека: @[Катя].",
+    )
+    fun w(x: String) = words[x] ?: x
+    if (tasks.none { it.id.startsWith("ex-") }) return this
+    return copy(tasks = tasks.map { t ->
+        if (!t.id.startsWith("ex-")) t
+        else t.copy(title = w(t.title), entries = t.entries.map { it.copy(text = w(it.text)) },
+            subtasks = t.subtasks.map { it.copy(title = w(it.title)) })
+    })
 }
 
 /** The examples are in the app (even ticked off). */

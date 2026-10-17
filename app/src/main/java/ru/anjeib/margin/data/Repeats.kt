@@ -44,6 +44,9 @@ fun Task.nextOccurrence(today: LocalDate = LocalDate.now()): Task? {
         history = listOf(Change(kind = "created", value = "repeat", by = "you")),
         subtasks = subtasks.map { it.withDone(false) },
         entries = emptyList(),
+        // The notes stay with the occurrence they were written in (17 окт: copied, the same note stood under two matters
+        // with one id — and the diary's list fell over the twice-used key).
+        comments = emptyList(), removedComments = emptyList(),
         createdAt = today.toString(),
     ).autoReminded() // «каждый пн в 10» reminds every Monday, not only the first
 }

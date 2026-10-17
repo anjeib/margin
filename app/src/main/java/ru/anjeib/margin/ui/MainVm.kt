@@ -1,5 +1,8 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.retextSamples
+import kotlinx.coroutines.flow.first
+
 import ru.anjeib.margin.data.questionRef
 import ru.anjeib.margin.data.deleteTask
 import ru.anjeib.margin.data.removeDeal
@@ -122,6 +125,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         // The demo copy opens with the sample already in it, once.
         if (ru.anjeib.margin.BuildConfig.DEMO && !ru.anjeib.margin.data.Demo.asked(ctx)) loadDemo()
         refreshSamples()
+        // The examples' words from before the one screen, once they are loaded (only those still word for word).
+        viewModelScope.launch {
+            data.first { it.tasks.isNotEmpty() || it.persons.isNotEmpty() }
+            val now = data.value
+            if (now.retextSamples() != now) store.update { it.retextSamples() }
+        }
         viewModelScope.launch { store.data.collect { Reminders.syncTasks(getApplication(), it.tasks, it.notes) } }
         // A quiet line under the field says what happened — and then leaves.
         viewModelScope.launch {
@@ -662,6 +671,9 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** The calendar's feed: the day at its top (the frame shows it; closing the calendar opens it), and each ask to go to a day. */
     val feedDay = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)
     val feedJump = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+    /** What the diary's feed shows (owner, 17 окт): null — everything; "deals", "topics" or "notes" — only that. */
+    val kindFilter = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
     /** The card page's «+»: each tap opens (or closes) the line of marks over its writing line. */
     val markPicker = androidx.compose.runtime.mutableStateOf(0)

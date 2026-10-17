@@ -9,6 +9,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -31,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -174,7 +179,12 @@ val FrameListTop = 6.dp
 /** A list that counts its rows as they are laid out — to know where each day of a feed begins. */
 class CountingScope(private val inner: androidx.compose.foundation.lazy.LazyListScope) : androidx.compose.foundation.lazy.LazyListScope by inner {
     var n = 0
-    override fun item(key: Any?, contentType: Any?, content: @Composable androidx.compose.foundation.lazy.LazyItemScope.() -> Unit) { n++; inner.item(key, contentType, content) }
+    /** Keys already laid out: a row met twice (the same thing reached by two ways) is shown once — a twice-used key would end the app. */
+    private val used = HashSet<Any>()
+    override fun item(key: Any?, contentType: Any?, content: @Composable androidx.compose.foundation.lazy.LazyItemScope.() -> Unit) {
+        if (key != null && !used.add(key)) { android.util.Log.w("Margin", "feed: key $key twice, shown once"); return }
+        n++; inner.item(key, contentType, content)
+    }
     override fun items(count: Int, key: ((Int) -> Any)?, contentType: (Int) -> Any?, itemContent: @Composable androidx.compose.foundation.lazy.LazyItemScope.(Int) -> Unit) {
         n += count; inner.items(count, key, contentType, itemContent)
     }
@@ -226,5 +236,136 @@ fun FeedFollow(on: Boolean, list: androidx.compose.foundation.lazy.LazyListState
         }.collect { idx ->
             if (idx != null) tell(starts.entries.filter { it.value <= idx }.maxByOrNull { it.value }?.key ?: starts.keys.minOrNull())
         }
+    }
+}
+
+/**
+ * The diary's one head (owner, 17 окт: «один экран без заголовка»): a line of marks — personal · work, matters · topics · notes
+ * (each a filter: chosen — only that, again — everything), then contacts · search · journal · the menu ≡; under it the week
+ * of the day at the top of the feed. A pull down (or a tap on the month on the margin) unfolds the whole month; a day picked
+ * in either brings the feed to it. The double rule parts what stands from what scrolls.
+ */
+@Composable
+fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru.anjeib.margin.data.CalEvent>, top: LocalDate,
+                /** «Дневник» is open under the head: its mark lit, a tap on it goes back to the diary. */
+                journalOn: Boolean = false,
+                onPeople: () -> Unit, onJournal: () -> Unit, onMenu: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    val t = LocalPageTools.current
+    val sphere by vm.diarySphere.collectAsState()
+    val kind by vm.kindFilter.collectAsState()
+    val monthOpen by vm.monthOpen.collectAsState()
+    val today = LocalDate.now()
+    fun pick(d: LocalDate) { vm.pageDay.value = d.takeIf { it != today }; vm.feedJump.value++; vm.monthOpen.value = false }
+    @Composable fun mark(label: String, on: Boolean, onClick: () -> Unit, glyph: @Composable (androidx.compose.ui.graphics.Color) -> Unit) {
+        Box(Modifier.size(40.dp).clip(CircleShape).background(if (on) c.linkSoft else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
+            glyph(if (on) c.link else c.ink.copy(alpha = 0.7f))
+        }
+    }
+    fun sphereTap(k: String) { vm.diarySphere.value = if (sphere == k) null else k }
+    fun kindTap(k: String) { vm.kindFilter.value = if (kind == k) null else k }
+    Column(Modifier.fillMaxWidth().pointerInput(Unit) {
+        var dy = 0f
+        detectVerticalDragGestures(onDragStart = { dy = 0f }, onDragEnd = {
+            if (dy > 36.dp.toPx()) vm.monthOpen.value = true else if (dy < -36.dp.toPx()) vm.monthOpen.value = false
+        }) { ch, d -> dy += d; ch.consume() }
+    }) {
+        // On the paper's own ground: the margin's rule starts under the marks, at the week. Owner, 17 окт («длинный ряд иконок
+        // не очень красиво»): the five filters live in one mark, «фильтр», with its menu; it is petrol while something is filtered.
+        // The paper's ground reaches a little below the name, so the margin's rule starts clear of «Дневник»'s line (owner, 17 окт).
+        Row(Modifier.fillMaxWidth().background(c.bg).padding(start = 4.dp, end = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            // What is open, by the marks on the left (owner, 17 окт): «Дела» — «простые и сложные», or «Дневник» — «только для себя».
+            Box(Modifier.weight(1f).height(44.dp).padding(start = 10.dp), contentAlignment = Alignment.CenterStart) {
+                androidx.compose.animation.Crossfade(journalOn, animationSpec = tween(200), label = "what") { j ->
+                    Column {
+                        androidx.compose.material3.Text(if (j) s.journalTitle else s.kindDeals, maxLines = 1,
+                            style = Type.pageTitle.copy(color = c.ink, fontSize = 25.sp, lineHeight = 27.sp))
+                        androidx.compose.material3.Text(if (j) s.journalSub else s.dealsSub, maxLines = 1,
+                            style = Type.small.copy(color = c.graphite, fontSize = 12.sp, lineHeight = 14.sp))
+                    }
+                }
+            }
+            var filters by remember { androidx.compose.runtime.mutableStateOf(false) }
+            Box {
+                mark(s.filterMark, sphere != null || kind != null, { filters = true }) { FilterGlyph(it, 21.dp) }
+                SoftMenu(filters, { filters = false }) {
+                    SoftMenuItem(s.spherePersonal, selected = sphere == "personal") { sphereTap("personal") }
+                    SoftMenuItem(s.sphereWork, selected = sphere == "work") { sphereTap("work") }
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).height(1.dp).background(c.hairline))
+                    SoftMenuItem(s.kindDeals, selected = kind == "deals") { kindTap("deals") }
+                    SoftMenuItem(s.kindTopics, selected = kind == "topics") { kindTap("topics") }
+                    SoftMenuItem(s.kindNotes, selected = kind == "notes") { kindTap("notes") }
+                    if (sphere != null || kind != null) {
+                        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).height(1.dp).background(c.hairline))
+                        SoftMenuItem(s.showEverything) { vm.diarySphere.value = null; vm.kindFilter.value = null; filters = false }
+                    }
+                }
+            }
+            mark(s.peopleTitle, false, onPeople) { PersonGlyph(it, 21.dp) }
+            if (t != null) mark(s.search, t.searchOn, t.search) { SearchGlyph(it, 21.dp) }
+            mark(s.journalTitle, journalOn, onJournal) { DiaryGlyph(it, 21.dp) }
+            mark(s.contentsTitle, false, onMenu) { MenuGlyph(it) }
+        }
+        AnimatedContent(monthOpen, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(120)) }, label = "calendar") { open ->
+            // The month folds back by «ОКТ ▴» on its margin (owner, 17 окт: «как свернуть?»), by a pull up, or by picking a day.
+            if (open) Box(Modifier.padding(top = 4.dp)) {
+                MonthPanel(data, vm, top, events, margin = { MonthFold(top, open = true) { vm.monthOpen.value = false } }) { pick(it) }
+            }
+            else WeekStrip(top, today, { pick(it) }) { vm.monthOpen.value = true }
+        }
+        DoubleRule(Modifier.padding(top = 8.dp, bottom = 4.dp))
+    }
+}
+
+/** The week of [day]: the weekday small over each number, [day] filled, today ringed; the month on the margin opens the month. */
+@Composable
+private fun WeekStrip(day: LocalDate, today: LocalDate, onPick: (LocalDate) -> Unit, onMonth: () -> Unit) {
+    val c = M.c
+    val monday = day.minusDays(day.dayOfWeek.value - 1L)
+    val loc = if (ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.Ru) java.util.Locale.forLanguageTag("ru") else java.util.Locale.ENGLISH
+    val pick by androidx.compose.runtime.rememberUpdatedState(onPick)
+    val now by androidx.compose.runtime.rememberUpdatedState(day)
+    Margined(Modifier.padding(top = 4.dp), margin = { Box(Modifier.padding(top = 10.dp)) { MonthFold(day, open = false, onClick = onMonth) } }) {
+        // A swipe across the week — the week before or after.
+        Row(Modifier.fillMaxWidth().pointerInput(Unit) {
+            var dx = 0f
+            detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = {
+                if (dx < -48.dp.toPx()) pick(now.plusDays(7)) else if (dx > 48.dp.toPx()) pick(now.minusDays(7))
+            }) { ch, d -> dx += d; ch.consume() }
+        }) {
+            (0L..6L).forEach { i ->
+                val d = monday.plusDays(i)
+                val sel = d == day
+                val weekend = d.dayOfWeek.value >= 6
+                Column(Modifier.weight(1f).padding(horizontal = 1.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .background(if (sel) c.link else androidx.compose.ui.graphics.Color.Transparent)
+                    .then(if (d == today && !sel) Modifier.border(1.dp, c.link, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
+                    .clickable { onPick(d) }.padding(vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    androidx.compose.material3.Text(d.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, loc).lowercase(),
+                        style = Type.italic.copy(color = if (sel) c.bg else if (weekend) weekendInk else c.graphite, fontSize = 12.sp, lineHeight = 14.sp))
+                    androidx.compose.material3.Text("${d.dayOfMonth}", style = Type.body.copy(color = if (sel) c.bg else c.ink, fontSize = 16.sp, lineHeight = 20.sp,
+                        fontWeight = if (sel || d == today) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal))
+                }
+            }
+        }
+    }
+}
+
+/** «ОКТ ▾» / «ОКТ ▴» on the margin of the head's calendar: unfolds the month, or folds it back into the week. */
+@Composable
+private fun MonthFold(day: LocalDate, open: Boolean, onClick: () -> Unit) = androidx.compose.material3.Text(
+    day.dayMonthShort().substringAfter(' ').uppercase() + if (open) " ▴" else " ▾",
+    style = Type.small.copy(color = M.c.ink, fontSize = 12.sp, letterSpacing = 1.5.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+    modifier = Modifier.padding(top = 4.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(4.dp))
+
+/** A filter: three lines, each shorter, as a funnel of words. */
+@Composable
+fun FilterGlyph(color: androidx.compose.ui.graphics.Color, size: androidx.compose.ui.unit.Dp = 20.dp) = androidx.compose.foundation.Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height; val st = 1.5.dp.toPx()
+    listOf(0.3f to 0.78f, 0.5f to 0.54f, 0.7f to 0.3f).forEach { (y, len) ->
+        drawLine(color, androidx.compose.ui.geometry.Offset(w * (0.5f - len / 2), h * y), androidx.compose.ui.geometry.Offset(w * (0.5f + len / 2), h * y), st,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round)
     }
 }

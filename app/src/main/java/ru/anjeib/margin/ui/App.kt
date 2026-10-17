@@ -112,6 +112,8 @@ private const val TOPICS = "topics"
 private const val CALENDAR = "calendar"
 private const val ARCHIVE = "archive"
 private const val MATERIALS = "materials"
+/** «Дневник» (owner, 17 окт): the free notes, a feed of its own — nothing comes into it from the diary, nothing goes out. */
+private const val JOURNAL = "journal"
 
 @Composable
 fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
@@ -193,6 +195,15 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         scope.launch { drawer.close() }
     }
 
+    /** Back from a page over the diary: the menu, «Дневник», «Контакты» — to the diary; what the menu opened — to the menu. */
+    fun backFromSection() {
+        when {
+            contents -> contents = false
+            screen == PEOPLE || screen == JOURNAL || screen == TOPICS -> { screen = TASKS; view = Views.TODAY }
+            else -> { screen = TASKS; contents = true }
+        }
+    }
+
     BackHandler(drawer.isOpen) { scope.launch { drawer.close() } }
     BackHandler(contents) { contents = false }
     // Find on the page (owner, 14 окт): the search tab slides a field down over the page instead of opening a screen.
@@ -207,7 +218,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     val plannerLook = planner
     BackHandler(!drawer.isOpen && openNote == null && openPerson == null && !searching && (screen != TASKS || view != Views.TODAY)) {
         // A section goes back to the contents it was opened from (owner, 14 окт); «Темы» and «Заметки» — to «Сегодня».
-        if (screen != TASKS) { val section = screen != TOPICS; screen = TASKS; if (plannerLook && section) contents = true else view = Views.TODAY } else view = Views.TODAY
+        if (screen != TASKS) { val section = screen !in setOf(TOPICS, PEOPLE, JOURNAL); screen = TASKS; if (plannerLook && section) contents = true else view = Views.TODAY } else view = Views.TODAY
     }
 
     // «В тему…» and «Удалить» from a matter's long press or card — one picker for every screen.
@@ -363,7 +374,10 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                     onOpenNotes = { screen = NOTES }, onOpenInbox = { screen = INBOX },
                                     onTry = { prefill = it; focusKey = System.currentTimeMillis() }, contentPadding = pad, pageDay = k.day,
                                     findPage = if (k.view == Views.TODAY) "today" else null,
+                                    onOpenPiece = { openPiece = it }, onPerson = { n -> data.persons.find { it.matches(n) }?.let { openPerson = it.id } },
                                 )
+                            JOURNAL -> DiaryPage(data, vm, onOpen = { openId(it) }, onPerson = { n -> data.persons.find { it.matches(n) }?.let { openPerson = it.id } }, contentPadding = pad,
+                                onOpenNote = { openPiece = it }, journal = true)
                             // «Темы» turn by days too (owner, 17 окт): the topics that stand on that day.
                             TOPICS -> TaskList(Views.ALL, sphereShown, settings, working, vm, events, onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
                                 contentPadding = pad, topicsOnly = true, findPage = "topics", pageDay = k.day)
@@ -380,40 +394,21 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             if (step != 0L) { val now = LocalDate.now(); val d = (vm.pageDay.value ?: now).plusDays(step); vm.pageDay.value = d.takeIf { it != now } }
                         }) { ch, d -> dx += d; ch.consume() }
                     }) { content() }
-                    // The diary's four sections in one frame (owner, 16 окт): the head, the date, the rules and the field stay put;
-                    // only the name, its line and the rows turn — sections by a swipe across the head, days across the page.
-                    if (planner && (screen == TASKS || screen == TOPICS)) {
+                    // One screen (owner, 17 окт: «сделать Margin ещё проще»): the head with the marks and the week, under it the feed of
+                    // every day; no sections to turn. «Дневник», «Контакты» and the menu ≡ open from the head.
+                    // «Дневник» lies under the same head (owner, 17 окт: «оставь ту же стабильную шапку… чтобы она не перелистывалась»):
+                    // only the feed under it changes; its mark is lit while it is open.
+                    if (planner && (screen == TASKS || screen == JOURNAL) && !contents) {
                         val todayF = LocalDate.now()
-                        val fp = FramePage(when { contents -> 3; screen == TOPICS -> 2; view == Views.NOTES -> 1; else -> 0 }, pageDay ?: todayF)
-                        // The calendar open on «Сегодня» or «Заметки»: one feed of all days (owner, 17 окт) — it doesn't turn by days,
-                        // the head shows the day at its top.
-                        val feedOn = monthOpen && (fp.section == 0 || fp.section == 1)
                         val feedDay by vm.feedDay.collectAsState()
-                        val headPage = if (feedOn) fp.copy(day = feedDay ?: fp.day) else fp
-                        val bodyPage = if (feedOn) fp.copy(day = LocalDate.ofEpochDay(0)) else fp
+                        val inJournal = screen == JOURNAL
                         Column(Modifier.fillMaxSize().screenRule()) {
-                            FrameHead(headPage, vm) { p ->
-                                when (p.section) {
-                                    0 -> {
-                                        val plan = dayPlan(sphereShown, p.day, todayF, events)
-                                        val away by vm.away.collectAsState()
-                                        // «2 просрочены» lights the late ones up (ChatGPT's review, owner, 14 окт).
-                                        val late = plan.deals.filter { it.dueDate?.isBefore(todayF) == true }.map { it.id }
-                                        Voice(daySummary(plan, todayF, away.takeIf { p.day == todayF }), onClick = if (late.isEmpty()) null else ({ vm.lightUp(late) }))
-                                    }
-                                    1 -> Voice(s.diarySub)
-                                    2 -> Voice(s.topicsSub)
-                                    else -> Voice(s.contentsSub)
-                                }
-                            }
+                            PlannerHead(sphereShown, vm, events, top = feedDay ?: pageDay ?: todayF, journalOn = inJournal,
+                                onPeople = { go(PEOPLE) }, onJournal = { if (inJournal) { screen = TASKS; view = Views.TODAY } else go(JOURNAL) }, onMenu = { contents = true })
                             Box(Modifier.weight(1f).fillMaxWidth()) {
-                                FramedPages(bodyPage) { p ->
-                                    val d = (if (p.day.toEpochDay() == 0L) pageDay else p.day)?.takeIf { it != todayF }
-                                    when (p.section) {
-                                        3 -> page(PageKey(MENU, view, null))
-                                        0 -> daySwipe { page(PageKey(TASKS, Views.TODAY, d)) }
-                                        1 -> daySwipe { page(PageKey(TASKS, Views.NOTES, d)) }
-                                        else -> daySwipe { page(PageKey(TOPICS, view, d)) }
+                                androidx.compose.runtime.CompositionLocalProvider(LocalFramed provides true) {
+                                    androidx.compose.animation.Crossfade(inJournal, animationSpec = tween(220), label = "journal") { j ->
+                                        if (j) page(PageKey(JOURNAL, view, pageDay)) else page(PageKey(TASKS, Views.TODAY, pageDay))
                                     }
                                 }
                             }
@@ -421,9 +416,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     }
                     // A section (settings, inbox, materials, contacts, archive, help) goes back to the contents with a swipe to the right
                     // (owner, 14 окт: one couldn't tell how to leave it).
-                    else if (planner) Box(Modifier.fillMaxSize().pointerInput(screen) {
+                    else if (planner) Box(Modifier.fillMaxSize().pointerInput(screen, contents) {
                         var dx = 0f
-                        detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = { if (dx > 90.dp.toPx()) { screen = TASKS; contents = true } }) { _, d -> dx += d }
+                        detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = { if (dx > 90.dp.toPx()) backFromSection() }) { _, d -> dx += d }
                     }) { PageTurn(pageKey, order = { it.order() }) { k -> page(k) } }
                     else Crossfade(screen, animationSpec = tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "screen") { sc ->
                         when (sc) {
@@ -441,14 +436,14 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         }
                     }
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(20.dp).background(Brush.verticalGradient(listOf(Color.Transparent, c.bg))).fieldRule())
-                    // The way out, on the margin at the top as on every card (owner, 14 окт): from a section — back to the contents
-                    // it was opened from. The contents is a page of the frame: its margin holds the date.
-                    if (planner && !contents && screen != TASKS && screen != TOPICS) Box(Modifier.align(Alignment.TopStart).width(MarginW).padding(top = 4.dp), contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.backWord) { if (contents) contents = false else { screen = TASKS; contents = true } },
+                    // The way out, on the margin at the top as on every card (owner, 14 окт): from the menu, «Дневник» and «Контакты»
+                    // — to the diary; from what the menu opens — back to the menu.
+                    if (planner && (contents || screen != TASKS && screen != JOURNAL)) Box(Modifier.align(Alignment.TopStart).width(MarginW).padding(top = 4.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.backWord) { backFromSection() },
                             contentAlignment = Alignment.Center) { BackGlyph(c.ink.copy(alpha = 0.8f), 21.dp) }
                     }
                 }
-                if ((screen == TASKS || screen == NOTES || screen == TOPICS) && !contents && !find.open) Column(
+                if ((screen == TASKS || screen == NOTES || screen == TOPICS || screen == JOURNAL) && !contents && !find.open) Column(
                     // The planner (design/v9): the field wide on the page, the margin's line ending just under it, the frame's rule below.
                     // A band of tinted paper with a double rule over it (owner, 14 окт): the place to write is unmistakable on a full page.
                     // Owner, 14 окт: the field floats over the stickers — one block: the hour, the words with the paperclip and the
@@ -456,9 +451,6 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     if (planner) Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 10.dp)
                     else Modifier.fillMaxWidth().background(c.bg).fieldRule().navigationBarsPadding().padding(horizontal = 14.dp).padding(bottom = 10.dp),
                 ) {
-                    // How the days turn (owner, 17 окт): a quiet hint over the field — a swipe across the page.
-                    if (planner && (screen == TOPICS || view == Views.TODAY || view == Views.NOTES))
-                        NavHint(s.navDays, Modifier.align(Alignment.CenterHorizontally).padding(bottom = 6.dp))
                     if (screen == TASKS) {
                         // Keep the last exchange on screen while it fades out, so it leaves gracefully.
                         val trayShown = tray != null || pending != null || busy == "main"
@@ -516,18 +508,18 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     val inlineHint = data.inlineHint(expandedKey).takeIf { screen == TASKS }
                     SmartComposer(
                         vm,
-                        hint = inlineHint ?: if (screen == TOPICS) s.topicsHint else if (screen == NOTES) s.notesHint else if (screen == TASKS && view == Views.NOTES && !contents) s.diaryHint else calDay?.takeIf { screen == TASKS }?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
+                        hint = inlineHint ?: if (screen == JOURNAL) s.journalHint else if (screen == TOPICS) s.topicsHint else if (screen == NOTES) s.notesHint else if (screen == TASKS && view == Views.NOTES && !contents) s.diaryHint else calDay?.takeIf { screen == TASKS }?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
                         busy = busy == (if (screen == NOTES) "notes" else "main"),
                         // «Темы»: the words start a topic — its name, and a list under it becomes its matters.
-                        onSend = { t, f -> if (screen == TASKS && inlineHint != null && vm.inlineSend(expandedKey, t, f)) Unit else if (screen == TOPICS) vm.send("/" + s.tagTopic + " " + t, files = f) else if (screen == TASKS && view == Views.NOTES) vm.addDiaryNote(t, f) else {
+                        onSend = { t, f -> if (screen == JOURNAL) vm.addDiaryNote(t, f) else if (screen == TASKS && inlineHint != null && vm.inlineSend(expandedKey, t, f)) Unit else if (screen == TOPICS) vm.send("/" + s.tagTopic + " " + t, files = f) else if (screen == TASKS && view == Views.NOTES) vm.addDiaryNote(t, f) else {
                             // Words taken from «Входящие» to be read here: their files go with them, and the thing leaves «Входящие».
                             val fromInbox = vm.inboxDraft.value.takeIf { screen == TASKS }
                             vm.send(t, scope = if (screen == NOTES) Scope.Notes else Scope.Main, files = f + (fromInbox?.second ?: emptyList()))
                             if (fromInbox != null) vm.inboxSent()
                         } },
                         prefill = prefill, onPrefillUsed = { prefill = null },
-                        onTyping = { typing = it }, slash = screen != NOTES && view != Views.NOTES, preview = if (view == Views.NOTES) null else ({ vm.previewOf(it) }),
-                        mentions = screen == TASKS && view == Views.NOTES,
+                        onTyping = { typing = it }, slash = screen != NOTES && screen != JOURNAL && view != Views.NOTES, preview = if (view == Views.NOTES || screen == JOURNAL) null else ({ vm.previewOf(it) }),
+                        mentions = screen == JOURNAL || screen == TASKS && view == Views.NOTES,
                         focusKey = focusKey, micKey = micKey, floating = planner,
                     )
                 }
@@ -892,18 +884,13 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
     }
     Column(Modifier.fillMaxSize()) {
     // The head stays put and a swipe across it turns the sections, as on every page; in the diary's frame it is the frame's.
-    if (!LocalFramed.current) Column(Modifier.fillMaxWidth().sectionSwipe()) {
-        PinnedTools()
-        Box(Modifier.screenRule()) { PageHead(s.contentsTitle, null) }
-    }
+    // The menu ≡ (owner, 17 окт): what isn't the diary itself — its name, the way back on the margin (App).
+    Box(Modifier.fillMaxWidth().padding(top = 40.dp).screenRule()) { PageHead(s.contentsTitle, null) }
     Column(Modifier.fillMaxSize().screenRule().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         Spacer(Modifier.height(8.dp))
-        line(s.feedTitle, "", screen == TASKS) { onGo(TASKS, Views.TODAY) }
-        line(s.diaryTitle, "", false) { onGo(TASKS, Views.NOTES) }
-        line(s.topicsPage, "", screen == TOPICS) { onGo(TOPICS, null) }
+        // The diary, «Дневник» and «Контакты» are in the diary's head; the menu keeps the rest (owner, 17 окт).
         line(s.inboxNote, data.inboxCount().takeIf { it > 0 }?.toString() ?: "", screen == INBOX) { onGo(INBOX, null) }
         line(s.materialsTitle, "", screen == MATERIALS) { onGo(MATERIALS, null) }
-        line(s.peopleTitle, "", screen == PEOPLE) { onGo(PEOPLE, null) }
         line(s.archiveTitle, "", screen == ARCHIVE) { onGo(ARCHIVE, null) }
         Spacer(Modifier.height(18.dp))
         SectionHead(s.aboutApp, top = 6.dp)
