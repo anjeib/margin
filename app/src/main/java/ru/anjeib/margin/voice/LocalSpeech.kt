@@ -12,14 +12,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.Serializable
 import ru.anjeib.margin.data.AppJson
 import java.io.File
-import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.security.MessageDigest
 
 /** One file of the speech model: where it is, how big, and its SHA-256 — a file that doesn't match is fetched again. */
@@ -209,26 +207,33 @@ object LocalSpeech {
         return OfflineRecognizer(assetManager = null, config = config).also { recognizer = it; recognizerOf = version }
     }
 
-    /** A 16 kHz mono 16-bit WAV → the words, with punctuation. [lang] other than Russian isn't read here. */
-    suspend fun transcribe(c: Context, wav: File, lang: String): String = withContext(Dispatchers.Default) {
+    /**
+     * Any voice file → the words, with punctuation: our own 16 kHz WAV as it is, anything else (a Telegram voice, m4a, mp3,
+     * a WAV of another rate) decoded on the phone first ([AudioDecoder]). A long recording is read in pieces of ≤ 25 s cut
+     * at pauses (GigaAM reads short stretches best and the memory stays small); [progress] 0..1 goes with the reading.
+     * Throws [Unreadable] when the file has no sound the phone can decode. [lang] other than Russian isn't read here.
+     */
+    suspend fun transcribe(c: Context, audio: File, lang: String, progress: (Float) -> Unit = {}): String = withContext(Dispatchers.Default) {
         require(lang == "ru") { "on-phone speech is Russian only" }
+        val job = coroutineContext[kotlinx.coroutines.Job]
         lock.withLock {
             val rec = open(c)
-            val stream = rec.createStream()
-            try {
-                stream.acceptWaveform(readWav(wav), 16000)
-                rec.decode(stream)
-                rec.getResult(stream).text.trim()
-            } finally { stream.release() }
-        }
-    }
-
-    private fun readWav(f: File): FloatArray {
-        RandomAccessFile(f, "r").use { raf ->
-            val bytes = ByteArray((raf.length() - 44).toInt().coerceAtLeast(0))
-            raf.seek(44); raf.readFully(bytes)
-            val sb = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
-            return FloatArray(sb.remaining()) { sb.get(it) / 32768f }
+            val chunker = Pcm.Chunker()
+            val words = mutableListOf<String>()
+            fun read(piece: FloatArray) {
+                if (Pcm.silent(piece)) return
+                val stream = rec.createStream()
+                try {
+                    stream.acceptWaveform(piece, Pcm.RATE)
+                    rec.decode(stream)
+                    rec.getResult(stream).text.trim().takeIf { it.isNotEmpty() }?.let { words += it }
+                } finally { stream.release() }
+            }
+            AudioDecoder.decode(audio, sink = { x -> chunker.push(x).forEach(::read) }, progress = progress, alive = { job?.isActive != false })
+            job?.ensureActive()
+            chunker.finish().forEach(::read)
+            progress(1f)
+            words.joinToString(" ")
         }
     }
 }

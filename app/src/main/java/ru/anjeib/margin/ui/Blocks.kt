@@ -431,9 +431,17 @@ private fun VoiceBlock(a: Attachment, vm: MainVm) {
             Spacer(Modifier.width(12.dp))
             Text(a.durationLabel(), style = Type.small.copy(color = c.graphite, fontSize = 13.sp))
         }
+        val waiting by ru.anjeib.margin.voice.Transcripts.waiting.collectAsState()
+        val reading by ru.anjeib.margin.voice.Transcripts.progress.collectAsState()
+        val unreadable by ru.anjeib.margin.voice.Transcripts.unreadable.collectAsState()
+        val quiet = Type.small.copy(color = c.graphite, fontSize = 12.5.sp)
         when {
             !a.transcript.isNullOrBlank() -> Text(a.transcript, style = Type.body.copy(color = c.ink, fontSize = 15.sp), modifier = Modifier.padding(top = 6.dp, start = 4.dp))
-            "voice" in working -> Text(s.transcribing, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(top = 4.dp, start = 4.dp))
+            // A long voice: how far the phone has read it (shown once it takes more than a couple of seconds).
+            reading[a.id] != null -> Text(s.transcribingAt((reading[a.id]!! * 100).toInt()), style = quiet, modifier = Modifier.padding(top = 4.dp, start = 4.dp))
+            a.id in waiting || "voice" in working -> Text(s.transcribing, style = quiet, modifier = Modifier.padding(top = 4.dp, start = 4.dp))
+            a.id in unreadable -> Text(s.voiceUnreadable, style = quiet, modifier = Modifier.padding(top = 4.dp, start = 4.dp))
+            a.transcript == "" -> Text(s.voiceNoWords, style = quiet, modifier = Modifier.padding(top = 4.dp, start = 4.dp))
         }
     }
 }

@@ -231,7 +231,13 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             // Owner, 16 окт: the calendar on every section — on «Темы» and «Содержание» it turns to the day's page and opens the month there.
             val dayPage = !contents && (screen == TOPICS || screen == TASKS && (view == Views.TODAY || view == Views.NOTES))
             if (!dayPage) { contents = false; screen = TASKS; view = Views.TODAY; vm.monthOpen.value = true }
-            else if (toolsMonth) { vm.monthOpen.value = false; vm.pageDay.value = null }
+            // Closed, the calendar leaves the diary on the day it shows — the one it was opened on, or the one picked in it, or in
+            // the feed the day at its top (owner, 17 окт).
+            else if (toolsMonth) {
+                vm.feedDay.value?.let { d -> vm.pageDay.value = d.takeIf { it != java.time.LocalDate.now() } }
+                vm.feedDay.value = null
+                vm.monthOpen.value = false
+            }
             else { toolsLanded?.let { d -> vm.pageDay.value = d.takeIf { it != java.time.LocalDate.now() } }; vm.monthOpen.value = true }
         },
         section = when { contents -> 3; screen == TOPICS -> 2; screen == TASKS && view == Views.NOTES -> 1; else -> 0 },
@@ -379,8 +385,14 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     if (planner && (screen == TASKS || screen == TOPICS)) {
                         val todayF = LocalDate.now()
                         val fp = FramePage(when { contents -> 3; screen == TOPICS -> 2; view == Views.NOTES -> 1; else -> 0 }, pageDay ?: todayF)
+                        // The calendar open on «Сегодня» or «Заметки»: one feed of all days (owner, 17 окт) — it doesn't turn by days,
+                        // the head shows the day at its top.
+                        val feedOn = monthOpen && (fp.section == 0 || fp.section == 1)
+                        val feedDay by vm.feedDay.collectAsState()
+                        val headPage = if (feedOn) fp.copy(day = feedDay ?: fp.day) else fp
+                        val bodyPage = if (feedOn) fp.copy(day = LocalDate.ofEpochDay(0)) else fp
                         Column(Modifier.fillMaxSize().screenRule()) {
-                            FrameHead(fp, vm) { p ->
+                            FrameHead(headPage, vm) { p ->
                                 when (p.section) {
                                     0 -> {
                                         val plan = dayPlan(sphereShown, p.day, todayF, events)
@@ -395,8 +407,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                 }
                             }
                             Box(Modifier.weight(1f).fillMaxWidth()) {
-                                FramedPages(fp) { p ->
-                                    val d = p.day.takeIf { it != todayF }
+                                FramedPages(bodyPage) { p ->
+                                    val d = (if (p.day.toEpochDay() == 0L) pageDay else p.day)?.takeIf { it != todayF }
                                     when (p.section) {
                                         3 -> page(PageKey(MENU, view, null))
                                         0 -> daySwipe { page(PageKey(TASKS, Views.TODAY, d)) }
@@ -444,6 +456,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                     if (planner) Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 10.dp)
                     else Modifier.fillMaxWidth().background(c.bg).fieldRule().navigationBarsPadding().padding(horizontal = 14.dp).padding(bottom = 10.dp),
                 ) {
+                    // How the days turn (owner, 17 окт): a quiet hint over the field — a swipe across the page.
+                    if (planner && (screen == TOPICS || view == Views.TODAY || view == Views.NOTES))
+                        NavHint(s.navDays, Modifier.align(Alignment.CenterHorizontally).padding(bottom = 6.dp))
                     if (screen == TASKS) {
                         // Keep the last exchange on screen while it fades out, so it leaves gracefully.
                         val trayShown = tray != null || pending != null || busy == "main"

@@ -240,7 +240,18 @@ fun TaskList(
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val listScope = androidx.compose.runtime.rememberCoroutineScope()
     // The month unfolds at the very top: the page goes up to show it.
-    androidx.compose.runtime.LaunchedEffect(monthOpen) { if (monthOpen) listState.animateScrollToItem(0) }
+    // The calendar on the diary's frame: every day in one feed under the pinned month (owner, 17 окт).
+    val feed = framed && monthOpen && view == Views.TODAY
+    val feedDays = if (feed) remember(data, events, today) {
+        (-120L..120L).map { today.plusDays(it) }.mapNotNull { d ->
+            val p = dayPlan(data, d, today, events)
+            if (d == today || p.deals.isNotEmpty() || p.events.isNotEmpty() || p.done.isNotEmpty()) d to p else null
+        }
+    } else emptyList()
+    val feedStarts = remember { HashMap<LocalDate, Int>() }
+    val feedJump by vm.feedJump.collectAsState()
+    FeedFollow(feed, listState, feedStarts, pageDay ?: today, feedJump) { vm.feedDay.value = it }
+    androidx.compose.runtime.LaunchedEffect(monthOpen) { if (monthOpen && !feed) listState.animateScrollToItem(0) }
     val find = LocalFind.current
     val found = remember { mutableListOf<FindHit>() }
     // A row's key ends with its matter's id — a matter of its own or one of a topic's («q:…»).
@@ -257,6 +268,35 @@ fun TaskList(
                 // no day (on today and the days ahead, until it is done). No «Ждём и обещали», «Сегодня», «Дальше» or «Без даты»
                 // sections; a swipe across the page turns the day (App), the month unfolds under the pinned head.
                 val day = pageDay ?: today
+                fun androidx.compose.foundation.lazy.LazyListScope.undatedRows(undated: List<Task>) {
+                        fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
+                        // A topic is one folded row here too; unfolded, its matters stand under it on the block's tint.
+                        val blocks = withTopicHeads(undated, 1) { t -> t.topicId?.let { it to (t.topicTitle ?: "") } }
+                        val inBlock = blocks.filterIsInstance<TopicHead>().map { it.id }.toSet()
+                        val pos = blockPositions(blocks) { (it as? Task)?.topicId }
+                        var i = -1
+                        blocks.forEachIndexed { bi, b ->
+                            if (b is TopicHead) {
+                                val rows = undated.filter { it.topicId == b.id }
+                                val since = rows.mapNotNull { born(it) }.minOrNull()?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() }
+                                item("ug" + b.id) { Box(Modifier.animateItem()) {
+                                    TopicFoldRow(b.title, rows, today, since to false, b.id in openTopics.value, { foldTopic(b.id) }, { onOpen(b.id) }, lit = b.id in landed)
+                                } }
+                                return@forEachIndexed
+                            }
+                            val t = b as Task
+                            if (t.topicId != null && t.topicId !in openTopics.value) return@forEachIndexed
+                            i++
+                            val seat = seatOf(i, undated.size)
+                            item("u" + t.id) {
+                                val since = born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() }
+                                MatterRow(t, seat, today, (if (planner) since else null) to false, modifier = Modifier.animateItem(),
+                                    onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) }, onTime = { timeFor = t.id }, onLater = { postponing = t.id },
+                                    faded = born(t)?.isBefore(today.minusDays(7)) == true, lit = t.id in landed, onOpenTopic = onOpen,
+                                    extra = since.takeIf { !planner }, showTopic = t.topicId !in inBlock, block = pos[bi])
+                            }
+                        }
+                }
                 val monthItem: () -> Unit = {
                     if (monthOpen) item("month") {
                         // No fade (owner, 14 окт): a fading month lay under the matters sliding up over it — it goes at once, they close up.
@@ -265,7 +305,7 @@ fun TaskList(
                 }
                 val plan = dayPlan(data, day, today, events)
                 // What has no day stands in every day from today on, at the day's end, newest first — gone once done.
-                val undated = if (day.isBefore(today)) emptyList() else (tasks.filter { !it.done && it.dueDate == null && it.startDate == null } + data.undatedTopicMatters())
+                val undated = if (day.isBefore(today) && !feed) emptyList() else (tasks.filter { !it.done && it.dueDate == null && it.startDate == null } + data.undatedTopicMatters())
                     .sortedByDescending { it.createdAt }
                 // In the diary's frame the head is the frame's (Frame.kt).
                 if (!framed) pinnedHead("head", plannerLook, calendar = true) {
@@ -288,39 +328,31 @@ fun TaskList(
                     }
                     if (planner) DoubleRule(Modifier.padding(top = 16.dp, bottom = 4.dp))
                 }
+                if (feed) {
+                    // Every day at once, the month pinned over them; a day picked in it comes up under it.
+                    feedStarts.clear()
+                    val cs = CountingScope(this)
+                    cs.stickyHeader("month") {
+                        Box(Modifier.background(c.bg).marginRule(marginInk)) {
+                            MonthPanel(data, vm, day, events) { d -> vm.pageDay.value = d.takeIf { it != today }; vm.feedJump.value++ }
+                        }
+                    }
+                    cs.n++
+                    feedDays.forEach { (d, p) ->
+                        feedStarts[d] = cs.n
+                        cs.item("fd$d") { FeedDayHead(d, today) }
+                        cs.dayPanel(p, today, "f$d", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
+                            doneOpen = isOpen("s-done-$d"), onDoneFold = { toggle("s-done-$d") }, openTopics = openTopics.value, onTopicFold = ::foldTopic)
+                        if (d == today && undated.isNotEmpty()) cs.undatedRows(undated)
+                    }
+                    // Room after the last day, so even it can come up under the month.
+                    item("feed-end") { Box(Modifier.fillParentMaxHeight()) }
+                } else {
                 monthItem()
                 val dayEmpty = plan.deals.isEmpty() && plan.events.isEmpty() && plan.done.isEmpty()
                 if (!dayEmpty) dayPanel(plan, today, "t", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                     doneOpen = isOpen("s-done-today"), onDoneFold = { toggle("s-done-today") }, openTopics = openTopics.value, onTopicFold = ::foldTopic)
-                if (undated.isNotEmpty()) {
-                    fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
-                    // A topic is one folded row here too; unfolded, its matters stand under it on the block's tint.
-                    val blocks = withTopicHeads(undated, 1) { t -> t.topicId?.let { it to (t.topicTitle ?: "") } }
-                    val inBlock = blocks.filterIsInstance<TopicHead>().map { it.id }.toSet()
-                    val pos = blockPositions(blocks) { (it as? Task)?.topicId }
-                    var i = -1
-                    blocks.forEachIndexed { bi, b ->
-                        if (b is TopicHead) {
-                            val rows = undated.filter { it.topicId == b.id }
-                            val since = rows.mapNotNull { born(it) }.minOrNull()?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() }
-                            item("ug" + b.id) { Box(Modifier.animateItem()) {
-                                TopicFoldRow(b.title, rows, today, since to false, b.id in openTopics.value, { foldTopic(b.id) }, { onOpen(b.id) }, lit = b.id in landed)
-                            } }
-                            return@forEachIndexed
-                        }
-                        val t = b as Task
-                        if (t.topicId != null && t.topicId !in openTopics.value) return@forEachIndexed
-                        i++
-                        val seat = seatOf(i, undated.size)
-                        item("u" + t.id) {
-                            val since = born(t)?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() }
-                            MatterRow(t, seat, today, (if (planner) since else null) to false, modifier = Modifier.animateItem(),
-                                onToggle = { vm.completeWithUndo(t.id) }, onOpen = { onOpen(t.id) }, onTime = { timeFor = t.id }, onLater = { postponing = t.id },
-                                faded = born(t)?.isBefore(today.minusDays(7)) == true, lit = t.id in landed, onOpenTopic = onOpen,
-                                extra = since.takeIf { !planner }, showTopic = t.topicId !in inBlock, block = pos[bi])
-                        }
-                    }
-                }
+                if (undated.isNotEmpty()) undatedRows(undated)
                 if (day == today) {
                     // Sunday: the week in one quiet panel — gathered by code, gone until next Sunday.
                     val wk = today.minusDays(today.dayOfWeek.value - 1L).toString()
@@ -337,6 +369,7 @@ fun TaskList(
                     archiveFold("arch", data.archived.sortedByDescending { it.doneAt }.map { t ->
                         ArchItem(t.id, t.title, t.doneAt, restore = { vm.restoreMatter(t.id) }, purge = { vm.purgeMatter(t.id) })
                     }, archOpen) { archOpen = !archOpen }
+                }
                 }
             }
 

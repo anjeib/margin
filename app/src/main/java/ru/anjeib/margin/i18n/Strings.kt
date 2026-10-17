@@ -424,6 +424,11 @@ interface Strings {
     val attachFile: String
     val attachContact: String
     val transcribing: String
+    fun transcribingAt(p: Int): String
+    /** A voice file the phone can't decode. */
+    val voiceUnreadable: String
+    /** Read, but no words in it. */
+    val voiceNoWords: String
     /** The bar of a topic's or a matter's page: the words are written on the page itself. */
     val writeOnPage: String
     /** «+ тема» in the Overview. */
@@ -900,6 +905,8 @@ interface Strings {
     val diaryEmptyHint: String
     val topicsPage: String
     val topicsSub: String
+    val navDays: String
+    val navSections: String
     val todayWordLink: String
     val topicsNoneThisDay: String
     val contentsSub: String
@@ -1057,7 +1064,7 @@ object Ru : Strings {
             "«+» в начале строки карточки" to "метки",
             "Поделиться → В Margin" to "из любого приложения — во «Входящие»; выделенный текст → «В Margin»",
         )),
-        HelpSection("Пересылка в Margin", "Из Telegram, MAX, почты: «Поделиться» или выделить текст → «В Margin». Или «Копировать» — и в Margin появится «Вставить скопированное». Пересланное ложится во «Входящие»: подержите строку и выберите, куда ему — в дело, заметку или тему."),
+        HelpSection("Пересылка в Margin", "Из Telegram, MAX, почты: «Поделиться» или выделить текст → «В Margin». Или «Копировать» — и в Margin появится «Вставить скопированное». Пересланное ложится во «Входящие»: подержите строку и выберите, куда ему — в дело, заметку или тему. Голосовые из Telegram и WhatsApp телефон расшифровывает сам, без интернета: слова встают вместо «Голосовое»."),
         HelpSection("Быстрый ввод и отзыв", "Быстро записать можно с плитки «Записать» в шторке (добавьте её через карандаш в быстрых настройках) или долгим нажатием на значок приложения — «Записать» / «Надиктовать». Если Margin понял фразу не так, нажмите «Не совсем понял» под результатом. «Отправить отзыв» в меню открывает письмо разработчику с журналами ошибок; ваши записи не отправляются."),
         HelpSection("Неделя, напоминания, виджет", "По воскресеньям на «Сегодня» появляется итог недели: сколько сделано, кто кому должен, какие темы стоят на месте; «Скрыть» убирает его до следующего воскресенья. Если кто-то просрочил обещание, рядом появится «напомнить»: Margin подготовит сообщение (SMS, если известен телефон, иначе через «Поделиться»), а отправите его вы. Утренняя сводка и вечерний итог включаются в Настройках → «Уведомления». Виджет «Margin · Сегодня» на рабочем столе показывает дела дня и открывает поле ввода или диктовку. Тему целиком можно отправить заказчику страницей PDF: «Ещё» → «Поделиться PDF»."),
         HelpSection("Приватность", "Настройки → «Приватность»: вход по отпечатку (или коду блокировки) и «Где ваши данные» — где хранятся записи и что уходит с телефона (ничего, кроме копии в Google, если вы её включили). На экране блокировки напоминания показываются без текста дел."),
@@ -1473,6 +1480,9 @@ object Ru : Strings {
     override val attachFile = "Файл"
     override val attachContact = "Контакт"
     override val transcribing = "Распознаю…"
+    override fun transcribingAt(p: Int) = "Распознаю · $p%"
+    override val voiceUnreadable = "Запись не читается"
+    override val voiceNoWords = "Слов не разобрать"
     override val writeOnPage = "Пишите выше ↑"
     override val newTopicLink = "+ тема"
     override val newTopicTitle = "Новая тема"
@@ -1881,6 +1891,8 @@ object Ru : Strings {
     override val diaryEmptyHint = "Пишите сюда что угодно — мысль, итоги встречи, впечатление. Заметки, написанные в деле или теме, тоже встают сюда со ссылкой на них. Через @ можно отметить человека, компанию, место, дело или тему."
     override val topicsPage = "Темы"
     override val topicsSub = "когда дело становится большим"
+    override val navDays = "дни"
+    override val navSections = "разделы"
     override val todayWordLink = "сегодня ›"
     override val topicsNoneThisDay = "В этот день тем нет"
     override val contentsSub = "входящие, материалы, контакты, архив"
@@ -2386,6 +2398,9 @@ object En : Strings {
     override val attachFile = "File"
     override val attachContact = "Contact"
     override val transcribing = "Transcribing…"
+    override fun transcribingAt(p: Int) = "Transcribing · $p%"
+    override val voiceUnreadable = "Can’t read the recording"
+    override val voiceNoWords = "No words to make out"
     override val writeOnPage = "Write above ↑"
     override val newTopicLink = "+ topic"
     override val newTopicTitle = "New topic"
@@ -2809,6 +2824,8 @@ object En : Strings {
     override val diaryEmptyHint = "Write anything here. Notes from the feed come here too."
     override val topicsPage = "Topics"
     override val topicsSub = "when a matter grows big"
+    override val navDays = "days"
+    override val navSections = "sections"
     override val todayWordLink = "today ›"
     override val topicsNoneThisDay = "No topics on this day"
     override val contentsSub = "inbox, materials, contacts, archive"

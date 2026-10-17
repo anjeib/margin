@@ -80,6 +80,9 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
     var editing by remember { mutableStateOf<ru.anjeib.margin.data.Entry?>(null) }
     var viewing by remember { mutableStateOf<Attachment?>(null) }
     val working by vm.working.collectAsState()
+    val heardWaiting by ru.anjeib.margin.voice.Transcripts.waiting.collectAsState()
+    val heardProgress by ru.anjeib.margin.voice.Transcripts.progress.collectAsState()
+    val heardUnreadable by ru.anjeib.margin.voice.Transcripts.unreadable.collectAsState()
     val topics = remember(data.tasks) {
         data.tasks.filter { it.topic && !it.done && !(it.thought && it.subtasks.isEmpty()) }
             .sortedByDescending { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.events.maxOfOrNull { it.at } ?: "", t.createdAt) }.take(8)
@@ -112,9 +115,13 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
                         InboxRow(seat = seatOf(i, list.size), hour = e.at.drop(11).take(5),
                             icon = { Icon(kindIcon(a?.kind ?: "text"), null, tint = c.graphite, modifier = Modifier.size(19.dp)) },
                             // A photo without words is «Фото без подписи», not its file name; the kind is the mark on the left.
-                            title = e.text.ifBlank { a?.caption ?: a?.let { if (it.kind == "photo") s.photoNoCaption else attachmentLabel(it).ifBlank { it.name } } ?: "" },
+                            // A voice without words shows what was said in it, once the phone has read it.
+                            title = e.text.ifBlank { a?.caption ?: a?.transcript?.takeIf { a.kind == "audio" && it.isNotBlank() }
+                                ?: a?.let { if (it.kind == "photo") s.photoNoCaption else attachmentLabel(it).ifBlank { it.name } } ?: "" },
                             meta = listOfNotNull(e.from, attachmentsSummary(e.attachments)?.takeIf { e.attachments.size > 1 || e.text.isNotBlank() },
-                                if (a != null && "ocr:${a.id}" in working) "…" else null).joinToString("  ·  "),
+                                a?.takeIf { it.kind == "audio" && e.text.isBlank() && !it.transcript.isNullOrBlank() }?.let { attachmentLabel(it) },
+                                if (a != null && "ocr:${a.id}" in working) "…" else null,
+                                a?.takeIf { it.kind == "audio" }?.let { voiceState(it, heardWaiting, heardProgress, heardUnreadable) }).joinToString("  ·  "),
                             thumb = a?.takeIf { it.kind == "photo" || it.kind == "video" }, onThumb = { viewing = it },
                             onOpen = { if (a != null) viewing = a else editing = e },
                             onRemove = { vm.removeEntry("note:${note.id}", e.id) }, canPick = topics.isNotEmpty(),
@@ -150,6 +157,15 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
 }
 
 /** One thing in «Входящие»: its hour on the margin, the kind mark, the words, a quiet line; a tap opens it, a hold — its menu. */
+/** «Распознаю · 40%» / «Запись не читается» for a voice in the inbox; null when there is nothing to say. */
+private fun voiceState(a: Attachment, waiting: Set<String>, progress: Map<String, Float>, unreadable: Set<String>): String? = when {
+    progress[a.id] != null -> ru.anjeib.margin.i18n.L.s.transcribingAt((progress[a.id]!! * 100).toInt())
+    a.id in waiting -> ru.anjeib.margin.i18n.L.s.transcribing
+    a.id in unreadable -> ru.anjeib.margin.i18n.L.s.voiceUnreadable
+    a.transcript == "" -> ru.anjeib.margin.i18n.L.s.voiceNoWords
+    else -> null
+}
+
 @Composable
 private fun InboxRow(seat: Seat, hour: String, icon: @Composable () -> Unit, title: String, meta: String, thumb: Attachment?, onThumb: (Attachment) -> Unit,
                      onOpen: (() -> Unit)? = null, onRemove: (() -> Unit)? = null, canPick: Boolean = false,

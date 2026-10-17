@@ -27,6 +27,8 @@ object Files {
     fun dir(ctx: Context) = File(ctx.filesDir, "att").apply { mkdirs() }
     fun file(ctx: Context, a: Attachment) = a.file?.let { File(dir(ctx), it) }
 
+    private val AUDIO_EXT = setOf("ogg", "oga", "opus", "m4a", "aac", "mp3", "wav", "amr", "3gp", "flac", "webm")
+
     /** Copies a picked content Uri into app storage. */
     suspend fun import(ctx: Context, uri: Uri, kindHint: String? = null): Attachment? = withContext(Dispatchers.IO) {
         runCatching {
@@ -48,6 +50,8 @@ object Files {
                 mime?.startsWith("image/") == true -> "photo"
                 mime?.startsWith("video/") == true -> "video"
                 mime?.startsWith("audio/") == true -> "audio"
+                // Some apps share a voice as application/octet-stream: the name says what it is.
+                name.substringAfterLast('.', "").lowercase() in AUDIO_EXT -> "audio"
                 else -> "file"
             }
             Attachment(id = id, kind = kind, file = out.name, name = name, mime = mime, size = if (size > 0) size else out.length(),

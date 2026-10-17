@@ -129,6 +129,22 @@ fun AppData.setOcr(attachmentId: String, text: String?): AppData {
         notes = notes.map { n -> if (n.entries.none { e -> e.attachments.any { it.id == attachmentId } }) n else n.copy(entries = n.entries.fix()) })
 }
 
+/**
+ * What was heard in a voice note, wherever it lives. Unlike [setOcr] an empty text is kept as "": it means «read, no words
+ * in it» (or a file the phone can't decode), so the note isn't read again on every start; null — not read yet.
+ */
+fun AppData.setTranscript(attachmentId: String, text: String): AppData {
+    val v = text.trim()
+    fun List<Entry>.fix() = map { e -> if (e.attachments.none { it.id == attachmentId }) e else e.copy(attachments = e.attachments.map { if (it.id == attachmentId) it.copy(transcript = v) else it }) }
+    return copy(tasks = tasks.map { t -> if (t.entries.none { e -> e.attachments.any { it.id == attachmentId } }) t else t.copy(entries = t.entries.fix()) },
+        notes = notes.map { n -> if (n.entries.none { e -> e.attachments.any { it.id == attachmentId } }) n else n.copy(entries = n.entries.fix()) })
+}
+
+/** Voice notes not read yet: forwarded from Telegram, shared from WhatsApp, attached as a file, or left while the model was coming. */
+fun AppData.unheardAudio(): List<Attachment> =
+    (tasks.asSequence().flatMap { it.entries } + notes.asSequence().flatMap { it.entries }).flatMap { it.attachments }
+        .filter { it.kind == "audio" && it.transcript == null && it.file != null }.toList()
+
 /** The attachment as it is now in the data (its recognised text may have arrived after it was opened). */
 fun AppData.attachment(id: String): Attachment? =
     (tasks.asSequence().flatMap { it.entries } + notes.asSequence().flatMap { it.entries }).flatMap { it.attachments }.firstOrNull { it.id == id }

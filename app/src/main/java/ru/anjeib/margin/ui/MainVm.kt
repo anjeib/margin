@@ -131,6 +131,11 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         Processor.schedule(ctx)
         ru.anjeib.margin.voice.LocalSpeech.refresh(ctx)
         ru.anjeib.margin.voice.ModelWorker.schedule(ctx)
+        // Voice notes that came in without words (shared, forwarded, left while the model was coming) are read on the phone.
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(store.data, ru.anjeib.margin.voice.LocalSpeech.state) { d, _ -> d }
+                .collect { d -> ru.anjeib.margin.voice.Transcripts.sweep(ctx, d) }
+        }
         // Back online → let the queue worker run right away.
         runCatching {
             ctx.getSystemService(android.net.ConnectivityManager::class.java)?.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
@@ -654,6 +659,10 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** The planner's day tabs: the day the main page shows (null — today). */
     val pageDay = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)
 
+    /** The calendar's feed: the day at its top (the frame shows it; closing the calendar opens it), and each ask to go to a day. */
+    val feedDay = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)
+    val feedJump = kotlinx.coroutines.flow.MutableStateFlow(0)
+
     /** The card page's «+»: each tap opens (or closes) the line of marks over its writing line. */
     val markPicker = androidx.compose.runtime.mutableStateOf(0)
 
@@ -737,7 +746,11 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     private fun enrich(owner: String, entryId: String, a: Attachment) {
         val s = settings.value
         when (a.kind) {
-            "audio" -> if (a.transcript.isNullOrBlank()) transcribe(a) { text -> updateAttachment(owner, entryId, a.id) { it.copy(transcript = text.sentence()) } }
+            // On the phone — the same reader as for shared voices (any format, long ones in pieces); the cloud only without the model.
+            "audio" -> if (a.transcript.isNullOrBlank()) {
+                if (ru.anjeib.margin.voice.Transcripts.canRead(ctx)) ru.anjeib.margin.voice.Transcripts.hear(ctx, a)
+                else transcribe(a) { text -> updateAttachment(owner, entryId, a.id) { it.copy(transcript = text.sentence()) } }
+            }
         }
     }
 
@@ -1042,7 +1055,10 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val inbox = data.value.inboxNote() ?: return
         val e = inbox.entries.find { it.id == entryId } ?: return
         val first = e.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
-        val title = (if (first.length > 90) first.take(90).substringBeforeLast(' ') + "…" else first)
+        // A forwarded voice: named by what was said in it (its words stay with the voice, not repeated in the text).
+        val heard = e.attachments.firstNotNullOfOrNull { a -> a.transcript?.takeIf { a.kind == "audio" && it.isNotBlank() } }?.substringBefore('\n')
+        val named = first.ifBlank { heard.orEmpty() }
+        val title = (if (named.length > 90) named.take(90).substringBeforeLast(' ') + "…" else named)
             .ifBlank { e.attachments.firstOrNull()?.let { it.caption ?: it.name } ?: L.s.untitled }.sentence()
         val rest = e.text.trim().removePrefix(first).trim()
         val t = Task(title = title, entries = if (rest.isNotBlank() || e.attachments.isNotEmpty() || e.from != null)
@@ -1058,7 +1074,10 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val inbox = data.value.inboxNote() ?: return
         val e = inbox.entries.find { it.id == entryId } ?: return
         val first = e.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
-        val title = (if (first.length > 70) first.take(70).substringBeforeLast(' ') + "…" else first)
+        // A forwarded voice: named by what was said in it (its words stay with the voice, not repeated in the text).
+        val heard = e.attachments.firstNotNullOfOrNull { a -> a.transcript?.takeIf { a.kind == "audio" && it.isNotBlank() } }?.substringBefore('\n')
+        val named = first.ifBlank { heard.orEmpty() }
+        val title = (if (named.length > 70) named.take(70).substringBeforeLast(' ') + "…" else named)
             .ifBlank { e.attachments.firstOrNull()?.let { it.caption ?: it.name } ?: L.s.diaryTitle }.sentence()
         val t = Task(title = title, topic = true, thought = true, entries = listOf(Entry(at = e.at, text = listOfNotNull(e.text.trim().ifBlank { null }, e.from?.let { "— $it" }).joinToString("\n"), attachments = e.attachments)),
             history = listOf(ru.anjeib.margin.data.Change(kind = "created", by = "you")))
@@ -1246,12 +1265,15 @@ class MainVm(app: Application) : AndroidViewModel(app) {
                 val d = data.value
                 val hints = (d.persons.map { it.name } + d.projects).distinct().take(40)
                 val text = if (canLocal) Files.file(ctx, audio)?.let { local.transcribe(ctx, it, "ru") } ?: "" else {
-                    val bytes = withContext(Dispatchers.IO) { Files.file(ctx, audio)?.readBytes() } ?: return@launch
+                    // The cloud takes 16 kHz PCM, as our own recordings are; anything else is decoded on the phone first.
+                    val bytes = withContext(Dispatchers.IO) { Files.file(ctx, audio)?.let { ru.anjeib.margin.voice.AudioDecoder.wav16k(it) } } ?: return@launch
                     val r = ru.anjeib.margin.ai.Llm.transcribe(s, bytes, hints)
                     prefs.addSpend(r.rub)
                     r.content
                 }
                 if (text.isNotBlank()) onText(text)
+            } catch (e: ru.anjeib.margin.voice.Unreadable) {
+                _toast.value = L.s.voiceUnreadable
             } catch (e: Exception) {
                 _toast.value = e.message
             } finally {

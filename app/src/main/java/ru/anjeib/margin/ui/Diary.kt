@@ -170,6 +170,11 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
     val find = LocalFind.current
     val found = remember { mutableListOf<FindHit>() }
     ReportFound("notes", found, list, data)
+    // The calendar on the diary's frame: all days' notes in one feed (owner, 17 окт).
+    val feed = LocalFramed.current && vm.monthOpen.collectAsState().value
+    val feedStarts = remember { HashMap<LocalDate, Int>() }
+    val feedJump by vm.feedJump.collectAsState()
+    FeedFollow(feed, list, feedStarts, day, feedJump) { vm.feedDay.value = it }
     val plannerLook = planner
     val framed = LocalFramed.current
     val monthOpen by vm.monthOpen.collectAsState()
@@ -195,17 +200,13 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                 }
                 if (planner) DoubleRule(Modifier.padding(top = 18.dp, bottom = 6.dp))
             }
-            if (monthOpen) item("month") { MonthPanel(data, vm, day, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
-            val dayLines = byDay[day].orEmpty()
-            if (lines.isEmpty() && day == today) item("empty") { Margined(Modifier.padding(top = 18.dp)) { Empty(s.diaryEmpty, s.diaryEmptyHint) } }
-            else if (dayLines.isEmpty()) item("none") { Margined(Modifier.padding(top = 18.dp)) { Voice(s.notesNoneThisDay) } }
-            run {
-                val list = dayLines
+            /** One day's notes: notes of one matter or topic together, under its link. */
+            fun androidx.compose.foundation.lazy.LazyListScope.dayNotes(d: LocalDate, list: List<Any>) {
                 // Owner, 16 окт: notes of one matter or topic in a day stand together, under its link, on one light tint.
                 val blocks = withTopicHeads(list) { (it as? LinkedNote)?.let { l -> l.open to l.link } }
                 val pos = blockPositions(blocks) { (it as? LinkedNote)?.open }
                 blocks.forEachIndexed { i, x ->
-                    if (x is TopicHead) { item("lg" + day + x.id) { TopicBlockHead(x.title, raw = true, top = if (i == 0) 4.dp else 14.dp) { onOpen(x.id) } }; return@forEachIndexed }
+                    if (x is TopicHead) { item("lg" + d + x.id) { TopicBlockHead(x.title, raw = true, top = if (i == 0) 4.dp else 14.dp) { onOpen(x.id) } }; return@forEachIndexed }
                     if (x is LinkedNote) { item("l" + x.key) { LinkedNoteRow(x, data, vm, i, blocks.size, pos[i], onOpen, onOpenNote, onPerson, first = i == 0) }; return@forEachIndexed }
                     val n = x as Task
                     item("n" + n.id) {
@@ -263,11 +264,35 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                     }
                 }
             }
+            if (feed) {
+                // The calendar open: every day's notes in one feed under the pinned month (owner, 17 окт).
+                feedStarts.clear()
+                val cs = CountingScope(this)
+                cs.stickyHeader("month") {
+                    Box(Modifier.background(c.bg).marginRule(marginInk)) {
+                        MonthPanel(data, vm, day, events) { d -> vm.pageDay.value = d.takeIf { it != today }; vm.feedJump.value++ }
+                    }
+                }
+                cs.n++
+                (byDay.keys + today).toSortedSet().forEach { d ->
+                    feedStarts[d] = cs.n
+                    cs.item("fd$d") { FeedDayHead(d, today) }
+                    val l = byDay[d].orEmpty()
+                    if (l.isEmpty()) cs.item("fn$d") { Margined(Modifier.padding(top = 6.dp)) { Voice(s.notesNoneThisDay) } } else cs.dayNotes(d, l)
+                }
+                item("feed-end") { Box(Modifier.fillParentMaxHeight()) }
+            } else {
+            if (monthOpen) item("month") { MonthPanel(data, vm, day, events) { d -> vm.pageDay.value = d.takeIf { it != today } } }
+            val dayLines = byDay[day].orEmpty()
+            if (lines.isEmpty() && day == today) item("empty") { Margined(Modifier.padding(top = 18.dp)) { Empty(s.diaryEmpty, s.diaryEmptyHint) } }
+            else if (dayLines.isEmpty()) item("none") { Margined(Modifier.padding(top = 18.dp)) { Voice(s.notesNoneThisDay) } }
+            dayNotes(day, dayLines)
             // Owner, 16 окт: archived notes at the end of the page, folded — the diary's own and those of matters and topics.
             val archived = data.tasks.filter { it.thought && it.done && it.subtasks.isEmpty() && sOk(it.sphere) }.map { t ->
                 ArchItem(t.id, t.title.ifBlank { t.entries.firstOrNull()?.text.orEmpty() }, t.doneAt, open = { onOpen(t.id) }, restore = { vm.reviveTopic(t.id) }, purge = { vm.removeMatter(t.id) })
             } + data.archivedNotes(vm, onOpenNote) { sOk(it) }
             if (day == today) archiveFold("arch", archived, archOpen) { archOpen = !archOpen }
+            }
             item("end") { PageEnd(pageLines) }
             item("tail") { Box(Modifier.width(1.dp).height(40.dp)) }
           }

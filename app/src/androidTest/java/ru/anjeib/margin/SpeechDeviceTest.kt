@@ -13,7 +13,7 @@ import java.io.File
 
 /**
  * GigaAM on the device: the model (files/speech-model) and test recordings (files/speech-set) are copied in beforehand
- * with «adb shell run-as <package>»; each WAV is read and timed. Logs under «Speech».
+ * with «adb shell run-as <package>»; each recording (WAV or a voice file of another app) is read and timed. Logs under «Speech».
  */
 @RunWith(AndroidJUnit4::class)
 class SpeechDeviceTest {
@@ -28,14 +28,17 @@ class SpeechDeviceTest {
         File(ctx.filesDir, "models/speech/current").writeText(m.version)
         LocalSpeech.refresh(ctx)
         assumeTrue(LocalSpeech.state.value is LocalSpeech.State.Ready)
-        val wavs = File(ctx.filesDir, "speech-set").listFiles { f -> f.name.endsWith(".wav") }!!.sortedBy { it.name }
+        // Our own WAVs and voice files of other apps: Telegram/WhatsApp .ogg/.opus, .m4a, .mp3, WAV of other rates.
+        val wavs = File(ctx.filesDir, "speech-set").listFiles { f -> f.extension.lowercase() in setOf("wav", "ogg", "oga", "opus", "m4a", "aac", "mp3", "flac", "amr") }!!.sortedBy { it.name }
         var total = 0L; var audio = 0.0
         wavs.forEach { w ->
             val t0 = System.currentTimeMillis()
-            val text = LocalSpeech.transcribe(ctx, w, "ru")
+            var steps = 0
+            val text = runCatching { LocalSpeech.transcribe(ctx, w, "ru") { steps++ } }.getOrElse { "<${it.javaClass.simpleName}: ${it.message}>" }
             val ms = System.currentTimeMillis() - t0
-            total += ms; audio += (w.length() - 44) / 32000.0
-            Log.i("Speech", "${w.name}\t${ms}ms\t$text")
+            val secs = runCatching { android.media.MediaMetadataRetriever().run { try { setDataSource(w.absolutePath); extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L } finally { release() } } }.getOrDefault(0L) / 1000.0
+            total += ms; audio += secs
+            Log.i("Speech", "${w.name}\t${"%.1f".format(secs)}s\t${ms}ms\tprogress×$steps\t$text")
         }
         Log.i("Speech", "TOTAL ${wavs.size} files, ${"%.1f".format(audio)} s audio, ${total} ms, RTF ${"%.3f".format(total / 1000.0 / audio)}")
     } }

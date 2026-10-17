@@ -86,7 +86,7 @@
             </intent-filter>
         </service>
 
-        <!-- «Поделиться» и «В Margin» в меню выделенного текста: из Telegram, MAX, почты, браузера. -->
+        <!-- «Поделиться» и «В Margin» в меню выделенного текста: из Telegram, MAX, почты, браузера; голосовые — audio/* (Telegram, WhatsApp). -->
         <activity
             android:name=".ForwardActivity"
             android:exported="true"
@@ -102,6 +102,7 @@
                 <data android:mimeType="text/*" />
                 <data android:mimeType="image/*" />
                 <data android:mimeType="video/*" />
+                <data android:mimeType="audio/*" />
                 <data android:mimeType="application/*" />
             </intent-filter>
             <intent-filter>
@@ -109,6 +110,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
                 <data android:mimeType="video/*" />
+                <data android:mimeType="audio/*" />
                 <data android:mimeType="application/*" />
             </intent-filter>
             <intent-filter>
