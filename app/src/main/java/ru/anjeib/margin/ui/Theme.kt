@@ -177,6 +177,17 @@ object Type {
     val label get() = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 11.5.sp, letterSpacing = 1.2.sp)
     val tab get() = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 17.sp)
     val italic get() = TextStyle(fontFamily = Serif, fontStyle = FontStyle.Italic, fontSize = 15.sp, lineHeight = 21.sp)
+
+    // ---- The planner's scale (owner, 17 окт: «шрифты вразнобой — нужны принципы»; CLAUDE.md «Шрифты») ----
+    // Three faces, each with its role: Cormorant — a page's name; Literata — what the person wrote (rows, notes) at L;
+    // the sans (Commissioner) — what the app says. Three sizes: L 16 (rows and the hour on the margin — one line), M 15
+    // (the way about: weekdays, the day's date, tabs), S 13 (lines under rows, links, «с 14 окт», subtitles, «ОКТ»).
+    /** L: the hour on the margin — medium, figures of one width; the same size as the row it stands by. */
+    val markL get() = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 16.sp, lineHeight = 23.sp, fontFeatureSettings = "tnum")
+    /** M: the way about — weekdays, a day's date, tabs. */
+    val markM get() = TextStyle(fontFamily = Sans, fontWeight = FontWeight(500), fontSize = 15.sp, lineHeight = 20.sp, fontFeatureSettings = "tnum")
+    /** S: what is said by the way — under a row, a subtitle, a link, a small date. */
+    val meta get() = TextStyle(fontFamily = Sans, fontWeight = FontWeight(400), fontSize = 13.sp, lineHeight = 18.sp)
 }
 
 val LocalPalette = staticCompositionLocalOf { LightPalette }

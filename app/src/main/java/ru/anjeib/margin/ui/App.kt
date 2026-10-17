@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.draw.shadow
+
 import ru.anjeib.margin.data.dowFull
 
 import androidx.compose.ui.input.pointer.pointerInput
@@ -410,6 +412,16 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                     androidx.compose.animation.Crossfade(inJournal, animationSpec = tween(220), label = "journal") { j ->
                                         if (j) page(PageKey(JOURNAL, view, pageDay)) else page(PageKey(TASKS, Views.TODAY, pageDay))
                                     }
+                                }
+                                // Gone far along the feed (owner, 17 окт): a quiet «↑ сегодня» / «↓ сегодня» over the field brings it back.
+                                val awayDay = feedDay?.takeIf { it != todayF }
+                                androidx.compose.animation.AnimatedVisibility(awayDay != null, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), enter = fadeIn(), exit = fadeOut()) {
+                                    val up = (awayDay ?: todayF).isAfter(todayF)
+                                    val pill = RoundedCornerShape(16.dp)
+                                    Text((if (up) "↑  " else "↓  ") + s.today.lowercase(),
+                                        style = Type.meta.copy(color = c.link, fontWeight = FontWeight.Medium),
+                                        modifier = Modifier.shadow(3.dp, pill).clip(pill).background(c.bg).border(1.dp, c.hairline, pill)
+                                            .clickable { vm.pageDay.value = null; vm.feedJump.value++ }.padding(horizontal = 16.dp, vertical = 8.dp))
                                 }
                             }
                         }
@@ -885,7 +897,7 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
     Column(Modifier.fillMaxSize()) {
     // The head stays put and a swipe across it turns the sections, as on every page; in the diary's frame it is the frame's.
     // The menu ≡ (owner, 17 окт): what isn't the diary itself — its name, the way back on the margin (App).
-    Box(Modifier.fillMaxWidth().padding(top = 40.dp).screenRule()) { PageHead(s.contentsTitle, null) }
+    Box(Modifier.fillMaxWidth().screenRule()) { PageHead(s.contentsTitle, null) }
     Column(Modifier.fillMaxSize().screenRule().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         Spacer(Modifier.height(8.dp))
         // The diary, «Дневник» and «Контакты» are in the diary's head; the menu keeps the rest (owner, 17 окт).

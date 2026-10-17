@@ -1026,7 +1026,11 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                             LaunchedEffect(Unit) { kotlinx.coroutines.delay(150); runCatching { focus.requestFocus() } }
                             Box(Modifier.padding(bottom = 10.dp).bleed(PanelBleed)) { SearchField(q, { q = it }, s.searchMaterials, Modifier.focusRequester(focus)) }
                         }
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // The same word-tabs as «Контакты» on the planner page (owner, 17 окт: one look).
+                        if (planner) Box(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 4.dp)) {
+                            TextTabs(listOf("all" to s.all, "photo" to s.kindPhotos, "file" to s.kindDocs, "audio" to s.kindVoice), kind, { kind = it })
+                        }
+                        else Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf("all" to s.all, "photo" to s.kindPhotos, "file" to s.kindDocs, "audio" to s.kindVoice).forEach { (k, l) -> Chip(l, kind == k, onClick = { kind = k }) }
                         }
                     }
@@ -1037,7 +1041,10 @@ fun MaterialsGrid(topics: List<Task>, onView: (Attachment) -> Unit, onTopic: ((S
                 val date = runCatching { LocalDate.parse(d) }.getOrNull()
                 item("day$d") {
                     Column(Modifier.animateItem()) {
-                        Margined(Modifier.padding(top = 14.dp), margin = { date?.let { DayMargin(it, today, false, strong = true) } }) {
+                        // The day as in the diary's feed: the date small in petrol on the margin.
+                        Margined(Modifier.padding(top = 14.dp), margin = { date?.let { if (planner) Text(if (it == today) s.today.lowercase() else it.dayMonthShort(),
+                            style = Type.small.copy(color = c.link, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.End),
+                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) else DayMargin(it, today, false, strong = true) } }) {
                             Panel { Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)) {
                                 // One link per topic or matter that day, its files under it.
                                 list.groupBy { it.first.id }.values.forEach { g ->

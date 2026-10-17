@@ -210,7 +210,7 @@ fun PanelDivider() = if (planner) Spacer(Modifier.height(2.dp))
     else Box(Modifier.padding(start = MarkCol + 12.dp).fillMaxWidth().height(1.dp).background(M.c.hairline))
 
 /** The top of a row's words, so the margin note can stand on their first line. */
-val RowTop = 13.dp
+val RowTop = 9.dp
 
 /** «когда» on the margin: small grey italic; [late] — terracotta; [link] — petrol (a day someone owes). */
 @Composable
@@ -222,8 +222,10 @@ fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modif
     if (planner) {
         // «Полоса набора» (0.66): hours and dates in Commissioner, aligned right against the margin rule to share the same
         // vertical axis as the day's large number; late — in terracotta.
-        Text(text, style = Type.small.copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink }, fontSize = 13.5.sp, lineHeight = 20.sp,
-            fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum", textAlign = TextAlign.End), maxLines = 2, modifier = modifier.fillMaxWidth())
+        // Owner, 17 окт: the hour is what the margin is read for — large, level with the row's first line; dates and «с 14 окт» stay small.
+        val hour = isHour(text)
+        Text(text, style = (if (hour) Type.markL else Type.meta.copy(fontWeight = FontWeight.Medium, lineHeight = 20.sp, fontFeatureSettings = "tnum"))
+            .copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink }, textAlign = TextAlign.End), maxLines = 2, modifier = modifier.fillMaxWidth())
         return
     }
     PencilText(AnnotatedString(text), style = Type.italic.copy(color = when { link -> c.link; else -> if (planner) c.ink else c.ink.copy(alpha = 0.8f) },
@@ -237,8 +239,12 @@ fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modif
 @Composable
 fun RowMargin(text: String?, late: Boolean = false, link: Boolean = false) {
     if (text.isNullOrBlank()) return
-    MarginNote(text, late, link, Modifier.padding(top = RowTop + 2.dp))
+    // A large hour shares the row's first line exactly; small words sit a little lower, on its baseline.
+    MarginNote(text, late, link, Modifier.padding(top = if (planner && isHour(text)) RowTop - 2.dp else RowTop + 2.dp))
 }
+
+/** «10:00», «9:30» — an hour, set large on the margin. */
+fun isHour(text: String) = Regex("^\\d{1,2}:\\d{2}$").matches(text.trim())
 
 /**
  * The one row of every list: the mark in its column, the words, one quiet line under them, an optional end.
@@ -318,7 +324,7 @@ fun MarginTap(onTap: (() -> Unit)?, late: Boolean = false, done: Boolean = false
         val extra = reach.roundToPx()
         val p = m.measure(c.copy(minWidth = 0, maxWidth = if (c.maxWidth == androidx.compose.ui.unit.Constraints.Infinity) c.maxWidth else c.maxWidth + extra))
         layout(p.width - extra, p.height) { p.place(0, 0) }
-    }.heightIn(min = 48.dp).drawBehind {
+    }.heightIn(min = 44.dp).drawBehind {
         // The cell now runs [reach] past its slot; the slot's right edge + 10 dp is the rule itself.
         val x = size.width - reach.toPx() + 10.dp.toPx()
         // RowBody pads the words RowTop − 2 dp from the top; the knot sits on the middle of their first line.
@@ -450,7 +456,7 @@ fun SectionHead(
 @Composable
 fun Voice(text: AnnotatedString, modifier: Modifier = Modifier, link: Boolean = false, onClick: (() -> Unit)? = null) {
     val c = M.c
-    PencilText(text, style = if (planner) Type.small.copy(color = if (link) c.link else c.graphite, fontSize = 14.5.sp, lineHeight = 20.sp)
+    PencilText(text, style = if (planner) Type.meta.copy(color = if (link) c.link else c.graphite, lineHeight = 19.sp)
         else Type.italic.copy(color = if (link) c.link else c.graphite, fontSize = 16.sp, lineHeight = 22.sp),
         modifier = modifier.clip(RoundedCornerShape(6.dp)).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(vertical = if (onClick != null) 6.dp else 0.dp))
@@ -470,7 +476,8 @@ fun TextTabs(options: List<Pair<String, String>>, selected: String, onSelect: (S
             Column(Modifier.clip(RoundedCornerShape(6.dp)).semantics { this.selected = on }.clickable { onSelect(k) }.padding(top = 6.dp),
                 horizontalAlignment = Alignment.Start) {
                 // «Полоса набора» (Fable, 15 окт): upright words, the chosen one in ink over its short rule — italic as a «selected» state read oddly.
-                Text(l, style = if (planner) Type.body.copy(fontFamily = rowFamily, color = if (on) c.ink else c.graphite, fontSize = 17.sp, fontWeight = if (on) FontWeight(600) else FontWeight(450))
+                // Tabs are the way about: M in the sans (owner, 17 окт: one scale).
+                Text(l, style = if (planner) Type.markM.copy(color = if (on) c.ink else c.graphite, fontWeight = if (on) FontWeight(600) else FontWeight(400))
                     else Type.body.copy(color = if (on) c.link else c.graphite, fontSize = 16.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium))
                 Spacer(Modifier.height(6.dp))
                 Box(Modifier.width(if (on) 28.dp else 0.dp).height(2.dp).clip(RoundedCornerShape(1.dp)).background(if (on) c.link else Color.Transparent))

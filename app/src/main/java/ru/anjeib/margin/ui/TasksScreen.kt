@@ -368,12 +368,16 @@ fun TaskList(
                         val d = f.day
                         feedStarts[d] = cs.n
                         cs.item("fd$d") { FeedDayHead(d, today) }
+                        // Everything: the day's notes go in among its matters by their hour.
+                        val noteRows: List<Pair<String, androidx.compose.foundation.lazy.LazyListScope.() -> Unit>> = if (kind == null) f.notes.map { n ->
+                            n.at.drop(11).take(5) to { item("l" + n.key) { LinkedNoteRow(n, data, vm, 0, 1, null, onOpen, onOpenPiece, onPerson) } }
+                        } else emptyList()
                         if (kind == null || kind == "deals") cs.dayPanel(f.plan, today, "f$d", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
-                            doneOpen = isOpen("s-done-$d"), onDoneFold = { toggle("s-done-$d") }, openTopics = openTopics.value, onTopicFold = ::foldTopic)
+                            doneOpen = isOpen("s-done-$d"), onDoneFold = { toggle("s-done-$d") }, openTopics = openTopics.value, onTopicFold = ::foldTopic, extras = noteRows)
                         if (kind == null || kind == "topics") f.topics.forEachIndexed { i, (t, word) ->
                             cs.item("ft$d" + t.id) { TopicPaperRow(t, seatOf(i, f.topics.size), onOpen = { onOpen(t.id) }, margin = word ?: "") }
                         }
-                        if (kind == null || kind == "notes") cs.linkedNotesOfDay(d, f.notes, data, vm, onOpen, onOpenPiece, onPerson)
+                        if (kind == "notes") cs.linkedNotesOfDay(d, f.notes, data, vm, onOpen, onOpenPiece, onPerson)
                         if (d == today) {
                             if ((kind == null || kind == "deals") && undated.isNotEmpty()) cs.undatedRows(undated)
                             if (kind == null) {

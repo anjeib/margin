@@ -208,7 +208,8 @@ fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpe
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
         pageHeadItem("h") { PageHead(s.archiveTitle, s.archiveSub) }
         if (notes.isEmpty() && people.isEmpty() && topics.isEmpty()) item("empty") {
-            Margined(Modifier.padding(top = 8.dp)) { Voice(s.archiveEmpty) }
+            // The same empty page as «Входящие» (owner, 17 окт: one look for the menu's sections).
+            Margined { Empty(s.inboxEmpty, s.archiveEmpty) }
         }
         // v2: settled topics with their materials; news in one brings it back. The day it was settled on the margin.
         if (topics.isNotEmpty()) item("th") { SectionHead(s.topicsBadge, count = topics.size, top = 12.dp) }
@@ -271,7 +272,7 @@ fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib
         Column {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(month.month.getDisplayName(TextStyle.FULL_STANDALONE, loc).replaceFirstChar { it.uppercase() } + if (month.year != today.year) " ${month.year}" else "",
-                    style = Type.title.copy(color = c.ink, fontSize = 18.sp), modifier = Modifier.weight(1f))
+                    style = Type.markM.copy(color = c.ink, fontWeight = FontWeight.SemiBold), modifier = Modifier.weight(1f))
                 Box(Modifier.size(34.dp).clip(CircleShape).clickable { month = month.minusMonths(1) }, contentAlignment = Alignment.Center) {
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, s.prevMonth, tint = c.graphite)
                 }
@@ -282,7 +283,7 @@ fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib
             Row(Modifier.fillMaxWidth()) {
                 (1..7).forEach { d ->
                     // Owner, 14 окт: weekends in pale terracotta, as a printed planner marks them.
-                    Text(java.time.DayOfWeek.of(d).getDisplayName(TextStyle.SHORT, loc).lowercase(), style = Type.italic.copy(color = if (d >= 6) weekendInk else c.graphite, fontSize = 12.sp, lineHeight = 14.sp),
+                    Text(java.time.DayOfWeek.of(d).getDisplayName(TextStyle.SHORT, loc).lowercase(), style = Type.meta.copy(color = if (d >= 6) weekendInk else c.graphite, lineHeight = 16.sp),
                         modifier = Modifier.weight(1f).padding(bottom = 1.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
             }
@@ -305,7 +306,7 @@ fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib
                                     .then(if (d == today && !sel) Modifier.border(1.dp, c.link, RoundedCornerShape(8.dp)) else Modifier)
                                     .clickable { onPick(d) }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                                     val weekend = d.dayOfWeek.value >= 6
-                                    Text("$n", style = Type.body.copy(color = when { sel -> c.bg; weekend -> if (past) weekendInk.copy(alpha = 0.5f) else weekendInk; past -> c.graphite; else -> c.ink }, fontSize = 14.sp, lineHeight = 16.sp,
+                                    Text("$n", style = Type.markM.copy(color = when { sel -> c.bg; weekend -> if (past) weekendInk.copy(alpha = 0.5f) else weekendInk; past -> c.graphite; else -> c.ink }, lineHeight = 17.sp,
                                         fontWeight = if (sel || d == today) FontWeight.SemiBold else FontWeight.Normal))
                                     Row(Modifier.height(5.dp).padding(top = 1.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                         val dot = when { sel -> c.bg; past -> c.ok; late -> c.ink; else -> c.link }

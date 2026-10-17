@@ -1,5 +1,7 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.layout.heightIn
+
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.foundation.layout.PaddingValues
 
@@ -368,19 +370,22 @@ fun PaddingValues.vertical() = PaddingValues(top = calculateTopPadding(), bottom
 fun PageHead(title: String, subtitle: String? = null, modifier: Modifier = Modifier, trailing: (@Composable () -> Unit)? = null) {
     val c = M.c
     if (planner) {
-        Column(modifier.fillMaxWidth().padding(top = if (trailing != null) 0.dp else 8.dp)) {
-            if (trailing != null) Row(Modifier.fillMaxWidth().padding(end = 6.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) { trailing() }
+        // Every page's name at one height and one size (owner, 17 окт: «сделай в едином стиле»): as «Дела» in the diary's head —
+        // Cormorant 25, level with the way back on the margin; a tool (the search on «Материалы») in the same line.
+        Column(modifier.fillMaxWidth().padding(top = 4.dp)) {
             Margined {
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
-                        // A long name («Содержание» by three icons) steps its size down instead of being cut.
-                        androidx.compose.foundation.text.BasicText(title, style = Type.pageTitle.copy(color = c.ink), maxLines = 1,
-                            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 26.sp, maxFontSize = 42.sp, stepSize = 1.sp))
-                        if (subtitle != null) Text(subtitle, style = Type.small.copy(color = c.graphite, fontSize = 14.5.sp, lineHeight = 20.sp), modifier = Modifier.padding(top = 2.dp))
+                        Box(Modifier.heightIn(min = 40.dp, max = 40.dp), contentAlignment = Alignment.CenterStart) {
+                            Text(title, style = Type.pageTitle.copy(color = c.ink, fontSize = 25.sp, lineHeight = 27.sp), maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
+                        if (subtitle != null) Text(subtitle, style = Type.meta.copy(color = c.graphite))
                     }
+                    trailing?.invoke()
                 }
             }
-            DoubleRule(Modifier.padding(top = 18.dp, bottom = 6.dp))
+            DoubleRule(Modifier.padding(top = 12.dp, bottom = 6.dp))
         }
         return
     }

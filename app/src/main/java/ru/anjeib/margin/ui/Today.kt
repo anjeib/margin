@@ -420,7 +420,17 @@ fun LazyListScope.dayPanel(
      * topics are unfolded; null — the older blocks.
      */
     openTopics: Set<String>? = null, onTopicFold: (String) -> Unit = {},
+    /**
+     * Owner, 17 окт («почему события в ленте идут не по времени?»): other rows of the day with their hour («08:30») — the notes of
+     * matters and topics — laid in among the matters by that hour.
+     */
+    extras: List<Pair<String, LazyListScope.() -> Unit>> = emptyList(),
 ) {
+    val waiting = extras.sortedBy { it.first }.toMutableList()
+    var timedSeen = false
+    fun flush(before: String?) {
+        while (waiting.isNotEmpty() && (before == null || waiting.first().first < before)) waiting.removeAt(0).second(this)
+    }
     val all = dayItems(plan, today)
     val doneAll = all.filterIsInstance<DayItem.Done>()
     // More than three done: folded into one row «сделано N ›»; open, the same row at the end folds them back.
@@ -435,6 +445,8 @@ fun LazyListScope.dayPanel(
     var i = -1
     blocks.forEachIndexed { bi, b ->
         if (b is TopicHead) {
+            // The topic's row stands by its first matter's hour too.
+            shown.filterIsInstance<DayItem.Matter>().firstOrNull { it.t.topicId == b.id }?.t?.time?.take(5)?.let { timedSeen = true; flush(it) }
             if (fold) {
                 val rows = shown.filterIsInstance<DayItem.Matter>().map { it.t }.filter { it.topicId == b.id }
                 val open = b.id in openTopics!!
@@ -445,6 +457,13 @@ fun LazyListScope.dayPanel(
             return@forEachIndexed
         }
         val it = b as DayItem
+        // The extras go in by the hour: before the first later timed row; all of them before the untimed rows after the timed ones.
+        val hour = when (it) {
+            is DayItem.Matter -> it.t.time?.take(5)
+            is DayItem.Event -> if (it.e.allDay) null else it.e.start.toLocalTime().toString().take(5)
+            else -> null
+        }
+        if (hour != null) { timedSeen = true; flush(hour) } else if (timedSeen || it is DayItem.Done) flush(null)
         // A folded topic keeps its matters inside it.
         if (fold && it is DayItem.Matter && it.t.topicId != null && it.t.topicId !in openTopics!!) return@forEachIndexed
         i++
@@ -462,6 +481,7 @@ fun LazyListScope.dayPanel(
             }
         }
     }
+    flush(null)
     if (foldable) item(keyPrefix + "done-fold") {
         PaperRow(seatOf(n - 1, n), mark = { TickGlyph(M.c.graphite, 16.dp) }, onClick = onDoneFold) {
             RowTitle(if (foldDone) M.s.doneCountWord(doneAll.size) + "  ›" else M.s.collapse + "  ‹", faded = true)

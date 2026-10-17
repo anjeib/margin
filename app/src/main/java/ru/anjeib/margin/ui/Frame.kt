@@ -190,15 +190,25 @@ class CountingScope(private val inner: androidx.compose.foundation.lazy.LazyList
     }
 }
 
-/** A day in the calendar's feed: its number large on the margin, the weekday quietly by it. */
+/**
+ * A day in the feed (owner, 17 окт: «даты слева огромные и дублируются верхним меню… сейчас очень много дыр»): a hairline across
+ * the page and the date small on the margin by it — «сегодня» in petrol for today; the weekday is the head's week.
+ */
 @Composable
 fun FeedDayHead(day: LocalDate, today: LocalDate) {
     val c = M.c
     val s = M.s
-    Margined(Modifier.padding(top = 18.dp), margin = { MarginDay(day.dayOfMonth, day.dayMonthShort().substringAfter(' ')) }) {
-        Box(Modifier.fillMaxWidth().height(50.dp), contentAlignment = Alignment.BottomStart) {
-            androidx.compose.material3.Text(day.dowFull().lowercase() + if (day == today) "  ·  " + s.today.lowercase() else "",
-                style = Type.small.copy(color = if (day == today) c.ink else c.graphite, fontSize = subSize), modifier = Modifier.padding(bottom = 10.dp))
+    val ink = if (day != today && day.dayOfWeek.value >= 6) c.link.copy(alpha = 0.6f) else c.link
+    // The date as on every day (owner, 17 окт), M in petrol; today — «сегодня» under it, S.
+    Margined(Modifier.padding(top = 12.dp, bottom = 2.dp), margin = {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+            androidx.compose.material3.Text(day.dayMonthShort(), maxLines = 1,
+                style = Type.markM.copy(color = ink, fontWeight = androidx.compose.ui.text.font.FontWeight(if (day == today) 600 else 500)))
+            if (day == today) androidx.compose.material3.Text(s.today.lowercase(), maxLines = 1, style = Type.meta.copy(color = c.link))
+        }
+    }) {
+        Box(Modifier.fillMaxWidth().height(20.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().height(if (day == today) 1.5.dp else 1.dp).background(c.link.copy(alpha = if (day == today) 0.7f else 0.3f)))
         }
     }
 }
@@ -283,7 +293,7 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
                         androidx.compose.material3.Text(if (j) s.journalTitle else s.kindDeals, maxLines = 1,
                             style = Type.pageTitle.copy(color = c.ink, fontSize = 25.sp, lineHeight = 27.sp))
                         androidx.compose.material3.Text(if (j) s.journalSub else s.dealsSub, maxLines = 1,
-                            style = Type.small.copy(color = c.graphite, fontSize = 12.sp, lineHeight = 14.sp))
+                            style = Type.meta.copy(color = c.graphite, lineHeight = 15.sp))
                     }
                 }
             }
@@ -305,7 +315,9 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
             }
             mark(s.peopleTitle, false, onPeople) { PersonGlyph(it, 21.dp) }
             if (t != null) mark(s.search, t.searchOn, t.search) { SearchGlyph(it, 21.dp) }
-            mark(s.journalTitle, journalOn, onJournal) { DiaryGlyph(it, 21.dp) }
+            // «Дела» and «Дневник» side by side (owner, 17 окт: «как из Дневника вернуться?»): the one open is lit.
+            mark(s.kindDeals, !journalOn, { if (journalOn) onJournal() }) { DealGlyph(it, 22.dp) }
+            mark(s.journalTitle, journalOn, { if (!journalOn) onJournal() }) { DiaryGlyph(it, 21.dp) }
             mark(s.contentsTitle, false, onMenu) { MenuGlyph(it) }
         }
         AnimatedContent(monthOpen, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(120)) }, label = "calendar") { open ->
@@ -327,7 +339,8 @@ private fun WeekStrip(day: LocalDate, today: LocalDate, onPick: (LocalDate) -> U
     val loc = if (ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.Ru) java.util.Locale.forLanguageTag("ru") else java.util.Locale.ENGLISH
     val pick by androidx.compose.runtime.rememberUpdatedState(onPick)
     val now by androidx.compose.runtime.rememberUpdatedState(day)
-    Margined(Modifier.padding(top = 4.dp), margin = { Box(Modifier.padding(top = 10.dp)) { MonthFold(day, open = false, onClick = onMonth) } }) {
+    // «ОКТ ▾» on the line of the weekdays (owner, 17 окт).
+    Margined(Modifier.padding(top = 4.dp), margin = { Box(Modifier.height(32.dp), contentAlignment = Alignment.CenterEnd) { MonthFold(day, open = false, onClick = onMonth, top = 0.dp) } }) {
         // A swipe across the week — the week before or after.
         Row(Modifier.fillMaxWidth().pointerInput(Unit) {
             var dx = 0f
@@ -343,10 +356,10 @@ private fun WeekStrip(day: LocalDate, today: LocalDate, onPick: (LocalDate) -> U
                     .background(if (sel) c.link else androidx.compose.ui.graphics.Color.Transparent)
                     .then(if (d == today && !sel) Modifier.border(1.dp, c.link, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
                     .clickable { onPick(d) }.padding(vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Only the weekdays (owner, 17 окт): the dates are the feed's, on its margin.
                     androidx.compose.material3.Text(d.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, loc).lowercase(),
-                        style = Type.italic.copy(color = if (sel) c.bg else if (weekend) weekendInk else c.graphite, fontSize = 12.sp, lineHeight = 14.sp))
-                    androidx.compose.material3.Text("${d.dayOfMonth}", style = Type.body.copy(color = if (sel) c.bg else c.ink, fontSize = 16.sp, lineHeight = 20.sp,
-                        fontWeight = if (sel || d == today) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal))
+                        style = Type.markM.copy(color = if (sel) c.bg else if (weekend) weekendInk else c.ink, lineHeight = 22.sp,
+                            fontWeight = if (sel || d == today) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal))
                 }
             }
         }
@@ -355,10 +368,10 @@ private fun WeekStrip(day: LocalDate, today: LocalDate, onPick: (LocalDate) -> U
 
 /** «ОКТ ▾» / «ОКТ ▴» on the margin of the head's calendar: unfolds the month, or folds it back into the week. */
 @Composable
-private fun MonthFold(day: LocalDate, open: Boolean, onClick: () -> Unit) = androidx.compose.material3.Text(
+private fun MonthFold(day: LocalDate, open: Boolean, top: androidx.compose.ui.unit.Dp = 4.dp, onClick: () -> Unit) = androidx.compose.material3.Text(
     day.dayMonthShort().substringAfter(' ').uppercase() + if (open) " ▴" else " ▾",
-    style = Type.small.copy(color = M.c.ink, fontSize = 12.sp, letterSpacing = 1.5.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
-    modifier = Modifier.padding(top = 4.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(4.dp))
+    style = Type.meta.copy(color = M.c.ink, letterSpacing = 1.5.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+    modifier = Modifier.padding(top = top).clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(4.dp))
 
 /** A filter: three lines, each shorter, as a funnel of words. */
 @Composable

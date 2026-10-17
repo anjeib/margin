@@ -240,7 +240,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                         val hour = at.drop(11).take(5)
                         val first = i == 0
                         Margined(Modifier.landing(n.id in landed, 0), margin = {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (first) 6.dp else 10.dp)) { MarginNote(hour) }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (first) 4.dp else 8.dp)) { MarginNote(hour) }
                         }) {
                             var menu by remember(n.id) { mutableStateOf(false) }
                             var edit by remember(n.id) { mutableStateOf(false) }
@@ -261,7 +261,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                                 // Prototype «inline»: a tap unfolds the note right here — all of it, written on in place.
                                 val inline = LocalInline.current
                                 val unfolded = inline?.open == n.id
-                                Column(Modifier.fillMaxWidth().combinedClickable(onClick = { if (inline != null) inline.toggle(n.id) else onOpen(n.id) }, onLongClick = { menu = true }).padding(horizontal = if (planner) 0.dp else 16.dp).padding(top = if (first) 8.dp else 12.dp, bottom = 12.dp)) {
+                                Column(Modifier.fillMaxWidth().combinedClickable(onClick = { if (inline != null) inline.toggle(n.id) else onOpen(n.id) }, onLongClick = { menu = true }).padding(horizontal = if (planner) 0.dp else 16.dp).padding(top = if (first) 4.dp else 8.dp, bottom = 8.dp)) {
                                     var titleLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
                                     var bodyLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
                                     // Three lines of a note at most (owner, 14 окт) — the whole of it is in its card.
@@ -369,7 +369,7 @@ internal fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: 
     }
     val toTopic = x.link.startsWith("#")
     Margined(if (block == BlockPos.Last) Modifier.padding(bottom = 8.dp) else Modifier, margin = {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (first) 6.dp else 10.dp)) { MarginNote(x.at.drop(11).take(5)) }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (first) 4.dp else 8.dp)) { MarginNote(x.at.drop(11).take(5)) }
     }) {
         Box(Modifier.blockTint(block)) {
             Box(Modifier.align(Alignment.TopEnd).padding(top = 8.dp)) { SoftMenu(menu, { menu = false }) {
@@ -381,7 +381,7 @@ internal fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: 
                 val inline = LocalInline.current
                 val unfolded = inline?.open == x.card
                 Column(Modifier.fillMaxWidth().combinedClickable(onClick = { if (inline != null) inline.toggle(x.card) else onOpenNote(x.card) }, onLongClick = { menu = true })
-                    .padding(horizontal = if (planner) 0.dp else 16.dp).padding(top = if (first) 8.dp else 12.dp, bottom = 12.dp).then(if (block == BlockPos.Last) Modifier.padding(bottom = 2.dp) else Modifier)) {
+                    .padding(horizontal = if (planner) 0.dp else 16.dp).padding(top = if (first) 4.dp else 8.dp, bottom = 8.dp).then(if (block == BlockPos.Last) Modifier.padding(bottom = 2.dp) else Modifier)) {
                     var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
                     if (unfolded) InlinePieceBody(x.card, vm)
                     else {

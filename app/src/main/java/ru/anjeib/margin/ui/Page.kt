@@ -133,8 +133,9 @@ val planner: Boolean @Composable get() = LocalPaper.current >= 4
 /** The rows' words: the book face on the planner page, Inter otherwise. */
 val rowFamily: androidx.compose.ui.text.font.FontFamily @Composable get() = if (planner) Literata else Sans
 /** Times reads small at Inter's size: a touch larger, a touch tighter on the planner page. */
-val rowSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 17.sp else 16.sp
-val rowLine: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 24.sp else 22.sp
+// Owner, 17 окт: Literata at 17 read heavy on a phone — a step down, 16/23; the hour on the margin with it (Type.markL).
+val rowSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 16.sp else 16.sp
+val rowLine: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 23.sp else 22.sp
 /** Grey words under a row: Times is thinner than Inter, so on the planner page they are a tone darker. */
 val subInk: Color @Composable get() = M.c.graphite
 val subSize: androidx.compose.ui.unit.TextUnit @Composable get() = if (planner) 13.sp else 13.5.sp
