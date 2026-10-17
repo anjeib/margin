@@ -1,6 +1,7 @@
 package ru.anjeib.margin.ui
 
 import ru.anjeib.margin.data.retextSamples
+import ru.anjeib.margin.data.withoutCopiedNotes
 import kotlinx.coroutines.flow.first
 
 import ru.anjeib.margin.data.questionRef
@@ -130,6 +131,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             data.first { it.tasks.isNotEmpty() || it.persons.isNotEmpty() }
             val now = data.value
             if (now.retextSamples() != now) store.update { it.retextSamples() }
+            // Notes copied into repeats before 0.77 (they couldn't be archived): each stays with its first matter.
+            if (data.value.withoutCopiedNotes() !== data.value) store.update { it.withoutCopiedNotes() }
         }
         viewModelScope.launch { store.data.collect { Reminders.syncTasks(getApplication(), it.tasks, it.notes) } }
         // A quiet line under the field says what happened — and then leaves.

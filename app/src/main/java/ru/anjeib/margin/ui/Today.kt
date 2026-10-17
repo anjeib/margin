@@ -450,7 +450,7 @@ fun LazyListScope.dayPanel(
     // Two or more things of one topic on the day make its row.
     val doneOf = shown.filterIsInstance<DayItem.Done>().map { it.t }.filter { it.topicId != null }
     val grouped: Set<String> = if (!fold) emptySet() else (matters.mapNotNull { it.t.topicId } + extras.mapNotNull { it.topicId } + doneOf.mapNotNull { it.topicId })
-        .groupingBy { it }.eachCount().filterValues { it >= 2 }.keys
+        .groupingBy { it }.eachCount().filterValues { it >= 2 }.keys + notesOf.keys  // a topic's note never stands apart from its topic (owner, 17 окт)
     val titles = matters.mapNotNull { m -> m.t.topicId?.let { it to (m.t.topicTitle ?: "") } }.toMap() +
         extras.mapNotNull { e -> e.topicId?.let { it to (e.topicTitle ?: "") } }.toMap()
     val withMatters = matters.mapNotNull { it.t.topicId }.toSet()

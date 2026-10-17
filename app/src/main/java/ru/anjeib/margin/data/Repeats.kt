@@ -105,3 +105,21 @@ fun postponed(t: Task, days: Long, today: LocalDate = LocalDate.now()): Task {
     val withReminder = if (moved.time != null) moved.copy(remindAt = "${moved.dueDate ?: moved.startDate}T${moved.time}") else moved.copy(remindAt = null)
     return withReminder.copy(postponed = t.postponed + 1)
 }
+
+/**
+ * Before 0.77 a repeating matter carried its notes into its next occurrence with the same ids — one note under several matters,
+ * which «В архив» could never put away (the next copy took its place). Each note stays with the first matter that has it, in
+ * its comments or its archive; the copies after it go. Nothing else is touched; run on every start, it finds nothing twice.
+ */
+fun AppData.withoutCopiedNotes(): AppData {
+    val seen = HashSet<String>()
+    var changed = false
+    val kept = HashMap<String, Task>()
+    for (t in tasks.sortedBy { it.createdAt }) {
+        // The archive first: a copy archived by hand in the first matter takes the later copies with it.
+        val removed = t.removedComments.filter { seen.add(it.id) }
+        val live = t.comments.filter { seen.add(it.id) }
+        if (removed.size != t.removedComments.size || live.size != t.comments.size) { changed = true; kept[t.id] = t.copy(comments = live, removedComments = removed) }
+    }
+    return if (!changed) this else copy(tasks = tasks.map { kept[it.id] ?: it })
+}
