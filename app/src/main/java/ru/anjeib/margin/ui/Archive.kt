@@ -90,3 +90,13 @@ fun AppData.archivedNotes(vm: MainVm, onOpenNote: (String) -> Unit, sphereOk: (S
     }
     return out.sortedByDescending { it.first }.map { it.second }
 }
+
+/** How much lies in «Архив» (the menu shows it by the word): topics, matters, notes of matters and topics, journal entries, contacts. */
+fun AppData.archiveCount(): Int {
+    fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it) + flat(it.children) }
+    val pieces = tasks.filter { !it.thought && !(it.topic && it.done) }.sumOf { t ->
+        t.removedEntries.size + t.removedComments.size + (if (t.topic) flat(t.subtasks).sumOf { it.removedComments.size } else 0)
+    }
+    return tasks.count { it.topic && it.done && !it.thought } + archived.size + pieces +
+        tasks.count { it.thought && it.done && it.subtasks.isEmpty() } + notes.count { it.archived } + persons.count { it.archived }
+}

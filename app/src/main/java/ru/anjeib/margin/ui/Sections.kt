@@ -198,31 +198,42 @@ fun CalendarScreen(data: AppData, vm: MainVm, onOpenTask: (String) -> Unit, cont
 
 /** «Архив»: notes and people put away by a swipe — each comes back with «Вернуть». */
 @Composable
-fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpenPerson: (String) -> Unit, contentPadding: PaddingValues, onOpenTask: (String) -> Unit = {}) {
+fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpenPerson: (String) -> Unit, contentPadding: PaddingValues, onOpenTask: (String) -> Unit = {},
+                  /** A note of a matter or a topic: its own card. */ onOpenPiece: (String) -> Unit = {}) {
     val c = M.c
     val s = M.s
+    // Owner, 17 окт: everything put away, by kind — topics, matters, notes of matters and topics, the journal's entries, contacts;
+    // each with «Открыть / Вернуть / Удалить насовсем» (a tap or a long press).
     val notes = data.notes.filter { it.archived }
     val people = data.persons.filter { it.archived }
-    val topics = data.tasks.filter { it.topic && it.done }.sortedByDescending { it.doneAt }
+    val topics = data.tasks.filter { it.topic && it.done && !it.thought }.sortedByDescending { it.doneAt }
+    val matters = data.archived.sortedByDescending { it.doneAt }
+    val pieces = data.archivedNotes(vm, onOpenPiece)
+    val journal = data.tasks.filter { it.thought && it.done && it.subtasks.isEmpty() }.sortedByDescending { it.doneAt }
     Box(Modifier.fillMaxSize().screenRule()) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding.vertical()) {
         pageHeadItem("h") { PageHead(s.archiveTitle, s.archiveSub) }
-        if (notes.isEmpty() && people.isEmpty() && topics.isEmpty()) item("empty") {
+        if (notes.isEmpty() && people.isEmpty() && topics.isEmpty() && matters.isEmpty() && pieces.isEmpty() && journal.isEmpty()) item("empty") {
             // The same empty page as «Входящие» (owner, 17 окт: one look for the menu's sections).
             Margined { Empty(s.inboxEmpty, s.archiveEmpty) }
         }
-        // v2: settled topics with their materials; news in one brings it back. The day it was settled on the margin.
-        if (topics.isNotEmpty()) item("th") { SectionHead(s.topicsBadge, count = topics.size, top = 12.dp) }
-        topics.forEachIndexed { i, t ->
-            item("t" + t.id) {
-                Box(Modifier.animateItem()) {
-                    TopicPaperRow(t, seatOf(i, topics.size), onOpen = { onOpenTask(t.id) },
-                        margin = t.doneAt?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }?.let { dayWord(it) },
-                        trailing = { PaperLink(s.bringBack) { vm.reviveTopic(t.id) } })
-                }
-            }
+        fun group(key: String, title: String, items: List<ArchItem>) {
+            if (items.isEmpty()) return
+            item(key + "-h") { SectionHead(title, count = items.size, top = 12.dp) }
+            items.forEach { a -> item(key + a.key) { Box(Modifier.animateItem()) { ArchiveRow(a) } } }
         }
-        if (notes.isNotEmpty()) item("nh") { SectionHead(s.notes, count = notes.size) }
+        group("t", s.topicsBadge, topics.map { t ->
+            ArchItem(t.id, t.title, t.doneAt, open = { onOpenTask(t.id) }, restore = { vm.reviveTopic(t.id) }, purge = { vm.removeMatter(t.id) })
+        })
+        group("m", s.kindDeals, matters.map { t ->
+            ArchItem(t.id, t.title, t.doneAt, sub = t.topicTitle?.let { "# $it" }, restore = { vm.restoreMatter(t.id) }, purge = { vm.purgeMatter(t.id) })
+        })
+        group("n", s.kindNotes, pieces)
+        group("j", s.journalTitle, journal.map { t ->
+            ArchItem(t.id, t.title.ifBlank { t.entries.firstOrNull()?.text.orEmpty() }, t.doneAt, open = { onOpenTask(t.id) }, restore = { vm.reviveTopic(t.id) }, purge = { vm.removeMatter(t.id) })
+        })
+        // Notes from before the topics (v1), if any are left.
+        if (notes.isNotEmpty()) item("nh") { SectionHead(s.notes, count = notes.size, top = 12.dp) }
         notes.forEachIndexed { i, n ->
             item("n" + n.id) {
                 Box(Modifier.animateItem()) {
@@ -230,7 +241,7 @@ fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpe
                 }
             }
         }
-        if (people.isNotEmpty()) item("ph") { SectionHead(s.peopleTitle, count = people.size) }
+        if (people.isNotEmpty()) item("ph") { SectionHead(s.peopleTitle, count = people.size, top = 12.dp) }
         people.forEachIndexed { i, p ->
             item("p" + p.id) {
                 PaperRow(seatOf(i, people.size), mark = { Avatar(p.name, 32.dp) }, modifier = Modifier.animateItem(), onClick = { onOpenPerson(p.id) },

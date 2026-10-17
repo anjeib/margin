@@ -276,13 +276,21 @@ fun TaskList(
                     else -> null
                 }
             }
+            // A topic whose period is going on stands under today even when nothing of it is on today (owner, 17 окт) — its
+            // period on the margin; not in the days before or after, there it stands only when something happens to it.
+            val going = if (d != today || kind == "deals" || kind == "notes") emptyList() else topics.filter { t ->
+                val st = t.startDate; val en = t.dueDate
+                st != null && en != null && !today.isBefore(st) && !today.isAfter(en) &&
+                    t.id !in inPlan && t.id !in inNotes && tops.none { it.first.id == t.id }
+            }.map { it to it.topicWhen() }
+            val allTops = tops + going
             val has = when (kind) {
                 "deals" -> p.deals.isNotEmpty() || p.done.isNotEmpty()
-                "topics" -> tops.isNotEmpty()
+                "topics" -> allTops.isNotEmpty()
                 "notes" -> notes.isNotEmpty()
-                else -> p.deals.isNotEmpty() || p.events.isNotEmpty() || p.done.isNotEmpty() || notes.isNotEmpty() || tops.isNotEmpty()
+                else -> p.deals.isNotEmpty() || p.events.isNotEmpty() || p.done.isNotEmpty() || notes.isNotEmpty() || allTops.isNotEmpty()
             }
-            if (d == today || has) FeedDay(d, p, notes, tops) else null
+            if (d == today || has) FeedDay(d, p, notes, allTops) else null
         }
     } else emptyList()
     val feedStarts = remember { HashMap<LocalDate, Int>() }

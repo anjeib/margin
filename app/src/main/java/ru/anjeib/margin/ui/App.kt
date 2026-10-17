@@ -359,7 +359,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                             TOPICS -> TaskList(Views.ALL, sphereShown, settings, working, vm, events, onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
                                 contentPadding = pad, topicsOnly = true, findPage = "topics")
                             CALENDAR -> CalendarScreen(data, vm, onOpenTask = { openId(it) }, contentPadding = pad, events = events)
-                            ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad, onOpenTask = { openId(it) })
+                            ARCHIVE -> ArchiveScreen(data, vm, onOpenNote = { openNote = it }, onOpenPerson = { openPerson = it }, contentPadding = pad, onOpenTask = { openId(it) }, onOpenPiece = { openPiece = it })
                             MATERIALS -> MaterialsGrid(data.tasks.filter { !(it.topic && it.done) }, onView = { viewing = it }, onTopic = { openId(it) }) { t -> PageHead(s.materialsTitle, s.materialsSub, trailing = t) }
                             SETTINGS -> SettingsScreen(settings, vm, pad)
                             HELP -> HelpScreen(pad)
@@ -919,7 +919,7 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
         // The diary, «Дневник» and «Контакты» are in the diary's head; the menu keeps the rest (owner, 17 окт).
         line(s.inboxNote, data.inboxCount().takeIf { it > 0 }?.toString() ?: "", screen == INBOX) { onGo(INBOX, null) }
         line(s.materialsTitle, "", screen == MATERIALS) { onGo(MATERIALS, null) }
-        line(s.archiveTitle, "", screen == ARCHIVE) { onGo(ARCHIVE, null) }
+        line(s.archiveTitle, data.archiveCount().takeIf { it > 0 }?.toString() ?: "", screen == ARCHIVE) { onGo(ARCHIVE, null) }
         Spacer(Modifier.height(18.dp))
         SectionHead(s.aboutApp, top = 6.dp)
         line(s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
