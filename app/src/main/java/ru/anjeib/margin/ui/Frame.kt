@@ -266,6 +266,8 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
     val sphere by vm.diarySphere.collectAsState()
     val kind by vm.kindFilter.collectAsState()
     val monthOpen by vm.monthOpen.collectAsState()
+    val topicF by vm.topicFilter.collectAsState()
+    val topicTitle = topicF?.let { id -> data.tasks.find { it.id == id }?.title }
     val today = LocalDate.now()
     fun pick(d: LocalDate) { vm.pageDay.value = d.takeIf { it != today }; vm.feedJump.value++; vm.monthOpen.value = false }
     @Composable fun mark(label: String, on: Boolean, onClick: () -> Unit, glyph: @Composable (androidx.compose.ui.graphics.Color) -> Unit) {
@@ -288,11 +290,15 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
         Row(Modifier.fillMaxWidth().background(c.bg).padding(start = 4.dp, end = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             // What is open, by the marks on the left (owner, 17 окт): «Дела» — «простые и сложные», or «Дневник» — «только для себя».
             Box(Modifier.weight(1f).height(44.dp).padding(start = 10.dp), contentAlignment = Alignment.CenterStart) {
-                androidx.compose.animation.Crossfade(journalOn, animationSpec = tween(200), label = "what") { j ->
+                androidx.compose.animation.Crossfade(Triple(journalOn, topicTitle, topicF), animationSpec = tween(200), label = "what") { (j, tt, _) ->
                     Column {
-                        androidx.compose.material3.Text(if (j) s.journalTitle else s.kindDeals, maxLines = 1,
+                        // A topic chosen: its name here, and the way back to the whole feed under it.
+                        androidx.compose.material3.Text(if (j) s.journalTitle else if (tt != null) "# $tt" else s.kindDeals, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             style = Type.pageTitle.copy(color = c.ink, fontSize = 25.sp, lineHeight = 27.sp))
-                        androidx.compose.material3.Text(if (j) s.journalSub else s.dealsSub, maxLines = 1,
+                        if (!j && tt != null) androidx.compose.material3.Text(s.topicFilterSub, maxLines = 1,
+                            style = Type.meta.copy(color = c.link, lineHeight = 15.sp), modifier = Modifier.clickable { vm.topicFilter.value = null })
+                        else androidx.compose.material3.Text(if (j) s.journalSub else s.dealsSub, maxLines = 1,
                             style = Type.meta.copy(color = c.graphite, lineHeight = 15.sp))
                     }
                 }

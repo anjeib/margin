@@ -247,12 +247,17 @@ fun TaskList(
     // and a topic on the days something happens to it (made, begins, ends, its deadline). The head (App) holds the week.
     val feed = framed && view == Views.TODAY
     val kind by vm.kindFilter.collectAsState()
-    val feedDays = if (feed) remember(data, events, today, kind) {
+    // A topic chosen (no topic page, owner 17 окт): the feed is that topic's — its matters, its notes, its days; unfolded.
+    val topicF by vm.topicFilter.collectAsState()
+    val feedDays = if (feed) remember(data, events, today, kind, topicF) {
+        val data = topicF?.let { id -> data.copy(tasks = data.tasks.filter { it.id == id }) } ?: data
         fun dayOf(x: String?) = x?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
         val notesByDay = data.linkedNotes().groupBy { dayOf(it.at) ?: today }
         val topics = data.tasks.filter { it.topic && !it.thought && !it.done }
         (-120L..120L).map { today.plusDays(it) }.mapNotNull { d ->
-            val p = dayPlan(data, d, today, events)
+            // Inside a topic its matters stand as plain rows — the topic's own row over them each day would only repeat the head.
+            val p = dayPlan(data, d, today, events).let { p0 -> if (topicF == null) p0 else
+                p0.copy(deals = p0.deals.map { it.copy(topicId = null, topicTitle = null) }, done = p0.done.map { it.copy(topicId = null, topicTitle = null) }) }
             val notes = notesByDay[d].orEmpty()
             val inPlan = p.deals.mapNotNull { it.topicId }.toSet()
             val inNotes = notes.map { it.open.removePrefix("q:").substringBefore(':') }.toSet()
@@ -303,7 +308,7 @@ fun TaskList(
                 fun androidx.compose.foundation.lazy.LazyListScope.undatedRows(undated: List<Task>) {
                         fun born(t: Task) = runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()
                         // A topic is one folded row here too; unfolded, its matters stand under it on the block's tint.
-                        val blocks = withTopicHeads(undated, 1) { t -> t.topicId?.let { it to (t.topicTitle ?: "") } }
+                        val blocks = withTopicHeads(undated, 2) { t -> t.topicId?.let { it to (t.topicTitle ?: "") } }
                         val inBlock = blocks.filterIsInstance<TopicHead>().map { it.id }.toSet()
                         val pos = blockPositions(blocks) { (it as? Task)?.topicId }
                         var i = -1
@@ -312,12 +317,12 @@ fun TaskList(
                                 val rows = undated.filter { it.topicId == b.id }
                                 val since = rows.mapNotNull { born(it) }.minOrNull()?.takeIf { it.isBefore(today) }?.let { s.sinceWord + " " + it.dayMonthShort() }
                                 item("ug" + b.id) { Box(Modifier.animateItem()) {
-                                    TopicFoldRow(b.title, rows, today, since to false, b.id in openTopics.value, { foldTopic(b.id) }, { onOpen(b.id) }, lit = b.id in landed)
+                                    TopicFoldRow(b.title, rows, today, since to false, ("u|" + b.id) !in openTopics.value || b.id == topicF, { foldTopic("u|" + b.id) }, { onOpen(b.id) }, lit = b.id in landed, topicId = b.id)
                                 } }
                                 return@forEachIndexed
                             }
                             val t = b as Task
-                            if (t.topicId != null && t.topicId !in openTopics.value) return@forEachIndexed
+                            if (t.topicId != null && t.topicId in inBlock && ("u|" + t.topicId) in openTopics.value && t.topicId != topicF) return@forEachIndexed
                             i++
                             val seat = seatOf(i, undated.size)
                             item("u" + t.id) {
@@ -337,7 +342,8 @@ fun TaskList(
                 }
                 val plan = dayPlan(data, day, today, events)
                 // What has no day stands in every day from today on, at the day's end, newest first — gone once done.
-                val undated = if (day.isBefore(today) && !feed) emptyList() else (tasks.filter { !it.done && it.dueDate == null && it.startDate == null } + data.undatedTopicMatters())
+                val undated = if (day.isBefore(today) && !feed) emptyList() else if (feed && topicF != null) data.undatedTopicMatters().filter { it.topicId == topicF }.map { it.copy(topicId = null, topicTitle = null) }
+                    else (tasks.filter { !it.done && it.dueDate == null && it.startDate == null } + data.undatedTopicMatters())
                     .sortedByDescending { it.createdAt }
                 // In the diary's frame the head is the frame's (Frame.kt).
                 if (!framed) pinnedHead("head", plannerLook, calendar = true) {
@@ -369,11 +375,22 @@ fun TaskList(
                         feedStarts[d] = cs.n
                         cs.item("fd$d") { FeedDayHead(d, today) }
                         // Everything: the day's notes go in among its matters by their hour.
-                        val noteRows: List<Pair<String, androidx.compose.foundation.lazy.LazyListScope.() -> Unit>> = if (kind == null) f.notes.map { n ->
-                            n.at.drop(11).take(5) to { item("l" + n.key) { LinkedNoteRow(n, data, vm, 0, 1, null, onOpen, onOpenPiece, onPerson) } }
+                        // A note of a topic (or of a topic's matter) belongs to that topic's row on the day.
+                        val noteRows: List<DayExtra> = if (kind == null) f.notes.map { n ->
+                            val topic = when {
+                                n.open.startsWith("q:") -> n.open.removePrefix("q:").substringBefore(':')
+                                n.link.startsWith("# ") -> n.open
+                                else -> null
+                            }
+                            DayExtra(n.at.drop(11).take(5), "l" + n.key, topic, n.link.substringAfterLast("# ").takeIf { topic != null }) { block ->
+                                item("l" + n.key) { LinkedNoteRow(n, data, vm, 0, 1, block, onOpen, onOpenPiece, onPerson) }
+                            }
                         } else emptyList()
+                        // Today a topic's row is open, other days folded — a tap turns it the other way, for that day.
+                        val dayTopics = (f.plan.deals.mapNotNull { it.topicId } + noteRows.mapNotNull { it.topicId }).toSet()
+                        val openHere = dayTopics.filter { (d == today) != ("$d|$it" in openTopics.value) }.toSet() + listOfNotNull(topicF)
                         if (kind == null || kind == "deals") cs.dayPanel(f.plan, today, "f$d", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
-                            doneOpen = isOpen("s-done-$d"), onDoneFold = { toggle("s-done-$d") }, openTopics = openTopics.value, onTopicFold = ::foldTopic, extras = noteRows)
+                            doneOpen = isOpen("s-done-$d"), onDoneFold = { toggle("s-done-$d") }, openTopics = openHere, onTopicFold = { foldTopic("$d|$it") }, extras = noteRows)
                         if (kind == null || kind == "topics") f.topics.forEachIndexed { i, (t, word) ->
                             cs.item("ft$d" + t.id) { TopicPaperRow(t, seatOf(i, f.topics.size), onOpen = { onOpen(t.id) }, margin = word ?: "") }
                         }
@@ -533,7 +550,10 @@ fun TopicPaperRow(t: Task, seat: Seat, onOpen: () -> Unit, onArchive: (() -> Uni
     val s = M.s
     val open = t.subtasks.count { !it.done }
     val waits = t.subtasks.count { !it.done && it.from != null }
-    PaperRow(seat, margin = margin, mark = { TopicGlyph(c.graphite, 20.dp) }, onClick = onOpen,
+    // A long press: rename, share as PDF, archive (owner, 17 окт: what the topic's page did).
+    var hold by remember { mutableStateOf(false) }
+    TopicHold(t.id, hold) { hold = false }
+    PaperRow(seat, margin = margin, mark = { TopicGlyph(c.graphite, 20.dp) }, onClick = onOpen, onLong = { hold = true },
         trailing = trailing ?: if (t.noNextStep && onArchive != null) ({ PaperLink(s.toArchive, onClick = onArchive) }) else null) {
         RowTitle(t.title, maxLines = 2)
         val sub = listOfNotNull(

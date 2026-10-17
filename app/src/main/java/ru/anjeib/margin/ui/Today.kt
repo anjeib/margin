@@ -1,5 +1,8 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.runtime.collectAsState
+
 import androidx.compose.ui.text.withLink
 
 import ru.anjeib.margin.data.shortLabel
@@ -328,18 +331,23 @@ enum class BlockPos { Head, Mid, Last, Single }
  * A topic in the day (owner, 16 окт): «# Тема ▸», under it how many of its matters stand here (how many late) and «открыть»;
  * on the margin the nearest of them — late since, or its hour. A tap unfolds its matters right here, on the block's tint.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<String?, Boolean>, open: Boolean, onToggle: () -> Unit, onOpen: () -> Unit,
-                 lit: Boolean = false) {
+                 lit: Boolean = false, /** The topic itself: a long press offers what its page did. */ topicId: String? = null,
+                 /** Its notes and done matters on the day, counted with its open matters. */ notes: Int = 0, done: Int = 0) {
     val c = M.c
     val s = M.s
+    var hold by remember { mutableStateOf(false) }
+    topicId?.let { TopicHold(it, hold) { hold = false } }
     val late = rows.count { !it.done && it.dueDate?.isBefore(today) == true }
     // Unfolded, its matters carry their own hours — the head doesn't repeat one.
     Margined(Modifier.landing(lit, 0).padding(top = if (open) 0.dp else 4.dp, bottom = if (open) 0.dp else 8.dp), margin = { if (!open) RowMargin(note.first, note.second) }) {
         // Owner, 16 окт («темы теряются в ленте»): a topic always lies on the block's light tint — folded it is a small block of
         // its own, unfolded the tint runs on under its matters.
         Box(Modifier.blockTint(if (open) BlockPos.Head else BlockPos.Single)) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = if (open) s.collapse else s.expandWord, onClick = onToggle)
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).combinedClickable(onClickLabel = if (open) s.collapse else s.expandWord, onClick = onToggle,
+                onLongClick = if (topicId != null) ({ hold = true }) else null)
                 .padding(top = RowTop - 2.dp, bottom = RowTop, end = 14.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
                     WordText(androidx.compose.ui.text.buildAnnotatedString {
@@ -350,7 +358,9 @@ fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<S
                     Text(if (open) "▾" else "▸", style = Type.body.copy(color = c.graphite, fontSize = subSize), modifier = Modifier.padding(start = 8.dp, top = 4.dp))
                 }
                 Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(s.summaryDeals(rows.size) + (if (late > 0) ", " + s.lateOfDay(late) else "") + "  ·  ", style = Type.small.copy(color = subInk, fontSize = subSize))
+                    val what = listOfNotNull(rows.size.takeIf { it > 0 }?.let { s.summaryDeals(it) }, notes.takeIf { it > 0 }?.let { s.nEntries(it) },
+                        done.takeIf { it > 0 }?.let { s.doneCountWord(it) }).joinToString(", ")
+                    Text(what + (if (late > 0) ", " + s.lateOfDay(late) else "") + "  ·  ", style = Type.small.copy(color = subInk, fontSize = subSize))
                     Text(s.openTopicLink, style = Type.small.copy(color = c.link, fontSize = subSize, fontWeight = FontWeight.Medium),
                         modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpen).padding(vertical = 2.dp))
                 }
@@ -416,21 +426,17 @@ fun LazyListScope.dayPanel(
     onOpen: (String) -> Unit, onDone: (String) -> Unit, onLater: (String) -> Unit, onTime: (String) -> Unit,
     doneOpen: Boolean = true, onDoneFold: (() -> Unit)? = null,
     /**
-     * Owner, 16 окт: a topic stands in the day as itself — one row, folded by default; its matters are not shown apart. Which
-     * topics are unfolded; null — the older blocks.
+     * Owner, 16–17 окт: a topic with two or more things on the day (matters and notes) stands as one row — unfolded, they are
+     * under it by the hour; a topic with one thing has no row of its own, the thing stands plain with «# Тема» under it. Which
+     * topics are unfolded on this day; null — the older blocks.
      */
     openTopics: Set<String>? = null, onTopicFold: (String) -> Unit = {},
     /**
-     * Owner, 17 окт («почему события в ленте идут не по времени?»): other rows of the day with their hour («08:30») — the notes of
-     * matters and topics — laid in among the matters by that hour.
+     * Owner, 17 окт («почему события в ленте идут не по времени?»): other rows of the day with their hour — the notes of
+     * matters and topics — laid in among the matters by that hour, or into their topic's row.
      */
-    extras: List<Pair<String, LazyListScope.() -> Unit>> = emptyList(),
+    extras: List<DayExtra> = emptyList(),
 ) {
-    val waiting = extras.sortedBy { it.first }.toMutableList()
-    var timedSeen = false
-    fun flush(before: String?) {
-        while (waiting.isNotEmpty() && (before == null || waiting.first().first < before)) waiting.removeAt(0).second(this)
-    }
     val all = dayItems(plan, today)
     val doneAll = all.filterIsInstance<DayItem.Done>()
     // More than three done: folded into one row «сделано N ›»; open, the same row at the end folds them back.
@@ -439,21 +445,67 @@ fun LazyListScope.dayPanel(
     val shown = if (foldDone) all.filter { it !is DayItem.Done } else all
     val n = shown.size + (if (foldable) 1 else 0)
     val fold = openTopics != null
-    val blocks = withTopicHeads(shown, if (fold) 1 else 2) { d -> (d as? DayItem.Matter)?.t?.let { t -> t.topicId?.let { it to (t.topicTitle ?: "") } } }
+    val matters = shown.filterIsInstance<DayItem.Matter>()
+    val notesOf = extras.filter { it.topicId != null }.groupBy { it.topicId!! }
+    // Two or more things of one topic on the day make its row.
+    val doneOf = shown.filterIsInstance<DayItem.Done>().map { it.t }.filter { it.topicId != null }
+    val grouped: Set<String> = if (!fold) emptySet() else (matters.mapNotNull { it.t.topicId } + extras.mapNotNull { it.topicId } + doneOf.mapNotNull { it.topicId })
+        .groupingBy { it }.eachCount().filterValues { it >= 2 }.keys
+    val titles = matters.mapNotNull { m -> m.t.topicId?.let { it to (m.t.topicTitle ?: "") } }.toMap() +
+        extras.mapNotNull { e -> e.topicId?.let { it to (e.topicTitle ?: "") } }.toMap()
+    val withMatters = matters.mapNotNull { it.t.topicId }.toSet()
+    val titlesDone = doneOf.associate { it.topicId!! to (it.topicTitle ?: "") }
+
+    /** A topic's row, and — unfolded — its matters and notes under it by the hour. */
+    fun LazyListScope.group(id: String) {
+        val ms = matters.map { it.t }.filter { it.topicId == id }
+        val ns = notesOf[id].orEmpty()
+        val ds = doneOf.filter { it.topicId == id }
+        val open = id in openTopics!!
+        val first = ms.firstOrNull()?.let { whenNote(it, today, underDay = true) } ?: (ns.minOfOrNull { it.hour } to false)
+        item(keyPrefix + "g" + id) { Box(Modifier.animateItem()) {
+            TopicFoldRow(titles[id] ?: titlesDone[id] ?: "", ms, today, first, open, { onTopicFold(id) }, { onOpen(id) }, lit = id in landed, topicId = id, notes = ns.size, done = ds.size)
+        } }
+        if (!open) return
+        val members: List<Pair<String, Any>> = (ms.map { (it.time?.take(5) ?: "99") to (it as Any) } + ns.map { it.hour to (it as Any) }).sortedBy { it.first } +
+            ds.map { "99" to (DayItem.Done(it) as Any) }
+        members.forEachIndexed { k, (_, x) ->
+            val pos = if (k == members.lastIndex) BlockPos.Last else BlockPos.Mid
+            when (x) {
+                is Task -> item(keyPrefix + x.id) { Box(Modifier.animateItem()) {
+                    MatterRow(x, seatOf(0, 1), today, whenNote(x, today, underDay = true),
+                        onToggle = { onDone(x.id) }, onOpen = { onOpen(x.id) }, onTime = { onTime(x.id) }, onLater = { onLater(x.id) },
+                        lit = x.id in landed, onOpenTopic = onOpen, showTopic = false, block = pos)
+                } }
+                is DayExtra -> x.emit(this, pos)
+                is DayItem.Done -> item(keyPrefix + x.key) { Box(Modifier.animateItem()) {
+                    DonePaperRow(x.t, seatOf(0, 1), onToggle = { onDone(x.t.id) }, onOpen = { onOpen(x.t.id) })
+                } }
+            }
+        }
+    }
+
+    // What waits to go in by the hour: notes standing alone, and topics that are only notes on this day (their row).
+    val waiting = (extras.filter { it.topicId == null || it.topicId !in grouped } +
+        grouped.filter { it !in withMatters }.map { id -> DayExtra(notesOf[id]?.minOf { it.hour } ?: "99", "ng$id", null, null) { _ -> group(id) } })
+        .sortedBy { it.hour }.toMutableList()
+    var timedSeen = false
+    fun flush(before: String?) {
+        while (waiting.isNotEmpty() && (before == null || waiting.first().hour < before)) waiting.removeAt(0).emit(this, null)
+    }
+
+    val blocks = if (fold) withTopicHeads(shown, 1) { d -> (d as? DayItem.Matter)?.t?.topicId?.takeIf { it in grouped }?.let { it to (titles[it] ?: "") } }
+        else withTopicHeads(shown, 2) { d -> (d as? DayItem.Matter)?.t?.let { t -> t.topicId?.let { it to (t.topicTitle ?: "") } } }
     val inBlock = blocks.filterIsInstance<TopicHead>().map { it.id }.toSet()
     val pos = blockPositions(blocks) { (it as? DayItem.Matter)?.t?.topicId }
     var i = -1
     blocks.forEachIndexed { bi, b ->
         if (b is TopicHead) {
-            // The topic's row stands by its first matter's hour too.
-            shown.filterIsInstance<DayItem.Matter>().firstOrNull { it.t.topicId == b.id }?.t?.time?.take(5)?.let { timedSeen = true; flush(it) }
-            if (fold) {
-                val rows = shown.filterIsInstance<DayItem.Matter>().map { it.t }.filter { it.topicId == b.id }
-                val open = b.id in openTopics!!
-                item(keyPrefix + "g" + b.id) { Box(Modifier.animateItem()) {
-                    TopicFoldRow(b.title, rows, today, whenNote(rows.first(), today, underDay = true), open, { onTopicFold(b.id) }, { onOpen(b.id) }, lit = b.id in landed)
-                } }
-            } else item(keyPrefix + "g" + b.id) { Box(Modifier.animateItem()) { TopicBlockHead(b.title) { onOpen(b.id) } } }
+            // The topic's row stands by the earliest hour of what is in it — a matter's or a note's.
+            (matters.mapNotNull { m -> m.t.time?.take(5)?.takeIf { m.t.topicId == b.id } } + notesOf[b.id].orEmpty().map { it.hour }).minOrNull()
+                ?.let { timedSeen = true; flush(it) }
+            if (fold) group(b.id)
+            else item(keyPrefix + "g" + b.id) { Box(Modifier.animateItem()) { TopicBlockHead(b.title) { onOpen(b.id) } } }
             return@forEachIndexed
         }
         val it = b as DayItem
@@ -464,8 +516,9 @@ fun LazyListScope.dayPanel(
             else -> null
         }
         if (hour != null) { timedSeen = true; flush(hour) } else if (timedSeen || it is DayItem.Done) flush(null)
-        // A folded topic keeps its matters inside it.
-        if (fold && it is DayItem.Matter && it.t.topicId != null && it.t.topicId !in openTopics!!) return@forEachIndexed
+        // A topic's row holds its matters.
+        if (fold && it is DayItem.Matter && it.t.topicId != null && it.t.topicId in grouped) return@forEachIndexed
+        if (fold && it is DayItem.Done && it.t.topicId != null && it.t.topicId in grouped) return@forEachIndexed
         i++
         val seat = seatOf(i, n)
         item(keyPrefix + it.key) {
@@ -473,7 +526,7 @@ fun LazyListScope.dayPanel(
                 when (it) {
                     is DayItem.Matter -> MatterRow(it.t, seat, today, whenNote(it.t, today, underDay = true),
                         onToggle = { onDone(it.t.id) }, onOpen = { onOpen(it.t.id) }, onTime = { onTime(it.t.id) }, onLater = { onLater(it.t.id) },
-                        lit = it.t.id in landed || (it.t.topicId != null && it.t.topicId in landed), onOpenTopic = onOpen, showTopic = it.t.topicId !in inBlock, block = pos[bi])
+                        lit = it.t.id in landed || (it.t.topicId != null && it.t.topicId in landed), onOpenTopic = onOpen, showTopic = it.t.topicId !in inBlock, block = if (fold) null else pos[bi])
                     is DayItem.Event -> EventPaperRow(it.e, seat)
                     is DayItem.Done -> DonePaperRow(it.t, seat, onToggle = { onDone(it.t.id) }, onOpen = { onOpen(it.t.topicId ?: it.t.id) })
                     is DayItem.Note -> NotePaperRow(it.n, seat, onOpen)
@@ -488,6 +541,9 @@ fun LazyListScope.dayPanel(
         }
     }
 }
+
+/** A row of the day besides its matters (a note), with its hour and, when it is a topic's, the topic. */
+class DayExtra(val hour: String, val key: String, val topicId: String?, val topicTitle: String?, val emit: LazyListScope.(BlockPos?) -> Unit)
 
 /** Nothing written yet: phrases to try — a tap puts one into the field, the user sends it. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -527,5 +583,37 @@ fun daySummary(plan: DayPlan, today: LocalDate, away: String? = null): androidx.
         if (plan.events.isNotEmpty()) { if (plan.deals.isNotEmpty()) append("  ·  "); append(s.summaryMeetings(plan.events.size)) }
         // Without the cloud Margin reads on the phone and the unsure waits in «Входящие» — said once, quietly, here.
         away?.let { append("  ·  "); withStyle(SpanStyle(color = c.faint)) { append(it) } }
+    }
+}
+
+/**
+ * What a topic's page used to offer, now on a long press of its row (owner, 17 окт: no topic page): rename it, share it as a
+ * PDF, put it into the archive with all that is in it.
+ */
+@Composable
+fun TopicHold(topicId: String, open: Boolean, onDismiss: () -> Unit) {
+    val vm = LocalVm.current ?: return
+    val c = M.c
+    val s = M.s
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val t = vm.data.collectAsState().value.tasks.find { it.id == topicId } ?: return
+    var dialog by remember(topicId) { mutableStateOf<String?>(null) }
+    // On the right, as every row's long-press menu.
+    Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.TopEnd) { Box { SoftMenu(open, onDismiss) {
+        SoftMenuItem(s.rename) { onDismiss(); dialog = "rename" }
+        SoftMenuItem(s.sharePdf) { onDismiss(); shareTopic(ctx, t) }
+        SoftMenuItem(s.toArchive) { onDismiss(); dialog = "archive" }
+    } } }
+    when (dialog) {
+        "rename" -> TextDialog(s.rename, t.title, "", onDismiss = { dialog = null }) { v ->
+            if (v.isNotBlank()) vm.saveTask(t.copy(title = v.trim().replaceFirstChar { it.uppercase() })); dialog = null
+        }
+        "archive" -> androidx.compose.material3.AlertDialog(
+            onDismissRequest = { dialog = null }, containerColor = c.card,
+            title = { Text(s.archiveQ, style = Type.cardTitle.copy(color = c.ink)) },
+            text = { Text(s.archiveText(t.title), style = Type.body.copy(color = c.graphite)) },
+            confirmButton = { androidx.compose.material3.TextButton({ dialog = null; vm.archiveTopic(t.id); if (vm.topicFilter.value == t.id) vm.topicFilter.value = null }) { Text(s.toArchive, color = c.link) } },
+            dismissButton = { androidx.compose.material3.TextButton({ dialog = null }) { Text(s.cancel, color = c.graphite) } },
+        )
     }
 }

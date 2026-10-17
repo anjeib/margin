@@ -675,6 +675,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** What the diary's feed shows (owner, 17 окт): null — everything; "deals", "topics" or "notes" — only that. */
     val kindFilter = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
+    /**
+     * Owner, 17 окт: no topic page — a topic opened anywhere (its row, «# Тема» under a matter, the search) narrows the feed to
+     * it: its matters and notes, day by day. null — the whole diary.
+     */
+    val topicFilter = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
     /** The card page's «+»: each tap opens (or closes) the line of marks over its writing line. */
     val markPicker = androidx.compose.runtime.mutableStateOf(0)
 

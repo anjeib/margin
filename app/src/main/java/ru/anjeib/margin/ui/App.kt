@@ -223,6 +223,20 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         if (screen != TASKS) { val section = screen !in setOf(TOPICS, PEOPLE, JOURNAL); screen = TASKS; if (plannerLook && section) contents = true else view = Views.TODAY } else view = Views.TODAY
     }
 
+    // A topic opened from anywhere — its row, «# Тема» under a matter, a card, the search — narrows the diary's feed to it
+    // (owner, 17 окт: «убери страницу темы»); back or «показать всё» gives the whole feed again.
+    val topicNarrow = planner
+    LaunchedEffect(openTask) {
+        val t = openTask?.let { id -> vm.data.value.tasks.find { it.id == id } }
+        if (topicNarrow && t != null && t.topic && !t.thought) {
+            vm.topicFilter.value = t.id
+            openTask = null; openHl = null; openTab = 0
+            screen = TASKS; view = Views.TODAY; contents = false; searching = false; openPerson = null; openNote = null
+        }
+    }
+    val topicF by vm.topicFilter.collectAsState()
+    BackHandler(topicF != null && screen == TASKS && !contents && openTask == null && openDeal == null) { vm.topicFilter.value = null }
+
     // «В тему…» and «Удалить» from a matter's long press or card — one picker for every screen.
     var topicFor by remember { mutableStateOf<String?>(null) }
     // «#метка» under a row opens its topic, or — when there is no such topic — the search for it (owner, 14 окт).
@@ -553,7 +567,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             // v2: a topic on the whole screen, sliding in from the side; when a task grows into one, its sheet gives way to it.
             // An idea opens as a half-page notebook card; «Открыть целиком» gives it the whole screen like any topic.
             val cardKey0 = openDeal ?: openPiece
-            val topicId = openTask?.takeIf { id -> data.tasks.find { it.id == id }?.let { it.topic && (!it.thought || fullIdea == id) } == true }
+            // Owner, 17 окт: no topic page on the planner — a topic narrows the feed instead (see the effect on openTask).
+            val noTopicPage = planner
+            val topicId = openTask?.takeIf { id -> !noTopicPage && data.tasks.find { it.id == id }?.let { it.topic && (!it.thought || fullIdea == id) } == true }
             var lastTopic by remember { mutableStateOf<String?>(null) }
             if (topicId != null) lastTopic = topicId
             AnimatedVisibility(topicId != null,

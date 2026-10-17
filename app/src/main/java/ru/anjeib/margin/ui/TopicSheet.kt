@@ -1117,7 +1117,7 @@ fun topicText(t: Task): String {
     }.trim()
 }
 
-private fun shareTopic(ctx: android.content.Context, t: Task) {
+internal fun shareTopic(ctx: android.content.Context, t: Task) {
     // A PDF made here, on the phone, into the system's «Поделиться» — mail, a messenger, Drive (owner, 11 окт).
     // If the page can't be made, the topic goes as text, as before.
     val pdf = runCatching { ru.anjeib.margin.data.TopicPdf.make(ctx, t) }.getOrNull()
