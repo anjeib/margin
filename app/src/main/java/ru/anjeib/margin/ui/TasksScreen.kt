@@ -258,6 +258,12 @@ fun TaskList(
             // Inside a topic its matters stand as plain rows — the topic's own row over them each day would only repeat the head.
             val p = dayPlan(data, d, today, events).let { p0 -> if (topicF == null) p0 else
                 p0.copy(deals = p0.deals.map { it.copy(topicId = null, topicTitle = null) }, done = p0.done.map { it.copy(topicId = null, topicTitle = null) }) }
+                // A window stands once in the feed (owner, 18 окт: one topic of «19–25 окт» filled every day of the week) — on its
+                // first day, or on today while it goes on; the day page and the month still count it in each of its days.
+                .let { p0 -> p0.copy(deals = p0.deals.filter { t ->
+                    val st = t.startDate; val en = t.dueDate
+                    st == null || en == null || !st.isBefore(en) || en.isBefore(today) || d == maxOf(st, today)
+                }) }
             val notes = notesByDay[d].orEmpty()
             val inPlan = p.deals.mapNotNull { it.topicId }.toSet()
             val inNotes = notes.map { it.open.removePrefix("q:").substringBefore(':') }.toSet()
@@ -381,7 +387,10 @@ fun TaskList(
                     feedDays.forEach { f ->
                         val d = f.day
                         feedStarts[d] = cs.n
-                        cs.item("fd$d") { FeedDayHead(d, today) }
+                        // An empty today says so on its line, instead of standing as a blank band.
+                        val free = d == today && f.plan.deals.isEmpty() && f.plan.events.isEmpty() && f.plan.done.isEmpty() && f.notes.isEmpty() &&
+                            f.topics.isEmpty() && (undated.isEmpty() || (kind != null && kind != "deals"))
+                        cs.item("fd$d") { FeedDayHead(d, today, free) }
                         // Everything: the day's notes go in among its matters by their hour.
                         // A note of a topic (or of a topic's matter) belongs to that topic's row on the day.
                         val noteRows: List<DayExtra> = if (kind == null) f.notes.map { n ->

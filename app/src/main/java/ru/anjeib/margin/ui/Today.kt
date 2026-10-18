@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
@@ -335,27 +336,31 @@ enum class BlockPos { Head, Mid, Last, Single }
 @Composable
 fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<String?, Boolean>, open: Boolean, onToggle: () -> Unit, onOpen: () -> Unit,
                  lit: Boolean = false, /** The topic itself: a long press offers what its page did. */ topicId: String? = null,
-                 /** Its notes and done matters on the day, counted with its open matters. */ notes: Int = 0, done: Int = 0) {
+                 /** Its notes and done matters on the day, counted with its open matters. */ notes: Int = 0, done: Int = 0,
+                 /** Unfolded, the margin still says [note] — a window its matters share and don't repeat. */ marginOpen: Boolean = false) {
     val c = M.c
     val s = M.s
     var hold by remember { mutableStateOf(false) }
     topicId?.let { TopicHold(it, hold) { hold = false } }
     val late = rows.count { !it.done && it.dueDate?.isBefore(today) == true }
     // Unfolded, its matters carry their own hours — the head doesn't repeat one.
-    Margined(Modifier.landing(lit, 0).padding(top = if (open) 0.dp else 4.dp, bottom = if (open) 0.dp else 8.dp), margin = { if (!open) RowMargin(note.first, note.second) }) {
+    Margined(Modifier.landing(lit, 0).padding(top = if (open) 0.dp else 4.dp, bottom = if (open) 0.dp else 8.dp), margin = { if (!open || marginOpen) RowMargin(note.first, note.second) }) {
         // Owner, 16 окт («темы теряются в ленте»): a topic always lies on the block's light tint — folded it is a small block of
         // its own, unfolded the tint runs on under its matters.
         Box(Modifier.blockTint(if (open) BlockPos.Head else BlockPos.Single)) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).combinedClickable(onClickLabel = if (open) s.collapse else s.expandWord, onClick = onToggle,
+            // The press lights the whole tint, not a smaller box inside it (owner, 18 окт: a second rectangle in the block).
+            Column(Modifier.fillMaxWidth().bleedLeft(BlockBleed).clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = if (open) 0.dp else 12.dp, bottomEnd = if (open) 0.dp else 12.dp))
+                .combinedClickable(onClickLabel = if (open) s.collapse else s.expandWord, onClick = onToggle,
                 onLongClick = if (topicId != null) ({ hold = true }) else null)
-                .padding(top = RowTop - 2.dp, bottom = RowTop, end = 14.dp)) {
+                .padding(start = BlockBleed, top = RowTop - 2.dp, bottom = RowTop, end = 12.dp)) {
                 Row(verticalAlignment = Alignment.Top) {
                     WordText(androidx.compose.ui.text.buildAnnotatedString {
                         withStyle(androidx.compose.ui.text.SpanStyle(color = c.link)) { append("# ") }
                         append(title)
                     }, style = Type.body.copy(fontFamily = rowFamily, color = c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(top = 2.dp))
-                    Text(if (open) "▾" else "▸", style = Type.body.copy(color = c.graphite, fontSize = subSize), modifier = Modifier.padding(start = 8.dp, top = 4.dp))
+                    // A chevron the size of the words (owner, 18 окт: the tiny ▸ in the corner read as a stray dot).
+                    Text(if (open) "⌃" else "⌄", style = Type.body.copy(color = c.graphite, fontSize = 20.sp, lineHeight = 20.sp), modifier = Modifier.padding(start = 8.dp, top = if (open) 6.dp else 0.dp))
                 }
                 Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                     val what = listOfNotNull(rows.size.takeIf { it > 0 }?.let { s.summaryDeals(it) }, notes.takeIf { it > 0 }?.let { s.nEntries(it) },
@@ -369,8 +374,16 @@ fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<S
     }
 }
 
-/** How far a block's tint reaches past the words on each side. */
+/** How far a block's tint reaches left of the words, into the gap by the rule; on the right it ends with the day's line. */
 private val BlockBleed = 10.dp
+
+/** Lays the content [d] wider, reaching further left than its slot — over the tint's bleed. */
+private fun Modifier.bleedLeft(d: androidx.compose.ui.unit.Dp): Modifier = this.layout { m, cs ->
+    val px = d.roundToPx()
+    if (!cs.hasBoundedWidth) { val p = m.measure(cs); return@layout layout(p.width, p.height) { p.place(0, 0) } }
+    val p = m.measure(cs.copy(minWidth = cs.minWidth + px, maxWidth = cs.maxWidth + px))
+    layout(p.width - px, p.height) { p.place(-px, 0) }
+}
 
 /**
  * A topic's block on «Сегодня» (owner, 16 окт: the bracket was «не очень» — a light tint instead): one soft sea tint under the
@@ -384,7 +397,7 @@ fun Modifier.blockTint(pos: BlockPos?): Modifier = if (pos == null) this else co
         val top = if (pos == BlockPos.Head || pos == BlockPos.Single) androidx.compose.ui.geometry.CornerRadius(r) else androidx.compose.ui.geometry.CornerRadius.Zero
         val bottom = if (pos == BlockPos.Last || pos == BlockPos.Single) androidx.compose.ui.geometry.CornerRadius(r) else androidx.compose.ui.geometry.CornerRadius.Zero
         val path = androidx.compose.ui.graphics.Path().apply {
-            addRoundRect(androidx.compose.ui.geometry.RoundRect(-BlockBleed.toPx(), 0f, size.width + BlockBleed.toPx(), size.height, top, top, bottom, bottom))
+            addRoundRect(androidx.compose.ui.geometry.RoundRect(-BlockBleed.toPx(), 0f, size.width, size.height, top, top, bottom, bottom))
         }
         drawPath(path, tint)
     }
@@ -462,9 +475,16 @@ fun LazyListScope.dayPanel(
         val ns = notesOf[id].orEmpty()
         val ds = doneOf.filter { it.topicId == id }
         val open = id in openTopics!!
-        val first = ms.firstOrNull()?.let { whenNote(it, today, underDay = true) } ?: (ns.minOfOrNull { it.hour } to false)
+        // Owner, 18 окт: «19–25 окт» on the margin of each of its seven matters said nothing. A window all of them share is said
+        // once, by the topic's row (open or folded); its matters keep only their hours.
+        val span = ms.map { it.startDate to it.dueDate }.distinct().singleOrNull()
+            ?.takeIf { (a, b) -> a != null && b != null && a.isBefore(b) && !b.isBefore(today) }
+        fun noteOf(x: Task) = whenNote(x, today, underDay = true).let { n -> if (span == null || n.second) n else (x.time ?: x.dayPart?.let { L.s.dayPart(it) }) to false }
+        val first = span?.let { (a, b) -> spanWord(a!!, b!!, today) to false }
+            ?: ms.firstOrNull()?.let { whenNote(it, today, underDay = true) } ?: (ns.minOfOrNull { it.hour } to false)
         item(keyPrefix + "g" + id) { Box(Modifier.animateItem()) {
-            TopicFoldRow(titles[id] ?: titlesDone[id] ?: "", ms, today, first, open, { onTopicFold(id) }, { onOpen(id) }, lit = id in landed, topicId = id, notes = ns.size, done = ds.size)
+            TopicFoldRow(titles[id] ?: titlesDone[id] ?: "", ms, today, first, open, { onTopicFold(id) }, { onOpen(id) }, lit = id in landed, topicId = id, notes = ns.size, done = ds.size,
+                marginOpen = span != null)
         } }
         if (!open) return
         val members: List<Pair<String, Any>> = (ms.map { (it.time?.take(5) ?: "99") to (it as Any) } + ns.map { it.hour to (it as Any) }).sortedBy { it.first } +
@@ -473,7 +493,7 @@ fun LazyListScope.dayPanel(
             val pos = if (k == members.lastIndex) BlockPos.Last else BlockPos.Mid
             when (x) {
                 is Task -> item(keyPrefix + x.id) { Box(Modifier.animateItem()) {
-                    MatterRow(x, seatOf(0, 1), today, whenNote(x, today, underDay = true),
+                    MatterRow(x, seatOf(0, 1), today, noteOf(x),
                         onToggle = { onDone(x.id) }, onOpen = { onOpen(x.id) }, onTime = { onTime(x.id) }, onLater = { onLater(x.id) },
                         lit = x.id in landed, onOpenTopic = onOpen, showTopic = false, block = pos)
                 } }

@@ -195,7 +195,7 @@ class CountingScope(private val inner: androidx.compose.foundation.lazy.LazyList
  * the page and the date small on the margin by it — «сегодня» in petrol for today; the weekday is the head's week.
  */
 @Composable
-fun FeedDayHead(day: LocalDate, today: LocalDate) {
+fun FeedDayHead(day: LocalDate, today: LocalDate, /** Nothing on it: «свободный день» at the line's start. */ free: Boolean = false) {
     val c = M.c
     val s = M.s
     val ink = if (day != today && day.dayOfWeek.value >= 6) c.link.copy(alpha = 0.6f) else c.link
@@ -207,8 +207,10 @@ fun FeedDayHead(day: LocalDate, today: LocalDate) {
             if (day == today) androidx.compose.material3.Text(s.today.lowercase(), maxLines = 1, style = Type.meta.copy(color = c.link))
         }
     }) {
-        Box(Modifier.fillMaxWidth().height(20.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.fillMaxWidth().height(if (day == today) 1.5.dp else 1.dp).background(c.link.copy(alpha = if (day == today) 0.7f else 0.3f)))
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().height(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (free) androidx.compose.material3.Text(s.freeDay.lowercase(), maxLines = 1, style = Type.meta.copy(color = c.graphite),
+                modifier = Modifier.padding(end = 10.dp))
+            Box(Modifier.weight(1f).height(if (day == today) 1.5.dp else 1.dp).background(c.link.copy(alpha = if (day == today) 0.7f else 0.3f)))
         }
     }
 }
