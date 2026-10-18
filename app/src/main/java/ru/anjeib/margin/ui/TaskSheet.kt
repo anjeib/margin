@@ -131,7 +131,6 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
     var showDone by remember { mutableStateOf(false) }
     var showAllSubs by remember { mutableStateOf(false) }
     var showAllEntries by remember { mutableStateOf(false) }
-    var showHistory by remember(task.id) { mutableStateOf(false) }
     val busy by vm.busy.collectAsState()
     val notice by vm.notice.collectAsState()
     val scopeKey = MainVm.key(Scope.InTask(task.id))
@@ -308,21 +307,7 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         }
                     }
                 }
-                // «История»: what changed and who changed it — folded; the dates on the margin.
-                if (task.history.size > 1) {
-                    SectionHead(s.historyWord, count = task.history.size, open = showHistory, onFold = { showHistory = !showHistory })
-                    androidx.compose.animation.AnimatedVisibility(showHistory, enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(240)) + androidx.compose.animation.fadeIn(),
-                        exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.fadeOut()) {
-                        Column {
-                            val hist = task.history.reversed()
-                            hist.forEachIndexed { i, h ->
-                                PlainRow(seatOf(i, hist.size), margin = dateOf(h.at)?.let { d -> { RowMargin(dayWord(d)) } }) {
-                                    Text(s.change(h.kind, h.value, h.by), style = Type.small.copy(color = c.ink, fontSize = 14.sp))
-                                }
-                            }
-                        }
-                    }
-                }
+                // No «История» (owner, 18 окт: «не информативная») — only the day the matter was made.
                 Margined { CreatedLine(task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt, onClick = if (task.source != null && task.noteId == null) ({ dialog = "source" }) else null) }
                 PageEnd(pageLines)
                 Spacer(Modifier.height(8.dp))

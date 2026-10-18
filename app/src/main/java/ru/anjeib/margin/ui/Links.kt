@@ -47,22 +47,11 @@ fun ideaOf(t: Task, d: AppData): Pair<Note, Entry>? {
 data class TaskLink(val kind: String, val title: String, val meta: String, val taskId: String? = null, val noteId: String? = null)
 
 /**
- * «Связи» in a task card: its idea, and what else is open with the people of this task — what we wait from them, what was promised to them.
- * Only links through a person: sharing a project alone is not a reason to show another task here.
+ * «Откуда» in a task card: only where the matter came from — the note it grew out of (owner, 18 окт). Open waits and promises
+ * with the same people are not shown here: sharing a person is no link between two matters, and they are on the person's card.
  */
 fun taskLinks(t: Task, d: AppData): List<TaskLink> = buildList {
     ideaOf(t, d)?.let { (n, e) -> add(TaskLink("idea", L.s.linkIdea + " · " + (dateOf(e.at)?.dayMonth() ?: ""), "«" + e.text.take(90) + "»", noteId = n.id)) }
-    val mine = t.people + listOfNotNull(t.waitingFor, t.promisedTo)
-    fun same(a: String, b: String) = a.equals(b, true) || d.person(a)?.matches(b) == true
-    val near = d.tasks.filter { o ->
-        o.id != t.id && !o.done && mine.any { p -> o.waitingFor?.let { same(p, it) } == true || o.promisedTo?.let { same(p, it) } == true }
-    }
-    near.filter { it.waitingFor != null }.take(2).forEach { o ->
-        add(TaskLink("wait", L.s.waitingFor(o.waitingFor!!), listOfNotNull(o.title, o.dueDate?.shortLabel()?.lowercase()).joinToString(" · "), taskId = o.id))
-    }
-    near.filter { it.promisedTo != null }.take(2).forEach { o ->
-        add(TaskLink("promise", L.s.promised(o.promisedTo!!), listOfNotNull(o.title, o.dueDate?.shortLabel()?.lowercase()).joinToString(" · "), taskId = o.id))
-    }
 }
 
 /** A dated history of a person, each line saying where it came from. */

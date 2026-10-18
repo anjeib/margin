@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.anjeib.margin.data.dayMonthShort
 import ru.anjeib.margin.data.dowFull
+import ru.anjeib.margin.data.dowShort
 import java.time.LocalDate
 
 // ---------------- the cards as pages of the planner (owner, 14 окт; design/v9/v9-card-deal|note|topic.png) ----------------
@@ -89,18 +90,15 @@ fun CardPage(onClose: () -> Unit, trailing: (@Composable () -> Unit)? = null, co
     val quiet = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Box(Modifier.fillMaxSize().background(glassWash).clickable(quiet, null, onClick = onClose)
         .statusBarsPadding().navigationBarsPadding().imePadding().padding(horizontal = 10.dp, vertical = 20.dp), contentAlignment = Alignment.Center) {
-        Column(Modifier.fillMaxWidth().shadow(20.dp, shape).clip(shape).background(c.bg).border(1.dp, c.hairline, shape)
+        // No ✕ and no row for it (owner, 18 окт: «крестик не нужен», «в шапке много пустоты»): the window closes by a tap past
+        // it or «назад»; «✓ сохранено» floats in its top corner without taking a line.
+        Box(Modifier.fillMaxWidth().shadow(20.dp, shape).clip(shape).background(c.bg).border(1.dp, c.hairline, shape)
             .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) {}) {
-            Row(Modifier.fillMaxWidth().screenRule().padding(top = 6.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.width(MarginW), contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.close, onClick = onClose), contentAlignment = Alignment.Center) {
-                        CloseGlyph(c.ink.copy(alpha = 0.7f), 16.dp)
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                trailing?.invoke()
+            Column(Modifier.fillMaxWidth()) {
+                Box(Modifier.fillMaxWidth().screenRule().height(14.dp))
+                content()
             }
-            content()
+            Box(Modifier.align(Alignment.TopEnd).padding(top = 8.dp)) { trailing?.invoke() }
         }
     }
 }
@@ -139,8 +137,8 @@ fun CardMargin(day: LocalDate?, hour: String? = null, late: Boolean = false, pre
 fun windowPrefix(from: LocalDate?, due: LocalDate?): String? =
     if (from != null && due != null && from.isBefore(due)) "${from.dayOfMonth}${if (from.month != due.month) " " + from.dayMonthShort().substringAfter(' ') else ""} –" else null
 
-/** The weekday under a day on the margin: «суббота». */
-fun LocalDate.weekdayWord(): String = dowFull().lowercase()
+/** Short (owner, 18 окт: «понедельник» broke in two on the narrow margin): «пн», «сб». */
+fun LocalDate.weekdayWord(): String = dowShort().lowercase()
 
 /**
  * «Личное» / «Работа» as their two drawn marks, a house and a briefcase, bare on the page at the right under the title

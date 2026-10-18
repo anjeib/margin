@@ -125,13 +125,14 @@ fun MarginDay(day: Int, month: String, /** Past its day: the figures in terracot
         // «Полоса набора» (owner, 15 окт): the number large in Literata's display cut, set to the rule; the month under it in wide caps.
         Column(horizontalAlignment = Alignment.End) {
             Text(day.toString(), style = androidx.compose.ui.text.TextStyle(fontFamily = Cormorant, fontWeight = FontWeight(500),
-                fontSize = 72.sp, lineHeight = 52.sp, fontFeatureSettings = "lnum",
+                // 56 sp (was 72): «26» has to fit the margin narrowed to the hours (owner, 18 окт).
+                fontSize = 56.sp, lineHeight = 42.sp, fontFeatureSettings = "lnum",
                 letterSpacing = (-2).sp, color = if (late) c.accentText else c.ink, platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
                 lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(androidx.compose.ui.text.style.LineHeightStyle.Alignment.Bottom, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both)),
                 softWrap = false, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
             // Literata's figures sit high in their line box: the month is pulled up under them.
             Text(month.uppercase(), style = Type.small.copy(color = c.ink, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 3.4.sp),
-                modifier = Modifier.offset(x = 2.dp, y = (-12).dp))
+                modifier = Modifier.offset(x = 2.dp, y = (-9).dp))
         }
         return
     }
