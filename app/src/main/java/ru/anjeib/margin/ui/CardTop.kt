@@ -226,7 +226,8 @@ fun MatterTitle(title: String, onTitle: (String) -> Unit, done: Boolean, hour: S
     }) {
         androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 6.dp)) {
             if (mark != null) { androidx.compose.foundation.layout.Box(Modifier.padding(top = 2.dp, end = 8.dp)) { mark() } }
-            val style = Type.body.copy(fontFamily = rowFamily, color = if (done) c.graphite else c.ink, fontSize = 20.sp, lineHeight = 27.sp,
+            // The words of the matter as in the feed and in a note's card (owner, 18 окт: 20 sp read too large) — L of the one scale.
+            val style = Type.body.copy(fontFamily = rowFamily, color = if (done) c.graphite else c.ink, fontSize = rowSize, lineHeight = rowLine,
                 textDecoration = if (done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)
             androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
                 if (title.isEmpty() && hint != null) Text(hint, style = style.copy(color = c.graphite))

@@ -292,16 +292,18 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                 feedStarts.clear()
                 val cs = CountingScope(this)
                 if (byDay.isEmpty()) cs.item("empty") { Margined(Modifier.padding(top = 18.dp)) { Voice(s.journalEmpty) } }
-                (byDay.keys + today).toSortedSet().forEach { d ->
+                // The day picked in the head's week stands too, even empty (owner, 18 окт: a tap on a day with no notes did nothing).
+                (byDay.keys + today + day).toSortedSet().forEach { d ->
                     feedStarts[d] = cs.n
-                    cs.item("jd$d") { FeedDayHead(d, today) }
+                    cs.item("jd$d") { FeedDayHead(d, today, free = byDay[d].isNullOrEmpty()) }
                     byDay[d]?.let { cs.dayNotes(d, it) }
                 }
                 val archivedOwn = data.tasks.filter { it.thought && it.done && it.subtasks.isEmpty() }.map { t ->
                     ArchItem(t.id, t.title.ifBlank { t.entries.firstOrNull()?.text.orEmpty() }, t.doneAt, open = { onOpen(t.id) }, restore = { vm.reviveTopic(t.id) }, purge = { vm.removeMatter(t.id) })
                 }
                 archiveFold("arch", archivedOwn, archOpen) { archOpen = !archOpen }
-                item("feed-end") { Box(Modifier.fillParentMaxHeight(0.6f)) }
+                // A whole screen of room after the last day, so a day picked near the end still comes up to the top.
+                item("feed-end") { Box(Modifier.fillParentMaxHeight()) }
             } else if (journal) {
                 // Every day's notes, the newest day first, its number large on the margin.
                 if (byDay.isEmpty()) item("empty") { Margined(Modifier.padding(top = 18.dp)) { Voice(s.journalEmpty) } }

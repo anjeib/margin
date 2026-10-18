@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.anjeib.margin.data.dayMonth
 import ru.anjeib.margin.data.dayMonthShort
 import ru.anjeib.margin.data.dowFull
 import java.time.LocalDate
@@ -191,26 +192,25 @@ class CountingScope(private val inner: androidx.compose.foundation.lazy.LazyList
 }
 
 /**
- * A day in the feed (owner, 17 окт: «даты слева огромные и дублируются верхним меню… сейчас очень много дыр»): a hairline across
- * the page and the date small on the margin by it — «сегодня» in petrol for today; the weekday is the head's week.
+ * A day in the feed (owner, 18 окт: «а нужны ли полосы?… по центру разделять датами дни, слева оставить только время»): no line —
+ * the day in words, small, in the middle of the page's column, with air above it. Today in petrol; an empty today says so.
  */
 @Composable
-fun FeedDayHead(day: LocalDate, today: LocalDate, /** Nothing on it: «свободный день» at the line's start. */ free: Boolean = false) {
+fun FeedDayHead(day: LocalDate, today: LocalDate, /** Nothing on it: «· свободный день» after the date. */ free: Boolean = false) {
     val c = M.c
     val s = M.s
-    val ink = if (day != today && day.dayOfWeek.value >= 6) c.link.copy(alpha = 0.6f) else c.link
-    // The date as on every day (owner, 17 окт), M in petrol; today — «сегодня» under it, S.
-    Margined(Modifier.padding(top = 12.dp, bottom = 2.dp), margin = {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-            androidx.compose.material3.Text(day.dayMonthShort(), maxLines = 1,
-                style = Type.markM.copy(color = ink, fontWeight = androidx.compose.ui.text.font.FontWeight(if (day == today) 600 else 500)))
-            if (day == today) androidx.compose.material3.Text(s.today.lowercase(), maxLines = 1, style = Type.meta.copy(color = c.link))
-        }
-    }) {
-        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().height(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (free) androidx.compose.material3.Text(s.freeDay.lowercase(), maxLines = 1, style = Type.meta.copy(color = c.graphite),
-                modifier = Modifier.padding(end = 10.dp))
-            Box(Modifier.weight(1f).height(if (day == today) 1.5.dp else 1.dp).background(c.link.copy(alpha = if (day == today) 0.7f else 0.3f)))
+    val ink = when {
+        day == today -> c.link
+        day.dayOfWeek.value >= 6 -> c.graphite.copy(alpha = 0.75f)
+        else -> c.graphite
+    }
+    // Today needs no weekday — the week above has it lit; so «сегодня, 18 октября · свободный день» fits one line.
+    val words = (if (day == today) s.today.lowercase() else day.dowFull().lowercase()) + ", " + day.dayMonth() +
+        (if (day.year != today.year) " ${day.year}" else "") + (if (free) "  ·  " + s.freeDay.lowercase() else "")
+    Margined(Modifier.padding(top = 22.dp, bottom = 6.dp)) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.Text(words, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                style = Type.meta.copy(color = ink, fontWeight = androidx.compose.ui.text.font.FontWeight(if (day == today) 600 else 500)))
         }
     }
 }
@@ -335,7 +335,8 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
             }
             else WeekStrip(top, today, { pick(it) }) { vm.monthOpen.value = true }
         }
-        DoubleRule(Modifier.padding(top = 8.dp, bottom = 4.dp))
+        // One hairline under the week (owner, 18 окт: the double rule was the heaviest thing on the screen once the days lost theirs).
+        Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp).padding(horizontal = 14.dp).height(1.dp).background(c.ink.copy(alpha = 0.18f)))
     }
 }
 

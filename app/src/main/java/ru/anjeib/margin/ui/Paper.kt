@@ -52,6 +52,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -224,8 +225,10 @@ fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modif
         // vertical axis as the day's large number; late — in terracotta.
         // Owner, 17 окт: the hour is what the margin is read for — large, level with the row's first line; dates and «с 14 окт» stay small.
         val hour = isHour(text)
-        Text(text, style = (if (hour) Type.markL else Type.meta.copy(fontWeight = FontWeight.Medium, lineHeight = 20.sp, fontFeatureSettings = "tnum"))
-            .copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink }, textAlign = TextAlign.End), maxLines = 2, modifier = modifier.fillMaxWidth())
+        val st = (if (hour) Type.markL else Type.meta.copy(fontWeight = FontWeight.Medium, lineHeight = 20.sp, fontFeatureSettings = "tnum"))
+            .copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink }, textAlign = TextAlign.End)
+        if (hour) TabularText(text, st, modifier.fillMaxWidth())
+        else Text(text, style = st, maxLines = 2, modifier = modifier.fillMaxWidth())
         return
     }
     PencilText(AnnotatedString(text), style = Type.italic.copy(color = when { link -> c.link; else -> if (planner) c.ink else c.ink.copy(alpha = 0.8f) },
@@ -233,6 +236,23 @@ fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modif
         shadow = if (planner && !c.dark) androidx.compose.ui.graphics.Shadow(Color.White.copy(alpha = 0.9f), androidx.compose.ui.geometry.Offset(0f, 1.6f), 0f) else null),
         // …and set on a small label of the same card as the tabs on the right, so the margin reads as the book's own index.
         modifier = if (planner && !late) modifier.marginLabel() else modifier, whole = late)
+}
+
+/**
+ * Figures of one width (owner, 18 окт: «почему 09:00 шире, чем 15:58?»). Commissioner has no «tnum» — its «1» is two thirds of
+ * a «0» — so every digit gets a cell as wide as the widest one, right-aligned as the margin is.
+ */
+@Composable
+fun TabularText(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier) {
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val cell = remember(style, density) { with(density) { ('0'..'9').maxOf { measurer.measure(it.toString(), style).size.width }.toDp() } }
+    Row(modifier.clearAndSetSemantics { contentDescription = text }, horizontalArrangement = Arrangement.End) {
+        text.forEach { ch ->
+            if (ch.isDigit()) Box(Modifier.width(cell), contentAlignment = Alignment.TopCenter) { Text(ch.toString(), style = style, maxLines = 1) }
+            else Text(ch.toString(), style = style, maxLines = 1)
+        }
+    }
 }
 
 /** The margin of a panel row: the note on the line of the row's first words. */

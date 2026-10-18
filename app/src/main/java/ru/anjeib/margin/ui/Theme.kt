@@ -208,7 +208,9 @@ fun MarginTheme(mode: ThemeMode, strings: Strings, content: @Composable () -> Un
     val p = if (dark) DarkPalette else LightPalette
     // The planner's margin is narrower — room for the words (ChatGPT's review, owner, 14 окт).
     // «Полоса набора» (owner, 15 окт): the margin a little wider — the dates stand in it from the left, the day's number on its right.
-    MarginW = marginFor(androidx.compose.ui.platform.LocalDensity.current.fontScale) + if (PlannerType.value) 12.dp else 0.dp
+    // Owner, 18 окт: the feed's margin holds only hours now — narrowed to «18:00» (it was wide enough for «19–25 окт»).
+    val fs = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    MarginW = if (PlannerType.value) 18.dp + 52.dp * fs.coerceIn(1f, 2f) else marginFor(fs)
     val scheme = if (dark) darkColorScheme(
         primary = p.accent, onPrimary = Color.White, background = p.bg, onBackground = p.ink,
         surface = p.card, onSurface = p.ink, surfaceVariant = p.chip, onSurfaceVariant = p.graphite,

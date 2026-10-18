@@ -393,7 +393,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                     onOpenPiece = { openPiece = it }, onPerson = { n -> data.persons.find { it.matches(n) }?.let { openPerson = it.id } },
                                 )
                             JOURNAL -> DiaryPage(data, vm, onOpen = { openId(it) }, onPerson = { n -> data.persons.find { it.matches(n) }?.let { openPerson = it.id } }, contentPadding = pad,
-                                onOpenNote = { openPiece = it }, journal = true)
+                                onOpenNote = { openPiece = it }, journal = true,
+                                // The head's week moves the diary too (owner, 18 окт: it went nowhere — the day was always today).
+                                day = vm.pageDay.collectAsState().value ?: LocalDate.now())
                             // «Темы» turn by days too (owner, 17 окт): the topics that stand on that day.
                             TOPICS -> TaskList(Views.ALL, sphereShown, settings, working, vm, events, onOpen = { openId(it) }, onView = { view = it }, onOpenNote = { openNote = it },
                                 contentPadding = pad, topicsOnly = true, findPage = "topics", pageDay = k.day)

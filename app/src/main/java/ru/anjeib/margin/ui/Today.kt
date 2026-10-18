@@ -95,6 +95,21 @@ fun whenNote(t: Task, today: LocalDate, underDay: Boolean): Pair<String?, Boolea
 }
 
 /**
+ * The feed (owner, 18 окт: «слева оставить только время»): the margin holds hours alone; the rest of «когда» — late since, a
+ * window, how long it lies — goes into the quiet line under the words.
+ */
+val LocalHoursOnly = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+/** [note] parted for the feed: the hour for the margin, the other words for the line under the row. */
+fun hoursAndRest(note: Pair<String?, Boolean>): Pair<String?, String?> {
+    val lines = note.first?.split("\n")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+    val hour = lines.lastOrNull { isHour(it) }
+    val rest = lines.filter { it != hour }.joinToString(" ").replace("– ", "–").ifBlank { null }
+    // Late is told by colour alone (the knot is terracotta too): «просрочено» under every row was a red wall (18 окт).
+    return hour to rest
+}
+
+/**
  * One matter in a panel. A tap opens it, a long press offers the hour, the topic and removing it; swipes — done and later.
  * Someone's promise wears its arrow instead of the circle, and the arrow closes it the same way («получено»).
  */
@@ -132,6 +147,8 @@ fun MatterRow(
     val acts = LocalRowActions.current
     val tomorrowAct = LocalTomorrow.current
     val promise = !t.done && (t.waitingFor != null || t.promisedTo != null)
+    val hoursOnly = LocalHoursOnly.current
+    val (marginText, whenSub) = if (hoursOnly) hoursAndRest(note) else note.first to null
     val body: @Composable () -> Unit = {
         PanelPiece(seat, bleed = !swipe || planner) {
             Box {
@@ -169,7 +186,7 @@ fun MatterRow(
                     if (unfolded) { val vm = LocalVm.current; if (vm != null) InlineMatterBody(t.id, vm) }
                     else if (!t.done) {
                         val days = t.dayOf()?.let { (i, n) -> s.dayOfDays(i, n) }
-                        TaskLine(t, null, showProject = true, today = today, tappable = true, hidePerson = hidePerson,
+                        TaskLine(t, whenSub, showProject = true, today = today, tappable = true, hidePerson = hidePerson,
                             topic = t.topicTitle?.takeIf { showTopic }, extra = listOfNotNull(days, extra).joinToString("  ·  ").ifBlank { null },
                             onTopic = t.topicId?.let { tid -> onOpenTopic?.let { f -> { f(tid) } } })
                     }
@@ -178,8 +195,8 @@ fun MatterRow(
         }
     }
     // «Полоса набора» (owner, 15 окт): the hour on the margin is the row's «done»; a row with no hour has only the knot (owner, 16 окт: no dash).
-    val marginSlot: (@Composable () -> Unit)? = if (planner) ({ MarginTap(::tick, late = note.second && !t.done && !ticking, done = t.done || ticking) { RowMargin(note.first, note.second && !t.done && !ticking) } })
-        else note.first?.let { m -> { RowMargin(m, note.second) } }
+    val marginSlot: (@Composable () -> Unit)? = if (planner) ({ MarginTap(::tick, late = note.second && !t.done && !ticking, done = t.done || ticking) { RowMargin(marginText, note.second && !t.done && !ticking && !hoursOnly) } })
+        else marginText?.let { m -> { RowMargin(m, note.second) } }
     val last = block == BlockPos.Last
     Margined(if (last) modifier.padding(bottom = 8.dp) else modifier, margin = marginSlot) {
       Box(Modifier.blockTint(block).then(if (last) Modifier.padding(bottom = 4.dp) else Modifier)) {
@@ -196,14 +213,15 @@ fun EventPaperRow(e: CalEvent, seat: Seat) {
     val c = M.c
     val s = M.s
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    PaperRow(seat, margin = if (e.allDay) s.allDay.lowercase() else e.start.toLocalTime().toString().take(5),
+    val hoursOnly = LocalHoursOnly.current
+    PaperRow(seat, margin = if (e.allDay) (if (hoursOnly) null else s.allDay.lowercase()) else e.start.toLocalTime().toString().take(5),
         mark = { CalendarGlyph(c.graphite, 20.dp) },
         onClick = {
             val ms = e.start.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
             runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("content://com.android.calendar/time/$ms"))) }
         }) {
         RowTitle(e.title)
-        val sub = listOfNotNull(if (e.allDay) null else e.start.toLocalTime().toString().take(5) + "–" + e.end.toLocalTime().toString().take(5), e.location).joinToString("  ·  ")
+        val sub = listOfNotNull(if (e.allDay) s.allDay.lowercase().takeIf { hoursOnly } else e.start.toLocalTime().toString().take(5) + "–" + e.end.toLocalTime().toString().take(5), e.location).joinToString("  ·  ")
         if (sub.isNotBlank()) RowSub(sub)
     }
 }
@@ -343,8 +361,10 @@ fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<S
     var hold by remember { mutableStateOf(false) }
     topicId?.let { TopicHold(it, hold) { hold = false } }
     val late = rows.count { !it.done && it.dueDate?.isBefore(today) == true }
+    // In the feed only an hour stays on the margin; a window or «с 14 окт» leads the line under the title.
+    val (hour, lead) = if (LocalHoursOnly.current) hoursAndRest(note.first to false) else note.first to null
     // Unfolded, its matters carry their own hours — the head doesn't repeat one.
-    Margined(Modifier.landing(lit, 0).padding(top = if (open) 0.dp else 4.dp, bottom = if (open) 0.dp else 8.dp), margin = { if (!open || marginOpen) RowMargin(note.first, note.second) }) {
+    Margined(Modifier.landing(lit, 0).padding(top = if (open) 0.dp else 4.dp, bottom = if (open) 0.dp else 8.dp), margin = { if (!open || marginOpen) RowMargin(hour, note.second) }) {
         // Owner, 16 окт («темы теряются в ленте»): a topic always lies on the block's light tint — folded it is a small block of
         // its own, unfolded the tint runs on under its matters.
         Box(Modifier.blockTint(if (open) BlockPos.Head else BlockPos.Single)) {
@@ -363,9 +383,9 @@ fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<S
                     Text(if (open) "⌃" else "⌄", style = Type.body.copy(color = c.graphite, fontSize = 20.sp, lineHeight = 20.sp), modifier = Modifier.padding(start = 8.dp, top = if (open) 6.dp else 0.dp))
                 }
                 Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val what = listOfNotNull(rows.size.takeIf { it > 0 }?.let { s.summaryDeals(it) }, notes.takeIf { it > 0 }?.let { s.nEntries(it) },
+                    val what = listOfNotNull(lead, rows.size.takeIf { it > 0 }?.let { s.summaryDeals(it) }, notes.takeIf { it > 0 }?.let { s.nEntries(it) },
                         done.takeIf { it > 0 }?.let { s.doneCountWord(it) }).joinToString(", ")
-                    Text(what + (if (late > 0) ", " + s.lateOfDay(late) else "") + "  ·  ", style = Type.small.copy(color = subInk, fontSize = subSize))
+                    Text((what + (if (late > 0) ", " + s.lateOfDay(late) else "")).replaceFirst(", ", if (lead != null) "  ·  " else ", ") + "  ·  ", style = Type.small.copy(color = subInk, fontSize = subSize))
                     Text(s.openTopicLink, style = Type.small.copy(color = c.link, fontSize = subSize, fontWeight = FontWeight.Medium),
                         modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpen).padding(vertical = 2.dp))
                 }

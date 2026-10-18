@@ -249,7 +249,7 @@ fun TaskList(
     val kind by vm.kindFilter.collectAsState()
     // A topic chosen (no topic page, owner 17 окт): the feed is that topic's — its matters, its notes, its days; unfolded.
     val topicF by vm.topicFilter.collectAsState()
-    val feedDays = if (feed) remember(data, events, today, kind, topicF) {
+    val feedDays = if (feed) remember(data, events, today, kind, topicF, pageDay) {
         val data = topicF?.let { id -> data.copy(tasks = data.tasks.filter { it.id == id }) } ?: data
         fun dayOf(x: String?) = x?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
         val notesByDay = data.linkedNotes().groupBy { dayOf(it.at) ?: today }
@@ -296,7 +296,8 @@ fun TaskList(
                 "notes" -> notes.isNotEmpty()
                 else -> p.deals.isNotEmpty() || p.events.isNotEmpty() || p.done.isNotEmpty() || notes.isNotEmpty() || allTops.isNotEmpty()
             }
-            if (d == today || has) FeedDay(d, p, notes, allTops) else null
+            // The day picked in the head's week stands too, even empty — the tap has somewhere to go (owner, 18 окт).
+            if (d == today || d == pageDay || has) FeedDay(d, p, notes, allTops) else null
         }
     } else emptyList()
     val feedStarts = remember { HashMap<LocalDate, Int>() }
@@ -311,6 +312,7 @@ fun TaskList(
     // The month unfolding or folding sets the whole page anew (owner, 14 окт): rows sliding while the section heads jumped
     // ran over each other and over the fading month — now everything simply stands in its new place.
     androidx.compose.runtime.key(monthOpen) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalHoursOnly provides feed) {
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = pad) {
       findable(found, find?.takeIf { findPage != null }, { k -> (k as? String)?.let { ks -> findable.firstOrNull { ks.endsWith(it.id) } }?.let { t -> find != null && findHit(find.words, t.findText()) } == true }) {
         when {
@@ -388,8 +390,8 @@ fun TaskList(
                         val d = f.day
                         feedStarts[d] = cs.n
                         // An empty today says so on its line, instead of standing as a blank band.
-                        val free = d == today && f.plan.deals.isEmpty() && f.plan.events.isEmpty() && f.plan.done.isEmpty() && f.notes.isEmpty() &&
-                            f.topics.isEmpty() && (undated.isEmpty() || (kind != null && kind != "deals"))
+                        val free = f.plan.deals.isEmpty() && f.plan.events.isEmpty() && f.plan.done.isEmpty() && f.notes.isEmpty() &&
+                            f.topics.isEmpty() && (d != today || undated.isEmpty() || (kind != null && kind != "deals"))
                         cs.item("fd$d") { FeedDayHead(d, today, free) }
                         // Everything: the day's notes go in among its matters by their hour.
                         // A note of a topic (or of a topic's matter) belongs to that topic's row on the day.
@@ -409,7 +411,7 @@ fun TaskList(
                         if (kind == null || kind == "deals") cs.dayPanel(f.plan, today, "f$d", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                             doneOpen = isOpen("s-done-$d"), onDoneFold = { toggle("s-done-$d") }, openTopics = openHere, onTopicFold = { foldTopic("$d|$it") }, extras = noteRows)
                         if (kind == null || kind == "topics") f.topics.forEachIndexed { i, (t, word) ->
-                            cs.item("ft$d" + t.id) { TopicPaperRow(t, seatOf(i, f.topics.size), onOpen = { onOpen(t.id) }, margin = word ?: "") }
+                            cs.item("ft$d" + t.id) { TopicPaperRow(t, seatOf(i, f.topics.size), onOpen = { onOpen(t.id) }, margin = null, lead = word) }
                         }
                         if (kind == "notes") cs.linkedNotesOfDay(d, f.notes, data, vm, onOpen, onOpenPiece, onPerson)
                         if (d == today) {
@@ -547,6 +549,7 @@ fun TaskList(
     }
     }
     }
+    }
 }
 
 /** A topic in a panel: its feed mark, the title, how much is open and written; settled — «в архив». */
@@ -562,7 +565,8 @@ fun Task.topicWhen(): String? {
 @Composable
 fun TopicPaperRow(t: Task, seat: Seat, onOpen: () -> Unit, onArchive: (() -> Unit)? = null, margin: String? = t.topicWhen() ?: (t.lastActivity() ?: runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull())?.let { dayWord(it) },
                   /** In search: the matter of the topic the words were found in. */
-                  found: String? = null, trailing: (@Composable () -> Unit)? = null) {
+                  found: String? = null, trailing: (@Composable () -> Unit)? = null,
+                  /** In the feed: what the margin said («конец», «19–25 окт»), first in the line under the title. */ lead: String? = null) {
     val c = M.c
     val s = M.s
     val open = t.subtasks.count { !it.done }
@@ -574,6 +578,7 @@ fun TopicPaperRow(t: Task, seat: Seat, onOpen: () -> Unit, onArchive: (() -> Uni
         trailing = trailing ?: if (t.noNextStep && onArchive != null) ({ PaperLink(s.toArchive, onClick = onArchive) }) else null) {
         RowTitle(t.title, maxLines = 2)
         val sub = listOfNotNull(
+            lead?.replace("\n", " ")?.replace("– ", "–"),
             if (t.noNextStep) s.allDoneShort else open.takeIf { it > 0 }?.let { s.summaryDeals(it) },
             waits.takeIf { it > 0 }?.let { s.a11yWaiting + " " + it },
             t.entries.size.takeIf { it > 0 }?.let { s.nEntries(it) },
