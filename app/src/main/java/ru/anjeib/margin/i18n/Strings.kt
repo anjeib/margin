@@ -582,17 +582,20 @@ interface Strings {
     val actShare: String get() = "Переслать"
     /** «Переслать» for a cell of a card's tools, where the long word doesn't fit. */
     val actSend: String get() = "Послать"
+    val toPhoneContacts: String get() = "В телефон"
     // Getting to know Margin (0.90): five scenes, then the permissions.
     val obSkip: String get() = "Пропустить"
     val obSetupTitle: String get() = "Почти готово"
     val obNext: String get() = "Дальше"
     val obMic: String get() = "Микрофон"
     val obScenes: List<Pair<String, String>> get() = listOf(
-        "Пишите как думаете" to "Одно поле внизу. День, время и люди встанут сами — ещё до отправки видно, как Margin понял фразу.",
-        "Голос — прямо на телефоне" to "Диктуйте в поле или перешлите голосовое из Telegram и WhatsApp — Margin распознает его без интернета.",
+        "Скажите — и готово" to "Нажмите микрофон и говорите как обычно. Речь распознаётся прямо на телефоне, без интернета; день, время и люди встанут сами.",
+        "Файл и человек — вместе с делом" to "Скрепка добавит файл или фото, «@» — человека. Всё ляжет в одно дело.",
         "Кружок на линии — сделано" to "Слева только время. Просроченное — терракотой, с того дня, как ждёт. Удержите строку — отложить, время, в тему.",
         "Ждём и обещали" to "«Маша пришлёт договор до пятницы» — Margin запомнит, кто кому должен, и напомнит в срок.",
         "Большое дело — тема" to "Свои дела, заметки и файлы. В ленте — одной строкой; нажатие раскрывает, «вся тема» откроет окно.",
+        "Дневник — для себя" to "Мысли и итоги дня — отдельно от дел. Книжка в шапке открывает дневник; пишите или диктуйте.",
+        "Контакты — из ваших дел" to "Имя под делом — ссылка: в карточке человека телефон и все дела с ним — что ждёте и что обещали.",
     )
     val obPhrase: String get() = "Завтра в 15 созвон с Олегом"
     val obHint: String get() = "Дело или заметка…"
@@ -601,9 +604,27 @@ interface Strings {
     val obRow2: String get() = "Созвон с Олегом"
     val obRow3: String get() = "Стоматолог"
     val obChips: List<String> get() = listOf("дело", "завтра 15:00", "Олег")
-    val obSaid: String get() = "Купить продукты на неделю"
-    val obVoiceText: String get() = "Возьми, пожалуйста, хлеб и молоко, а в субботу едем к родителям на дачу."
-    val obVoiceFrom: String get() = "Аня, из Telegram · голосовое"
+    val obSaid: String get() = "Завтра в 10 позвонить маме насчёт дачи"
+    val obVoiceRow: String get() = "Позвонить маме насчёт дачи"
+    val obVoiceRowSub: String get() = "Мама"
+    val obVoicePreview: String get() = "дело · завтра 10:00 · Мама"
+    val obAttachSaid: String get() = "Отправить договор @Олег до пятницы"
+    val obAttachFile: String get() = "Договор.pdf"
+    val obAttachPerson: String get() = "Олег"
+    val obAttachRow: String get() = "Отправить договор Олегу"
+    val obAttachRowSub: String get() = "обещали Олегу · 📎 1"
+    val obAttachOther: String get() = "Планёрка"
+    val obFridayDay: String get() = "пятница, 23 октября"
+    val obDiaryDay: String get() = "сегодня, 18 октября"
+    val obDiary1: String get() = "Утро ясное, впервые за неделю солнце."
+    val obDiaryNew: String get() = "Пробежала 5 км без остановки. Месяц назад не могла и двух."
+    val obDiaryHint: String get() = "Запись в дневник…"
+    val obPeopleRow: String get() = "Созвон по смете"
+    val obPeopleRowSub: String get() = "Маша"
+    val obPeopleName: String get() = "Маша"
+    val obPeopleOrg: String get() = "ООО «Северный ветер»"
+    val obPeoplePhone: String get() = "+7 916 555-12-40"
+    val obPeopleDeals: List<String> get() = listOf("Договор от Маши — ждём, пт 23 окт", "Созвон по смете — сегодня, 14:00")
     val obKnot1: String get() = "Пробежка в парке"
     val obKnot2: String get() = "Позвонить маме"
     val obKnot3: String get() = "Купить продукты"

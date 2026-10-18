@@ -225,6 +225,8 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
                         androidx.compose.animation.AnimatedVisibility(more) {
                             MoreActions(listOfNotNull(
                                 if (data.persons.size > 1) Action(s.actMerge, false, { more = false; dialog = "merge" }) { PeopleGlyph(it, 21.dp) } else null,
+                                // Into the phone's contacts (owner, 18 окт): the system's own «new contact» window, filled in — no permission.
+                                Action(s.toPhoneContacts, false, { more = false; runCatching { ctx.startActivity(phoneContactIntent(person)) } }) { PersonGlyph(it, 21.dp) },
                             ))
                         }
                     }
@@ -376,5 +378,21 @@ private fun ContactChip(icon: ImageVector, label: String, onClick: () -> Unit, o
         Icon(icon, null, tint = c.link, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(8.dp))
         Text(label, style = Type.small.copy(color = c.link, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+
+/** The phone's «new contact» window with what Margin knows about [p]: name, phone, mail, company or what it does, address. */
+internal fun phoneContactIntent(p: ru.anjeib.margin.data.Person): android.content.Intent {
+    return android.content.Intent(android.provider.ContactsContract.Intents.Insert.ACTION).apply {
+        type = android.provider.ContactsContract.RawContacts.CONTENT_TYPE
+        putExtra(android.provider.ContactsContract.Intents.Insert.NAME, p.name)
+        p.phone?.let { putExtra(android.provider.ContactsContract.Intents.Insert.PHONE, it) }
+        p.email?.let { putExtra(android.provider.ContactsContract.Intents.Insert.EMAIL, it) }
+        (p.company ?: if (p.org) p.name else null)?.let { putExtra(android.provider.ContactsContract.Intents.Insert.COMPANY, it) }
+        p.address?.let { putExtra(android.provider.ContactsContract.Intents.Insert.POSTAL, it) }
+        p.about?.takeIf { p.aboutFromUser }?.let { putExtra(android.provider.ContactsContract.Intents.Insert.NOTES, it) }
+        // Back to Margin when the contact is saved.
+        putExtra("finishActivityOnSaveCompleted", true)
     }
 }
