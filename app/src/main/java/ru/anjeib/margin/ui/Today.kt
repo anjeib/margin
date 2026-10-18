@@ -541,7 +541,25 @@ fun LazyListScope.dayPanel(
         while (waiting.isNotEmpty() && (before == null || waiting.first().hour < before)) waiting.removeAt(0).emit(this, null)
     }
 
-    val blocks = if (fold) withTopicHeads(shown, 1) { d -> (d as? DayItem.Matter)?.t?.topicId?.takeIf { it in grouped }?.let { it to (titles[it] ?: "") } }
+    // A topic's row stands by its earliest hour when one of its matters has one (owner, 18 окт: «16:00» stood above «11:00»
+    // because the row took the place of its first, untimed matter); a topic of untimed matters stays among the untimed.
+    val topicHour = if (!fold) emptyMap() else grouped.associateWith { id -> matters.mapNotNull { m -> m.t.time?.take(5)?.takeIf { m.t.topicId == id && m.t.dueDate?.isBefore(today) != true } }.minOrNull() }
+    fun orderKey(d: DayItem): String = when (d) {
+        is DayItem.Matter -> {
+            val tid = d.t.topicId?.takeIf { it in grouped }
+            when {
+                tid != null && topicHour[tid] != null -> "2" + topicHour[tid]
+                d.t.dueDate?.isBefore(today) == true -> "0"
+                d.t.time == null -> "1"
+                else -> "2" + d.t.time!!.take(5)
+            }
+        }
+        is DayItem.Event -> if (d.e.allDay) "0" else "2" + d.e.start.toLocalTime().toString().take(5)
+        is DayItem.Note -> "3"
+        is DayItem.Done -> "4"
+    }
+    val ordered = if (fold) shown.sortedBy { orderKey(it) } else shown
+    val blocks = if (fold) withTopicHeads(ordered, 1) { d -> (d as? DayItem.Matter)?.t?.topicId?.takeIf { it in grouped }?.let { it to (titles[it] ?: "") } }
         else withTopicHeads(shown, 2) { d -> (d as? DayItem.Matter)?.t?.let { t -> t.topicId?.let { it to (t.topicTitle ?: "") } } }
     val inBlock = blocks.filterIsInstance<TopicHead>().map { it.id }.toSet()
     val pos = blockPositions(blocks) { (it as? DayItem.Matter)?.t?.topicId }

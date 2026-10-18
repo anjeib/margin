@@ -94,7 +94,7 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
             pageHeadItem("h") { PageHead(s.inboxNote, s.inboxHint) }
             if (data.queue.isEmpty() && note?.entries.isNullOrEmpty()) item("empty") { Margined { Empty(s.inboxEmpty, s.inboxEmptyHint) } }
             if (data.queue.isNotEmpty()) {
-                item("q-h") { SectionHead(s.waitingNet, count = data.queue.size, top = 10.dp) }
+                item("q-h") { SectionHead(s.waitingNet, count = data.queue.size, top = 10.dp, rule = false) }
                 data.queue.forEachIndexed { i, q ->
                     item("q" + q.id) {
                         InboxRow(seat = seatOf(i, data.queue.size), hour = q.at.drop(11).take(5), icon = { Icon(Icons.Outlined.CloudOff, null, tint = c.graphite, modifier = Modifier.size(19.dp)) },
@@ -107,8 +107,10 @@ fun InboxScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, content
             if (note != null && note.entries.isNotEmpty()) {
                 // v8: by day — the day as a section's label, the hour on the margin of each row.
                 val byDay = note.entries.reversed().groupBy { dayOf(it.at) }
+                var firstDay = data.queue.isEmpty()
                 byDay.forEach { (d, list) ->
-                item("d" + d) { SectionHead(d?.let { dayTalk(it, today) } ?: "—", count = list.size) }
+                val f = firstDay; firstDay = false
+                item("d" + d) { SectionHead(d?.let { dayTalk(it, today) } ?: "—", count = list.size, rule = !f) }
                 list.forEachIndexed { i, e ->
                     val a = e.attachments.firstOrNull()
                     item("e" + e.id) {

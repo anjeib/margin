@@ -370,7 +370,8 @@ fun SwipeActions(
             val dir = state.dismissDirection
             val toEnd = dir == SwipeToDismissBoxValue.StartToEnd
             Box(Modifier.fillMaxSize().clip(shape)
-                .background(if (dir == SwipeToDismissBoxValue.Settled) c.card else if (toEnd) c.accent else c.ink).padding(horizontal = 22.dp),
+                // At rest nothing under the row — on the planner the row stands on the paper (18 окт: a white plate showed in «Входящие»).
+                .background(if (dir == SwipeToDismissBoxValue.Settled) androidx.compose.ui.graphics.Color.Transparent else if (toEnd) c.accent else c.ink).padding(horizontal = 22.dp),
                 contentAlignment = if (toEnd) Alignment.CenterStart else Alignment.CenterEnd) {
                 if (dir != SwipeToDismissBoxValue.Settled) Text((if (toEnd) right?.first else left?.first).orEmpty(), style = Type.tab.copy(color = c.bg))
             }
