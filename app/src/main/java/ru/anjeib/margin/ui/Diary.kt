@@ -240,7 +240,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                         val hour = at.drop(11).take(5)
                         val first = i == 0
                         Margined(Modifier.landing(n.id in landed, 0), margin = {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (first) 4.dp else 8.dp)) { MarginNote(hour) }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = (if (first) 4.dp else 8.dp) + KnotDrop)) { MarginNote(hour) }
                         }) {
                             var menu by remember(n.id) { mutableStateOf(false) }
                             var edit by remember(n.id) { mutableStateOf(false) }
@@ -371,7 +371,7 @@ internal fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: 
     }
     val toTopic = x.link.startsWith("#")
     Margined(if (block == BlockPos.Last) Modifier.padding(bottom = 8.dp) else Modifier, margin = {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (first) 4.dp else 8.dp)) { MarginNote(x.at.drop(11).take(5)) }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = (if (first) 4.dp else 8.dp) + KnotDrop)) { MarginNote(x.at.drop(11).take(5)) }
     }) {
         Box(Modifier.blockTint(block)) {
             Box(Modifier.align(Alignment.TopEnd).padding(top = 8.dp)) { SoftMenu(menu, { menu = false }) {

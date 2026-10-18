@@ -225,7 +225,8 @@ fun MarginNote(text: String, late: Boolean = false, link: Boolean = false, modif
         // vertical axis as the day's large number; late — in terracotta.
         // Owner, 17 окт: the hour is what the margin is read for — large, level with the row's first line; dates and «с 14 окт» stay small.
         val hour = isHour(text)
-        val st = (if (hour) Type.markL else Type.meta.copy(fontWeight = FontWeight.Medium, lineHeight = 20.sp, fontFeatureSettings = "tnum"))
+        // Owner, 18 окт: the hour read large and heavy beside the words — a step down, regular, on the words' line height.
+        val st = (if (hour) Type.markL.copy(fontSize = 15.sp, fontWeight = FontWeight.Normal, lineHeight = rowLine) else Type.meta.copy(fontWeight = FontWeight.Medium, lineHeight = 20.sp, fontFeatureSettings = "tnum"))
             .copy(color = when { late -> c.accentText; link -> c.link; else -> c.ink }, textAlign = TextAlign.End)
         if (hour) TabularText(text, st, modifier.fillMaxWidth())
         else Text(text, style = st, maxLines = 2, modifier = modifier.fillMaxWidth())
@@ -260,7 +261,7 @@ fun TabularText(text: String, style: androidx.compose.ui.text.TextStyle, modifie
 fun RowMargin(text: String?, late: Boolean = false, link: Boolean = false) {
     if (text.isNullOrBlank()) return
     // A large hour shares the row's first line exactly; small words sit a little lower, on its baseline.
-    MarginNote(text, late, link, Modifier.padding(top = if (planner && isHour(text)) RowTop - 2.dp else RowTop + 2.dp))
+    MarginNote(text, late, link, Modifier.padding(top = if (planner && isHour(text)) RowTop - 2.dp + KnotDrop else RowTop + 2.dp))
 }
 
 /** «10:00», «9:30» — an hour, set large on the margin. */
@@ -348,7 +349,8 @@ fun MarginTap(onTap: (() -> Unit)?, late: Boolean = false, done: Boolean = false
         // The cell now runs [reach] past its slot; the slot's right edge + 10 dp is the rule itself.
         val x = size.width - reach.toPx() + 10.dp.toPx()
         // RowBody pads the words RowTop − 2 dp from the top; the knot sits on the middle of their first line.
-        val y = (RowTop - 2.dp).toPx() + line.toPx() / 2
+        // + KnotDrop: the eye reads a line's middle at its small letters, lower than the box's middle (owner, 18 окт: «чуть выше»).
+        val y = (RowTop - 2.dp + KnotDrop).toPx() + line.toPx() / 2
         val r = 6.dp.toPx()
         val at = androidx.compose.ui.geometry.Offset(x, y)
         drawCircle(paper, radius = r + 3.dp.toPx(), center = at)
@@ -364,6 +366,9 @@ fun MarginTap(onTap: (() -> Unit)?, late: Boolean = false, done: Boolean = false
 
 /** How far the margin's tap cell reaches past its slot: over the 10 dp gap, the rule and the knot's far half. */
 val KnotReach = 22.dp
+
+/** How far the knot and the hour sit below the geometric middle of the words' first line — on their small letters. */
+val KnotDrop = 3.dp
 
 /** The words of a row: ink, 16 sp, up to three lines. */
 @Composable

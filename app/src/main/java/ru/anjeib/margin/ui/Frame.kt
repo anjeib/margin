@@ -201,8 +201,9 @@ fun FeedDayHead(day: LocalDate, today: LocalDate, /** Nothing on it: «· сво
     val s = M.s
     val ink = when {
         day == today -> c.link
-        day.dayOfWeek.value >= 6 -> c.graphite.copy(alpha = 0.75f)
-        else -> c.graphite
+        // Owner, 18 окт: the dates read faint in graphite — in ink, the weekend a touch softer.
+        day.dayOfWeek.value >= 6 -> c.ink.copy(alpha = 0.6f)
+        else -> c.ink.copy(alpha = 0.85f)
     }
     // Today needs no weekday — the week above has it lit; so «сегодня, 18 октября · свободный день» fits one line.
     val words = (if (day == today) s.today.lowercase() else day.dowFull().lowercase()) + ", " + day.dayMonth() +

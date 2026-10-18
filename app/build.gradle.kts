@@ -27,8 +27,8 @@ android {
         applicationId = "ru.margin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 83
-        versionName = "0.83"
+        versionCode = 84
+        versionName = "0.84"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         // No keys in what people install: the AI goes through Margin's own door in Yandex Cloud (server/proxy),
