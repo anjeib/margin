@@ -1,5 +1,8 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -275,9 +278,13 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
     val today = LocalDate.now()
     fun pick(d: LocalDate) { vm.pageDay.value = d.takeIf { it != today }; vm.feedJump.value++; vm.monthOpen.value = false }
     @Composable fun mark(label: String, on: Boolean, onClick: () -> Unit, glyph: @Composable (androidx.compose.ui.graphics.Color) -> Unit) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(if (on) c.linkSoft else androidx.compose.ui.graphics.Color.Transparent)
-            .clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
-            glyph(if (on) c.link else c.ink.copy(alpha = 0.7f))
+        // A finger's 44 dp and a name for TalkBack (ChatGPT's audit of 0.89: 40 dp, no names); the lit circle stays 40 dp.
+        // 48 dp cut «простые и сложные» under «Дела» — six marks leave no room at 48.
+        Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = label, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .semantics { contentDescription = label; selected = on }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(if (on) c.linkSoft else androidx.compose.ui.graphics.Color.Transparent), contentAlignment = Alignment.Center) {
+                glyph(if (on) c.link else c.ink.copy(alpha = 0.7f))
+            }
         }
     }
     fun sphereTap(k: String) { vm.diarySphere.value = if (sphere == k) null else k }
@@ -317,6 +324,9 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
                     Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).height(1.dp).background(c.hairline))
                     SoftMenuItem(s.kindDeals, selected = kind == "deals") { kindTap("deals") }
                     SoftMenuItem(s.kindTopics, selected = kind == "topics") { kindTap("topics") }
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).height(1.dp).background(c.hairline))
+                    SoftMenuItem(s.filterWait, selected = kind == "wait") { kindTap("wait") }
+                    SoftMenuItem(s.filterPromise, selected = kind == "promise") { kindTap("promise") }
                     if (sphere != null || kind != null) {
                         Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).height(1.dp).background(c.hairline))
                         SoftMenuItem(s.showEverything) { vm.diarySphere.value = null; vm.kindFilter.value = null; filters = false }

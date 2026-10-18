@@ -330,7 +330,7 @@ fun PaperRow(
  * stops short of it on both sides (a disc of paper under the ring), and a done row's knot is filled.
  */
 @Composable
-fun MarginTap(onTap: (() -> Unit)?, late: Boolean = false, done: Boolean = false, content: @Composable () -> Unit) {
+fun MarginTap(onTap: (() -> Unit)?, late: Boolean = false, done: Boolean = false, /** What TalkBack names the checkbox: the matter. */ label: String? = null, content: @Composable () -> Unit) {
     if (onTap == null || !planner) { content(); return }
     val c = M.c
     val s = M.s
@@ -358,7 +358,7 @@ fun MarginTap(onTap: (() -> Unit)?, late: Boolean = false, done: Boolean = false
         drawCircle(ringColor, radius = r, center = at, style = androidx.compose.ui.graphics.drawscope.Stroke(1.3.dp.toPx()))
     }.clip(RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
         // TalkBack (ChatGPT, 15 окт): a checkbox with a real state, not «checkable=false».
-        .semantics { toggleableState = androidx.compose.ui.state.ToggleableState(done) }
+        .semantics { toggleableState = androidx.compose.ui.state.ToggleableState(done); label?.let { contentDescription = it } }
         .clickable(onClickLabel = s.markDone, role = androidx.compose.ui.semantics.Role.Checkbox, onClick = onTap)) {
         Box(Modifier.fillMaxWidth().padding(end = reach)) { content() }
     }

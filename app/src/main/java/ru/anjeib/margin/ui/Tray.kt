@@ -190,11 +190,13 @@ private fun Dots(color: androidx.compose.ui.graphics.Color) {
 }
 
 @Composable
-private fun ResultBubble(p: Pending, current: AppData, onConfirm: () -> Unit, onEdit: () -> Unit, onReject: () -> Unit, onHold: () -> Unit, onSeparate: () -> Unit = {},
+private fun ResultBubble(p: Pending, now: AppData, onConfirm: () -> Unit, onEdit: () -> Unit, onReject: () -> Unit, onHold: () -> Unit, onSeparate: () -> Unit = {},
                          onAskWhen: (String, String) -> Unit = { _, _ -> }, onKeepContact: (String) -> Unit = {}, onMoveTo: (String) -> Unit = {},
                          onMisparse: (Pending, String) -> Unit = { _, _ -> }) {
     val c = M.c
     val s = M.s
+    // Saved at once (0.90): what is new is new against the state before it was saved.
+    val current = p.committed ?: now
     val after = p.preview.data
     var created = 0
     var newTopics = 0; var changed = 0; var done = 0; var notes = 0; var people = 0; var appended = false; var topics = 0

@@ -860,7 +860,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
     val sub = plannerLook && depth > 0
     val strikeLine = if (plannerLook) rowLine else 22.sp
     val indent = if (sub) 26.dp * (depth - 1) else (if (planner) 18.dp else MarkCol / 2 + 21.dp) * depth
-    Margined(margin = when { sub -> null; plannerLook && !removed -> ({ MarginTap(::tick, late = late, done = q.done) { margin?.invoke() ?: RowMargin(null) } }); else -> margin }) {
+    Margined(margin = when { sub -> null; plannerLook && !removed -> ({ MarginTap(::tick, late = late, done = q.done, label = q.title) { margin?.invoke() ?: RowMargin(null) } }); else -> margin }) {
         PanelPiece(seat, divider = depth == 0) {
         Box {
             Row(Modifier.fillMaxWidth().background(sel).padding(start = indent)

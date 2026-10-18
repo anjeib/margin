@@ -37,6 +37,8 @@ fun alarmPlan(tasks: List<Task>, notes: List<Note>, now: LocalDateTime, morning:
     fun at(date: String?, time: String?, owed: Boolean) = day(date)?.let { d -> (hour(time) ?: morning.takeIf { owed })?.let { d.atTime(it) } }
     for (t in tasks) {
         if (t.done) continue
+        // The course's lessons never ring (ChatGPT's audit of 0.89: a newcomer got notifications from the examples).
+        if (t.id.startsWith("ex-")) continue
         if (t.topic) {
             put(t.id, dt(t.remindAt)) // a thought keeps the reminder its note had
             for (q in t.subtasks) {

@@ -249,17 +249,21 @@ fun TaskList(
     val kind by vm.kindFilter.collectAsState()
     // A topic chosen (no topic page, owner 17 окт): the feed is that topic's — its matters, its notes, its days; unfolded.
     val topicF by vm.topicFilter.collectAsState()
+    // «Ждём» / «Обещали» in the filter (ChatGPT's audit of 0.89: before a call — who owes whom, at a glance): only those matters.
+    val owe = kind == "wait" || kind == "promise"
+    val dealsKind = kind == "deals" || owe
+    fun oweOk(t: Task) = if (kind == "wait") t.waitingFor != null && !t.done else t.promisedTo != null && !t.done
     val feedDays = if (feed) remember(data, events, today, kind, topicF, pageDay) {
         val data = topicF?.let { id -> data.copy(tasks = data.tasks.filter { it.id == id }) } ?: data
         fun dayOf(x: String?) = x?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
-        val topics = data.tasks.filter { it.topic && !it.thought && !it.done }
+        val topics = if (owe) emptyList() else data.tasks.filter { it.topic && !it.thought && !it.done }
         (-120L..120L).map { today.plusDays(it) }.mapNotNull { d ->
             // A window stands once in the feed (owner, 18 окт: one topic of «19–25 окт» filled every day of the week) — on its
             // first day, or on today while it goes on; the day page and the month still count it in each of its days.
             val p0 = dayPlan(data, d, today, events).let { p0 -> p0.copy(deals = p0.deals.filter { t ->
                 val st = t.startDate; val en = t.dueDate
                 st == null || en == null || !st.isBefore(en) || en.isBefore(today) || d == maxOf(st, today)
-            }) }
+            }) }.let { p0 -> if (!owe) p0 else p0.copy(deals = p0.deals.filter { oweOk(it) }, done = emptyList(), events = emptyList()) }
             // Inside a topic its matters stand as plain rows — the topic's own row over them each day would only repeat the head;
             // the topic's window they share is said once, by the topic's row (owner, 18 окт), not under each of them.
             val topicSpan = topicF?.let { id -> data.tasks.find { it.id == id } }?.let { it.start to it.due }?.takeIf { it.first != null && it.second != null }
@@ -288,14 +292,14 @@ fun TaskList(
             }
             // A topic whose period is going on stands under today even when nothing of it is on today (owner, 17 окт) — its
             // period on the margin; not in the days before or after, there it stands only when something happens to it.
-            val going = if (d != today || kind == "deals" || kind == "notes") emptyList() else topics.filter { t ->
+            val going = if (d != today || dealsKind || kind == "notes") emptyList() else topics.filter { t ->
                 val st = t.startDate; val en = t.dueDate
                 st != null && en != null && !today.isBefore(st) && !today.isAfter(en) &&
                     t.id !in inPlan && t.id !in inNotes && tops.none { it.first.id == t.id }
             }.map { it to it.topicWhen() }
             val allTops = tops + going
             val has = when (kind) {
-                "deals" -> p.deals.isNotEmpty() || p.done.isNotEmpty()
+                "deals", "wait", "promise" -> p.deals.isNotEmpty() || p.done.isNotEmpty()
                 "topics" -> allTops.isNotEmpty()
                 "notes" -> notes.isNotEmpty()
                 else -> p.deals.isNotEmpty() || p.events.isNotEmpty() || p.done.isNotEmpty() || notes.isNotEmpty() || allTops.isNotEmpty()
@@ -418,12 +422,12 @@ fun TaskList(
                             cs.item("ft$d" + t.id) { TopicPaperRow(t, seatOf(i, f.topics.size), onOpen = { onOpen(t.id) }, margin = null, lead = lead) }
                         }
                         if (topicF != null && (kind == null || kind == "topics")) topicRows()
-                        if (kind == null || kind == "deals") cs.dayPanel(f.plan, today, "f$d", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
+                        if (kind == null || dealsKind) cs.dayPanel(f.plan, today, "f$d", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                             doneOpen = isOpen("s-done-$d"), onDoneFold = { toggle("s-done-$d") }, openTopics = openHere, onTopicFold = { foldTopic("$d|$it") }, extras = noteRows)
                         if (topicF == null && (kind == null || kind == "topics")) topicRows()
                         if (kind == "notes") cs.linkedNotesOfDay(d, f.notes, data, vm, onOpen, onOpenPiece, onPerson)
                         if (d == today) {
-                            if ((kind == null || kind == "deals") && undated.isNotEmpty()) cs.undatedRows(undated)
+                            if ((kind == null || dealsKind) && undated.isNotEmpty()) cs.undatedRows(undated.filter { !owe || oweOk(it) })
                             if (kind == null) {
                                 // Shared or saved without a place: one line while there is something to put away.
                                 val unplaced = data.inboxNote()?.entries?.size ?: 0

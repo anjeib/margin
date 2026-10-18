@@ -47,6 +47,12 @@ data class Pending(
     val userMsgId: String? = null,
     val smart: Boolean = false,
     val source: String = "",
+    /**
+     * The state before the plan was saved (ChatGPT's audit of 0.89: a matter closed away within the preview's 2,6 s was lost).
+     * The plan is written at once; «Отменить» brings this back. null — not saved yet (a question, «в отдельную заметку»).
+     */
+    val committed: AppData? = null,
+    val ids: List<String> = emptyList(),
 )
 
 /** Result line shown under a scoped composer (inside a task or the notes section). */
@@ -251,7 +257,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val d = runCatching { ru.anjeib.margin.data.FileBackup.read(getApplication(), uri) }.getOrNull()
         if (d == null) { _toast.value = L.s.restoreFailed; return@launch }
         val before = data.value
-        store.restore { cur -> d.copy(chat = cur.chat) }
+        // The copy whole, its history of input too (ChatGPT's audit of 0.89: the chat did not come back).
+        store.restore { d }
         runCatching { ru.anjeib.margin.notify.Reminders.rescheduleAll(getApplication()) }
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { offerUndo(before, L.s.restoreDone) }
     }
@@ -1005,7 +1012,13 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     private fun propose(plan: AiPlan, files: List<Attachment>, userMsgId: String? = null, smart: Boolean = false, source: String = "") {
-        val p = Pending(newId(), plan, Assistant.apply(data.value, plan, source, strict = !smart, recent = recentTasks()), settings.value.autoConfirm, files, userMsgId, smart, source)
+        var p = Pending(newId(), plan, Assistant.apply(data.value, plan, source, strict = !smart, recent = recentTasks()), settings.value.autoConfirm, files, userMsgId, smart, source)
+        // Saved before it is shown: closing the app over the preview keeps it; only a question waits for the answer.
+        if (plan.question == null) {
+            val before = data.value
+            val ids = applyPlan(plan, files, source = source, strict = !smart)
+            p = p.copy(committed = before, ids = ids)
+        }
         _pending.value = p
         autoJob?.cancel()
         if (p.auto) autoJob = viewModelScope.launch {
@@ -1019,8 +1032,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val p = _pending.value ?: return emptyList()
         autoJob?.cancel()
         _pending.value = null
-        val before = data.value
-        val ids = applyPlan(p.plan, p.files, source = p.source, strict = !p.smart)
+        val before = p.committed ?: data.value
+        val ids = if (p.committed != null) p.ids else applyPlan(p.plan, p.files, source = p.source, strict = !p.smart)
         // Nothing left to say → the bubble leaves and the result settles into its list.
         val talk = p.plan.question != null || (p.smart && !p.plan.reply.isNullOrBlank())
         if (!talk) {
@@ -1051,8 +1064,11 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** «в отдельную заметку»: what the AI appended to an existing note becomes a note of its own. */
     fun pendingAsNewNote() {
-        val p = _pending.value ?: return
+        val p0 = _pending.value ?: return
         autoJob?.cancel()
+        // Already saved as it was read: back first, then the other reading waits for «Готово».
+        p0.committed?.let { before -> store.restore { before } }
+        val p = p0.copy(committed = null, ids = emptyList())
         val actions = p.plan.actions.map { a ->
             val type = (a["type"] as? kotlinx.serialization.json.JsonPrimitive)?.content
             if (type == "append_note" || type == "create_note") kotlinx.serialization.json.JsonObject(
@@ -1070,6 +1086,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val p = _pending.value
         _pending.value = null
         _trayFrom.value = null
+        // Saved already: «Отменить» takes it back out.
+        p?.committed?.let { before -> store.restore { before } }
         p?.files?.takeIf { it.isNotEmpty() }?.let { fileAway(Scope.Main, it, data.value, null) }
     }
 

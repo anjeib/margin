@@ -196,7 +196,7 @@ fun MatterRow(
         }
     }
     // «Полоса набора» (owner, 15 окт): the hour on the margin is the row's «done»; a row with no hour has only the knot (owner, 16 окт: no dash).
-    val marginSlot: (@Composable () -> Unit)? = if (planner) ({ MarginTap(::tick, late = note.second && !t.done && !ticking, done = t.done || ticking) { RowMargin(marginText, note.second && !t.done && !ticking && !hoursOnly) } })
+    val marginSlot: (@Composable () -> Unit)? = if (planner) ({ MarginTap(::tick, late = note.second && !t.done && !ticking, done = t.done || ticking, label = t.title) { RowMargin(marginText, note.second && !t.done && !ticking && !hoursOnly) } })
         else marginText?.let { m -> { RowMargin(m, note.second) } }
     val last = block == BlockPos.Last
     Margined(if (last) modifier.padding(bottom = 8.dp) else modifier, margin = marginSlot) {

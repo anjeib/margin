@@ -5,82 +5,50 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 
 /**
- * The first page (owner, 16 окт: «пустота напрягает при первом знакомстве»): a few things that are at once examples and a short
- * story of Margin — a topic «Знакомство с Margin» whose notes tell how it works, and matters each showing one thing (the knot,
- * the long press, a wait and a promise, a repeat with a place, several days, a window, no date, done, «не буду») in its own
- * words; a note of the diary about the diary. They come once, on a fresh start, as ordinary records — not marked, nothing in
- * Settings takes them away or brings them back: they are put away or archived like anything else. Russian only.
+ * The first page (owner, 16 окт: «пустота напрягает при первом знакомстве»): the course — one topic. It comes once, on a fresh
+ * start, as an ordinary record — not marked; nothing in Settings takes it away or brings it back: it is archived like any topic.
  */
 object Samples {
-    /** The set as data; [sheet] and [plan] are the course's files (drawn on the phone — [withFiles]; none in the tests). */
+    /**
+     * Owner, 18 окт: the examples are one topic, «Курс освоения Margin», on the day of the first launch — its lessons are its
+     * matters for that day (no hours, so no reminders), its notes say the rest, with the course's files. Archived like any topic.
+     * [sheet] and [plan] are the course's files (drawn on the phone — [withFiles]; none in the tests).
+     */
     fun build(today: LocalDate = LocalDate.now(), sheet: Attachment? = null, plan: Attachment? = null, photo: Attachment? = null): AppData {
-        fun d(n: Long) = today.plusDays(n).toString()
-        fun at(n: Long, hm: String) = "${today.plusDays(n)}T$hm"
-        fun ev(n: Long, hm: String, ref: String, wait: Boolean = false, entry: String? = null) =
-            TopicEvent(at = at(n, hm), kind = if (wait) "wait" else "q", ref = ref, entry = entry)
-
-        // The course is itself a topic: lessons as its matters (one with steps under it), its notes as lessons in words, its files.
+        val d0 = today.toString()
+        fun at(hm: String) = "${today}T$hm"
+        fun ev(hm: String, ref: String, wait: Boolean = false, entry: String? = null) =
+            TopicEvent(at = at(hm), kind = if (wait) "wait" else "q", ref = ref, entry = entry)
+        fun lesson(id: String, title: String, parent: String? = null, from: String? = null, done: Boolean = false) =
+            Subtask(id = "ex-c$id", title = title, due = if (parent == null || parent.startsWith("ex-c-e")) d0 else null, parent = parent, from = from,
+                done = done, doneAt = if (done) d0 else null)
         val course = Task(
-            id = "ex-course", title = "Курс освоения Margin", topic = true, sphere = "personal", createdAt = d(-2), people = listOf("Катя"),
+            id = "ex-course", title = "Курс освоения Margin", topic = true, sphere = "personal", createdAt = d0, people = listOf("Катя"),
             entries = listOf(
-                Entry(id = "ex-c-e1", at = at(-2, "10:00"), text = "Это курс из пяти уроков — и заодно пример темы. Тема собирает одно большое дело: " +
-                    "его дела, поддела, заметки и файлы. «Вся тема ›» откроет её окном — все уроки и заметки по дням.", attachments = listOfNotNull(plan?.copy(caption = "План курса"))),
-                Entry(id = "ex-c-e2", at = at(-1, "18:30"), text = "Урок 1 · Как писать. В поле внизу — как говорите: «завтра в 15 созвон с Катей», " +
-                    "«Маша пришлёт договор до пятницы». День, время, люди и кто кому должен встанут сами. Голосом — то же: держите микрофон.",
+                Entry(id = "ex-c-e1", at = at("09:00"), text = "Это курс и заодно пример темы: большое дело со своими делами, заметками и файлами. " +
+                    "Отмечайте уроки кружком на линии. Освоитесь — удержите строку темы и уберите её в архив.",
+                    attachments = listOfNotNull(plan?.copy(caption = "План курса"))),
+                Entry(id = "ex-c-e2", at = at("09:01"), text = "Пишите и диктуйте как говорите: «завтра в 15 созвон с Катей», «Маша пришлёт договор до пятницы». " +
+                    "День, время, люди и кто кому должен встанут сами. Голосовые из Telegram и WhatsApp — «Поделиться → Margin», они станут текстом.",
                     attachments = listOfNotNull(sheet)),
-                Entry(id = "ex-c-e4", at = at(-1, "19:40"), text = "Урок 5 · Файлы. Фото, PDF и голос кладутся в заметку скрепкой в поле и все вместе видны в «Материалах» (меню ≡). " +
-                    "Вот фото с первого занятия.", attachments = listOfNotNull(photo?.copy(caption = "Первое занятие"))),
-                Entry(id = "ex-c-e3", at = at(0, "08:30"), text = "Урок 3 · Как писать в тему. Скажите «Добавь в тему Курс освоения Margin …» — слова лягут сюда. " +
-                    "Так же «Добавь в дело …»."),
+                Entry(id = "ex-c-e3", at = at("09:02"), text = "Заметки живут в деле или теме — как эта. Файлы и фото кладутся скрепкой в поле внизу.",
+                    attachments = listOfNotNull(photo?.copy(caption = "Первое занятие"))),
             ),
             subtasks = listOf(
-                Subtask(id = "ex-c1", title = "Урок 0 · Установить Margin", done = true, doneAt = d(-1)),
-                Subtask(id = "ex-c2", title = "Урок 1 · Нажать на кружок на линии — дело сделано", due = d(0), time = "10:00"),
-                Subtask(id = "ex-c3", title = "Урок 2 · Домашнее задание от Кати — то, что ждём, помечено «ждём» под делом", from = "Катя", due = d(1)),
-                Subtask(id = "ex-c4", title = "Урок 3 · Сказать голосом: «Добавь в тему Курс освоения Margin…»", due = d(2), parent = "ex-c-e3"),
-                Subtask(id = "ex-c5", title = "Урок 4 · Поддела: разбить дело на шаги", due = d(3)),
-                Subtask(id = "ex-c6", title = "Шаг · поддело — маленькое кольцо под своим делом", parent = "ex-c5"),
-                Subtask(id = "ex-c7", title = "Шаг · отметить его этим кольцом", parent = "ex-c5"),
-                Subtask(id = "ex-c8", title = "Урок 5 · Открыть шпаргалку в «Материалах»", due = d(5)),
+                lesson("1", "1. Нажмите на кружок на линии — дело сделано"),
+                lesson("2", "2. Скажите в микрофон: «завтра в 10 позвонить маме»"),
+                lesson("3", "3. Домашнее задание от Кати — «ждём» под делом", from = "Катя"),
+                lesson("4", "4. Удержите строку дела — отложить, время, в тему"),
+                lesson("5", "5. Разбейте дело на шаги"),
+                lesson("6", "Шаг — маленькое кольцо под своим делом", parent = "ex-c5"),
+                lesson("7", "Шаг — отметьте его этим кольцом", parent = "ex-c5"),
+                lesson("8", "6. Напишите что-нибудь для себя в «Дневник» — книжка в шапке"),
             ),
-            events = listOf(ev(-1, "18:00", "ex-c1"), ev(-1, "21:15", "ex-c2"), ev(-1, "18:31", "ex-c3", wait = true, entry = "ex-c-e2"),
-                ev(0, "08:31", "ex-c4", entry = "ex-c-e3"), ev(-1, "09:30", "ex-c5"), ev(-1, "09:31", "ex-c6"), ev(-1, "09:32", "ex-c7"), ev(-1, "09:33", "ex-c8")),
+            events = listOf(ev("09:00", "ex-c1"), ev("09:01", "ex-c2", entry = "ex-c-e2"), ev("09:01", "ex-c3", wait = true, entry = "ex-c-e2"),
+                ev("09:02", "ex-c4"), ev("09:02", "ex-c5"), ev("09:02", "ex-c6"), ev("09:02", "ex-c7"), ev("09:03", "ex-c8")),
         )
-
-        fun deal(id: String, title: String, born: Long, note: String? = null) = Task(id = "ex-$id", title = title, sphere = "personal", createdAt = d(born),
-            comments = listOfNotNull(note?.let { Comment(id = "ex-$id-n", at = at(born.coerceAtMost(0), "09:00"), text = it) }))
-        val classDay = (0L..6L).map { today.plusDays(it) }.first { it.dayOfWeek in setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY) }
-        val deals = listOf(
-            deal("hold", "Удержите строку — откроется меню: отложить, время, в тему", 0,
-                "Час стоит на полях. В карточке нажмите на него — поменяете время.").copy(due = d(0), time = "19:00"),
-            deal("late", "Просроченное помнит, с какого дня ждёт", -3).copy(due = d(-2)),
-            deal("class", "Занятие курса: повтор и место", -20,
-                "«Каждый понедельник, среду и пятницу в 18» — повтор понятен из слов. Адрес нажимается — откроется карта.")
-                .copy(due = classDay.toString(), time = "18:00", place = "Покровка, 21", people = listOf("Катя"), repeat = Repeat("weekly", days = listOf(1, 3, 5))),
-            deal("practice", "Практика: одно дело в несколько дней", -2)
-                .copy(slots = listOf(Slot(id = "ex-s1", date = d(1), time = "19:00"), Slot(id = "ex-s2", date = d(3), time = "19:00"))).syncSlots(),
-            deal("promise", "Конспект для Лёши — мы обещали, ладонь к нему", -1).copy(promisedTo = "Лёша", due = d(1)),
-            deal("wait", "Оплата за курс от Маши — ждём, «напомнить» напишет ей", -4).copy(waitingFor = "Маша", due = d(0)),
-            deal("break", "Каникулы курса: дело на период — в ленте стоит один раз, в первый его день", -1).copy(start = d(4), due = d(7)),
-            deal("nodate", "Без даты — тоже нормально: такие дела стоят под сегодняшним днём, пока не сделаны", -5),
-            deal("done", "Сделанное зачёркнуто; нажмите на кружок — вернётся", -3).copy(due = d(-1), done = true, doneAt = d(-1)),
-            deal("drop", "«Не буду» — закрыто без выполнения, честно", -6).copy(done = true, dropped = true, doneAt = d(-2)),
-        )
-
-        val note = Task(
-            id = "ex-note", title = "Дневник — только для себя", topic = true, thought = true, sphere = "personal", createdAt = d(0),
-            entries = listOf(Entry(id = "ex-n-e1", at = at(0, "09:00"), text = "Это дневник: записи только для себя — мысли, впечатления, итоги дня. " +
-                "Он отдельный: дела и темы сюда не попадают, а то, что здесь, не появляется в «Делах». «@» отметит человека: @[Катя].")),
-        )
-
-        // People: a contact with a card and her company; those only mentioned wait under «Упомянуты» in «Контакты».
-        val persons = listOf(
-            Person(id = "ex-p-katya", name = "Катя", about = "ведёт курс Margin", company = "Коворкинг «Поля»", phone = "+7 916 555-12-40", kept = true, aboutFromUser = true),
-            Person(id = "ex-p-place", name = "Коворкинг «Поля»", org = true, address = "Покровка, 21", kept = true),
-            Person(id = "ex-p-masha", name = "Маша", draft = true),
-            Person(id = "ex-p-lesha", name = "Лёша", draft = true),
-        )
-        return AppData(tasks = listOf(course) + deals + note, persons = persons)
+        val persons = listOf(Person(id = "ex-p-katya", name = "Катя", about = "ведёт курс Margin", kept = true, aboutFromUser = true))
+        return AppData(tasks = listOf(course), persons = persons)
     }
 
     /** The set with the course's files: the plan and the cheat sheet drawn on the phone, the class photo from the app's assets. */

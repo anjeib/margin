@@ -25,35 +25,25 @@ import ru.anjeib.margin.i18n.L
 class SamplesTest {
     private val set = Samples.build()
 
+    /** Owner, 18 окт: one topic on the day of the first launch, its lessons for that day with no hours — nothing rings. */
     @Test fun aCourseThatShowsEachThing() {
         val t = set.tasks
         assertTrue("ordinary records", t.none { it.sample } && set.persons.none { it.sample })
-        val topic = t.single { it.topic && !it.thought }
+        assertEquals("only the course", 1, t.size)
+        val topic = t.single()
+        assertTrue(topic.topic && !topic.thought)
         assertEquals("Курс освоения Margin", topic.title)
+        val today = java.time.LocalDate.now().toString()
+        assertEquals(today, topic.createdAt)
         assertTrue("a wait in the topic", topic.subtasks.any { it.from != null })
         assertTrue("a matter under a matter", topic.subtasks.any { q -> q.parent != null && topic.subtasks.any { it.id == q.parent } })
-        assertTrue("a matter from a note", topic.subtasks.any { q -> q.parent != null && topic.entries.any { it.id == q.parent } })
-        assertTrue("a topic matter for today", topic.subtasks.any { it.due == java.time.LocalDate.now().toString() && it.time != null })
+        assertTrue("lessons for today, no hours", topic.subtasks.filter { it.parent == null && !it.done }.all { it.due == today && it.time == null })
         assertTrue("notes in the topic", topic.entries.size >= 3)
-        assertEquals(1, t.count { it.thought })
-        val simple = t.filter { !it.topic }
-        assertTrue("an hour", simple.any { it.time != null && it.repeat == null })
-        assertTrue("late", simple.any { !it.done && it.dueDate?.isBefore(java.time.LocalDate.now()) == true })
-        assertTrue("a repeat with a place", simple.any { it.repeat != null && it.place != null })
-        assertTrue("several days", simple.any { it.slots.size >= 2 })
-        assertTrue("a window", simple.any { it.startDate != null && it.dueDate != null && it.startDate!!.isBefore(it.dueDate) })
-        assertTrue("a promise", simple.any { it.promisedTo != null })
-        assertTrue("a wait", simple.any { it.waitingFor != null })
-        assertTrue("no date", simple.any { it.dueDate == null && it.startDate == null && it.slots.isEmpty() && !it.done })
-        assertTrue("done", simple.any { it.done && !it.dropped })
-        assertTrue("not doing it", simple.any { it.dropped })
-        assertTrue("a contact, a company, the mentioned", set.persons.any { !it.org && it.isContact } && set.persons.any { it.org } && set.persons.any { it.draft })
-        assertTrue(simple.size <= 10)
-        // The day lists see the course's lesson for today.
-        assertTrue(set.listTasks().any { it.id == "q:ex-course:ex-c2" })
-        // Files land in the notes when there are any.
+        // No reminders from the course.
+        assertTrue(ru.anjeib.margin.notify.alarmPlan(t, emptyList(), java.time.LocalDateTime.now().withHour(0), java.time.LocalTime.of(8, 30)).isEmpty())
+        assertTrue(set.listTasks().any { it.id == "q:ex-course:ex-c1" })
         val f = ru.anjeib.margin.data.Attachment(kind = "file", name = "x.pdf")
-        assertTrue(Samples.build(sheet = f, plan = f, photo = f).tasks.single { it.topic && !it.thought }.entries.count { it.attachments.isNotEmpty() } == 3)
+        assertTrue(Samples.build(sheet = f, plan = f, photo = f).tasks.single().entries.count { it.attachments.isNotEmpty() } == 3)
     }
 
     @Test fun theCourseDoesNotDoubleTheUsersOwn() {
