@@ -320,7 +320,8 @@ fun dayItems(plan: DayPlan, today: LocalDate): List<DayItem> {
     val timed = (rest.filter { it.time != null }.map { it.time!! to DayItem.Matter(it) } +
         plan.events.filter { !it.allDay }.map { it.start.toLocalTime().toString().take(5) to DayItem.Event(it) }).sortedBy { it.first }.map { it.second }
     val loose = rest.filter { it.time == null }
-    return late.map { DayItem.Matter(it) } + allDay.map { DayItem.Event(it) } + timed + loose.map { DayItem.Matter(it) } +
+    // Owner, 18 окт: matters with no hour first — what is to be done some time today — then the day by its hours.
+    return late.map { DayItem.Matter(it) } + allDay.map { DayItem.Event(it) } + loose.map { DayItem.Matter(it) } + timed +
         plan.feed.map { DayItem.Note(it) } + plan.done.map { DayItem.Done(it) }
 }
 
@@ -507,7 +508,8 @@ fun LazyListScope.dayPanel(
                 marginOpen = span != null)
         } }
         if (!open) return
-        val members: List<Pair<String, Any>> = (ms.map { (it.time?.take(5) ?: "99") to (it as Any) } + ns.map { it.hour to (it as Any) }).sortedBy { it.first } +
+        // Inside a topic the same order: its matters with no hour first, then matters and notes by the hour.
+        val members: List<Pair<String, Any>> = (ms.map { (it.time?.take(5) ?: "") to (it as Any) } + ns.map { it.hour to (it as Any) }).sortedBy { it.first } +
             ds.map { "99" to (DayItem.Done(it) as Any) }
         members.forEachIndexed { k, (_, x) ->
             val pos = if (k == members.lastIndex) BlockPos.Last else BlockPos.Mid
