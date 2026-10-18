@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.layout
@@ -66,7 +67,7 @@ import ru.anjeib.margin.data.shortLabel
 fun Onboarding(vm: MainVm, onDone: () -> Unit) {
     val c = M.c
     val s = M.s
-    val scenes = 7
+    val scenes = 6
     val pager = androidx.compose.foundation.pager.rememberPagerState { scenes + 1 }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val last = pager.currentPage == scenes
@@ -117,22 +118,21 @@ private fun ScenePage(i: Int, shown: Boolean) {
         Spacer(Modifier.height(10.dp))
         Text(line, style = Type.body.copy(color = c.graphite, fontSize = 16.sp, lineHeight = 23.sp))
         Spacer(Modifier.height(28.dp))
-        Box(Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(22.dp)).background(c.card)
+        Box(Modifier.fillMaxWidth().height(370.dp).clip(RoundedCornerShape(22.dp)).background(c.card)
             .then(Modifier.padding(vertical = 18.dp))) {
             when (i) {
-                0 -> SceneVoice(t.value)
-                1 -> SceneAttach(t.value)
-                2 -> SceneKnot(t.value)
+                0 -> SceneTour(t.value)
+                1 -> SceneVoiceDeals(t.value)
+                2 -> SceneVoiceTopic(t.value)
                 3 -> SceneWait(t.value)
-                4 -> SceneTopic(t.value)
-                5 -> SceneDiary(t.value)
+                4 -> SceneDiary(t.value)
                 else -> ScenePeople(t.value)
             }
         }
     }
 }
 
-private val SceneMs = intArrayOf(6400, 6000, 3200, 3600, 3800, 4200, 4200)
+private val SceneMs = intArrayOf(12000, 17000, 14000, 7500, 8000, 4800)
 
 /** [t] mapped onto [a]..[b] of the scene's time, clamped to 0..1. */
 private fun seg(t: Float, a: Float, b: Float) = ((t - a) / (b - a)).coerceIn(0f, 1f)
@@ -187,6 +187,7 @@ private fun SceneRule(content: @Composable () -> Unit) {
 @Composable
 private fun SceneField(text: String, caret: Boolean, mic: Boolean, micPulse: Float = 0f, hint: String = "",
                        /** Recording: the timer and a little wave in place of the words. */ rec: Float = -1f) {
+    // While recording the button is «✓» — it stops and puts the words into the field, as in the app.
     val c = M.c
     Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp).clip(RoundedCornerShape(24.dp)).background(c.bg).padding(start = 12.dp, end = 5.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically) {
@@ -209,130 +210,307 @@ private fun SceneField(text: String, caret: Boolean, mic: Boolean, micPulse: Flo
         Box(Modifier.size(38.dp).drawBehind {
             if (micPulse > 0f) drawCircle(c.sea.copy(alpha = 0.3f * (1f - micPulse)), radius = size.minDimension / 2 + 14.dp.toPx() * micPulse)
         }.clip(CircleShape).background(c.sea), contentAlignment = Alignment.Center) {
-            if (mic) MicGlyph(c.bg, 18.dp) else Text("↑", style = Type.body.copy(color = c.bg, fontSize = 18.sp))
+            if (rec >= 0f) Text("✓", style = Type.body.copy(color = c.bg, fontSize = 17.sp))
+            else if (mic) MicGlyph(c.bg, 18.dp) else Text("↑", style = Type.body.copy(color = c.bg, fontSize = 18.sp))
         }
     }
 }
 
-/** A finger over the scene: where it is (in the scene's px), and how pressed (0..1). */
-@Composable
-private fun Finger(x: androidx.compose.ui.unit.Dp, y: androidx.compose.ui.unit.Dp, show: Float, press: Float) {
-    val c = M.c
-    if (show <= 0f) return
-    Box(Modifier.offset(x - 22.dp, y - 22.dp).size(44.dp).graphicsLayer { alpha = show; scaleX = 1f - 0.18f * press; scaleY = 1f - 0.18f * press }
-        .clip(CircleShape).background(c.ink.copy(alpha = 0.16f + 0.12f * press)))
-}
-
-/** A press of [at]..[at]+0.06 of the scene: 0 → 1 → 0. */
-private fun pressAt(t: Float, at: Float) = (1f - kotlin.math.abs((t - at - 0.03f) / 0.03f)).coerceIn(0f, 1f)
-
 /**
- * The voice — the heart of Margin (owner, 18 окт): a finger presses the microphone, the words said appear over the field as
- * they are heard, the finger sends them, Margin shows how it read them, and the matter lands in its day.
+ * A touch, drawn small and exact (owner, 18 окт: «тап аккуратнее, а не серым большим кругом»): a sea dot where the finger
+ * lands and a thin ring spreading from it, gone in a third of a second. [times] — the scene's moments of the taps.
  */
 @Composable
-private fun SceneVoice(t: Float) {
+private fun Tap(x: androidx.compose.ui.unit.Dp, y: androidx.compose.ui.unit.Dp, t: Float, vararg times: Float) {
+    val c = M.c
+    val k = times.map { (t - it) / 0.03f }.firstOrNull { it in 0f..1f } ?: return
+    androidx.compose.foundation.Canvas(Modifier.offset(x - 24.dp, y - 24.dp).size(48.dp)) {
+        val o = center
+        drawCircle(c.sea.copy(alpha = 0.85f * (1f - k)), radius = 6.dp.toPx(), center = o)
+        drawCircle(c.sea.copy(alpha = 0.9f * (1f - k)), radius = (8f + 14f * k).dp.toPx(), center = o, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+    }
+}
+
+/**
+ * One saying, as the app does it: a tap on the microphone, the words heard appear over the field as you speak, a tap on «✓»
+ * puts them into the field, a tap on «↑» sends; Margin shows how it read them, and the row lands. Everything inside [a]..[b].
+ */
+private class Say(t: Float, a: Float, b: Float, val text: String) {
+    val u = if (t < a) -1f else seg(t, a, b)
+    val on = t in a..b
+    val tapMic = a + (b - a) * 0.04f
+    val tapStop = a + (b - a) * 0.5f
+    val tapSend = a + (b - a) * 0.64f
+    val rec = if (u in 0.06f..0.5f) seg(u, 0.06f, 0.5f) else -1f
+    val heard = if (rec >= 0f) text.take((text.length * seg(u, 0.1f, 0.46f)).toInt()) else ""
+    val inField = if (u in 0.5f..0.66f) text else ""
+    val preview = if (u < 0f) 0f else seg(u, 0.68f, 0.72f) * (1f - seg(u, 0.86f, 0.9f))
+    /** The row in the day: 0 before, 1 from the end of the saying on. */
+    val land = if (t > b) 1f else if (u < 0f) 0f else seg(u, 0.86f, 0.96f)
+}
+
+/** The bottom of a voice scene: the words heard, or how Margin read them, over the field; the field itself. */
+@Composable
+private fun VoiceBottom(say: Say?, previewTitle: String, previewLine: String, hint: String, chips: @Composable (() -> Unit)? = null) {
+    val c = M.c
+    Column(Modifier.fillMaxWidth()) {
+        chips?.invoke()
+        if (say != null && say.heard.isNotEmpty()) Text(say.heard + "…", style = Type.body.copy(fontFamily = rowFamily, fontSize = 15.sp, lineHeight = 21.sp, color = c.ink),
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.bg).padding(horizontal = 12.dp, vertical = 8.dp))
+        if (say != null && say.preview > 0f) Column(Modifier.padding(horizontal = 18.dp, vertical = 8.dp).fillMaxWidth().graphicsLayer { alpha = say.preview }
+            .clip(RoundedCornerShape(12.dp)).border(1.dp, c.sea.copy(alpha = 0.4f), RoundedCornerShape(12.dp)).background(c.bg).padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Text(previewTitle, style = Type.body.copy(fontFamily = rowFamily, fontSize = 15.sp, color = c.ink))
+            Text(previewLine, style = Type.meta.copy(color = c.graphite), modifier = Modifier.padding(top = 2.dp))
+        }
+        val rec = say?.rec ?: -1f
+        val field = say?.inField.orEmpty()
+        SceneField(field, caret = false, mic = field.isEmpty(), micPulse = if (rec >= 0f) (rec * 18f) % 1f else 0f, hint = hint, rec = rec)
+    }
+}
+
+/** Where the field's button and paperclip are, in a scene [w] × [h]. */
+private fun micX(w: androidx.compose.ui.unit.Dp) = w - 14.dp - 5.dp - 19.dp
+private fun micY(h: androidx.compose.ui.unit.Dp) = h - 5.dp - 19.dp
+private val ClipX = 14.dp + 12.dp + 8.dp
+/** The knot on the rule, its x. */
+private val KnotX = 54.dp + 7.dp
+
+/**
+ * The first page — the app at a glance (owner, 18 окт: «обзор приложения: экранов, элементов интерфейса, переключений»):
+ * its head, the week, the feed and the field, and a tap on each in turn with what it does said under it.
+ */
+@Composable
+private fun SceneTour(t: Float) {
     val c = M.c
     val s = M.s
-    val said = s.obSaid
-    val rec = seg(t, 0.12f, 0.55f)
-    val words = said.take((said.length * seg(t, 0.18f, 0.52f)).toInt())
-    val preview = seg(t, 0.62f, 0.68f) * (1f - seg(t, 0.8f, 0.84f))
-    val land = seg(t, 0.8f, 0.9f)
+    val steps = s.obTour
+    val n = steps.size
+    val step = (t * n).toInt().coerceIn(0, n - 1)
+    val inStep = t * n - step
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = maxWidth; val h = maxHeight
+        fun icon(i: Int) = w - 10.dp - 16.dp - 32.dp * (5 - i)
+        val dw = (w - 74.dp) / 7
+        val journal = step == 3 && inStep > 0.25f
+        Column(Modifier.fillMaxSize()) {
+            // The head: what is open, and its six marks.
+            Row(Modifier.fillMaxWidth().height(40.dp).padding(start = 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (journal) s.journalTitle else s.kindDeals, style = Type.pageTitle.copy(color = c.ink, fontSize = 19.sp, lineHeight = 20.sp))
+                    Text(if (journal) s.journalSub else s.dealsSub, style = Type.meta.copy(color = c.graphite, fontSize = 10.sp, lineHeight = 12.sp))
+                }
+                val lit = listOf(step == 0, step == 1, step == 2, !journal, journal, step == 4)
+                listOf<@Composable (androidx.compose.ui.graphics.Color) -> Unit>({ FilterGlyph(it, 17.dp) }, { PersonGlyph(it, 17.dp) }, { SearchGlyph(it, 17.dp) },
+                    { DealGlyph(it, 18.dp) }, { DiaryGlyph(it, 17.dp) }, { Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { MenuGlyph(it) } }).forEachIndexed { i, g ->
+                    Box(Modifier.size(32.dp).clip(CircleShape).background(if (lit[i] && (i >= 3 || inStep > 0.1f)) c.linkSoft else androidx.compose.ui.graphics.Color.Transparent),
+                        contentAlignment = Alignment.Center) { g(if (lit[i]) c.link else c.ink.copy(alpha = 0.7f)) }
+                }
+            }
+            // The week: «ОКТ ▾» and the days; the one picked is filled.
+            Row(Modifier.fillMaxWidth().height(32.dp).padding(start = 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("ОКТ " + if (step == 6 && inStep > 0.2f) "▴" else "▾", style = Type.meta.copy(color = c.ink, fontSize = 11.sp, letterSpacing = 1.sp), modifier = Modifier.width(50.dp))
+                val picked = if (step == 5 && inStep > 0.2f) 0 else 6
+                listOf("пн", "вт", "ср", "чт", "пт", "сб", "вс").forEachIndexed { k, d ->
+                    Box(Modifier.weight(1f).padding(horizontal = 1.dp).clip(RoundedCornerShape(6.dp)).background(if (k == picked) c.link else androidx.compose.ui.graphics.Color.Transparent).padding(vertical = 3.dp),
+                        contentAlignment = Alignment.Center) { Text(d, style = Type.meta.copy(color = if (k == picked) c.bg else c.ink, fontSize = 11.sp)) }
+                }
+            }
+            Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).height(1.dp).background(c.ink.copy(alpha = 0.18f)))
+            // The month, unfolded at its step.
+            val month = if (step == 6) seg(inStep, 0.2f, 0.45f) else 0f
+            Column(Modifier.fillMaxWidth().clipToBounds().layout { m, cs -> val p = m.measure(cs); layout(p.width, (p.height * month).toInt()) { p.place(0, 0) } }
+                .padding(start = 64.dp, end = 10.dp, top = 2.dp, bottom = 4.dp)) {
+                (0 until 3).forEach { r ->
+                    Row { (0 until 7).forEach { k -> val d = 12 + r * 7 + k; Text(if (d > 31) "" else "$d", style = Type.meta.copy(color = if (d == 18) c.link else c.ink, fontSize = 10.sp), modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) } }
+                }
+            }
+            SceneRule {
+                Column {
+                    Text(if (step == 5 && inStep > 0.2f) s.obMonday else s.obToday, style = Type.meta.copy(color = c.link, fontSize = 11.sp), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    if (journal) SceneNote("08:05", s.obDiary1) else {
+                        SceneRow(null, s.obTourRow1, sub = s.obTourRow1Sub, late = true, subColor = c.accentText)
+                        SceneRow("11:00", s.obTourRow2)
+                    }
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            // What the tapped thing does, in a few words.
+            Text(steps[step], style = Type.small.copy(color = c.ink, fontSize = 13.5.sp, lineHeight = 18.sp),
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp).fillMaxWidth().graphicsLayer { alpha = seg(inStep, 0.05f, 0.2f) }
+                    .clip(RoundedCornerShape(10.dp)).background(c.linkSoft).padding(horizontal = 12.dp, vertical = 8.dp))
+            SceneField("", caret = false, mic = true, hint = s.obHint)
+        }
+        // The taps, one at the start of each step, on its thing.
+        val at = (step + 0.08f) / n
+        val (x, y) = when (step) {
+            0, 1, 2, 4 -> icon(if (step == 4) 5 else step) to 20.dp
+            3 -> icon(4) to 20.dp
+            5 -> (64.dp + dw * 0.5f) to 56.dp
+            6 -> 34.dp to 56.dp
+            else -> micX(w) to micY(h)
+        }
+        Tap(x, y, t, at)
+    }
+}
+
+/** Several matters by voice (owner, 18 окт): a plain one, one with a file and a person, then one is done. */
+@Composable
+private fun SceneVoiceDeals(t: Float) {
+    val c = M.c
+    val s = M.s
+    val one = Say(t, 0.02f, 0.36f, s.obSay1)
+    val clip = 0.4f
+    val two = Say(t, 0.43f, 0.8f, s.obSay2)
+    val done = seg(t, 0.86f, 0.92f)
+    val fileChip = if (t in clip + 0.02f..0.43f + (0.8f - 0.43f) * 0.66f) 1f else 0f
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         val w = maxWidth; val h = maxHeight
         Column(Modifier.fillMaxSize()) {
             SceneRule {
                 Column {
-                    Text(s.obTomorrow, style = Type.meta.copy(color = c.graphite), modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    SceneRow("09:30", s.obRow1)
-                    SceneRow("10:00", s.obVoiceRow, sub = s.obVoiceRowSub, subColor = c.link, alpha = land, offsetY = (1f - land) * 30f, grow = land)
-                    SceneRow("18:30", s.obRow3)
+                    Text(s.obToday, style = Type.meta.copy(color = c.link), modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    SceneRow(null, s.obRow2a, sub = s.obRow2aSub, subColor = c.link, alpha = two.land, offsetY = (1f - two.land) * 24f, grow = two.land)
+                    SceneRow("09:30", s.obRow1, done = done)
+                    SceneRow("11:00", s.obRow1a, sub = s.obRow1aSub, subColor = c.link, alpha = one.land, offsetY = (1f - one.land) * 24f, grow = one.land)
                 }
             }
             Spacer(Modifier.weight(1f))
-            // The words heard so far, over the field, as the phone reads them while you speak.
-            if (words.isNotEmpty() && land == 0f && preview == 0f) Text(words + if (rec < 1f) "…" else "", style = Type.body.copy(fontFamily = rowFamily, fontSize = 15.sp, lineHeight = 21.sp, color = c.ink),
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.bg).padding(horizontal = 12.dp, vertical = 8.dp))
-            // How Margin read it: the result card, as after a send.
-            if (preview > 0f) Column(Modifier.padding(horizontal = 18.dp, vertical = 8.dp).fillMaxWidth().graphicsLayer { alpha = preview }
-                .clip(RoundedCornerShape(12.dp)).background(c.bg).padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(s.obVoiceRow, style = Type.body.copy(fontFamily = rowFamily, fontSize = 15.sp, color = c.ink))
-                Text(s.obVoicePreview, style = Type.meta.copy(color = c.graphite), modifier = Modifier.padding(top = 2.dp))
-            }
-            val recording = rec in 0.001f..0.999f
-            SceneField(if (recording || land > 0f || preview > 0f) "" else words, caret = false, mic = words.isEmpty() || recording || land > 0f || preview > 0f,
-                micPulse = if (recording) (t * 10f) % 1f else 0f, hint = s.obHint, rec = if (recording) rec else -1f)
+            val say = if (two.u >= 0f && t <= 0.8f) two else if (one.on) one else null
+            VoiceBottom(say, if (say === two) s.obRow2a else s.obRow1a, if (say === two) s.obPrev2 else s.obPrev1, s.obHint, chips = {
+                Row(Modifier.padding(start = 18.dp, bottom = 6.dp).graphicsLayer { alpha = fileChip }, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(Modifier.clip(RoundedCornerShape(12.dp)).background(c.bg).padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        ClipGlyph(c.graphite, 12.dp); Spacer(Modifier.width(4.dp)); Text(s.obAttachFile, style = Type.meta.copy(color = c.ink))
+                    }
+                }
+            })
         }
-        // The finger: to the microphone, press; after the words, the same button sends.
-        val atMic = 0.08f; val atSend = 0.57f
-        val show = seg(t, 0.02f, 0.08f) * (1f - seg(t, 0.64f, 0.7f))
-        Finger(w - 14.dp - 5.dp - 19.dp, h - 5.dp - 19.dp, show, maxOf(pressAt(t, atMic), pressAt(t, atSend)))
+        Tap(micX(w), micY(h), t, one.tapMic, one.tapStop, one.tapSend, two.tapMic, two.tapStop, two.tapSend)
+        Tap(ClipX, micY(h), t, clip)
+        // «Планёрка» is the second row by then: under the day's line and the new matter with its line under it.
+        Tap(KnotX, 22.dp + 53.dp + 13.dp, t, 0.86f)
     }
 }
 
-/** A file and a person go with the words: the paperclip adds the file, «@» the person; sent — one matter with both. */
+/** A topic by voice, and a matter in it by voice (owner, 18 окт). */
 @Composable
-private fun SceneAttach(t: Float) {
+private fun SceneVoiceTopic(t: Float) {
     val c = M.c
     val s = M.s
-    val file = seg(t, 0.16f, 0.22f)
-    val phrase = s.obAttachSaid
-    val typed = phrase.take((phrase.length * seg(t, 0.28f, 0.55f)).toInt())
-    val land = seg(t, 0.74f, 0.86f)
+    val one = Say(t, 0.02f, 0.4f, s.obSayTopic)
+    val openAt = 0.48f
+    val win = seg(t, openAt + 0.02f, openAt + 0.08f)
+    val two = Say(t, 0.56f, 0.94f, s.obSayInTopic)
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-        val h = maxHeight
+        val w = maxWidth; val h = maxHeight
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                SceneRule {
+                    Column {
+                        Text(s.obToday, style = Type.meta.copy(color = c.link), modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        SceneRow("09:30", s.obRow1)
+                        // The topic's row: on the block's tint, «# Ремонт ванной», «тема · вся тема ›».
+                        Row(Modifier.fillMaxWidth().layout { m, cs -> val p = m.measure(cs); layout(p.width, (p.height * one.land).toInt()) { p.place(0, 0) } }
+                            .graphicsLayer { alpha = one.land }.padding(vertical = 4.dp)) {
+                            Spacer(Modifier.width(KnotX + 10.dp))
+                            Column(Modifier.weight(1f).padding(end = 12.dp).clip(RoundedCornerShape(12.dp)).background(c.sea.copy(alpha = 0.07f)).padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                Row { Text("# ", style = Type.body.copy(fontFamily = rowFamily, fontSize = rowSize, color = c.link)); Text(s.obTopic, style = Type.body.copy(fontFamily = rowFamily, fontSize = rowSize, color = c.ink)) }
+                                Text(s.obTopicNewSub, style = Type.meta.copy(color = c.graphite), modifier = Modifier.padding(top = 2.dp))
+                            }
+                        }
+                    }
+                }
+                // The topic's window over the feed, as in the app; its matter comes in by voice.
+                if (win > 0f) Column(Modifier.fillMaxSize().padding(horizontal = 4.dp).background(c.card).graphicsLayer { alpha = win; translationY = (1f - win) * 40f }
+                    .clip(RoundedCornerShape(16.dp)).border(1.dp, c.hairline, RoundedCornerShape(16.dp)).background(c.bg).padding(14.dp)) {
+                    Text(s.obTopicHead(if (two.land >= 1f) 1 else 0), style = Type.italic.copy(color = c.graphite, fontSize = 13.sp))
+                    Row(Modifier.padding(top = 6.dp)) { Text("# ", style = Type.body.copy(fontFamily = rowFamily, fontSize = 17.sp, color = c.link)); Text(s.obTopic, style = Type.body.copy(fontFamily = rowFamily, fontSize = 17.sp, color = c.ink)) }
+                    Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(1.dp).background(c.hairline))
+                    Text(s.dealsBadge, style = Type.small.copy(color = c.ink, fontSize = 12.sp, letterSpacing = 1.sp))
+                    Row(Modifier.padding(top = 8.dp).graphicsLayer { alpha = two.land; translationY = (1f - two.land) * 16f }, verticalAlignment = Alignment.Top) {
+                        Box(Modifier.padding(top = 4.dp).size(12.dp).clip(CircleShape).border(1.3.dp, c.sea, CircleShape))
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(s.obInTopicRow, style = Type.body.copy(fontFamily = rowFamily, fontSize = 15.sp, color = c.ink))
+                            Text(s.obInTopicSub, style = Type.meta.copy(color = c.graphite))
+                        }
+                    }
+                }
+            }
+            val say = if (two.u >= 0f) two else if (one.on) one else null
+            VoiceBottom(say, if (say === two) s.obInTopicRow else "# " + s.obTopic, if (say === two) s.obPrevInTopic else s.obPrevTopic,
+                if (win > 0f) s.topicWriteHint else s.obHint)
+        }
+        Tap(micX(w), micY(h), t, one.tapMic, one.tapStop, one.tapSend, two.tapMic, two.tapStop, two.tapSend)
+        // «вся тема ›» under the topic's name.
+        Tap(KnotX + 10.dp + 10.dp + 110.dp, 22.dp + 35.dp + 34.dp, t, openAt)
+    }
+}
+
+/** «Ждём и обещали» by voice: the words make a wait; on its day the reminder comes. */
+@Composable
+private fun SceneWait(t: Float) {
+    val c = M.c
+    val s = M.s
+    val one = Say(t, 0.02f, 0.62f, s.obSayWait)
+    val bell = seg(t, 0.72f, 0.8f)
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = maxWidth; val h = maxHeight
         Column(Modifier.fillMaxSize()) {
             SceneRule {
                 Column {
-                    Text(s.obFridayDay, style = Type.meta.copy(color = c.graphite), modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    SceneRow("11:00", s.obAttachOther)
-                    SceneRow(null, s.obAttachRow, sub = s.obAttachRowSub, subColor = c.link, alpha = land, offsetY = (1f - land) * 30f, grow = land)
+                    SceneRow(null, s.obWait1, sub = s.obWait1Sub, alpha = one.land, offsetY = (1f - one.land) * 24f, grow = one.land)
+                    SceneRow(null, s.obWait2, sub = s.obWait2Sub)
                 }
             }
             Spacer(Modifier.weight(1f))
-            // What goes with the words, as plaques over the field: the file, then the person picked with «@».
-            Row(Modifier.padding(start = 18.dp, bottom = 8.dp).graphicsLayer { alpha = file * (1f - land) }, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.clip(RoundedCornerShape(12.dp)).background(c.bg).padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ClipGlyph(c.graphite, 12.dp); Spacer(Modifier.width(4.dp)); Text(s.obAttachFile, style = Type.meta.copy(color = c.ink))
-                }
-                if (typed.length > phrase.indexOf('@') + 3) Row(Modifier.clip(RoundedCornerShape(12.dp)).background(c.bg).padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PersonGlyph(c.link, 13.dp); Spacer(Modifier.width(4.dp)); Text(s.obAttachPerson, style = Type.meta.copy(color = c.link))
+            if (bell > 0f) Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp).fillMaxWidth().graphicsLayer { alpha = bell; translationY = (1f - bell) * -24f }
+                .clip(RoundedCornerShape(16.dp)).background(c.bg).padding(14.dp)) {
+                Text("Margin · " + s.obFriday, style = Type.meta.copy(color = c.graphite))
+                Text(s.obRemind, style = Type.body.copy(fontSize = 15.sp, color = c.ink), modifier = Modifier.padding(top = 4.dp))
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Text(s.obGot, style = Type.meta.copy(color = c.link)); Text(s.obTomorrowBtn, style = Type.meta.copy(color = c.link))
                 }
             }
-            SceneField(if (land > 0f) "" else typed, caret = t in 0.28f..0.62f, mic = typed.isEmpty() || land > 0f, hint = s.obHint)
+            else VoiceBottom(if (one.on) one else null, s.obWait1, s.obPrevWait, s.obHint)
         }
-        val show = seg(t, 0.03f, 0.08f) * (1f - seg(t, 0.7f, 0.74f))
-        // To the paperclip, press; then over to «send».
-        val toSend = seg(t, 0.58f, 0.64f)
-        val x = (14.dp + 12.dp + 8.dp) * (1f - toSend) + (maxWidth - 14.dp - 5.dp - 19.dp) * toSend
-        Finger(x, h - 5.dp - 19.dp, show, maxOf(pressAt(t, 0.12f), pressAt(t, 0.66f)))
+        Tap(micX(w), micY(h), t, one.tapMic, one.tapStop, one.tapSend)
     }
 }
 
-/** «Дневник — для себя»: the book in the head opens the diary; a few words land under the day with their hour. */
+/** «Дневник» by voice: the book in the head opens it, the words said land under the day with their hour. */
 @Composable
 private fun SceneDiary(t: Float) {
     val c = M.c
     val s = M.s
-    val line = s.obDiaryNew
-    val typed = line.take((line.length * seg(t, 0.12f, 0.5f)).toInt())
-    val land = seg(t, 0.62f, 0.74f)
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.padding(horizontal = 18.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(s.journalTitle, style = Type.pageTitle.copy(color = c.ink, fontSize = 22.sp), modifier = Modifier.weight(1f))
-            Box(Modifier.size(34.dp).clip(CircleShape).background(c.linkSoft), contentAlignment = Alignment.Center) { DiaryGlyph(c.link, 18.dp) }
-        }
-        Spacer(Modifier.height(6.dp))
-        SceneRule {
-            Column {
-                Text(s.obDiaryDay, style = Type.meta.copy(color = c.link), modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                SceneNote("08:05", s.obDiary1)
-                SceneNote("09:40", line, alpha = land, grow = land)
+    val openAt = 0.06f
+    val diary = t > openAt + 0.02f
+    val one = Say(t, 0.14f, 0.86f, s.obDiaryNew)
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = maxWidth; val h = maxHeight
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.padding(start = 18.dp, end = 10.dp).height(36.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (diary) s.journalTitle else s.kindDeals, style = Type.pageTitle.copy(color = c.ink, fontSize = 22.sp), modifier = Modifier.weight(1f))
+                Box(Modifier.size(32.dp).clip(CircleShape).background(if (!diary) c.linkSoft else androidx.compose.ui.graphics.Color.Transparent), contentAlignment = Alignment.Center) { DealGlyph(if (!diary) c.link else c.ink.copy(alpha = 0.7f), 18.dp) }
+                Box(Modifier.size(32.dp).clip(CircleShape).background(if (diary) c.linkSoft else androidx.compose.ui.graphics.Color.Transparent), contentAlignment = Alignment.Center) { DiaryGlyph(if (diary) c.link else c.ink.copy(alpha = 0.7f), 17.dp) }
             }
+            Spacer(Modifier.height(6.dp))
+            SceneRule {
+                Column {
+                    Text(s.obToday, style = Type.meta.copy(color = c.link), modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    if (diary) {
+                        SceneNote("08:05", s.obDiary1)
+                        SceneNote("09:40", s.obDiaryNew, alpha = one.land, grow = one.land)
+                    } else {
+                        SceneRow("09:30", s.obRow1)
+                        SceneRow("11:00", s.obRow1a)
+                    }
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            VoiceBottom(if (one.on) one else null, s.obDiaryNew.take(28) + "…", s.obPrevDiary, if (diary) s.obDiaryHint else s.obHint)
         }
-        Spacer(Modifier.weight(1f))
-        SceneField(if (land > 0f) "" else typed, caret = t in 0.12f..0.58f, mic = typed.isEmpty() || land > 0f, hint = s.obDiaryHint)
+        Tap(w - 10.dp - 16.dp, 18.dp, t, openAt)
+        Tap(micX(w), micY(h), t, one.tapMic, one.tapStop, one.tapSend)
     }
 }
 
@@ -355,7 +533,7 @@ private fun SceneNote(hour: String, text: String, alpha: Float = 1f, grow: Float
 private fun ScenePeople(t: Float) {
     val c = M.c
     val s = M.s
-    val card = seg(t, 0.3f, 0.45f)
+    val card = seg(t, 0.3f, 0.42f)
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         SceneRule {
             Column {
@@ -377,88 +555,8 @@ private fun ScenePeople(t: Float) {
             Text(s.obPeoplePhone, style = Type.small.copy(color = c.link, fontSize = 14.sp), modifier = Modifier.padding(top = 10.dp))
             s.obPeopleDeals.forEach { d -> Text("○  $d", style = Type.body.copy(fontFamily = rowFamily, fontSize = 15.sp, color = c.ink), modifier = Modifier.padding(top = 8.dp)) }
         }
-        // The finger taps «Маши» under the matter.
-        Finger(54.dp + 14.dp + 12.dp + 120.dp, 50.dp, seg(t, 0.04f, 0.1f) * (1f - seg(t, 0.32f, 0.38f)), pressAt(t, 0.2f))
-    }
-}
-
-/** «Кружок на линии — сделано»: a tap on the knot fills it and strikes the words. */
-@Composable
-private fun SceneKnot(t: Float) {
-    val s = M.s
-    val tap = seg(t, 0.25f, 0.45f)
-    val done = seg(t, 0.35f, 0.6f)
-    SceneRule {
-        Column {
-            SceneRow("09:00", s.obKnot1, done = 1f)
-            SceneRow("11:00", s.obKnot2, done = done, knotPulse = if (tap in 0.01f..0.99f) tap else 0f)
-            SceneRow(null, s.obKnot3, sub = s.obKnot3Sub)
-            SceneRow(null, s.obKnot4, sub = s.obKnot4Sub, late = true, subColor = M.c.accentText)
-        }
-    }
-}
-
-/** «Ждём и обещали»: «Маша пришлёт договор до пятницы» becomes a wait; on its day a reminder comes. */
-@Composable
-private fun SceneWait(t: Float) {
-    val c = M.c
-    val s = M.s
-    val row = seg(t, 0.05f, 0.25f)
-    val bell = seg(t, 0.45f, 0.65f)
-    Column(Modifier.fillMaxSize()) {
-        SceneRule {
-            Column {
-                SceneRow(null, s.obWait1, sub = s.obWait1Sub, alpha = row, offsetY = (1f - row) * 30f, grow = row)
-                SceneRow(null, s.obWait2, sub = s.obWait2Sub)
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        // The reminder on its day, sliding down as the phone shows it.
-        Column(Modifier.padding(horizontal = 14.dp).fillMaxWidth().graphicsLayer { alpha = bell; translationY = (1f - bell) * -30f }
-            .clip(RoundedCornerShape(16.dp)).background(c.bg).padding(14.dp)) {
-            Text("Margin · " + s.obFriday, style = Type.meta.copy(color = c.graphite))
-            Text(s.obRemind, style = Type.body.copy(fontSize = 15.sp, color = c.ink), modifier = Modifier.padding(top = 4.dp))
-            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Text(s.obGot, style = Type.meta.copy(color = c.link)); Text(s.obTomorrowBtn, style = Type.meta.copy(color = c.link))
-            }
-        }
-    }
-}
-
-/** «Большое дело — тема»: its row in the day unfolds into its matters. */
-@Composable
-private fun SceneTopic(t: Float) {
-    val c = M.c
-    val s = M.s
-    val open = seg(t, 0.3f, 0.55f)
-    SceneRule {
-        Column {
-            SceneRow("10:00", s.obRow1)
-            Row(Modifier.fillMaxWidth()) {
-                Spacer(Modifier.width(54.dp + 14.dp + 12.dp - 10.dp))
-                Column(Modifier.weight(1f).padding(end = 12.dp).clip(RoundedCornerShape(12.dp)).background(c.sea.copy(alpha = 0.07f)).padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("# ", style = Type.body.copy(fontFamily = rowFamily, fontSize = rowSize, color = c.link))
-                        Text(s.obTopic, style = Type.body.copy(fontFamily = rowFamily, fontSize = rowSize, color = c.ink), modifier = Modifier.weight(1f))
-                        Text(if (open > 0.5f) "⌃" else "⌄", style = Type.body.copy(color = c.graphite, fontSize = 18.sp))
-                    }
-                    Text(s.obTopicSub, style = Type.meta.copy(color = c.graphite), modifier = Modifier.padding(top = 2.dp))
-                    Column(Modifier.layout { m, cs -> val p = m.measure(cs.copy(maxHeight = androidx.compose.ui.unit.Constraints.Infinity)); layout(p.width, (p.height * open).toInt()) { p.place(0, 0) } }
-                        .clipToBounds().graphicsLayer { alpha = open }) {
-                        s.obTopicDeals.forEach { d ->
-                            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(11.dp).clip(CircleShape).background(c.card)) {
-                                    androidx.compose.foundation.Canvas(Modifier.matchParentSize()) { drawCircle(c.sea, style = androidx.compose.ui.graphics.drawscope.Stroke(1.2.dp.toPx())) }
-                                }
-                                Spacer(Modifier.width(10.dp))
-                                Text(d, style = Type.body.copy(fontFamily = rowFamily, fontSize = 15.sp, color = c.ink))
-                            }
-                        }
-                    }
-                }
-            }
-            SceneRow("18:30", s.obRow3)
-        }
+        // A tap on «Маша» under the second matter.
+        Tap(KnotX + 12.dp + 14.dp + 16.dp, 53.dp + 46.dp, t, 0.2f)
     }
 }
 
