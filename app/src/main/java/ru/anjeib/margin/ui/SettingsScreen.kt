@@ -80,7 +80,9 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
     // Owner, 16 окт: the page's name stays put; only the settings under it scroll.
     Column(Modifier.fillMaxSize().screenRule().padding(contentPadding.vertical())) {
         Column(Modifier.padding(start = MarginW + MarginGap, end = 16.dp)) {
-            Text(s.settings, style = Type.pageTitle.copy(color = c.ink), modifier = Modifier.padding(top = 14.dp, bottom = if (planner) 0.dp else 18.dp))
+            // The one size of every page's name (owner, 18 окт: «Настройки» stood twice as large as «Архив» or «Контакты»).
+            Text(s.settings, style = Type.pageTitle.copy(color = c.ink, fontSize = if (planner) 25.sp else Type.pageTitle.fontSize, lineHeight = if (planner) 27.sp else Type.pageTitle.lineHeight),
+                modifier = Modifier.padding(top = if (planner) 22.dp else 14.dp, bottom = if (planner) 0.dp else 18.dp))
             if (planner) DoubleRule(Modifier.pageWide().padding(top = 18.dp, bottom = 10.dp))
         }
         // The rules across the page stay whole: the column scrolls at full width, its words padded inside.

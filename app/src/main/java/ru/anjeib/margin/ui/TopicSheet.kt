@@ -246,7 +246,11 @@ private fun feedOf(t: Task): List<FeedLine> {
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: String?, onClose: () -> Unit, onOpenPerson: (String) -> Unit) {
+fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: String?, onClose: () -> Unit, onOpenPerson: (String) -> Unit,
+                /** In a window over the page (owner, 18 окт): no way back on the margin — a tap past it or «назад» closes it. */
+                popup: Boolean = false,
+                /** In the window, a matter («q:…») or a note opens as the app's own window over it — not a smaller window inside. */
+                onOpenPiece: ((String) -> Unit)? = null) {
     val c = M.c
     val s = M.s
     val view = LocalView.current
@@ -340,10 +344,12 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
     Column(
         Modifier.fillMaxSize().graphicsLayer {
             scaleY = 1f - 0.92f * fold.value; alpha = 1f - fold.value; transformOrigin = TransformOrigin(0.5f, 1f)
-        }.frosted(dealQ != null || noteK != null).background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding().marginRule(marginInk, rule.value, over = !marginUnder),
+        }.frosted(dealQ != null || noteK != null).background(c.bg).then(if (popup) Modifier else Modifier.statusBarsPadding().navigationBarsPadding().imePadding())
+            .marginRule(marginInk, rule.value, over = !marginUnder),
     ) {
         // As every card (owner, 14 окт; design/v9/v9-card-topic.png): under the frame's «MARGIN», back on the margin.
-        Row(Modifier.fillMaxWidth().padding(top = 18.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (popup) Spacer(Modifier.height(14.dp))
+        else Row(Modifier.fillMaxWidth().padding(top = 18.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(MarginW), contentAlignment = Alignment.Center) {
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = s.backWord, onClick = onClose), contentAlignment = Alignment.Center) {
                     BackGlyph(c.ink.copy(alpha = 0.8f), 21.dp)
@@ -374,7 +380,43 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         // Owner, 16 окт: a topic can be given a day or a window («Когда») — then that stands on the margin instead of «с …».
         val tDue = task.dueDate
         val tStart = task.startDate
-        Margined(margin = if (folded) null else ({
+        // Owner, 18 окт: the topic's window is built as a matter's — on top only what is about it (its day, «тема · 7 дел», the
+        // marks, the tools that act), under the rule its name as a row, then its matters and notes.
+        if (popup) {
+            var name by remember(task.id) { mutableStateOf(task.title) }
+            fun saveName() {
+                val cur = vm.data.value.tasks.find { it.id == task.id } ?: return
+                val t = name.replace("\n", " ").trim()
+                if (t.isNotBlank() && t != cur.title) vm.saveTask(cur.copy(title = t.sentence()))
+            }
+            LaunchedEffect(name) { if (name != task.title) { kotlinx.coroutines.delay(700); saveName() } }
+            androidx.compose.runtime.DisposableEffect(task.id) { onDispose { saveName() } }
+            val notesN = feedAll.count { it is FeedLine.Said && !it.removed }
+            val shown = tDue ?: tStart
+            CardHead(name, { name = it }, task.done, onToggle = {}, sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) }, kind = s.cardKindTopic,
+                margin = {
+                    if (!note && shown != null) CardMargin(shown, prefix = windowPrefix(tStart.takeIf { tDue != null }, tDue), strongPrefix = true, under = shown.weekdayWord(), onDay = { dialog = "dates" })
+                    else CardMargin(bornDay, prefix = if (note) null else s.sinceWord, under = bornDay?.weekdayWord(), onDay = if (note) null else ({ dialog = "dates" }))
+                },
+                meta = listOfNotNull(
+                    open.takeIf { it > 0 }?.let { MetaItem(Meta.plain(s.tasksCount(it)), Meta.quiet()) {} },
+                    notesN.takeIf { it > 0 }?.let { MetaItem(Meta.plain(s.entriesCount(it)), Meta.quiet()) {} },
+                ),
+                showTitle = false, tools = {
+                    // Only what acts on the topic, as a matter's tools (the filters are gone: both sections are always shown).
+                    ActionBar(listOfNotNull(
+                        if (!note) Action(s.actWhen, false, { dialog = "dates" }) { CalendarGlyph(it, 22.dp) } else null,
+                        // «Переслать» doesn't fit a matter's cell (owner, 18 окт: the same cells) — the shorter word.
+                        Action(s.actSend, false, { shareTopic(ctx, task) }) { ShareGlyph(it, 22.dp) },
+                        if (!task.done) Action(s.toArchive, false, { dialog = "archive" }) { ArchiveGlyph(it, 22.dp) }
+                        else Action(s.bringBack, false, { vm.reviveTopic(task.id) }) { ArchiveGlyph(it, 22.dp) },
+                        if (task.done) Action(s.delete, false, { dialog = "delete" }) { TrashGlyph(it, 22.dp) } else null,
+                    ), slots = 5)  // from the left, as a matter's tools (owner, 18 окт); five cells — «Послать» needs a little more than a sixth
+                })
+            CardRule()
+            MatterTitle(name, { name = it }, task.done, null, null, mark = if (note) null else ({ Box(Modifier.padding(top = 2.dp)) { TopicGlyph(c.link, 17.dp) } }))
+        }
+        else Margined(margin = if (folded) null else ({
             if (!note && (tDue != null || tStart != null)) CardMargin(tDue ?: tStart, prefix = windowPrefix(tStart.takeIf { tDue != null }, tDue), onDay = { dialog = "dates" }, strongPrefix = true)
             else CardMargin(bornDay, prefix = if (note) null else s.sinceWord)
         })) {
@@ -384,9 +426,10 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 8.dp))
                 else Row(verticalAlignment = Alignment.Top) {
                   // «#» — the sign a topic goes by everywhere (its tab, its mentions); a note has none.
-                  if (!note) { Box(Modifier.padding(top = 7.dp)) { TopicGlyph(c.ink.copy(alpha = 0.75f), 24.dp) }; Spacer(Modifier.width(10.dp)) }
+                  if (!note) { Box(Modifier.padding(top = if (popup) 4.dp else 7.dp)) { TopicGlyph(c.ink.copy(alpha = 0.75f), if (popup) 19.dp else 24.dp) }; Spacer(Modifier.width(if (popup) 8.dp else 10.dp)) }
                   androidx.compose.foundation.text.BasicTextField(titleV, { titleV = it.copy(text = it.text.replace("\n", " ")) },
-                    textStyle = Type.display.copy(color = c.ink, fontSize = 30.sp, lineHeight = 36.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
+                    // In the window a step down (owner, 18 окт: the matter's card is 16 sp; 30 sp read huge beside it).
+                    textStyle = Type.display.copy(color = c.ink, fontSize = if (popup) 22.sp else 30.sp, lineHeight = if (popup) 28.sp else 36.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences),
                     keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { saveTitle(); focusManager.clearFocus() }),
                     modifier = Modifier.fillMaxWidth().focusRequester(titleFocus).onFocusChanged { f -> if (f.isFocused) titleHad = true else if (titleHad) { titleHad = false; saveTitle() } })
@@ -450,7 +493,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                         addUnder = { id, title -> addUnder = id to title; selected = null; focusTick++ },
                         editDeal = { editQ = it }, dateDeal = { dateQ = it }, editNote = { editNote = it }, view = { viewing = it }, timeDeal = { timeQ = it },
                         // Owner, 16 окт («core»): a tap opens the matter's or the note's card as a window; changes are in the hold too.
-                        openDeal = { dealQ = it.id }, openNote = { noteK = entryKey(task.id, it.id) },
+                        openDeal = { q -> onOpenPiece?.invoke("q:${task.id}:${q.id}") ?: run { dealQ = q.id } },
+                        openNote = { e -> onOpenPiece?.invoke(entryKey(task.id, e.id)) ?: run { noteK = entryKey(task.id, e.id) } },
                     ), onArchive = { dialog = "archive" }, onSource = { dialog = "source" })
                 }
             }
@@ -617,6 +661,7 @@ private fun FeedPage(task: Task, rows: List<FeedRow>, onFold: (String) -> Unit, 
     // New lines arrive one after another, in the order they were written.
     val freshKeys = feed.filter { it.key !in seen }.map { it.key }
     val today = LocalDate.now()
+    val hoursOnly = planner
     LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(top = 6.dp, bottom = 24.dp)) {
         item("origin") { Spacer(Modifier.height(4.dp)) }
         rows.forEach { row ->
@@ -631,7 +676,13 @@ private fun FeedPage(task: Task, rows: List<FeedRow>, onFold: (String) -> Unit, 
                     val line = row.line
                     val day = dateOfStamp(line.at)
                     val hour = timeOfStamp(line.at).takeIf { line is FeedLine.Said && it.isNotBlank() && it != "00:00" }
+                    // Owner, 18 окт: as in the feed — only hours on the margin; a matter's day goes into its quiet line, a note's day
+                    // stands over it in words, in the middle, as the feed's days do.
                     val margin: (@Composable () -> Unit)? = when {
+                        hoursOnly -> when (line) {
+                            is FeedLine.Deal -> line.q.time?.takeIf { line.q.slots.isEmpty() && !line.q.done }?.let { tm -> ({ RowMargin(tm) }) }
+                            is FeedLine.Said -> hour?.let { h -> ({ RowMargin(h) }) }
+                        }
                         // A matter among the matters: its own day on the margin, as on «Сегодня».
                         row.byDue -> (line as? FeedLine.Deal)?.q?.due?.let { d -> runCatching { LocalDate.parse(d) }.getOrNull() }?.let { d ->
                             val late = !line.q.done && !line.removed && d.isBefore(today)
@@ -647,7 +698,8 @@ private fun FeedPage(task: Task, rows: List<FeedRow>, onFold: (String) -> Unit, 
                         // Lines slide into place but never fade: a line fading out under «только дела» kept its day on the margin
                         // on top of the next one's (review 0.13, defect 13). New lines have their own arrival.
                         Column(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).arrive(fresh, freshKeys.indexOf(line.key)).landing(hl == line.key, 10)
-                            .padding(top = if (row.dayFirst && !row.firstInSection) 14.dp else 0.dp)) {
+                            .padding(top = if (row.dayFirst && !row.firstInSection && !hoursOnly) 14.dp else 0.dp)) {
+                            if (hoursOnly && row.dayFirst && line is FeedLine.Said && day != null) FeedDayHead(day, today)
                             when (line) {
                                 is FeedLine.Said -> NoteLine(task, line.e, line.removed, row.seat, margin, fresh, working, vm, act)
                                 is FeedLine.Deal -> DealLine(task, line.q, line.removed, line.depth, row.seat, margin, vm, act)
@@ -727,6 +779,7 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin:
     androidx.compose.runtime.DisposableEffect(e.id) { onDispose { save() } }
     // Selected by a tap (owner, 16 окт): marked softly; the field below then writes into this note.
     val picked = LocalInline.current?.open == entryKey(task.id, e.id)
+    val noteFamily = if (planner) rowFamily else Type.body.fontFamily
     val sel by androidx.compose.animation.animateColorAsState(if (tools) c.chip else if (picked) c.linkSoft else Color.Transparent, tween(180), label = "sel")
     // Written straight on the page, as in the diary (owner, 14 окт; design/v9/v9-card-topic.png) — no panel; the matters keep theirs.
     Margined(margin = margin) {
@@ -737,12 +790,13 @@ private fun NoteLine(task: Task, e: Entry, removed: Boolean, seat: Seat, margin:
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
                         if (editing) androidx.compose.foundation.text.BasicTextField(draftValue, { draftValue = continueList(draftValue, it) },
-                            textStyle = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
+                            textStyle = Type.body.copy(fontFamily = noteFamily, color = c.ink, fontSize = 16.sp, lineHeight = 23.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link),
                             modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { f ->
                                 // The field reports «not focused» as it appears: leave editing only once the cursor has been in it.
                                 if (f.isFocused) hadFocus = true else if (editing && hadFocus) { save(); editing = false; hadFocus = false }
                             })
-                        else if (e.text.isNotBlank()) ListAwareText(e.text, Type.body.copy(color = if (removed) c.faint else c.ink.copy(alpha = 0.9f), fontSize = 16.sp, lineHeight = 23.sp,
+                        // The words in the face of every row (Literata on the planner), as the diary's notes.
+                        else if (e.text.isNotBlank()) ListAwareText(e.text, Type.body.copy(fontFamily = noteFamily, color = if (removed) c.faint else c.ink.copy(alpha = 0.9f), fontSize = 16.sp, lineHeight = 23.sp,
                             textDecoration = null))
                         // A list in a record is a list of thoughts, not matters: bullets, no ticks.
                         e.items.forEach { Row(Modifier.padding(vertical = 1.dp)) {
@@ -804,6 +858,7 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
     // rule — that read as one more matter of the topic. It is a point of the one above: a small ring right under where the words
     // above begin, its words after it, a size smaller; its day, if any, in its quiet line. The ring is its «done».
     val sub = plannerLook && depth > 0
+    val strikeLine = if (plannerLook) rowLine else 22.sp
     val indent = if (sub) 26.dp * (depth - 1) else (if (planner) 18.dp else MarkCol / 2 + 21.dp) * depth
     Margined(margin = when { sub -> null; plannerLook && !removed -> ({ MarginTap(::tick, late = late, done = q.done) { margin?.invoke() ?: RowMargin(null) } }); else -> margin }) {
         PanelPiece(seat, divider = depth == 0) {
@@ -828,11 +883,11 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
                     Spacer(Modifier.width(6.dp))
                 }
                 Column(Modifier.weight(1f).padding(top = 2.dp)) {
-                    WordText(q.title, style = Type.body.copy(fontFamily = rowFamily, fontSize = if (plannerLook) (if (depth == 0) 17.sp else 15.5.sp) else if (depth == 0) 16.sp else 15.sp, lineHeight = if (plannerLook) 24.sp else 22.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    WordText(q.title, style = Type.body.copy(fontFamily = rowFamily, fontSize = if (plannerLook) (if (depth == 0) rowSize else 15.sp) else if (depth == 0) 16.sp else 15.sp, lineHeight = if (plannerLook) rowLine else 22.sp, color = if (q.done || removed) c.graphite else c.ink), maxLines = 3, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.drawWithContent {
                             drawContent()
                             // Through the middle of the first line, whatever its size.
-                            if (strike.value > 0f) { val y = (if (plannerLook) 24.sp else 22.sp).toPx() / 2 + 1.dp.toPx(); drawLine(c.faint, Offset(0f, y), Offset(size.width * strike.value, y), strokeWidth = 1.3.dp.toPx()) }
+                            if (strike.value > 0f) { val y = strikeLine.toPx() / 2 + 1.dp.toPx(); drawLine(c.faint, Offset(0f, y), Offset(size.width * strike.value, y), strokeWidth = 1.3.dp.toPx()) }
                         })
                     // Several days: each, ticked ones struck.
                     if (q.slots.isNotEmpty() && !removed) Text(buildAnnotatedString {
@@ -846,11 +901,15 @@ private fun DealLine(task: Task, q: Subtask, removed: Boolean, depth: Int, seat:
                     }, style = Type.small.copy(fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))
                     // The quiet line: when (late in terracotta) with its hour, who owes it, when it was done.
                     if (!removed) {
-                        val whenText = if (q.slots.isEmpty() && !q.done) due?.let { (if (late) s.lateSince(it.dayMonthShort()) else dayTalk(it, today)) + (q.time?.let { t -> " $t" } ?: "") } else null
+                        // On the planner the hour is on the margin and late reads by colour, as in the feed: «с 16 окт».
+                        val whenText = if (q.slots.isEmpty() && !q.done) due?.let {
+                            if (plannerLook) (if (late) s.sinceWord + " " + it.dayMonthShort() else dayTalk(it, today))
+                            else (if (late) s.lateSince(it.dayMonthShort()) else dayTalk(it, today)) + (q.time?.let { t -> " $t" } ?: "")
+                        } else null
                         val rest = listOfNotNull(q.from?.let { s.promiseToYou(it) }, q.assignee,
                             if (q.done) q.doneAt?.let { d -> LocalDate.parse(d).dayMonthShort().let { if (q.isWait) s.gotOn(it) else s.solvedOn(it) } } else null)
                         if (whenText != null || rest.isNotEmpty()) PencilText(buildAnnotatedString {
-                            whenText?.let { w -> if (late) pencil { withStyle(SpanStyle(color = c.ink)) { append(w) } } else withStyle(SpanStyle(color = c.ink)) { append(w) } }
+                            whenText?.let { w -> if (late) pencil { withStyle(SpanStyle(color = if (plannerLook) c.accentText else c.ink)) { append(w) } } else withStyle(SpanStyle(color = c.ink)) { append(w) } }
                             if (whenText != null && rest.isNotEmpty()) append("  ·  ")
                             append(rest.joinToString("  ·  "))
                         }, style = Type.small.copy(color = c.graphite, fontSize = 13.5.sp), modifier = Modifier.padding(top = 3.dp))

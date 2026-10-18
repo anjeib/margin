@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.ime
+import androidx.compose.ui.focus.onFocusChanged
 import ru.anjeib.margin.data.dowShort
 import ru.anjeib.margin.data.dayMonthYear
 import ru.anjeib.margin.data.dayMonthShort
@@ -50,15 +53,19 @@ fun MetaLine(items: List<MetaItem>, modifier: Modifier = Modifier) {
     if (items.isEmpty()) return
     val c = M.c
     // Each value is a tap of a finger's height; the dots stay between values on one line (DotFlow).
-    DotFlow(items.size, modifier, separator = { Text("  ·  ", style = if (planner) Type.italic.copy(color = c.graphite, fontSize = 17.sp) else Type.small.copy(color = c.graphite, fontSize = 14.5.sp)) }) { i ->
+    // Owner, 18 окт («шапка пустая»): on the planner the line is denser — 15 sp, a narrower dot, less air above and under each value,
+    // so «тема · 7 дел · 4 заметки» or «дело · Катя · Покровка, 21» stay on one line while they fit.
+    val pad = if (planner) 4.dp else 9.dp
+    DotFlow(items.size, modifier, separator = { Text(if (planner) " · " else "  ·  ", style = if (planner) Type.italic.copy(color = c.graphite, fontSize = 15.sp) else Type.small.copy(color = c.graphite, fontSize = 14.5.sp),
+        modifier = Modifier.padding(vertical = pad)) }) { i ->
         val it = items[i]
         if (it.way) androidx.compose.foundation.layout.Row(Modifier.clip(RoundedCornerShape(6.dp))
-            .combinedClickable(onClick = it.onClick, onLongClick = it.onLong).padding(vertical = 9.dp, horizontal = 1.dp)) {
+            .combinedClickable(onClick = it.onClick, onLongClick = it.onLong).padding(vertical = pad, horizontal = 1.dp)) {
             Text(it.text, style = it.style, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             Text(" ›", style = it.style)
         }
         else Text(it.text, style = it.style, modifier = Modifier.clip(RoundedCornerShape(6.dp))
-            .combinedClickable(onClick = it.onClick, onLongClick = it.onLong).padding(vertical = 9.dp, horizontal = 1.dp))
+            .combinedClickable(onClick = it.onClick, onLongClick = it.onLong).padding(vertical = pad, horizontal = 1.dp))
     }
 }
 
@@ -66,10 +73,10 @@ fun MetaLine(items: List<MetaItem>, modifier: Modifier = Modifier) {
 object Meta {
     @Composable fun date(late: Boolean = false) = dateStyle(14.5.sp, late)
     // The planner (owner, 14 окт): the card's line under the title is Margin's own voice — the book's italic.
-    @Composable fun link() = if (planner) Type.italic.copy(color = M.c.link, fontSize = 17.sp) else Type.small.copy(color = M.c.link, fontSize = 14.5.sp)
-    @Composable fun quiet() = if (planner) Type.italic.copy(color = M.c.graphite, fontSize = 17.sp) else Type.small.copy(color = M.c.graphite, fontSize = 14.5.sp)
+    @Composable fun link() = if (planner) Type.italic.copy(color = M.c.link, fontSize = 15.sp) else Type.small.copy(color = M.c.link, fontSize = 14.5.sp)
+    @Composable fun quiet() = if (planner) Type.italic.copy(color = M.c.graphite, fontSize = 15.sp) else Type.small.copy(color = M.c.graphite, fontSize = 14.5.sp)
     fun plain(t: String) = AnnotatedString(t)
-    @Composable fun faint() = if (planner) Type.italic.copy(color = M.c.faint, fontSize = 17.sp) else Type.small.copy(color = M.c.faint, fontSize = 14.5.sp)
+    @Composable fun faint() = if (planner) Type.italic.copy(color = M.c.faint, fontSize = 15.sp) else Type.small.copy(color = M.c.faint, fontSize = 14.5.sp)
     /** «● Личное» / «● Работа» — the sphere with its coloured dot; a tap switches it. */
     @Composable fun sphere(work: Boolean): AnnotatedString {
         val c = M.c
@@ -205,7 +212,7 @@ fun CardHead(title: String, onTitle: (String) -> Unit, done: Boolean, onToggle: 
                 androidx.compose.foundation.layout.Box(Modifier.weight(1f)) { if (line.isNotEmpty()) MetaLine(line) }
                 if (onSphere != null) SphereIcons(sphere, { k -> k?.let(onSphere) }, Modifier.padding(start = 6.dp))
             }
-            tools?.let { androidx.compose.foundation.layout.Box(Modifier.padding(top = 12.dp)) { it() } }
+            tools?.let { androidx.compose.foundation.layout.Box(Modifier.padding(top = if (planner) 6.dp else 12.dp)) { it() } }
         }
     }
 }
@@ -219,6 +226,12 @@ fun MatterTitle(title: String, onTitle: (String) -> Unit, done: Boolean, hour: S
                 mark: (@Composable () -> Unit)? = null, hint: String? = null) {
     val c = M.c
     val s = M.s
+    // The keyboard put away, the name lets go of the cursor (owner, 18 окт: its handle stayed over the page).
+    var focused by remember { androidx.compose.runtime.mutableStateOf(false) }
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    val ime = androidx.compose.foundation.layout.WindowInsets.Companion.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
+    val fm = androidx.compose.ui.platform.LocalFocusManager.current
+    androidx.compose.runtime.LaunchedEffect(ime) { if (!ime && focused) fm.clearFocus() }
     Margined(margin = {
         val label = hour ?: if (onHour != null) s.addTime else null
         if (label != null) MarginNote(label, late = late && hour != null, modifier = Modifier.padding(top = 9.dp).clip(RoundedCornerShape(6.dp))
@@ -232,7 +245,7 @@ fun MatterTitle(title: String, onTitle: (String) -> Unit, done: Boolean, hour: S
             androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
                 if (title.isEmpty() && hint != null) Text(hint, style = style.copy(color = c.graphite))
                 androidx.compose.foundation.text.BasicTextField(title, onTitle, textStyle = style,
-                    cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link), modifier = Modifier.fillMaxWidth())
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(c.link), modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused })
             }
         }
     }

@@ -196,7 +196,8 @@ class CountingScope(private val inner: androidx.compose.foundation.lazy.LazyList
  * the day in words, small, in the middle of the page's column, with air above it. Today in petrol; an empty today says so.
  */
 @Composable
-fun FeedDayHead(day: LocalDate, today: LocalDate, /** Nothing on it: «· свободный день» after the date. */ free: Boolean = false) {
+fun FeedDayHead(day: LocalDate, today: LocalDate, /** Nothing on it: «· свободный день» after the date. */ free: Boolean = false,
+                /** What an empty day is called here: the diary has no free days, only none written. */ freeWord: String? = null) {
     val c = M.c
     val s = M.s
     val ink = when {
@@ -207,7 +208,7 @@ fun FeedDayHead(day: LocalDate, today: LocalDate, /** Nothing on it: «· сво
     }
     // Today needs no weekday — the week above has it lit; so «сегодня, 18 октября · свободный день» fits one line.
     val words = (if (day == today) s.today.lowercase() else day.dowFull().lowercase()) + ", " + day.dayMonth() +
-        (if (day.year != today.year) " ${day.year}" else "") + (if (free) "  ·  " + s.freeDay.lowercase() else "")
+        (if (day.year != today.year) " ${day.year}" else "") + (if (free) "  ·  " + (freeWord ?: s.freeDay.lowercase()) else "")
     Margined(Modifier.padding(top = 22.dp, bottom = 6.dp)) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             androidx.compose.material3.Text(words, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -292,7 +293,7 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
         // The paper's ground reaches a little below the name, so the margin's rule starts clear of «Дневник»'s line (owner, 17 окт).
         Row(Modifier.fillMaxWidth().background(c.bg).padding(start = 4.dp, end = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             // What is open, by the marks on the left (owner, 17 окт): «Дела» — «простые и сложные», or «Дневник» — «только для себя».
-            Box(Modifier.weight(1f).height(44.dp).padding(start = 10.dp), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.weight(1f).heightIn(min = 44.dp).padding(start = 10.dp), contentAlignment = Alignment.CenterStart) {
                 androidx.compose.animation.Crossfade(Triple(journalOn, topicTitle, topicF), animationSpec = tween(200), label = "what") { (j, tt, _) ->
                     Column {
                         // A topic chosen: its name here, and the way back to the whole feed under it.
@@ -308,14 +309,14 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
             }
             var filters by remember { androidx.compose.runtime.mutableStateOf(false) }
             Box {
-                mark(s.filterMark, sphere != null || kind != null, { filters = true }) { FilterGlyph(it, 21.dp) }
+                // The diary is only for oneself: personal / work and the kinds don't sort it — no filter there (18 окт).
+                if (!journalOn) mark(s.filterMark, sphere != null || kind != null, { filters = true }) { FilterGlyph(it, 21.dp) }
                 SoftMenu(filters, { filters = false }) {
                     SoftMenuItem(s.spherePersonal, selected = sphere == "personal") { sphereTap("personal") }
                     SoftMenuItem(s.sphereWork, selected = sphere == "work") { sphereTap("work") }
                     Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).height(1.dp).background(c.hairline))
                     SoftMenuItem(s.kindDeals, selected = kind == "deals") { kindTap("deals") }
                     SoftMenuItem(s.kindTopics, selected = kind == "topics") { kindTap("topics") }
-                    SoftMenuItem(s.kindNotes, selected = kind == "notes") { kindTap("notes") }
                     if (sphere != null || kind != null) {
                         Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).height(1.dp).background(c.hairline))
                         SoftMenuItem(s.showEverything) { vm.diarySphere.value = null; vm.kindFilter.value = null; filters = false }

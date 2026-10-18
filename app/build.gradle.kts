@@ -27,8 +27,8 @@ android {
         applicationId = "ru.margin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 86
-        versionName = "0.86"
+        versionCode = 87
+        versionName = "0.87"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         // No keys in what people install: the AI goes through Margin's own door in Yandex Cloud (server/proxy),
@@ -37,8 +37,9 @@ android {
         buildConfigField("String", "YC_KEY", "\"\"")
         buildConfigField("String", "YC_FOLDER", "\"\"")
         buildConfigField("String", "PROXY_URL", "\"${secrets.getProperty("PROXY_URL", "")}\"")
-        // Closed alpha: one shared code built in, so testers need not type anything (switched off by itself in server/alpha.local).
-        buildConfigField("String", "ALPHA_CODE", "\"${secrets.getProperty("ALPHA_CODE", "")}\"")
+        // RuStore (owner, 18 окт): free, everything on the phone — no shared alpha code in what people install. The door
+        // (PROXY_URL) stays only for the speech model's manifest, which needs no code.
+        buildConfigField("String", "ALPHA_CODE", "\"\"")
         buildConfigField("boolean", "DEMO", "false")
         // Owner, 14 окт: the release is without the cloud AI for now — Margin reads everything on the phone; true brings it back.
         buildConfigField("boolean", "CLOUD_AI", "false")

@@ -66,7 +66,8 @@ class TodayWidget : GlanceAppWidget() {
         val data = Store.get(context).data.value
         val today = LocalDate.now()
         val due = data.listTasks().filter { !it.done && ((it.dueDate ?: it.startDate)?.let { d -> !d.isAfter(today) } == true || it.openWindow(today)) }
-            .sortedWith(compareBy({ (it.dueDate ?: it.startDate)?.isBefore(today) != true }, { it.time ?: "99" }))
+            // The day's order as in the feed (0.85): late first, then the matters with no hour, then by the hour.
+            .sortedWith(compareBy({ (it.dueDate ?: it.startDate)?.isBefore(today) != true }, { it.time ?: "" }))
         val s = L.s
         val locale = if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) Locale.forLanguageTag("ru") else Locale.ENGLISH
         val dayName = today.dayOfWeek.getDisplayName(DateStyle.FULL_STANDALONE, locale).replaceFirstChar { it.uppercase() }
@@ -93,7 +94,9 @@ class TodayWidget : GlanceAppWidget() {
         val accent = ColorProvider(day = Color(0xFFC8643B), night = Color(0xFFD9774E))
         val chip = ColorProvider(day = Color(0xFFECE6DC), night = Color(0xFF2A2622))
         val card = ColorProvider(day = Color(0xFFFCFAF7), night = Color(0xFF1E1B18))
-        val rule = ColorProvider(day = Color(0xD9C8643B), night = Color(0xD9D9774E))
+        // As the app now (0.87): the rule in ink, the voice button in sea; terracotta only for what is late.
+        val rule = ColorProvider(day = Color(0x661A1A1A), night = Color(0x66EDE7DD))
+        val sea = ColorProvider(day = Color(0xFF2B6E72), night = Color(0xFF4F9A9E))
         fun open(action: String?) = actionStartActivity(Intent(ctx, MainActivity::class.java).apply { if (action != null) setAction(action) }
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
         Column(GlanceModifier.fillMaxSize().background(bg).cornerRadius(20.dp).padding(14.dp)) {
@@ -109,8 +112,8 @@ class TodayWidget : GlanceAppWidget() {
                 rows.forEach { (whenText, line, late) ->
                     Row(GlanceModifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                         // The same «когда» as on the app's margin: larger, medium, in ink a touch softer than the words.
-                        Text(whenText, maxLines = 1, style = TextStyle(color = if (late) accent else inkSoft, fontSize = 13.5.sp, fontStyle = FontStyle.Italic,
-                            fontWeight = FontWeight.Medium, fontFamily = FontFamily.Serif, textAlign = TextAlign.End), modifier = GlanceModifier.width(whenW))
+                        Text(whenText, maxLines = 1, style = TextStyle(color = if (late) accent else inkSoft, fontSize = 13.5.sp,
+                            textAlign = TextAlign.End), modifier = GlanceModifier.width(whenW))
                         Spacer(GlanceModifier.width(8.dp))
                         Box(GlanceModifier.width(1.dp).height(18.dp).background(rule)) {}
                         Spacer(GlanceModifier.width(10.dp))
@@ -125,7 +128,7 @@ class TodayWidget : GlanceAppWidget() {
                     Text(write + "…", style = TextStyle(color = graphite, fontSize = 14.sp))
                 }
                 Spacer(GlanceModifier.width(8.dp))
-                Box(GlanceModifier.size(40.dp).background(accent).cornerRadius(20.dp).clickable(open(MainActivity.ACTION_DICTATE)), contentAlignment = Alignment.Center) {
+                Box(GlanceModifier.size(40.dp).background(sea).cornerRadius(20.dp).clickable(open(MainActivity.ACTION_DICTATE)), contentAlignment = Alignment.Center) {
                     Image(ImageProvider(R.drawable.ic_mic_white), contentDescription = null, modifier = GlanceModifier.size(20.dp))
                 }
             }

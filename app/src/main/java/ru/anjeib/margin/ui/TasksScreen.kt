@@ -252,21 +252,25 @@ fun TaskList(
     val feedDays = if (feed) remember(data, events, today, kind, topicF, pageDay) {
         val data = topicF?.let { id -> data.copy(tasks = data.tasks.filter { it.id == id }) } ?: data
         fun dayOf(x: String?) = x?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
-        val notesByDay = data.linkedNotes().groupBy { dayOf(it.at) ?: today }
         val topics = data.tasks.filter { it.topic && !it.thought && !it.done }
         (-120L..120L).map { today.plusDays(it) }.mapNotNull { d ->
-            // Inside a topic its matters stand as plain rows — the topic's own row over them each day would only repeat the head.
-            val p = dayPlan(data, d, today, events).let { p0 -> if (topicF == null) p0 else
-                p0.copy(deals = p0.deals.map { it.copy(topicId = null, topicTitle = null) }, done = p0.done.map { it.copy(topicId = null, topicTitle = null) }) }
-                // A window stands once in the feed (owner, 18 окт: one topic of «19–25 окт» filled every day of the week) — on its
-                // first day, or on today while it goes on; the day page and the month still count it in each of its days.
-                .let { p0 -> p0.copy(deals = p0.deals.filter { t ->
-                    val st = t.startDate; val en = t.dueDate
-                    st == null || en == null || !st.isBefore(en) || en.isBefore(today) || d == maxOf(st, today)
-                }) }
-            val notes = notesByDay[d].orEmpty()
+            // A window stands once in the feed (owner, 18 окт: one topic of «19–25 окт» filled every day of the week) — on its
+            // first day, or on today while it goes on; the day page and the month still count it in each of its days.
+            val p0 = dayPlan(data, d, today, events).let { p0 -> p0.copy(deals = p0.deals.filter { t ->
+                val st = t.startDate; val en = t.dueDate
+                st == null || en == null || !st.isBefore(en) || en.isBefore(today) || d == maxOf(st, today)
+            }) }
+            // Inside a topic its matters stand as plain rows — the topic's own row over them each day would only repeat the head;
+            // the topic's window they share is said once, by the topic's row (owner, 18 окт), not under each of them.
+            val topicSpan = topicF?.let { id -> data.tasks.find { it.id == id } }?.let { it.start to it.due }?.takeIf { it.first != null && it.second != null }
+            fun bare(t: Task) = if (topicSpan != null && (t.start to t.due) == topicSpan && t.dueDate?.isBefore(today) != true) t.copy(start = null, due = null) else t
+            val p = if (topicF == null) p0 else
+                p0.copy(deals = p0.deals.map { bare(it).copy(topicId = null, topicTitle = null) }, done = p0.done.map { it.copy(topicId = null, topicTitle = null) })
+            // Owner, 18 окт: a note lives with its matter — it is in the matter's (or the topic's) window, not in the feed.
+            val notes = emptyList<LinkedNote>()
             val inPlan = p.deals.mapNotNull { it.topicId }.toSet()
             val inNotes = notes.map { it.open.removePrefix("q:").substringBefore(':') }.toSet()
+            // Inside a topic its own row («новая», «конец») stays: the head has no room for its whole name (owner, 18 окт).
             val tops = topics.mapNotNull { t ->
                 val word = when {
                     t.dueDate == d -> if (t.startDate != null) s.topicEndsWord else s.topicDueWord
@@ -408,11 +412,15 @@ fun TaskList(
                         // Today a topic's row is open, other days folded — a tap turns it the other way, for that day.
                         val dayTopics = (f.plan.deals.mapNotNull { it.topicId } + noteRows.mapNotNull { it.topicId }).toSet()
                         val openHere = dayTopics.filter { (d == today) != ("$d|$it" in openTopics.value) }.toSet() + listOfNotNull(topicF)
+                        // Inside a topic its own row leads its day — the name the head has no room for, then its matters (owner, 18 окт).
+                        fun topicRows() = f.topics.forEachIndexed { i, (t, word) ->
+                            val lead = if (topicF != null) listOfNotNull(word, t.topicWhen()).joinToString("  ·  ").ifBlank { null } else word
+                            cs.item("ft$d" + t.id) { TopicPaperRow(t, seatOf(i, f.topics.size), onOpen = { onOpen(t.id) }, margin = null, lead = lead) }
+                        }
+                        if (topicF != null && (kind == null || kind == "topics")) topicRows()
                         if (kind == null || kind == "deals") cs.dayPanel(f.plan, today, "f$d", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
                             doneOpen = isOpen("s-done-$d"), onDoneFold = { toggle("s-done-$d") }, openTopics = openHere, onTopicFold = { foldTopic("$d|$it") }, extras = noteRows)
-                        if (kind == null || kind == "topics") f.topics.forEachIndexed { i, (t, word) ->
-                            cs.item("ft$d" + t.id) { TopicPaperRow(t, seatOf(i, f.topics.size), onOpen = { onOpen(t.id) }, margin = null, lead = word) }
-                        }
+                        if (topicF == null && (kind == null || kind == "topics")) topicRows()
                         if (kind == "notes") cs.linkedNotesOfDay(d, f.notes, data, vm, onOpen, onOpenPiece, onPerson)
                         if (d == today) {
                             if ((kind == null || kind == "deals") && undated.isNotEmpty()) cs.undatedRows(undated)

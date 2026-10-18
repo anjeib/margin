@@ -84,8 +84,9 @@ fun whenNote(t: Task, today: LocalDate, underDay: Boolean): Pair<String?, Boolea
     val s = L.s
     val due = t.dueDate
     val start = t.startDate
-    if (!t.done && due != null && due.isBefore(today)) return (s.sinceWord + " " + due.dayMonthShort()) to true
     val hour = t.time ?: t.dayPart?.let { s.dayPart(it) }
+    // Late keeps its hour too (18 окт: «Показать Олегу» at 11:00 lost it) — on the feed the hour is all the margin holds.
+    if (!t.done && due != null && due.isBefore(today)) return listOfNotNull(s.sinceWord + " " + due.dayMonthShort(), t.time).joinToString("\n") to true
     // A window standing on today is not due today: its span says so (owner, 13 окт).
     if (underDay && start != null && due != null && start.isBefore(due) && !due.isBefore(today)) return listOfNotNull(spanWord(start, due, today), hour).joinToString("\n") to false
     if (underDay) return hour to false
@@ -383,13 +384,16 @@ fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<S
                     // A chevron the size of the words (owner, 18 окт: the tiny ▸ in the corner read as a stray dot).
                     Text(if (open) "⌃" else "⌄", style = Type.body.copy(color = c.graphite, fontSize = 20.sp, lineHeight = 20.sp), modifier = Modifier.padding(start = 8.dp, top = if (open) 6.dp else 0.dp))
                 }
-                Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val what = listOfNotNull(lead, rows.size.takeIf { it > 0 }?.let { s.summaryDeals(it) }, notes.takeIf { it > 0 }?.let { s.nEntries(it) },
-                        done.takeIf { it > 0 }?.let { s.doneCountWord(it) }).joinToString(", ")
-                    Text((what + (if (late > 0) ", " + s.lateOfDay(late) else "")).replaceFirst(", ", if (lead != null) "  ·  " else ", ") + "  ·  ", style = Type.small.copy(color = subInk, fontSize = subSize))
-                    Text(s.openTopicLink, style = Type.small.copy(color = c.link, fontSize = subSize, fontWeight = FontWeight.Medium),
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpen).padding(vertical = 2.dp))
-                }
+                // One text, so at a large font the line wraps between words and «вся тема ›» never breaks letter by letter (18 окт).
+                val what = listOfNotNull(lead, rows.size.takeIf { it > 0 }?.let { s.summaryDeals(it) }, notes.takeIf { it > 0 }?.let { s.nEntries(it) },
+                    done.takeIf { it > 0 }?.let { s.doneCountWord(it) }).joinToString(", ")
+                val said = (what + (if (late > 0) ", " + s.lateOfDay(late) else "")).replaceFirst(", ", if (lead != null) "  ·  " else ", ")
+                Text(androidx.compose.ui.text.buildAnnotatedString {
+                    append(said + "  ·  ")
+                    withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("topic", androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = c.link, fontWeight = FontWeight.Medium))) { onOpen() }) {
+                        append(s.openTopicLink.replace(" ", "\u00A0"))
+                    }
+                }, style = Type.small.copy(color = subInk, fontSize = subSize), modifier = Modifier.padding(top = 3.dp))
             }
         }
     }
@@ -508,8 +512,9 @@ fun LazyListScope.dayPanel(
                 marginOpen = span != null)
         } }
         if (!open) return
-        // Inside a topic the same order: its matters with no hour first, then matters and notes by the hour.
-        val members: List<Pair<String, Any>> = (ms.map { (it.time?.take(5) ?: "") to (it as Any) } + ns.map { it.hour to (it as Any) }).sortedBy { it.first } +
+        // Inside a topic the day's order: late first (oldest first), then its matters with no hour, then matters and notes by the hour.
+        fun keyOf(t: Task) = when { t.dueDate?.isBefore(today) == true -> "0" + t.due; t.time == null -> "1"; else -> "2" + t.time!!.take(5) }
+        val members: List<Pair<String, Any>> = (ms.map { keyOf(it) to (it as Any) } + ns.map { "2" + it.hour to (it as Any) }).sortedBy { it.first } +
             ds.map { "99" to (DayItem.Done(it) as Any) }
         members.forEachIndexed { k, (_, x) ->
             val pos = if (k == members.lastIndex) BlockPos.Last else BlockPos.Mid

@@ -225,7 +225,8 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
 
     // A topic opened from anywhere — its row, «# Тема» under a matter, a card, the search — narrows the diary's feed to it
     // (owner, 17 окт: «убери страницу темы»); back or «показать всё» gives the whole feed again.
-    val topicNarrow = planner
+    // Owner, 18 окт: not that either — a topic opens as a window over the page, as a matter does (below); this stays off.
+    val topicNarrow = false
     LaunchedEffect(openTask) {
         val t = openTask?.let { id -> vm.data.value.tasks.find { it.id == id } }
         if (topicNarrow && t != null && t.topic && !t.thought) {
@@ -311,7 +312,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         // Owner, 14 окт: no tabs at the foot — the sections are in the contents, opened by ≡ at the top by the search.
         // A card's window open: the page under it out of focus.
         val cardOver = openDeal != null || openPiece != null ||
-            openTask?.let { id -> data.tasks.find { it.id == id }?.let { !it.topic || (it.thought && fullIdea != id) } } == true
+            openTask?.let { id -> data.tasks.find { it.id == id }?.let { !it.topic || (it.thought && fullIdea != id) || planner } } == true
         PageSheet(frame = !overlay) {
             Column(Modifier.fillMaxSize().frosted(cardOver).statusBarsPadding().imePadding()) {
                 fun bare(t: ru.anjeib.margin.data.Task) = t.thought && t.subtasks.isEmpty()
@@ -570,11 +571,29 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
             // An idea opens as a half-page notebook card; «Открыть целиком» gives it the whole screen like any topic.
             val cardKey0 = openDeal ?: openPiece
             // Owner, 17 окт: no topic page on the planner — a topic narrows the feed instead (see the effect on openTask).
-            val noTopicPage = planner
-            val topicId = openTask?.takeIf { id -> !noTopicPage && data.tasks.find { it.id == id }?.let { it.topic && (!it.thought || fullIdea == id) } == true }
+            // Owner, 18 окт: on the planner the topic is a window over the page, like a matter's card — no page, no narrowed feed.
+            val topicWindow = planner
+            val topicId = openTask?.takeIf { id -> data.tasks.find { it.id == id }?.let { it.topic && (!it.thought || fullIdea == id) } == true }
             var lastTopic by remember { mutableStateOf<String?>(null) }
             if (topicId != null) lastTopic = topicId
-            AnimatedVisibility(topicId != null,
+            if (topicWindow) AnimatedVisibility(topicId != null,
+                enter = fadeIn(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(220), initialScale = 0.96f),
+                exit = fadeOut(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(160), targetScale = 0.97f)) {
+                data.tasks.find { it.id == (topicId ?: lastTopic) }?.let { t ->
+                    val close = { openTask = null; openHl = null; openTab = 0; fullIdea = null }
+                    val shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)
+                    val quiet = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    Box(Modifier.fillMaxSize().frosted(cardKey0 != null).background(glassWash).clickable(quiet, null) { close() }
+                        .statusBarsPadding().navigationBarsPadding().imePadding().padding(horizontal = 10.dp, vertical = 20.dp)) {
+                        Box(Modifier.fillMaxSize().shadow(20.dp, shape).clip(shape).background(c.bg).border(1.dp, c.hairline, shape)
+                            .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) {}) {
+                            TopicScreen(t, data, vm, openTab, openHl, onClose = close, onOpenPerson = { openTask = null; openPerson = it }, popup = true,
+                                onOpenPiece = { k -> if (k.startsWith("q:")) openDeal = k else openPiece = k })
+                        }
+                    }
+                }
+            }
+            else AnimatedVisibility(topicId != null,
                 enter = androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { it / 3 } + fadeIn(androidx.compose.animation.core.tween(220)),
                 exit = androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(220)) { it / 3 } + fadeOut(androidx.compose.animation.core.tween(180))) {
                 data.tasks.find { it.id == (topicId ?: lastTopic) }?.let { t ->

@@ -295,7 +295,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                 // The day picked in the head's week stands too, even empty (owner, 18 окт: a tap on a day with no notes did nothing).
                 (byDay.keys + today + day).toSortedSet().forEach { d ->
                     feedStarts[d] = cs.n
-                    cs.item("jd$d") { FeedDayHead(d, today, free = byDay[d].isNullOrEmpty()) }
+                    cs.item("jd$d") { FeedDayHead(d, today, free = byDay[d].isNullOrEmpty(), freeWord = s.noEntriesWord) }
                     byDay[d]?.let { cs.dayNotes(d, it) }
                 }
                 val archivedOwn = data.tasks.filter { it.thought && it.done && it.subtasks.isEmpty() }.map { t ->

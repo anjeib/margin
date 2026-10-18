@@ -410,6 +410,8 @@ fun Modifier.pageWide(): Modifier = this.layout { m, c ->
 /** The page's head closes with a double rule — a heavy line and a hairline — across the whole sheet (owner, 15 окт). */
 @Composable
 fun DoubleRule(modifier: Modifier = Modifier) {
+    // Owner, 18 окт: one hairline under every head, as under the week of the main screen — the double rule was the heaviest thing.
+    if (planner) { Box(modifier.fillMaxWidth().padding(horizontal = 14.dp).height(1.dp).background(M.c.ink.copy(alpha = 0.18f))); return }
     val ink = M.c.ink.copy(alpha = if (M.c.dark) 0.85f else 1f)
     Box(modifier.fillMaxWidth().padding(horizontal = 14.dp).height(5.dp).drawBehind {
         drawRect(ink, size = androidx.compose.ui.geometry.Size(size.width, 2.dp.toPx()))

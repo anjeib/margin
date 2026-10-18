@@ -217,9 +217,12 @@ fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpe
             // The same empty page as «Входящие» (owner, 17 окт: one look for the menu's sections).
             Margined { Empty(s.inboxEmpty, s.archiveEmpty) }
         }
+        // The first section after the head has no line over it — the head's line is there (18 окт: an empty band above it).
+        var first = true
         fun group(key: String, title: String, items: List<ArchItem>) {
             if (items.isEmpty()) return
-            item(key + "-h") { SectionHead(title, count = items.size, top = 12.dp) }
+            val f = first; first = false
+            item(key + "-h") { SectionHead(title, count = items.size, top = 12.dp, rule = !f) }
             items.forEach { a -> item(key + a.key) { Box(Modifier.animateItem()) { ArchiveRow(a) } } }
         }
         group("t", s.topicsBadge, topics.map { t ->
@@ -233,7 +236,7 @@ fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpe
             ArchItem(t.id, t.title.ifBlank { t.entries.firstOrNull()?.text.orEmpty() }, t.doneAt, open = { onOpenTask(t.id) }, restore = { vm.reviveTopic(t.id) }, purge = { vm.removeMatter(t.id) })
         })
         // Notes from before the topics (v1), if any are left.
-        if (notes.isNotEmpty()) item("nh") { SectionHead(s.notes, count = notes.size, top = 12.dp) }
+        if (notes.isNotEmpty()) { val f = first; first = false; item("nh") { SectionHead(s.notes, count = notes.size, top = 12.dp, rule = !f) } }
         notes.forEachIndexed { i, n ->
             item("n" + n.id) {
                 Box(Modifier.animateItem()) {
@@ -241,7 +244,7 @@ fun ArchiveScreen(data: AppData, vm: MainVm, onOpenNote: (String) -> Unit, onOpe
                 }
             }
         }
-        if (people.isNotEmpty()) item("ph") { SectionHead(s.peopleTitle, count = people.size, top = 12.dp) }
+        if (people.isNotEmpty()) { val f = first; first = false; item("ph") { SectionHead(s.peopleTitle, count = people.size, top = 12.dp, rule = !f) } }
         people.forEachIndexed { i, p ->
             item("p" + p.id) {
                 PaperRow(seatOf(i, people.size), mark = { Avatar(p.name, 32.dp) }, modifier = Modifier.animateItem(), onClick = { onOpenPerson(p.id) },

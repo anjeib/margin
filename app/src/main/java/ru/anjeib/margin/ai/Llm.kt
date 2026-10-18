@@ -16,7 +16,8 @@ object Llm {
     const val YA_STRONG = "deepseek-v4.1-flash"
 
     fun yandex(s: Settings) = s.provider == "yandex"
-    fun door(s: Settings) = Yandex.Door(s.yaKey, s.yaFolder, s.invite, s.device)
+    // Without the cloud AI no invite is sent anywhere — an alpha code kept in old settings stays unused (RuStore, 18 окт).
+    fun door(s: Settings) = Yandex.Door(s.yaKey, s.yaFolder, if (ru.anjeib.margin.BuildConfig.CLOUD_AI) s.invite else "", s.device)
     /** With a key (developer builds) or, in what people install, with an invite code for Margin's own door. */
     /** The AI may be asked: «Телефон» (the default since 13 окт) asks it nothing — Margin reads everything on the phone. */
     fun ready(s: Settings) = ru.anjeib.margin.BuildConfig.CLOUD_AI && s.parseMode != "local" &&

@@ -528,7 +528,8 @@ internal fun DatesDialog(task: Task, onDismiss: () -> Unit, onSave: (String?, St
     val window = task.startDate != null && task.dueDate != null && task.startDate!!.isBefore(task.dueDate)
     // Owner, 16 окт: two windows as pills, then the month — a tap on a number is the day, a press drawn across days the window.
     AlertDialog(
-        onDismissRequest = onDismiss, containerColor = c.card,
+        // On the page's paper, as the cards are (owner, 18 окт: a white dialog over the paper).
+        onDismissRequest = onDismiss, containerColor = if (planner) c.bg else c.card,
         title = { Text(s.dateWord, style = Type.cardTitle.copy(color = c.ink)) },
         confirmButton = {},
         dismissButton = {
@@ -540,6 +541,8 @@ internal fun DatesDialog(task: Task, onDismiss: () -> Unit, onSave: (String?, St
         text = {
         Column {
             FlowRow(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // «Завтра» first — the day most often given (18 окт).
+                Pill(s.quickTomorrow, onClick = { onSave(null, today.plusDays(1).toString()) })
                 Pill(s.quickNextWeek, onClick = { onSave(nextMonday.toString(), nextMonday.plusDays(6).toString()) })
                 Pill(s.quickNextMonth, onClick = { onSave(nextMonth.atDay(1).toString(), nextMonth.atEndOfMonth().toString()) })
                 // A repeating task: skip this one and go straight to the next time.
