@@ -168,7 +168,22 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             confirmButton = { androidx.compose.material3.TextButton({ demoAsk = false; vm.loadDemo(); mineKept = vm.hasMine() }) { Text(s.demoLoad, color = c.link) } },
             dismissButton = { androidx.compose.material3.TextButton({ demoAsk = false }) { Text(s.cancel, color = c.graphite) } })
 
+        // A copy in a file and back (18 окт): the system's own windows pick where — nothing leaves the phone by itself.
+        val saveTo = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { u -> u?.let { vm.backupTo(it) } }
+        var restoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+        val openFrom = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { u -> restoreUri = u }
+        restoreUri?.let { u ->
+            androidx.compose.material3.AlertDialog(onDismissRequest = { restoreUri = null }, containerColor = c.card,
+                title = { Text(s.restoreQ, style = Type.cardTitle.copy(color = c.ink)) },
+                text = { Text(s.restoreText, style = Type.body.copy(color = c.graphite)) },
+                confirmButton = { androidx.compose.material3.TextButton({ restoreUri = null; vm.restoreFrom(u) }) { Text(s.restoreReplace, color = c.accentText) } },
+                dismissButton = { androidx.compose.material3.TextButton({ restoreUri = null }) { Text(s.cancel, color = c.graphite) } })
+        }
         Group(s.backupSection) {
+            ValueRow(s.backupFile, s.backupFileHint, "") {
+                saveTo.launch("Margin-" + java.time.LocalDate.now() + ".zip")
+            }
+            ValueRow(s.restoreFile, s.restoreFileHint, "") { openFrom.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }
             // First the main switch and what it means, then the optional file copy.
             ToggleRow(s.googleBackup, if (settings.googleBackup) s.googleBackupHint else s.googleBackupOff, settings.googleBackup) { on ->
                 vm.updateSettings { it.copy(googleBackup = on) }

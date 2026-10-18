@@ -1,5 +1,7 @@
 package ru.anjeib.margin.widget
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
@@ -63,18 +65,21 @@ import java.util.Locale
 class TodayWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         L.lang = resolveLang(Prefs.get(context).settings.value.lang)
-        val data = Store.get(context).data.value
-        val today = LocalDate.now()
-        val due = data.listTasks().filter { !it.done && ((it.dueDate ?: it.startDate)?.let { d -> !d.isAfter(today) } == true || it.openWindow(today)) }
-            // The day's order as in the feed (0.85): late first, then the matters with no hour, then by the hour.
-            .sortedWith(compareBy({ (it.dueDate ?: it.startDate)?.isBefore(today) != true }, { it.time ?: "" }))
-        val s = L.s
-        val locale = if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) Locale.forLanguageTag("ru") else Locale.ENGLISH
-        val dayName = today.dayOfWeek.getDisplayName(DateStyle.FULL_STANDALONE, locale).replaceFirstChar { it.uppercase() }
-        val dayDate = today.dayOfMonth.toString() + " " + today.month.getDisplayName(DateStyle.SHORT, locale).trimEnd('.')
+        val store = Store.get(context)
         // «когда» grows with the phone's font size, as on the app's margin.
         val whenW = (60f * context.resources.configuration.fontScale.coerceIn(1f, 2f)).dp
         provideContent {
+            // Read inside the content (18 окт): while the widget's session lives, an update recomposes it — values taken
+            // outside stayed as they were (after «Восстановить из файла» it kept «дел нет»).
+            val data by store.data.collectAsState()
+            val today = LocalDate.now()
+            val due = data.listTasks().filter { !it.done && ((it.dueDate ?: it.startDate)?.let { d -> !d.isAfter(today) } == true || it.openWindow(today)) }
+                // The day's order as in the feed (0.85): late first, then the matters with no hour, then by the hour.
+                .sortedWith(compareBy({ (it.dueDate ?: it.startDate)?.isBefore(today) != true }, { it.time ?: "" }))
+            val s = L.s
+            val locale = if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) Locale.forLanguageTag("ru") else Locale.ENGLISH
+            val dayName = today.dayOfWeek.getDisplayName(DateStyle.FULL_STANDALONE, locale).replaceFirstChar { it.uppercase() }
+            val dayDate = today.dayOfMonth.toString() + " " + today.month.getDisplayName(DateStyle.SHORT, locale).trimEnd('.')
             // v8: «когда» left of a thin rule, as on the app's margin — the hour, or «с 8 окт» when late.
             Body(context, dayName, dayDate, due.take(6).map { t ->
                 val late = (t.dueDate ?: t.startDate)?.isBefore(today) == true

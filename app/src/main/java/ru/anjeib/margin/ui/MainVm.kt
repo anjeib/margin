@@ -239,6 +239,22 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun disconnectMail() { ru.anjeib.margin.ai.Forward.disconnectMail(ctx); ru.anjeib.margin.ai.Forward.schedule(ctx) }
 
     fun toastShown() { _toast.value = null }
+
+    /** «Сохранить копию в файл» (18 окт): everything in one .zip at the place the user picked. */
+    fun backupTo(uri: android.net.Uri) = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        val ok = runCatching { store.flush(); ru.anjeib.margin.data.FileBackup.write(getApplication(), uri, data.value) }.isSuccess
+        _toast.value = if (ok) L.s.backupSaved else L.s.backupFailed
+    }
+
+    /** «Восстановить из файла»: the copy replaces what is here (undo can bring this back for a while). */
+    fun restoreFrom(uri: android.net.Uri) = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        val d = runCatching { ru.anjeib.margin.data.FileBackup.read(getApplication(), uri) }.getOrNull()
+        if (d == null) { _toast.value = L.s.restoreFailed; return@launch }
+        val before = data.value
+        store.restore { cur -> d.copy(chat = cur.chat) }
+        runCatching { ru.anjeib.margin.notify.Reminders.rescheduleAll(getApplication()) }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { offerUndo(before, L.s.restoreDone) }
+    }
     fun dismissTray() { _trayFrom.value = null }
     fun clearNotice() { _notice.value = null }
 

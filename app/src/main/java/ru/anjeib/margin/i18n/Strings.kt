@@ -582,6 +582,17 @@ interface Strings {
     val actShare: String get() = "Переслать"
     /** «Переслать» for a cell of a card's tools, where the long word doesn't fit. */
     val actSend: String get() = "Послать"
+    val backupFile: String get() = "Сохранить копию в файл"
+    val backupFileHint: String get() = "Все дела, темы, дневник и файлы — одним файлом .zip. Положите его куда удобно: в «Файлы», на диск, в облако."
+    val restoreFile: String get() = "Восстановить из файла"
+    val restoreFileHint: String get() = "Например, на новом телефоне"
+    val restoreQ: String get() = "Заменить всё копией из файла?"
+    val restoreText: String get() = "Всё, что сейчас в Margin, заменится содержимым файла. Если здесь есть что-то новое, сначала сохраните копию."
+    val restoreReplace: String get() = "Заменить"
+    val backupSaved: String get() = "Копия сохранена"
+    val backupFailed: String get() = "Не получилось сохранить копию"
+    val restoreDone: String get() = "Восстановлено из копии"
+    val restoreFailed: String get() = "Это не копия Margin"
     val inboxSaved: String get() = "Во Входящих"
     val inboxMadeDeal: String get() = "Стало делом"
     val inboxMadeNote: String get() = "Стало заметкой"
@@ -1030,7 +1041,7 @@ object Ru : Strings {
             "Календарь" to "учитывать встречи из календаря телефона",
             "Уведомления" to "утренняя сводка и вечерний итог: включить и выбрать час",
             "Оформление" to "светлая, тёмная или как в системе",
-            "Резервная копия" to "копия в аккаунт Google — по желанию, по умолчанию выключена",
+            "Резервная копия" to "«Сохранить копию в файл» — всё одним .zip, «Восстановить из файла» — например, на новом телефоне; копия в аккаунт Google — по желанию",
             "Приватность" to "вход по отпечатку и «Где ваши данные»",
         )),
         // ---- legends ----
