@@ -272,7 +272,7 @@ fun SmartComposer(
                 else (kinds.map { Pick("/$it", "/$it", "kind") } + spheres.map { Pick("/$it", "/$it", "sphere", sphereDot(it)) } +
                     actions.map { Pick("/$it", "/$it", "action") }).filter { it.label.drop(1).startsWith(query) }
             "+" -> spheres.map { Pick("/$it", "/$it", "sphere", sphereDot(it)) }
-            "#" -> d.tasks.filter { it.topic && !it.done }.sortedByDescending { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.createdAt) }
+            "#" -> d.tasks.filter { it.topic && !it.done && !it.thought }.sortedByDescending { t -> maxOf(t.entries.maxOfOrNull { it.at } ?: "", t.createdAt) }
                 .filter { query.isNullOrEmpty() || it.title.lowercase().replace('ё', 'е').contains(query) }.take(8).map { Pick("#[${it.id}]", it.title, "topic", topic = true) }
             "@" -> if (mentions) {
                 fun hit(x: String) = query.isNullOrEmpty() || x.lowercase().replace('ё', 'е').let { it.startsWith(query) || it.contains(" $query") }

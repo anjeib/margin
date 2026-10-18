@@ -13,7 +13,7 @@ import java.time.LocalDateTime
  */
 object Feedback {
     /** Where tester reports go (the owner's choice, 9 Oct 2026). */
-    const val EMAIL = "anjeibrus@yahoo.com"
+    const val EMAIL = "info@vuzburo.ru"
 
     private const val MAX_BYTES = 200_000L
 

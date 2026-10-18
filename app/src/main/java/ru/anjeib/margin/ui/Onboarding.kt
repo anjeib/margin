@@ -276,80 +276,88 @@ private val ClipX = 14.dp + 12.dp + 8.dp
 private val KnotX = 54.dp + 7.dp
 
 /**
- * The first page — the app at a glance (owner, 18 окт: «обзор приложения: экранов, элементов интерфейса, переключений»):
- * its head, the week, the feed and the field, and a tap on each in turn with what it does said under it.
+ * The first page — the app at a glance (owner, 18 окт: «всё быстро мелькает, сделай экраном с подсказками при тапе»): the head,
+ * the week, the feed and the field stand still; a small sea dot marks each thing one can tap. A tap says under it what the
+ * thing does and does it here — the diary opens, a day is picked, the month unfolds.
  */
 @Composable
-private fun SceneTour(t: Float) {
+private fun SceneTour(@Suppress("UNUSED_PARAMETER") t: Float) {
     val c = M.c
     val s = M.s
     val steps = s.obTour
-    val n = steps.size
-    val step = (t * n).toInt().coerceIn(0, n - 1)
-    val inStep = t * n - step
-    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-        val w = maxWidth; val h = maxHeight
-        fun icon(i: Int) = w - 10.dp - 16.dp - 32.dp * (5 - i)
-        val dw = (w - 74.dp) / 7
-        val journal = step == 3 && inStep > 0.25f
-        Column(Modifier.fillMaxSize()) {
-            // The head: what is open, and its six marks.
-            Row(Modifier.fillMaxWidth().height(40.dp).padding(start = 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(if (journal) s.journalTitle else s.kindDeals, style = Type.pageTitle.copy(color = c.ink, fontSize = 19.sp, lineHeight = 20.sp))
-                    Text(if (journal) s.journalSub else s.dealsSub, style = Type.meta.copy(color = c.graphite, fontSize = 10.sp, lineHeight = 12.sp))
-                }
-                val lit = listOf(step == 0, step == 1, step == 2, !journal, journal, step == 4)
-                listOf<@Composable (androidx.compose.ui.graphics.Color) -> Unit>({ FilterGlyph(it, 17.dp) }, { PersonGlyph(it, 17.dp) }, { SearchGlyph(it, 17.dp) },
-                    { DealGlyph(it, 18.dp) }, { DiaryGlyph(it, 17.dp) }, { Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { MenuGlyph(it) } }).forEachIndexed { i, g ->
-                    Box(Modifier.size(32.dp).clip(CircleShape).background(if (lit[i] && (i >= 3 || inStep > 0.1f)) c.linkSoft else androidx.compose.ui.graphics.Color.Transparent),
-                        contentAlignment = Alignment.Center) { g(if (lit[i]) c.link else c.ink.copy(alpha = 0.7f)) }
+    var sel by remember { mutableStateOf(-1) }
+    var seen by remember { mutableStateOf(emptySet<Int>()) }
+    var journal by remember { mutableStateOf(false) }
+    var picked by remember { mutableStateOf(6) }
+    var month by remember { mutableStateOf(false) }
+    fun tap(i: Int) { sel = i; seen = seen + i }
+    val monthH by androidx.compose.animation.core.animateFloatAsState(if (month) 1f else 0f, androidx.compose.animation.core.tween(260), label = "month")
+    @Composable fun Dot(i: Int, m: Modifier = Modifier) {
+        if (i !in seen) Box(m.size(7.dp).clip(CircleShape).background(c.sea))
+    }
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().height(40.dp).padding(start = 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(if (journal) s.journalTitle else s.kindDeals, style = Type.pageTitle.copy(color = c.ink, fontSize = 19.sp, lineHeight = 20.sp))
+                Text(if (journal) s.journalSub else s.dealsSub, style = Type.meta.copy(color = c.graphite, fontSize = 10.sp, lineHeight = 12.sp))
+            }
+            val marks = listOf<Pair<Int, @Composable (androidx.compose.ui.graphics.Color) -> Unit>>(
+                0 to { FilterGlyph(it, 17.dp) }, 1 to { PersonGlyph(it, 17.dp) }, 2 to { SearchGlyph(it, 17.dp) },
+                3 to { DealGlyph(it, 18.dp) }, 3 to { DiaryGlyph(it, 17.dp) }, 4 to { Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { MenuGlyph(it) } })
+            marks.forEachIndexed { k, (i, g) ->
+                val lit = when (k) { 3 -> !journal; 4 -> journal; else -> sel == i }
+                Box(Modifier.size(32.dp)) {
+                    Box(Modifier.matchParentSize().clip(CircleShape).background(if (lit) c.linkSoft else androidx.compose.ui.graphics.Color.Transparent)
+                        .clickable { tap(i); if (k == 3) journal = false; if (k == 4) journal = true }, contentAlignment = Alignment.Center) { g(if (lit) c.link else c.ink.copy(alpha = 0.7f)) }
+                    if (k != 3) Dot(i, Modifier.align(Alignment.TopEnd))
                 }
             }
-            // The week: «ОКТ ▾» and the days; the one picked is filled.
-            Row(Modifier.fillMaxWidth().height(32.dp).padding(start = 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("ОКТ " + if (step == 6 && inStep > 0.2f) "▴" else "▾", style = Type.meta.copy(color = c.ink, fontSize = 11.sp, letterSpacing = 1.sp), modifier = Modifier.width(50.dp))
-                val picked = if (step == 5 && inStep > 0.2f) 0 else 6
-                listOf("пн", "вт", "ср", "чт", "пт", "сб", "вс").forEachIndexed { k, d ->
-                    Box(Modifier.weight(1f).padding(horizontal = 1.dp).clip(RoundedCornerShape(6.dp)).background(if (k == picked) c.link else androidx.compose.ui.graphics.Color.Transparent).padding(vertical = 3.dp),
-                        contentAlignment = Alignment.Center) { Text(d, style = Type.meta.copy(color = if (k == picked) c.bg else c.ink, fontSize = 11.sp)) }
-                }
+        }
+        Row(Modifier.fillMaxWidth().height(32.dp).padding(start = 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(50.dp)) {
+                Text("ОКТ " + if (month) "▴" else "▾", style = Type.meta.copy(color = c.ink, fontSize = 11.sp, letterSpacing = 1.sp),
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { tap(6); month = !month }.padding(4.dp))
+                Dot(6, Modifier.align(Alignment.TopEnd).padding(end = 6.dp))
             }
-            Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).height(1.dp).background(c.ink.copy(alpha = 0.18f)))
-            // The month, unfolded at its step.
-            val month = if (step == 6) seg(inStep, 0.2f, 0.45f) else 0f
-            Column(Modifier.fillMaxWidth().clipToBounds().layout { m, cs -> val p = m.measure(cs); layout(p.width, (p.height * month).toInt()) { p.place(0, 0) } }
-                .padding(start = 64.dp, end = 10.dp, top = 2.dp, bottom = 4.dp)) {
-                (0 until 3).forEach { r ->
-                    Row { (0 until 7).forEach { k -> val d = 12 + r * 7 + k; Text(if (d > 31) "" else "$d", style = Type.meta.copy(color = if (d == 18) c.link else c.ink, fontSize = 10.sp), modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) } }
-                }
-            }
-            SceneRule {
-                Column {
-                    Text(if (step == 5 && inStep > 0.2f) s.obMonday else s.obToday, style = Type.meta.copy(color = c.link, fontSize = 11.sp), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    if (journal) SceneNote("08:05", s.obDiary1) else {
-                        SceneRow(null, s.obTourRow1, sub = s.obTourRow1Sub, late = true, subColor = c.accentText)
-                        SceneRow("11:00", s.obTourRow2)
+            Box(Modifier.weight(1f)) {
+                Row(Modifier.fillMaxWidth()) {
+                    listOf("пн", "вт", "ср", "чт", "пт", "сб", "вс").forEachIndexed { k, d ->
+                        Box(Modifier.weight(1f).padding(horizontal = 1.dp).clip(RoundedCornerShape(6.dp)).background(if (k == picked) c.link else androidx.compose.ui.graphics.Color.Transparent)
+                            .clickable { tap(5); picked = k; month = false }.padding(vertical = 3.dp), contentAlignment = Alignment.Center) {
+                            Text(d, style = Type.meta.copy(color = if (k == picked) c.bg else c.ink, fontSize = 11.sp))
+                            if (k == 2) Dot(5, Modifier.align(Alignment.TopEnd))
+                        }
                     }
                 }
             }
-            Spacer(Modifier.weight(1f))
-            // What the tapped thing does, in a few words.
-            Text(steps[step], style = Type.small.copy(color = c.ink, fontSize = 13.5.sp, lineHeight = 18.sp),
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp).fillMaxWidth().graphicsLayer { alpha = seg(inStep, 0.05f, 0.2f) }
-                    .clip(RoundedCornerShape(10.dp)).background(c.linkSoft).padding(horizontal = 12.dp, vertical = 8.dp))
+        }
+        Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).height(1.dp).background(c.ink.copy(alpha = 0.18f)))
+        Column(Modifier.fillMaxWidth().clipToBounds().layout { m, cs -> val p = m.measure(cs); layout(p.width, (p.height * monthH).toInt()) { p.place(0, 0) } }
+            .padding(start = 64.dp, end = 10.dp, top = 2.dp, bottom = 4.dp)) {
+            (0 until 3).forEach { r ->
+                Row { (0 until 7).forEach { k -> val d = 12 + r * 7 + k; Text(if (d > 31) "" else "$d", style = Type.meta.copy(color = if (d == 12 + picked) c.link else c.ink, fontSize = 10.sp), modifier = Modifier.weight(1f).clickable { if (d <= 31 && d < 19) { picked = d - 12; month = false } }, textAlign = androidx.compose.ui.text.style.TextAlign.Center) } }
+            }
+        }
+        SceneRule {
+            Column {
+                Text(if (picked == 6) s.obToday else s.obDayOf(picked), style = Type.meta.copy(color = c.link, fontSize = 11.sp), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                if (journal) SceneNote("08:05", s.obDiary1) else {
+                    SceneRow(null, s.obTourRow1, sub = s.obTourRow1Sub, late = true, subColor = c.accentText)
+                    SceneRow("11:00", s.obTourRow2)
+                }
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        // What the tapped thing does; before any tap — where to begin.
+        androidx.compose.animation.Crossfade(sel, label = "hint") { k ->
+            Text(if (k < 0) s.obTourStart else steps[k], style = Type.small.copy(color = if (k < 0) c.graphite else c.ink, fontSize = 13.5.sp, lineHeight = 18.sp),
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp).fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp)).background(if (k < 0) androidx.compose.ui.graphics.Color.Transparent else c.linkSoft).padding(horizontal = 12.dp, vertical = 8.dp))
+        }
+        Box(Modifier.fillMaxWidth().clickable { tap(7) }) {
             SceneField("", caret = false, mic = true, hint = s.obHint)
+            Dot(7, Modifier.align(Alignment.TopEnd).padding(end = 18.dp))
         }
-        // The taps, one at the start of each step, on its thing.
-        val at = (step + 0.08f) / n
-        val (x, y) = when (step) {
-            0, 1, 2, 4 -> icon(if (step == 4) 5 else step) to 20.dp
-            3 -> icon(4) to 20.dp
-            5 -> (64.dp + dw * 0.5f) to 56.dp
-            6 -> 34.dp to 56.dp
-            else -> micX(w) to micY(h)
-        }
-        Tap(x, y, t, at)
     }
 }
 

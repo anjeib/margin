@@ -306,7 +306,7 @@ fun AppData.inboxToTopic(inboxId: String, entryId: String, topicId: String): App
 
 /** «#ремонт» → the open topic whose title has a word starting so; «#[id]» — chosen from the window. */
 fun AppData.topicFor(token: String): Task? {
-    val open = tasks.filter { it.topic && !it.done }
+    val open = tasks.filter { it.topic && !it.done && !it.thought }
     if (token.startsWith("[")) return open.find { it.id == token.trim('[', ']') }
     val q = token.lowercase().replace('_', ' ').replace('ё', 'е')
     fun words(t: Task) = t.title.lowercase().replace('ё', 'е').split(Regex("[^\\p{L}\\d]+")).filter { it.isNotBlank() }

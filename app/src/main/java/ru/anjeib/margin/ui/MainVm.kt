@@ -321,7 +321,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun marksOf(text: String, inTopic: Boolean = false): Pair<List<String>, String> {
         fun cap(s: String) = s.trim().replaceFirstChar { it.uppercaseChar() }
         val t = text.trim()
-        if (!inTopic) Commands.intoTopic(t, data.value.tasks.filter { it.topic && !it.done }.map { it.id to it.title })?.let { (id, said) ->
+        if (!inTopic) Commands.intoTopic(t, data.value.tasks.filter { it.topic && !it.done && !it.thought }.map { it.id to it.title })?.let { (id, said) ->
             val (m, rest) = LocalParser.marks(said)
             return listOf("#[$id]") + m.map(::markToken) to cap(rest)
         }
@@ -1519,7 +1519,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         fun norm(s: String) = s.lowercase().replace('ё', 'е')
         for (n in words.size downTo 2) {
             val name = norm(words.take(n).joinToString(" "))
-            val hit = d.tasks.firstOrNull { it.topic && !it.done && norm(it.title) == name } ?: continue
+            val hit = d.tasks.firstOrNull { it.topic && !it.done && !it.thought && norm(it.title) == name } ?: continue
             val end = m.range.first + 1 + words.take(n).joinToString(" ").length + (if (m.value.startsWith("#")) 0 else 1)
             return hit to (m.range.first..(end - 1))
         }
