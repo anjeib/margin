@@ -1,6 +1,5 @@
 package ru.anjeib.margin.ui
 
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import ru.anjeib.margin.data.topicOn
 
 import androidx.compose.foundation.verticalScroll
@@ -325,17 +324,8 @@ fun TaskList(
     // The month unfolding or folding sets the whole page anew (owner, 14 окт): rows sliding while the section heads jumped
     // ran over each other and over the fading month — now everything simply stands in its new place.
     androidx.compose.runtime.key(monthOpen) {
-    // A strong flick of the feed, up or down, always brings it back to today (owner, 26 окт); an ordinary one just scrolls.
-    val homeSpeed = with(androidx.compose.ui.platform.LocalDensity.current) { 4000.dp.toPx() }
-    val flingHome = remember(feed, homeSpeed) { object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
-        override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
-            if (!feed || kotlin.math.abs(available.y) < homeSpeed) return androidx.compose.ui.unit.Velocity.Zero
-            vm.pageDay.value = null; vm.feedJump.value++
-            return available
-        }
-    } }
     androidx.compose.runtime.CompositionLocalProvider(LocalHoursOnly provides feed) {
-    LazyColumn(Modifier.fillMaxSize().then(if (feed) Modifier.nestedScroll(flingHome) else Modifier), state = listState, contentPadding = pad) {
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = pad) {
       findable(found, find?.takeIf { findPage != null }, { k -> (k as? String)?.let { ks -> findable.firstOrNull { ks.endsWith(it.id) } }?.let { t -> find != null && findHit(find.words, t.findText()) } == true }) {
         when {
             view == Views.TODAY -> {
