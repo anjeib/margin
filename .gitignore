@@ -25,3 +25,4 @@ server/cloudru/env.local
 
 # Archive outside git: old APKs, Whisper sources, old proxy codes (secrets)
 archive/local/
+rustore/api-key.json
