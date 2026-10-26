@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import ru.anjeib.margin.data.topicOn
 
 import androidx.compose.foundation.verticalScroll
@@ -311,6 +312,9 @@ fun TaskList(
     } else emptyList()
     val feedStarts = remember { HashMap<LocalDate, Int>() }
     val feedJump by vm.feedJump.collectAsState()
+    val pastOpen by vm.pastOpen.collectAsState()
+    // A day gone by picked in the week or the month: «Прошедшее» unfolds for it to have somewhere to go.
+    androidx.compose.runtime.LaunchedEffect(pageDay, feedJump) { if (pageDay?.isBefore(today) == true) vm.pastOpen.value = true }
     FeedFollow(feed, listState, feedStarts, pageDay ?: today, feedJump) { vm.feedDay.value = it }
     androidx.compose.runtime.LaunchedEffect(monthOpen) { if (monthOpen && !feed) listState.animateScrollToItem(0) }
     val find = LocalFind.current
@@ -321,8 +325,17 @@ fun TaskList(
     // The month unfolding or folding sets the whole page anew (owner, 14 окт): rows sliding while the section heads jumped
     // ran over each other and over the fading month — now everything simply stands in its new place.
     androidx.compose.runtime.key(monthOpen) {
+    // A strong flick of the feed, up or down, always brings it back to today (owner, 26 окт); an ordinary one just scrolls.
+    val homeSpeed = with(androidx.compose.ui.platform.LocalDensity.current) { 4000.dp.toPx() }
+    val flingHome = remember(feed, homeSpeed) { object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+        override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+            if (!feed || kotlin.math.abs(available.y) < homeSpeed) return androidx.compose.ui.unit.Velocity.Zero
+            vm.pageDay.value = null; vm.feedJump.value++
+            return available
+        }
+    } }
     androidx.compose.runtime.CompositionLocalProvider(LocalHoursOnly provides feed) {
-    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = pad) {
+    LazyColumn(Modifier.fillMaxSize().then(if (feed) Modifier.nestedScroll(flingHome) else Modifier), state = listState, contentPadding = pad) {
       findable(found, find?.takeIf { findPage != null }, { k -> (k as? String)?.let { ks -> findable.firstOrNull { ks.endsWith(it.id) } }?.let { t -> find != null && findHit(find.words, t.findText()) } == true }) {
         when {
             view == Views.TODAY -> {
@@ -395,8 +408,12 @@ fun TaskList(
                     // Every day at once; a day picked in the head's week or month comes up to the top.
                     feedStarts.clear()
                     val cs = CountingScope(this)
+                    // The days gone by — one folded line above today (owner, 26 окт).
+                    val past = feedDays.count { it.day.isBefore(today) }
+                    if (past > 0) cs.item("past") { FeedPastHead(pastOpen, past) { vm.pastOpen.value = !pastOpen } }
                     feedDays.forEach { f ->
                         val d = f.day
+                        if (d.isBefore(today) && !pastOpen) return@forEach
                         feedStarts[d] = cs.n
                         // An empty today says so on its line, instead of standing as a blank band.
                         val free = f.plan.deals.isEmpty() && f.plan.events.isEmpty() && f.plan.done.isEmpty() && f.notes.isEmpty() &&

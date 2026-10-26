@@ -710,6 +710,8 @@ interface Strings {
     val whoSkip: String get() = "Пропустить"
     /** Deleted at once, without the archive (owner, 26 окт) — «Отменить» still takes it back. */
     val deleteNow: String get() = "Удалить"
+    /** The days gone by, folded above today (owner, 26 окт). */
+    fun pastFold(days: Int): String = "Прошедшее  ·  $days " + ru.anjeib.margin.data.pluralRu(days, "день", "дня", "дней")
     val deleteTopicQ: String get() = "Удалить тему вместе с делами и заметками?"
     val actOpenCalendar: String get() = "Открыть в календаре"
     val actMakeDeal: String get() = "Сделать делом"

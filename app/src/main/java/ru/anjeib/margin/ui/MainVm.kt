@@ -728,6 +728,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** The calendar's feed: the day at its top (the frame shows it; closing the calendar opens it), and each ask to go to a day. */
     val feedDay = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)
     val feedJump = kotlinx.coroutines.flow.MutableStateFlow(0)
+    /** «Прошедшее» unfolded (owner, 26 окт: the days gone by are one folded line above today). */
+    val pastOpen = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     /** What the diary's feed shows (owner, 17 окт): null — everything; "deals", "topics" or "notes" — only that. */
     val kindFilter = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)

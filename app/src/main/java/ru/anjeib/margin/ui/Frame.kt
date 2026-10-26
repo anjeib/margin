@@ -221,6 +221,23 @@ fun FeedDayHead(day: LocalDate, today: LocalDate, /** Nothing on it: «· сво
 }
 
 /**
+ * All the days gone by as one folded line above today (owner, 26 окт); a tap unfolds or folds them. What wasn't done there
+ * is not in them anyway — it stands in today, marked late.
+ */
+@Composable
+fun FeedPastHead(open: Boolean, days: Int, onToggle: () -> Unit) {
+    val c = M.c
+    val s = M.s
+    Margined(Modifier.padding(top = 14.dp, bottom = 2.dp)) {
+        Box(Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).clickable(onClickLabel = if (open) s.collapse else s.expandWord, onClick = onToggle)
+            .padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.Text(s.pastFold(days) + "  " + (if (open) "⌃" else "⌄"), maxLines = 1,
+                style = Type.meta.copy(color = c.graphite, fontWeight = androidx.compose.ui.text.font.FontWeight(500)))
+        }
+    }
+}
+
+/**
  * The calendar's feed (owner, 17 окт): every day in one list under the pinned month. A day picked in the month — or «сегодня ›»
  * ([jump] counts the asks) — brings its first row up under the month; scrolled, the day at the top is told to [onTop].
  */
