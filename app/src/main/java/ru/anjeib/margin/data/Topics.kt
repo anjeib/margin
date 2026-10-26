@@ -66,7 +66,7 @@ fun questionRef(id: String): Pair<String, String>? =
 
 fun Task.questionRow(q: Subtask) = Task(
     id = "q:$id:${q.id}", title = q.title, due = q.due, start = q.start, time = q.time, waitingFor = q.from, promisedTo = q.promisedTo, dropped = q.dropped, comments = q.comments,
-    people = (listOfNotNull(q.assignee) + q.people).distinct(), place = q.place, repeat = q.repeat, project = project, sphere = sphere, topicId = id, topicTitle = title,
+    people = (listOfNotNull(q.assignee) + q.people).distinct(), who = q.who, place = q.place, repeat = q.repeat, project = project, sphere = sphere, topicId = id, topicTitle = title,
     // The day the matter itself appeared, not the topic — «лежит с 3 окт».
     createdAt = events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at?.take(10) ?: createdAt,
 )

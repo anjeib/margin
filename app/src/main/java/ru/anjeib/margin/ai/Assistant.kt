@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import ru.anjeib.margin.data.peopleCalled
 import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.AppJson
 import ru.anjeib.margin.data.Entry
@@ -429,7 +430,7 @@ object Assistant {
         fun subs(l: List<Subtask>, names: List<String> = emptyList()): List<Subtask> = l.map { it.copy(title = it.title.withNames(names + d.persons.map { p -> p.name }), assignee = who(it.assignee), children = subs(it.children, names)) }
 
         fun learn(people: List<String>, project: String?) {
-            val newPeople = people.distinct().filter { it.lowercase() !in me && d.person(it) == null }.map { Person(name = it.properName(), draft = true) }
+            val newPeople = people.distinct().filter { it.lowercase() !in me && d.person(it) == null && d.peopleCalled(it).isEmpty() }.map { Person(name = it.properName(), draft = true) }
             val newProject = project?.takeIf { p -> d.projects.none { it.equals(p, true) } }
             if (newPeople.isNotEmpty() || newProject != null)
                 d = d.copy(persons = d.persons + newPeople, projects = d.projects + listOfNotNull(newProject))

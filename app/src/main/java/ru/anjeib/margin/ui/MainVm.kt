@@ -116,7 +116,29 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     val models: StateFlow<List<ModelInfo>> = _models
 
     private val _events = MutableStateFlow<List<ru.anjeib.margin.data.CalEvent>>(emptyList())
-    val events: StateFlow<List<ru.anjeib.margin.data.CalEvent>> = _events
+    /** The phone's meetings, without those already made into matters. */
+    val events: StateFlow<List<ru.anjeib.margin.data.CalEvent>> = kotlinx.coroutines.flow.combine(_events, store.data) { ev, d -> d.meetingsLeft(ev) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** «Сделать делом»: the meeting becomes a matter of its day, hour and place — the phone's calendar itself is not touched. */
+    fun eventToDeal(e: ru.anjeib.margin.data.CalEvent) {
+        val t = e.toTask().let { if (it.title.isBlank()) it.copy(title = L.s.calendarTitle) else it }
+        store.update { it.copy(tasks = it.tasks + t, calSeen = it.calSeen + (e.key to "")) }
+        land(listOf(t.id))
+        say(L.s.eventMadeDeal)
+    }
+
+    private val _whoAsk = MutableStateFlow<WhoAsk?>(null)
+    /** «Кто это — Маша?» — waiting for the user's answer. */
+    val whoAsk: StateFlow<WhoAsk?> = _whoAsk
+    /** [personId] — the one meant; null — someone else of that name, a new person; "" — not said, not asked again. */
+    fun answerWho(a: WhoAsk, personId: String?) {
+        _whoAsk.value = null
+        store.update { d ->
+            if (personId != null) d.tieName(a.ref, a.name, personId)
+            else Person(name = a.name.properName(), kept = true).let { p -> d.copy(persons = d.persons + p).tieName(a.ref, a.name, p.id) }
+        }
+    }
 
     private val _keyStatus = MutableStateFlow<String?>(null)
     val keyStatus: StateFlow<String?> = _keyStatus
@@ -141,6 +163,13 @@ class MainVm(app: Application) : AndroidViewModel(app) {
             if (data.value.withoutCopiedNotes() !== data.value) store.update { it.withoutCopiedNotes() }
         }
         viewModelScope.launch { store.data.collect { Reminders.syncTasks(getApplication(), it.tasks, it.notes) } }
+        // Each name in a matter means one person: tied at once when only one is called so, asked when several are (tester, 26 окт).
+        viewModelScope.launch {
+            store.data.collect { d ->
+                if (d.tieNames() !== d) store.update { it.tieNames() }
+                else _whoAsk.value = d.whoQuestion()
+            }
+        }
         // A quiet line under the field says what happened — and then leaves.
         viewModelScope.launch {
             _notice.collect { n -> if (n != null) { kotlinx.coroutines.delay(7000); if (_notice.value == n) _notice.value = null } }
@@ -177,6 +206,8 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         cloudJob?.cancel()
         if (!on) return
         watchCloud()
+        // Meetings added or moved in the calendar while Margin was away.
+        refreshCalendar()
         // «Телефон»: whatever waited in «Входящие» for the AI is read on the phone now.
         if (settings.value.parseMode == "local" && data.value.queue.isNotEmpty()) sortForwarded()
         val F = ru.anjeib.margin.ai.Forward
@@ -989,6 +1020,32 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun restoreComment(ref: String, id: String) = store.update { it.restoreComment(ref, id) }
     fun purgeComment(ref: String, id: String) = store.update { it.purgeComment(ref, id) }
 
+    /**
+     * «Удалить» at once, without the archive (owner, 26 окт): a matter, a topic's matter, a topic or a note of «Дневник».
+     * «Отменить» takes it back; its files go only once that moment has passed.
+     */
+    fun deleteNow(ref: String) {
+        val before = data.value
+        val q = questionRef(ref)
+        val files = if (q != null) emptyList() else before.tasks.find { it.id == ref }?.let { t -> (t.entries + t.removedEntries).flatMap { it.attachments } }.orEmpty()
+        store.update { d -> if (q != null) d.removeDeal(q.first, q.second).purgeDeal(q.first, q.second) else d.deleteTask(ref) }
+        offerUndo(before, L.s.deletedOne)
+        if (files.isNotEmpty()) viewModelScope.launch { kotlinx.coroutines.delay(9000); if (data.value.tasks.none { it.id == ref }) files.forEach { Files.delete(ctx, it) } }
+    }
+
+    /** The same for a note of a matter or a topic ([key] — «c|дело|заметка» or «e|тема|запись»). */
+    fun deleteNotePiece(key: String) {
+        val before = data.value
+        val (kind, ref, id) = key.split('|').let { Triple(it[0], it.getOrElse(1) { "" }, it.getOrElse(2) { "" }) }
+        val files = if (kind == "c") emptyList() else before.tasks.find { it.id == ref }?.let { t -> (t.entries + t.removedEntries).find { it.id == id }?.attachments }.orEmpty()
+        store.update { d -> if (kind == "c") d.archiveComment(ref, id).purgeComment(ref, id) else d.removeRecord(ref, id).purgeRecord(ref, id) }
+        offerUndo(before, L.s.deletedOne)
+        if (files.isNotEmpty()) viewModelScope.launch {
+            kotlinx.coroutines.delay(9000)
+            if (data.value.tasks.find { it.id == ref }?.let { t -> (t.entries + t.removedEntries).none { it.id == id } } != false) files.forEach { Files.delete(ctx, it) }
+        }
+    }
+
     fun removeMatter(ref: String) {
         val before = data.value
         val q = questionRef(ref)
@@ -1009,6 +1066,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val ev = if (on) ru.anjeib.margin.data.PhoneCalendar.events(ctx) else emptyList()
         _events.value = ev
         Assistant.calendar = ru.anjeib.margin.data.PhoneCalendar.contextLines(ev)
+        // Two months ahead become matters by themselves (owner, 26 окт); further on they show as meetings until their time comes.
+        if (on) viewModelScope.launch {
+            val ahead = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ru.anjeib.margin.data.PhoneCalendar.events(ctx, java.time.LocalDate.now(), 60) }
+            val today = java.time.LocalDate.now()
+            if (data.value.withCalendar(ahead, today) !== data.value) store.update { it.withCalendar(ahead, today) }
+        }
     }
 
     private fun propose(plan: AiPlan, files: List<Attachment>, userMsgId: String? = null, smart: Boolean = false, source: String = "") {
@@ -1816,7 +1879,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** A contact's name was tapped somewhere: the app opens their page. */
     val openPersonReq: StateFlow<String?> = _openPerson
     fun personOpened() { _openPerson.value = null }
-    fun nameTapped(name: String) {
+    fun nameTapped(name: String, id: String? = null) {
+        // The person this matter means (0.94) — not just anyone of that name.
+        data.value.persons.find { it.id == id }?.let { p ->
+            if (!p.isContact) store.update { d -> d.editPerson(p.id) { it.copy(draft = false, kept = true, archived = false) } }
+            _openPerson.value = p.id; return
+        }
         // Owner, 14 окт: any mark opens its own card — a name its person's; one not yet a contact becomes one on the tap.
         val p = data.value.contact(name) ?: run { keepContact(name); data.value.contact(name) }
         if (p != null) _openPerson.value = p.id else offerContact(name)
@@ -1980,7 +2048,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     }
 
     /** Merges [fromId] into [intoId]: one person, all mentions point to the survivor. */
-    fun mergePersons(fromId: String, intoId: String) = store.update { it.mergePersons(fromId, intoId) }
+    fun mergePersons(fromId: String, intoId: String) {
+        val before = data.value
+        store.update { it.mergePersons(fromId, intoId) }
+        // Nothing is lost for good on one tap: the bar takes it back, as after a deletion.
+        offerUndo(before, L.s.mergedOne)
+    }
 
     fun deletePerson(id: String) = store.update { it.removePerson(id) }
 

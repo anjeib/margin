@@ -115,6 +115,7 @@ import ru.anjeib.margin.data.dowFull
 import ru.anjeib.margin.data.dayMonthShort
 import ru.anjeib.margin.data.dayMonthYear
 import ru.anjeib.margin.data.listTasks
+import ru.anjeib.margin.data.meetingsLeft
 import ru.anjeib.margin.data.materials
 import ru.anjeib.margin.data.noNextStep
 import ru.anjeib.margin.data.openQuestions
@@ -419,7 +420,14 @@ fun TaskList(
                         // Inside a topic its own row leads its day — the name the head has no room for, then its matters (owner, 18 окт).
                         fun topicRows() = f.topics.forEachIndexed { i, (t, word) ->
                             val lead = if (topicF != null) listOfNotNull(word, t.topicWhen()).joinToString("  ·  ").ifBlank { null } else word
-                            cs.item("ft$d" + t.id) { TopicPaperRow(t, seatOf(i, f.topics.size), onOpen = { onOpen(t.id) }, margin = null, lead = lead) }
+                            // In the feed a topic's own day looks like its row everywhere else — «#», the tint — and says it whole (owner, 26 окт:
+                            // a new empty topic read as a plain line: no mark, no date, no «0 дел»).
+                            cs.item("ft$d" + t.id) {
+                                if (topicF != null) TopicPaperRow(t, seatOf(i, f.topics.size), onOpen = { onOpen(t.id) }, margin = null, lead = lead)
+                                else TopicFoldRow(t.title, emptyList(), today, null to false, open = false, onToggle = { onOpen(t.id) }, onOpen = { onOpen(t.id) }, topicId = t.id,
+                                    whole = listOfNotNull(word, t.topicWhen() ?: runCatching { LocalDate.parse(t.createdAt.take(10)) }.getOrNull()?.let { dayWord(it) },
+                                        M.s.summaryDeals(t.subtasks.count { !it.done })).joinToString("  ·  "))
+                            }
                         }
                         if (topicF != null && (kind == null || kind == "topics")) topicRows()
                         if (kind == null || dealsKind) cs.dayPanel(f.plan, today, "f$d", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
@@ -647,7 +655,8 @@ fun Modifier.landing(active: Boolean, radius: Int): Modifier {
 val LocalTomorrow = androidx.compose.runtime.staticCompositionLocalOf<((String) -> Unit)?> { null }
 
 /** What a long press on a matter offers beyond the swipes: the topic it belongs in, and removing it. */
-class RowActions(val toTopic: (String) -> Unit, val remove: (String) -> Unit)
+/** [remove] — «В архив»; [delete] — «Удалить» at once (owner, 26 окт). */
+class RowActions(val toTopic: (String) -> Unit, val remove: (String) -> Unit, val delete: (String) -> Unit = {})
 val LocalRowActions = androidx.compose.runtime.staticCompositionLocalOf<RowActions?> { null }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -738,7 +747,7 @@ fun dayPlan(data: AppData, date: LocalDate, today: LocalDate, events: List<CalEv
         .sortedWith(compareBy({ it.dueDate?.isBefore(today) != true }, { it.time ?: "99" }, { it.title }))
     val steps = emptyList<TopicStep>()
     // An event shows on every day it covers (a three-day trip, a holiday); all-day ends are exclusive midnights.
-    val evs = events.filter { e ->
+    val evs = data.meetingsLeft(events).filter { e ->
         val first = e.start.toLocalDate()
         val last = if (e.allDay || e.end.toLocalTime() == java.time.LocalTime.MIDNIGHT) e.end.toLocalDate().minusDays(1) else e.end.toLocalDate()
         !date.isBefore(first) && !date.isAfter(maxOf(first, last))

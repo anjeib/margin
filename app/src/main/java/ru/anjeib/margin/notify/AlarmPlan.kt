@@ -39,6 +39,8 @@ fun alarmPlan(tasks: List<Task>, notes: List<Note>, now: LocalDateTime, morning:
         if (t.done) continue
         // The course's lessons never ring (ChatGPT's audit of 0.89: a newcomer got notifications from the examples).
         if (t.id.startsWith("ex-")) continue
+        // A meeting from the phone calendar: the calendar itself rings for it — not twice (0.94); «напомни в…» still does.
+        if (t.calEvent != null && t.remindAt == null) continue
         if (t.topic) {
             put(t.id, dt(t.remindAt)) // a thought keeps the reminder its note had
             for (q in t.subtasks) {

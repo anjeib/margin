@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.personIn
 import ru.anjeib.margin.data.properName
 import ru.anjeib.margin.data.shortLabel
 
@@ -182,8 +183,8 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 val meta = buildList {
                     if (window) task.whenLabel()?.substringBefore(" · ${task.time}")?.let { add(MetaItem(Meta.plain(it), Meta.quiet()) { dialog = "dates" }) }
                     // A name is its person's card (owner, 14 окт); who it is changes under «Ещё» → «Ждём» / «Обещал».
-                    owes?.let { add(MetaItem(Meta.promise(it), Meta.quiet()) { vm.nameTapped(task.waitingFor ?: task.promisedTo ?: return@MetaItem) }) }
-                    others.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { vm.nameTapped(p) }) }
+                    owes?.let { add(MetaItem(Meta.promise(it), Meta.quiet()) { (task.waitingFor ?: task.promisedTo)?.let { n -> vm.nameTapped(n, vm.data.value.personIn(n, task.who)?.id) } }) }
+                    others.forEach { p -> add(MetaItem(Meta.plain(p), Meta.link()) { vm.nameTapped(p, vm.data.value.personIn(p, task.who)?.id) }) }
                     task.place?.let { add(MetaItem(Meta.plain(it), Meta.link(), onLong = { fill("place") }) {
                         runCatching { ctxOpen.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(it)))) }
                     }) }
@@ -213,9 +214,9 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                                 Action(s.actPromised, false, { dialog = "promised" }) { HandGlyph(it, 23.dp) },
                                 if (!task.done) rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } } else null,
                                 Action(s.actToIdea, false, { commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }) { NoteGlyph(it, 21.dp) },
-                                // Owner, 16 окт: «В архив»; «Удалить» only for what is done.
-                                if (task.done) Action(s.delete, false, { dialog = "delete" }) { TrashGlyph(it, 22.dp) }
-                                else Action(s.toArchive, false, { commitTitle(); onClose(); vm.archiveMatter(task.id) }) { ArchiveGlyph(it, 22.dp) },
+                                // Owner, 16 окт: «В архив»; 26 окт — and «Удалить» at once too, with «Отменить».
+                                if (!task.done) Action(s.toArchive, false, { commitTitle(); onClose(); vm.archiveMatter(task.id) }) { ArchiveGlyph(it, 22.dp) } else null,
+                                Action(s.deleteNow, false, { onClose(); vm.deleteNow(task.id) }) { TrashGlyph(it, 22.dp) },
                             ))
                         }
                     }

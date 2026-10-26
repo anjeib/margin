@@ -86,7 +86,7 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
                             // Owner, 16 окт: «В архив»; an archived note — «Вернуть» and only then «Удалить».
                             if (!task.done) Action(s.toArchive, false, { commitTitle(); vm.archiveTopic(task.id); onClose() }) { ArchiveGlyph(it, 22.dp) }
                             else Action(s.bringBack, false, { vm.reviveTopic(task.id) }) { ArchiveGlyph(it, 22.dp) },
-                            if (task.done) Action(s.delete, false, { vm.removeMatter(task.id); onClose() }) { TrashGlyph(it, 22.dp) } else null,
+                            Action(s.deleteNow, false, { onClose(); vm.deleteNow(task.id) }) { TrashGlyph(it, 22.dp) },
                         ), slots = 4)
                 })
                 // Owner, 16 окт: the head (day, title, marks, tools) stays put; only what is under it scrolls.

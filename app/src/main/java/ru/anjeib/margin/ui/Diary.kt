@@ -256,6 +256,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                                 SoftMenuItem(s.actToMatter) { menu = false; vm.ideaToMatter(n.id) }
                                 rowActs?.let { r -> SoftMenuItem(s.actToTopic) { menu = false; r.toTopic(n.id) } }
                                 SoftMenuItem(s.toArchive) { menu = false; vm.archiveTopic(n.id) }
+                                SoftMenuItem(s.deleteNow) { menu = false; vm.deleteNow(n.id) }
                             } } }
                             PanelPiece(seatOf(i, list.size)) {
                                 // Prototype «inline»: a tap unfolds the note right here — all of it, written on in place.
@@ -378,6 +379,7 @@ internal fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: 
                 SoftMenuItem(s.edit) { menu = false; edit = true }
                 SoftMenuItem(if (toTopic) s.toTheTopic else s.toTheMatter) { menu = false; onOpen(x.open) }
                 SoftMenuItem(s.toArchive) { menu = false; vm.removeNotePiece(x.card) }
+                SoftMenuItem(s.deleteNow) { menu = false; vm.deleteNotePiece(x.card) }
             } }
             PanelPiece(seatOf(i, n)) {
                 val inline = LocalInline.current

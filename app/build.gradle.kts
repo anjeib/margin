@@ -20,15 +20,15 @@ val keystoreProps = Properties().apply {
 android {
     packaging { resources { excludes += setOf("META-INF/NOTICE.md", "META-INF/LICENSE.md") } }
     namespace = "ru.anjeib.margin"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         // The published app (RuStore, owner's choice 9 Oct). Margin 2 builds up to 0.22 were «ru.anjeib.margin.v2» — a different app.
         applicationId = "ru.margin.app"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 93
-        versionName = "0.93"
+        targetSdk = 36
+        versionCode = 94
+        versionName = "0.94"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         // No keys in what people install: the AI goes through Margin's own door in Yandex Cloud (server/proxy),

@@ -8,7 +8,8 @@ fun AppData.editPerson(id: String, f: (Person) -> Person) = copy(persons = perso
 fun AppData.personFor(token: String): String {
     val n = token.trim('[', ']').replace('_', ' ')
     val people = persons.filter { !it.archived }
-    return people.find { it.matches(n) }?.name ?: people.firstOrNull { it.name.lowercase().startsWith(n.lowercase()) }?.name ?: n.properName()
+    // Two «Маша …»: the name stays as said — the matter then asks which one is meant.
+    return people.find { it.matches(n) }?.name ?: people.filter { it.name.lowercase().startsWith(n.lowercase()) }.singleOrNull()?.name ?: n.properName()
 }
 
 /** «+ контакт»: a draft (or a bare name) becomes a contact. */
@@ -73,13 +74,23 @@ fun AppData.mergePersons(fromId: String, intoId: String): AppData {
         aliases = (into.aliases + from.name + from.aliases).distinct().filterNot { it.equals(into.name, true) },
         about = into.about ?: from.about, phone = into.phone ?: from.phone, email = into.email ?: from.email,
     )
-    return copy(persons = persons.filterNot { it.id == fromId }.map { if (it.id == intoId) merged else it }, tasks = tasks.map { it.renamed(from, into.name) })
+    return copy(persons = persons.filterNot { it.id == fromId }.map { if (it.id == intoId) merged else it }, tasks = tasks.map { it.renamed(from, into.name, intoId) })
 }
 
-private fun Task.renamed(p: Person, n: String): Task {
-    fun fix(x: String?) = if (x != null && p.matches(x)) n else x
-    fun subs(l: List<Subtask>): List<Subtask> = l.map { it.copy(assignee = fix(it.assignee), children = subs(it.children)) }
-    return copy(people = people.map { fix(it)!! }.distinct(), waitingFor = fix(waitingFor), promisedTo = fix(promisedTo), subtasks = subs(subtasks))
+/** Only the names that mean [p] here — another person of the same name keeps theirs; the tie moves with the name (to [into] after a merge). */
+private fun Task.renamed(p: Person, n: String, into: String = p.id): Task {
+    fun tie(who: Map<String, String>, names: List<String>): Map<String, String> {
+        val mine = names.filter { p.isIn(it, who) }.map { it.lowercase() }.toSet()
+        return if (mine.isEmpty()) who else who.filterKeys { it !in mine } + (n.lowercase() to into)
+    }
+    fun subs(l: List<Subtask>): List<Subtask> = l.map { q ->
+        fun fix(x: String?) = if (x != null && p.isIn(x, q.who)) n else x
+        q.copy(assignee = fix(q.assignee), from = fix(q.from), promisedTo = fix(q.promisedTo), people = q.people.map { fix(it)!! }.distinct(),
+            who = tie(q.who, listOfNotNull(q.assignee, q.from, q.promisedTo) + q.people), children = subs(q.children))
+    }
+    fun fix(x: String?) = if (x != null && p.isIn(x, who)) n else x
+    return copy(people = people.map { fix(it)!! }.distinct(), waitingFor = fix(waitingFor), promisedTo = fix(promisedTo),
+        who = tie(who, people + listOfNotNull(waitingFor, promisedTo)), subtasks = subs(subtasks))
 }
 
 /** A task saved from its card: words with capitals and names, people as the contacts know them ([me] — the user, as is). */
@@ -90,7 +101,7 @@ fun AppData.namesFixed(t0: Task, me: String): Task =
 
 /** Names on [t] nobody knows yet become drafts, a new label joins the labels. */
 fun AppData.withMentionsOf(t: Task, me: String): AppData {
-    val newPeople = (t.people + listOfNotNull(t.waitingFor, t.promisedTo)).filter { p -> p != me && person(p) == null }.distinct().map { Person(name = it, draft = true) }
+    val newPeople = (t.people + listOfNotNull(t.waitingFor, t.promisedTo)).filter { p -> p != me && person(p) == null && peopleCalled(p).isEmpty() }.distinct().map { Person(name = it, draft = true) }
     val newProject = t.project?.takeIf { p -> projects.none { it.equals(p, true) } }
     return copy(persons = persons + newPeople, projects = projects + listOfNotNull(newProject))
 }

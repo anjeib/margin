@@ -5,6 +5,7 @@ import ru.anjeib.margin.data.Entry
 import ru.anjeib.margin.data.Note
 import ru.anjeib.margin.data.Person
 import ru.anjeib.margin.data.Task
+import ru.anjeib.margin.data.isIn
 import ru.anjeib.margin.data.dayMonth
 import ru.anjeib.margin.data.shortLabel
 import ru.anjeib.margin.data.text
@@ -20,8 +21,8 @@ fun stemsOf(text: String): Set<String> =
 
 fun dateOf(stamp: String?): LocalDate? = stamp?.let { runCatching { LocalDateTime.parse(it.take(16)).toLocalDate() }.getOrNull() ?: runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
 
-fun Person.involvedIn(t: Task) = t.people.any { matches(it) } || t.waitingFor?.let { matches(it) } == true ||
-    t.promisedTo?.let { matches(it) } == true || t.subtasks.any { s -> s.assignee?.let { matches(it) } == true || s.from?.let { matches(it) } == true }
+fun Person.involvedIn(t: Task) = t.people.any { isIn(it, t.who) } || t.waitingFor?.let { isIn(it, t.who) } == true ||
+    t.promisedTo?.let { isIn(it, t.who) } == true || t.subtasks.any { s -> s.assignee?.let { isIn(it, s.who) } == true || s.from?.let { isIn(it, s.who) } == true }
 
 /** «↳ из заметки «vuzburo · идеи» · 5 окт» or «↳ из разговора · 5 окт». Null when the idea row in «Связи» already says it. */
 fun originLine(t: Task, d: AppData): String? {

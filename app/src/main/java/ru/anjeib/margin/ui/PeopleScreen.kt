@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.isIn
 import androidx.compose.foundation.layout.widthIn
 import ru.anjeib.margin.data.shortLabel
 import ru.anjeib.margin.data.questionRow
@@ -122,13 +123,13 @@ fun PeopleList(data: AppData, vm: MainVm, onOpen: (String) -> Unit, contentPaddi
           item("g$gi" + p.id) {
             // Matters, not topics: a topic with them is counted by its matters that involve them.
             val open = data.tasks.count { !it.done && !it.topic && it.involves(p) } + data.tasks.filter { it.topic && !it.done }.sumOf { t ->
-                t.subtasks.count { q -> !q.done && (q.from?.let { w -> p.matches(w) } == true || q.assignee?.let { w -> p.matches(w) } == true) } }
+                t.subtasks.count { q -> !q.done && (q.from?.let { w -> p.isIn(w, q.who) } == true || q.assignee?.let { w -> p.isIn(w, q.who) } == true) } }
             val seat = seatOf(i, group.size)
             // What's open with them right now beats a static description.
             // Waits from their topics' matters count too, not only simple matters.
-            val wait = data.tasks.firstOrNull { !it.done && it.waitingFor?.let { w -> p.matches(w) } == true }
-                ?: data.tasks.filter { it.topic && !it.done }.firstNotNullOfOrNull { t -> t.subtasks.firstOrNull { q -> !q.done && q.from?.let { w -> p.matches(w) } == true }?.let { t.questionRow(it) } }
-            val promise = data.tasks.firstOrNull { !it.done && it.promisedTo?.let { w -> p.matches(w) } == true }
+            val wait = data.tasks.firstOrNull { !it.done && it.waitingFor?.let { w -> p.isIn(w, it.who) } == true }
+                ?: data.tasks.filter { it.topic && !it.done }.firstNotNullOfOrNull { t -> t.subtasks.firstOrNull { q -> !q.done && q.from?.let { w -> p.isIn(w, q.who) } == true }?.let { t.questionRow(it) } }
+            val promise = data.tasks.firstOrNull { !it.done && it.promisedTo?.let { w -> p.isIn(w, it.who) } == true }
             // Mid-sentence the title starts small, but a name stays a name: «ждём: Маша вернёт 3 000 ₽».
             fun mid(t: Task) = t.title.replaceFirstChar { c -> c.lowercase() }
                 .withNames(listOfNotNull(p.name, t.waitingFor, t.promisedTo) + p.aliases + t.people)
@@ -187,7 +188,7 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
     // Their topics apart from matters: a topic is not ticked off like one. The matters — simple ones and, from the
     // topics, the ones that involve them (waited from them, given to them) — in the same rows as on «Сегодня».
     val openTopics = tasks.filter { !it.done && it.topic && !(it.thought && it.subtasks.isEmpty()) }
-    val topicMatters = openTopics.flatMap { t -> t.subtasks.filter { q -> !q.done && (q.from?.let { person.matches(it) } == true || q.assignee?.let { person.matches(it) } == true) }.map { t.questionRow(it) } }
+    val topicMatters = openTopics.flatMap { t -> t.subtasks.filter { q -> !q.done && (q.from?.let { person.isIn(it, q.who) } == true || q.assignee?.let { person.isIn(it, q.who) } == true) }.map { t.questionRow(it) } }
     val open = (tasks.filter { !it.done && !it.topic } + topicMatters).sortedWith(compareBy({ it.dueDate?.isBefore(LocalDate.now()) != true }, { it.dueDate ?: LocalDate.MAX }))
     val done = tasks.filter { it.done }.sortedByDescending { it.doneAt }.take(5)
     val notes = data.notes.filter { n -> listOf(person.name).plus(person.aliases).any { n.title.contains(it, true) || n.text.contains(it, true) } }
@@ -348,7 +349,8 @@ fun PersonScreen(person: Person, data: AppData, vm: MainVm, onBack: () -> Unit, 
             containerColor = c.card,
             title = { Text(s.mergeWith, style = Type.cardTitle.copy(color = c.ink)) },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(s.mergeHint, style = Type.small.copy(color = c.graphite, fontSize = 14.sp, lineHeight = 19.sp), modifier = Modifier.padding(bottom = 10.dp))
                     data.persons.filter { it.id != person.id && it.isContact }.forEach { o ->
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { vm.mergePersons(person.id, o.id); dialog = null; onBack() }
                             .padding(vertical = 10.dp, horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {

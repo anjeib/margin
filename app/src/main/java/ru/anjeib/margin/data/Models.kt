@@ -45,6 +45,8 @@ data class Subtask(
     val repeat: Repeat? = null,
     val place: String? = null,
     val people: List<String> = emptyList(),
+    /** Which person each name here means (name in lower case → person id; "" — the user didn't say): see [personIn]. */
+    val who: Map<String, String> = emptyMap(),
 )
 
 /**
@@ -222,6 +224,8 @@ data class Task(
     val time: String? = null,
     val remindAt: String? = null, // ISO date-time yyyy-MM-ddTHH:mm
     val people: List<String> = emptyList(),
+    /** Which person each name here means (tester, 26 окт: two different Машас) — name in lower case → person id; "" — the user didn't say. */
+    val who: Map<String, String> = emptyMap(),
     val project: String? = null,
     /** v2: «Личное» or «Работа» — the one badge a topic carries instead of a project: personal | work. */
     val sphere: String? = null,
@@ -250,6 +254,10 @@ data class Task(
     val sourceFixed: Boolean = false,
     /** Where it happens: an address or a place («Ленина 5», «кафе Зерно»). */
     val place: String? = null,
+    /** Made from a meeting of the phone's calendar (by itself since 0.94, owner 26 окт): its [CalEvent.key] — the meeting itself is no longer shown. */
+    val calEvent: String? = null,
+    /** Whose calendar it came from — «Google Календарь»: said under the matter. */
+    val calFrom: String? = null,
     /** Before 0.26: the user's one comment; now it lives in [comments] (moved on load). */
     val note: String? = null,
     /** The user's own comments, each with when it was written; no AI. A small mark in the lists says they are there. */
@@ -346,6 +354,8 @@ data class AppData(
      * so no list, count, reminder or search sees them; «Архив» brings them back or deletes them for good.
      */
     val archived: List<Task> = emptyList(),
+    /** Meetings of the phone calendar already made into matters: key → what they were then (day|hour|title|place) — see [withCalendar]. */
+    val calSeen: Map<String, String> = emptyMap(),
     /** Schema version of the file ([Store.SCHEMA]); 0 = written before versions existed. */
     val v: Int = 0,
 ) {
@@ -369,10 +379,12 @@ data class AppData(
         if (d.persons.any { !it.aboutFromUser && it.about != null && it.summary == null && it.about.length <= 40 })
             d = d.copy(persons = d.persons.map { if (!it.aboutFromUser && it.about != null && it.summary == null && it.about.length <= 40) it.copy(aboutFromUser = true) else it })
         // Same name twice (older versions could do that) → one person with everything known.
+        // Two contacts may share a name now (0.94: each matter remembers which one) — only mere mentions are folded in.
         val byName = d.persons.groupBy { it.name.lowercase() }
-        if (byName.values.any { it.size > 1 })
-            d = d.copy(persons = byName.values.map { g ->
-                g.reduce { a, b -> a.copy(about = a.about ?: b.about, phone = a.phone ?: b.phone, email = a.email ?: b.email, aliases = (a.aliases + b.aliases).distinct()) }
+        if (byName.values.any { g -> g.size > 1 && g.count { !it.draft } <= 1 })
+            d = d.copy(persons = byName.values.flatMap { g ->
+                if (g.count { !it.draft } > 1) g.filter { !it.draft }
+                else listOf((g.filter { !it.draft } + g.filter { it.draft }).reduce { a, b -> a.copy(about = a.about ?: b.about, phone = a.phone ?: b.phone, email = a.email ?: b.email, aliases = (a.aliases + b.aliases).distinct()) })
             })
         if (d.tasks.any { it.comment != null })
             d = d.copy(tasks = d.tasks.map { t ->

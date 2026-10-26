@@ -122,6 +122,7 @@ private fun InlineComment(cm: Comment, ref: String, vm: MainVm) {
         SoftMenu(menu, { menu = false }) {
             SoftMenuItem(s.edit) { menu = false; edit = true }
             SoftMenuItem(s.toArchive) { menu = false; vm.archiveComment(ref, cm.id) }
+            SoftMenuItem(s.deleteNow) { menu = false; vm.deleteNotePiece("c|$ref|${cm.id}") }
         }
     }
     if (edit) TextDialog(s.edit, cm.text, "", onDismiss = { edit = false }) { v -> if (v.isNotBlank()) vm.editComment(ref, cm.id, v.trim()); edit = false }

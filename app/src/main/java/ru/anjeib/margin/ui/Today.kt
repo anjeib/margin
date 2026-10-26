@@ -162,6 +162,7 @@ fun MatterRow(
                     if (acts != null) {
                         SoftMenuItem(if (t.topicId != null) s.toOtherTopic else s.toTopicPick) { quick = false; acts.toTopic(t.id) }
                         SoftMenuItem(s.toArchive) { quick = false; acts.remove(t.id) }
+                        SoftMenuItem(s.deleteNow) { quick = false; acts.delete(t.id) }
                     }
                 }
                 RowBody(
@@ -215,12 +216,20 @@ fun EventPaperRow(e: CalEvent, seat: Seat) {
     val s = M.s
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val hoursOnly = LocalHoursOnly.current
+    val vm = LocalVm.current
+    var menu by remember(e.key) { mutableStateOf(false) }
+    fun openCalendar() {
+        val ms = e.start.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("content://com.android.calendar/time/$ms"))) }
+    }
+    // A tap asks (tester, 26 окт: a meeting should be able to be a matter): open it in the calendar, or make it a matter here.
     PaperRow(seat, margin = if (e.allDay) (if (hoursOnly) null else s.allDay.lowercase()) else e.start.toLocalTime().toString().take(5),
         mark = { CalendarGlyph(c.graphite, 20.dp) },
-        onClick = {
-            val ms = e.start.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-            runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("content://com.android.calendar/time/$ms"))) }
-        }) {
+        onClick = { if (vm != null) menu = true else openCalendar() }) {
+        Box { SoftMenu(menu, { menu = false }) {
+            SoftMenuItem(s.actMakeDeal) { menu = false; vm?.eventToDeal(e) }
+            SoftMenuItem(s.actOpenCalendar) { menu = false; openCalendar() }
+        } }
         RowTitle(e.title)
         val sub = listOfNotNull(if (e.allDay) s.allDay.lowercase().takeIf { hoursOnly } else e.start.toLocalTime().toString().take(5) + "–" + e.end.toLocalTime().toString().take(5), e.location).joinToString("  ·  ")
         if (sub.isNotBlank()) RowSub(sub)
@@ -281,7 +290,7 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
             SoftMenuItem(s.actWhen) { menu = false; dlg = "dates" }
             SoftMenuItem(s.fieldTime) { menu = false; dlg = "time" }
             SoftMenuItem(s.edit) { menu = false; dlg = "title" }
-            LocalRowActions.current?.let { r -> SoftMenuItem(s.toArchive) { menu = false; r.remove(t.id) } }
+            LocalRowActions.current?.let { r -> SoftMenuItem(s.toArchive) { menu = false; r.remove(t.id) }; SoftMenuItem(s.deleteNow) { menu = false; r.delete(t.id) } }
         } }
         RowTitle(t.title, marked = late)
         // Words never broken: at a large font «напомнить» goes to the next line whole (FlowRow).
@@ -292,7 +301,7 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
                 val (a, name, b) = if (incoming) s.promiseToYouParts(who) else s.promiseFromYouParts(who)
                 // The name is its person's card (owner, 14 окт), the rest of the row opens the matter.
                 // On the planner page the name keeps the italic's grey — still a tap to the person (owner's sample, 15 окт).
-                append(a); withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("p", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = if (planner) c.graphite else c.link))) { links.onName(who) }) { append(name) }; append(b)
+                append(a); withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("p", androidx.compose.ui.text.TextLinkStyles(SpanStyle(color = if (planner) c.graphite else c.link))) { links.onName(who, t.who) }) { append(name) }; append(b)
             }, style = if (planner) androidx.compose.ui.text.TextStyle(fontFamily = Literata, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, color = c.graphite, fontSize = 15.sp, lineHeight = 20.sp)
                 else Type.small.copy(fontFamily = rowFamily, color = subInk, fontSize = subSize), modifier = Modifier.padding(top = 2.dp))
             if (nudge) {
@@ -357,7 +366,9 @@ enum class BlockPos { Head, Mid, Last, Single }
 fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<String?, Boolean>, open: Boolean, onToggle: () -> Unit, onOpen: () -> Unit,
                  lit: Boolean = false, /** The topic itself: a long press offers what its page did. */ topicId: String? = null,
                  /** Its notes and done matters on the day, counted with its open matters. */ notes: Int = 0, done: Int = 0,
-                 /** Unfolded, the margin still says [note] — a window its matters share and don't repeat. */ marginOpen: Boolean = false) {
+                 /** Unfolded, the margin still says [note] — a window its matters share and don't repeat. */ marginOpen: Boolean = false,
+                 /** A topic standing on its own day (new, begins, ends): the whole of it said instead of the day's count, nothing to unfold. */
+                 whole: String? = null) {
     val c = M.c
     val s = M.s
     var hold by remember { mutableStateOf(false) }
@@ -382,12 +393,12 @@ fun TopicFoldRow(title: String, rows: List<Task>, today: LocalDate, note: Pair<S
                     }, style = Type.body.copy(fontFamily = rowFamily, color = c.ink, fontSize = rowSize, lineHeight = rowLine), maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(top = 2.dp))
                     // A chevron the size of the words (owner, 18 окт: the tiny ▸ in the corner read as a stray dot).
-                    Text(if (open) "⌃" else "⌄", style = Type.body.copy(color = c.graphite, fontSize = 20.sp, lineHeight = 20.sp), modifier = Modifier.padding(start = 8.dp, top = if (open) 6.dp else 0.dp))
+                    if (whole == null) Text(if (open) "⌃" else "⌄", style = Type.body.copy(color = c.graphite, fontSize = 20.sp, lineHeight = 20.sp), modifier = Modifier.padding(start = 8.dp, top = if (open) 6.dp else 0.dp))
                 }
                 // One text, so at a large font the line wraps between words and «вся тема ›» never breaks letter by letter (18 окт).
                 val what = listOfNotNull(lead, rows.size.takeIf { it > 0 }?.let { s.summaryDeals(it) }, notes.takeIf { it > 0 }?.let { s.nEntries(it) },
                     done.takeIf { it > 0 }?.let { s.doneCountWord(it) }).joinToString(", ")
-                val said = (what + (if (late > 0) ", " + s.lateOfDay(late) else "")).replaceFirst(", ", if (lead != null) "  ·  " else ", ")
+                val said = whole ?: (what + (if (late > 0) ", " + s.lateOfDay(late) else "")).replaceFirst(", ", if (lead != null) "  ·  " else ", ")
                 Text(androidx.compose.ui.text.buildAnnotatedString {
                     append(said + "  ·  ")
                     withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("topic", androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = c.link, fontWeight = FontWeight.Medium))) { onOpen() }) {
@@ -668,6 +679,7 @@ fun TopicHold(topicId: String, open: Boolean, onDismiss: () -> Unit) {
         SoftMenuItem(s.rename) { onDismiss(); dialog = "rename" }
         SoftMenuItem(s.sharePdf) { onDismiss(); shareTopic(ctx, t) }
         SoftMenuItem(s.toArchive) { onDismiss(); dialog = "archive" }
+        SoftMenuItem(s.deleteNow) { onDismiss(); dialog = "deleteNow" }
     } } }
     when (dialog) {
         "rename" -> TextDialog(s.rename, t.title, "", onDismiss = { dialog = null }) { v ->
@@ -678,6 +690,14 @@ fun TopicHold(topicId: String, open: Boolean, onDismiss: () -> Unit) {
             title = { Text(s.archiveQ, style = Type.cardTitle.copy(color = c.ink)) },
             text = { Text(s.archiveText(t.title), style = Type.body.copy(color = c.graphite)) },
             confirmButton = { androidx.compose.material3.TextButton({ dialog = null; vm.archiveTopic(t.id); if (vm.topicFilter.value == t.id) vm.topicFilter.value = null }) { Text(s.toArchive, color = c.link) } },
+            dismissButton = { androidx.compose.material3.TextButton({ dialog = null }) { Text(s.cancel, color = c.graphite) } },
+        )
+        // A whole topic with its matters and notes: asked once; «Отменить» still takes it back.
+        "deleteNow" -> androidx.compose.material3.AlertDialog(
+            onDismissRequest = { dialog = null }, containerColor = c.card,
+            title = { Text(s.deleteTopicQ, style = Type.cardTitle.copy(color = c.ink)) },
+            text = { Text(t.title, style = Type.body.copy(color = c.graphite)) },
+            confirmButton = { androidx.compose.material3.TextButton({ dialog = null; if (vm.topicFilter.value == t.id) vm.topicFilter.value = null; vm.deleteNow(t.id) }) { Text(s.delete, color = c.accentText) } },
             dismissButton = { androidx.compose.material3.TextButton({ dialog = null }) { Text(s.cancel, color = c.graphite) } },
         )
     }

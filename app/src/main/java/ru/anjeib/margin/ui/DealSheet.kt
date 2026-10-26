@@ -1,5 +1,6 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.personIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import ru.anjeib.margin.ai.Scope
@@ -120,7 +121,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 var more by remember(qid) { mutableStateOf(false) }
                 var postponing by remember(qid) { mutableStateOf(false) }
                 if (postponing) PostponeDialog(onDismiss = { postponing = false }) { d -> vm.postponeTo(ref, d); postponing = false }
-                fun person(n: String) { vm.nameTapped(n) }
+                fun person(n: String) { vm.nameTapped(n, vm.data.value.personIn(n, q.who)?.id) }
                 // Its topic — a way back to it — at the top; no ⋯ (owner, 14 окт): what it can do is under «Ещё».
                 // The same card as a simple matter (owner, 14 окт): its topic is a mark in the line under the title, not a line above it.
                 Spacer(Modifier.height(4.dp))
@@ -167,6 +168,7 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                                 Action(s.actToIdea, false, { commit(); vm.dealToIdea(topic.id, q.id); onClose() }) { NoteGlyph(it, 21.dp) },
                                 // Owner, 16 окт: into the topic's «Архив», not deleted.
                                 Action(s.toArchive, false, { vm.archiveMatter(ref); onClose() }) { ArchiveGlyph(it, 22.dp) },
+                                Action(s.deleteNow, false, { onClose(); vm.deleteNow(ref) }) { TrashGlyph(it, 22.dp) },
                             ))
                         }
                     }

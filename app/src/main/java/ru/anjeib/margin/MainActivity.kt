@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import ru.anjeib.margin.data.AppData
+import ru.anjeib.margin.data.personIn
 import ru.anjeib.margin.data.Store
 import ru.anjeib.margin.data.ThemeMode
 import ru.anjeib.margin.data.Subtask
@@ -77,7 +78,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 }
                 val d by vm.data.collectAsState()
                 androidx.compose.runtime.CompositionLocalProvider(ru.anjeib.margin.ui.LocalPeopleLinks provides ru.anjeib.margin.ui.PeopleLinks(
-                    isContact = { n -> d.persons.any { it.isContact && it.matches(n) } }, onName = vm::nameTapped,
+                    isContact = { n, who -> d.personIn(n, who)?.isContact ?: d.persons.any { it.isContact && it.matches(n) } },
+                    onName = { n, who -> vm.nameTapped(n, d.personIn(n, who)?.id) },
                 ), ru.anjeib.margin.ui.LocalTomorrow provides { id -> vm.postponeTo(id, java.time.LocalDate.now().plusDays(1)) },
                     ru.anjeib.margin.ui.LocalPaper provides vm.paperStyle.value) {
                 if (locked.value) LockScreen(strings.lockOpen) { unlock() } else

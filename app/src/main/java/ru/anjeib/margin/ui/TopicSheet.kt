@@ -410,7 +410,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                         Action(s.actSend, false, { shareTopic(ctx, task) }) { ShareGlyph(it, 22.dp) },
                         if (!task.done) Action(s.toArchive, false, { dialog = "archive" }) { ArchiveGlyph(it, 22.dp) }
                         else Action(s.bringBack, false, { vm.reviveTopic(task.id) }) { ArchiveGlyph(it, 22.dp) },
-                        if (task.done) Action(s.delete, false, { dialog = "delete" }) { TrashGlyph(it, 22.dp) } else null,
+                        Action(s.delete, false, { dialog = "delete" }) { TrashGlyph(it, 22.dp) },
                     ), slots = 5)  // from the left, as a matter's tools (owner, 18 окт); five cells — «Послать» needs a little more than a sixth
                 })
             CardRule()
@@ -468,7 +468,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                             Action(s.actShare, false, { menu = false; shareTopic(ctx, task) }) { ShareGlyph(it, 22.dp) },
                             if (!task.done) Action(s.toArchive, false, { menu = false; dialog = "archive" }) { ArchiveGlyph(it, 22.dp) }
                             else Action(s.bringBack, false, { menu = false; vm.reviveTopic(task.id) }) { ArchiveGlyph(it, 22.dp) },
-                            if (task.done) Action(s.delete, false, { menu = false; dialog = "delete" }) { TrashGlyph(it, 22.dp) } else null,
+                            Action(s.delete, false, { menu = false; dialog = "delete" }) { TrashGlyph(it, 22.dp) },
                         ))
                     }
                 }
@@ -549,8 +549,8 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
         "label" -> TextDialog(s.labelWord, task.project.orEmpty(), "дом", onDismiss = { dialog = null }) { v -> vm.setTopicLabel(task.id, v); dialog = null }
         "delete" -> AlertDialog(
             onDismissRequest = { dialog = null }, containerColor = c.card,
-            title = { Text(s.deleteTaskQ, style = Type.cardTitle.copy(color = c.ink)) },
-            confirmButton = { TextButton({ dialog = null; onClose(); vm.deleteTask(task.id) }) { Text(s.delete, color = c.accentText) } },
+            title = { Text(if (task.thought) s.deleteTaskQ else s.deleteTopicQ, style = Type.cardTitle.copy(color = c.ink)) },
+            confirmButton = { TextButton({ dialog = null; onClose(); vm.deleteNow(task.id) }) { Text(s.delete, color = c.accentText) } },
             dismissButton = { TextButton({ dialog = null }) { Text(s.cancel, color = c.graphite) } },
         )
         "source" -> AlertDialog(

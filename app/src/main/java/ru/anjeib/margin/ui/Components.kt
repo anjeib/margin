@@ -216,7 +216,9 @@ fun Hairline(modifier: Modifier = Modifier) {
 
 /** Who is a contact and what a tap on a name does — given by the app, so rows anywhere can link names. */
 /** What a mark in a line opens (owner, 14 окт: every mark its own card): a name — the person, «#метка» — its topic or the search. */
-data class PeopleLinks(val isContact: (String) -> Boolean = { false }, val onName: (String) -> Unit = {}, val onTag: (String) -> Unit = {})
+/** A name opens the person it means in its matter ([who] — the matter's ties; empty — by the name). */
+data class PeopleLinks(val isContact: (String, Map<String, String>) -> Boolean = { _, _ -> false }, val onName: (String, Map<String, String>) -> Unit = { _, _ -> },
+                       val onTag: (String) -> Unit = {})
 val LocalPeopleLinks = androidx.compose.runtime.compositionLocalOf { PeopleLinks() }
 
 /**
@@ -240,6 +242,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
     val s = M.s
     val links = LocalPeopleLinks.current
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val vm = LocalVm.current
     val (d, n) = t.subtasks.progress()
     val sep = "  ·  "
     val text = androidx.compose.ui.text.buildAnnotatedString {
@@ -249,7 +252,7 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
             if (!tappable) { withStyle(androidx.compose.ui.text.SpanStyle(color = color)) { append(shown) }; return }
             withLink(androidx.compose.ui.text.LinkAnnotation.Clickable(tag, androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = color))) { onClick() }) { append(shown) }
         }
-        fun name(n0: String, shown: String = n0) = link("p:$n0", shown, if (links.isContact(n0)) c.link else c.graphite) { links.onName(n0) }
+        fun name(n0: String, shown: String = n0) = link("p:$n0", shown, if (links.isContact(n0, t.who)) c.link else c.graphite) { links.onName(n0, t.who) }
         topic?.let { tp ->
             next()
             if (onTopic != null) withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("topic", androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = c.link))) { onTopic() }) { append("# $tp") }
@@ -263,6 +266,15 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
         if (!t.done) {
             val parts = t.waitingFor?.let { s.promiseToYouParts(it) to it } ?: t.promisedTo?.let { s.promiseFromYouParts(it) to it }
             parts?.let { (p, who) -> next(); if (namedIn(t.title, who)) append(if (t.waitingFor != null) s.a11yWaiting else s.a11yPromised) else { append(p.first); name(who, p.second); append(p.third) } }
+            // Their day has come (or a week went by without one): «напомнить» — a ready message to them (owner, 21 окт: back in the row).
+            if (t.waitingFor != null && vm != null) {
+                val due = t.dueDate ?: t.startDate
+                val nudge = due?.let { !it.isAfter(today) } ?: (runCatching { java.time.LocalDate.parse(t.createdAt.take(10)) }.getOrNull()?.isBefore(today.minusDays(7)) == true)
+                if (nudge) { next()
+                    if (!tappable) withStyle(androidx.compose.ui.text.SpanStyle(color = c.link, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)) { append(s.remindLink) }
+                    else withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("remind", androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = c.link, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))) { remindAbout(ctx, vm.data.value, t) }) { append(s.remindLink) }
+                }
+            }
         }
         t.people.filter { p -> p != t.waitingFor && p != t.promisedTo && p != s.me && !namedIn(t.title, p) && p != hidePerson }.take(2).forEach { next(); name(it) }
         t.place?.let { pl ->
@@ -271,6 +283,8 @@ fun TaskLine(t: Task, whenText: String?, showProject: Boolean = true, showIdea: 
                 runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=" + android.net.Uri.encode(pl)))) }
             }
         }
+        // A meeting from the phone calendar says where it came from; the words open it there (owner, 26 окт).
+        t.calFrom?.let { from -> next(); link("cal", from, c.link) { t.calEvent?.let { ru.anjeib.margin.data.PhoneCalendar.open(ctx, it) } } }
         if (n > 0) { next(); append(s.progressOf(d, n)) }
         // The loop itself is in the column on the left; here only the words.
         t.repeat?.let { next(); append(it.label()) }

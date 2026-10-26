@@ -277,7 +277,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     // Prototype «inline»: what is unfolded in its row; «назад» folds it.
     val expandedKey by vm.expanded.collectAsState()
     BackHandler(expandedKey != null) { vm.expanded.value = null }
-    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.archiveMatter(it) }), LocalFind provides find,
+    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.archiveMatter(it) }, delete = { vm.deleteNow(it) }), LocalFind provides find,
         LocalPeopleLinks provides tagLinks, LocalPageTools provides pageTools.takeIf { planner },
         LocalVm provides vm) {
     ModalNavigationDrawer(
@@ -691,6 +691,33 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
         dismissButton = { androidx.compose.material3.TextButton({ crashOffer = false; ru.anjeib.margin.data.Feedback.crashSeen(ctx) }) { Text(s.crashLater, color = c.graphite) } },
     )
 
+    // «Кто это — Маша?»: two people of one name, the matter remembers which one (tester, 26 окт).
+    val whoAsk by vm.whoAsk.collectAsState()
+    whoAsk?.let { a ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { vm.answerWho(a, "") }, containerColor = c.card,
+            title = { Text(s.whoTitle(a.name), style = Type.cardTitle.copy(color = c.ink)) },
+            text = {
+                Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                    Text(s.whoText(a.title), style = Type.small.copy(color = c.graphite, fontSize = 14.sp, lineHeight = 19.sp), modifier = Modifier.padding(bottom = 8.dp))
+                    a.ids.mapNotNull { id -> data.persons.find { it.id == id } }.forEach { p ->
+                        // What tells them apart: what is known, else what they were last in.
+                        val last = data.tasks.lastOrNull { t -> t.who.values.contains(p.id) }?.title
+                        val hint = listOfNotNull(p.company, p.phone, p.about?.take(40), last?.let { "«$it»" }).firstOrNull()
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { vm.answerWho(a, p.id) }.padding(vertical = 10.dp, horizontal = 6.dp)) {
+                            Text(p.name, style = Type.body.copy(color = c.ink))
+                            hint?.let { Text(it, style = Type.small.copy(color = c.graphite), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
+                        }
+                    }
+                    Text(s.whoOther, style = Type.body.copy(color = c.link), modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                        .clickable { vm.answerWho(a, null) }.padding(vertical = 12.dp, horizontal = 6.dp))
+                }
+            },
+            confirmButton = {},
+            dismissButton = { androidx.compose.material3.TextButton({ vm.answerWho(a, "") }) { Text(s.whoSkip, color = c.graphite) } },
+        )
+    }
+
     val storeProblem by vm.storeProblem.collectAsState()
     storeProblem?.let { p ->
         val (title, text) = when (p.kind) {
@@ -734,7 +761,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     )
 
     // The cards get the same «В тему…» / «Удалить» as the rows (their sheets live outside the drawer).
-    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.archiveMatter(it) })) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalRowActions provides RowActions(toTopic = { topicFor = it }, remove = { vm.archiveMatter(it) }, delete = { vm.deleteNow(it) })) {
     // The cards are pages now (owner, 14 окт) — opened over the diary, above (see «cardKey»).
     openTask?.let { id -> if (data.tasks.none { it.id == id }) openTask = null }
     }

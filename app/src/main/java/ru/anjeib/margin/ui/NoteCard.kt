@@ -146,7 +146,8 @@ fun NoteCard(key: String, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         // Owner, 16 окт: «В архив»; «Удалить» only once it is there (with «Вернуть»).
                         if (!n.removed) Action(s.toArchive, false, { remove() }) { ArchiveGlyph(it, 22.dp) } else null,
                         if (n.removed) Action(s.bringBack, false, { vm.restoreNotePiece(key); onClose() }) { ArchiveGlyph(it, 22.dp) } else null,
-                        if (n.removed) Action(s.delete, false, { vm.purgeNotePiece(key); onClose() }) { TrashGlyph(it, 22.dp) } else null,
+                        if (n.removed) Action(s.delete, false, { vm.purgeNotePiece(key); onClose() }) { TrashGlyph(it, 22.dp) }
+                        else Action(s.deleteNow, false, { onClose(); vm.deleteNotePiece(key) }) { TrashGlyph(it, 22.dp) },
                     ), slots = 4)
                 })
                 // Owner, 16 окт: the head (day, where it lives, marks, tools) stays put; only the words under it scroll.

@@ -578,7 +578,8 @@ private fun SetupPage(vm: MainVm) {
     fun has(p: String) = androidx.core.content.ContextCompat.checkSelfPermission(ctx, p) == android.content.pm.PackageManager.PERMISSION_GRANTED
     // A pressed button shows what happened — otherwise nobody knows whether it worked.
     var notifOk by remember { mutableStateOf(Build.VERSION.SDK_INT >= 33 && has(Manifest.permission.POST_NOTIFICATIONS)) }
-    var calOk by remember { mutableStateOf(has(Manifest.permission.READ_CALENDAR)) }
+    // The tick means meetings will be in the feed — the permission and the setting both (a permission kept from before left the setting off).
+    var calOk by remember { mutableStateOf(has(Manifest.permission.READ_CALENDAR) && vm.settings.value.calendar) }
     var micOk by remember { mutableStateOf(has(Manifest.permission.RECORD_AUDIO)) }
     val notif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> notifOk = ok }
     val mic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> micOk = ok }
@@ -597,7 +598,10 @@ private fun SetupPage(vm: MainVm) {
             if (Build.VERSION.SDK_INT >= 33) Pill(if (notifOk) "✓ " + s.notifications else s.notifications, accent = !notifOk,
                 onClick = if (notifOk) null else ({ notif.launch(Manifest.permission.POST_NOTIFICATIONS) }))
             Pill(if (calOk) "✓ " + s.calendar else s.calendar, accent = !calOk,
-                onClick = if (calOk) null else ({ cal.launch(Manifest.permission.READ_CALENDAR) }))
+                onClick = if (calOk) null else ({
+                    if (has(Manifest.permission.READ_CALENDAR)) { calOk = true; vm.updateSettings { it.copy(calendar = true) }; vm.refreshCalendar() }
+                    else cal.launch(Manifest.permission.READ_CALENDAR)
+                }))
         }
         // The morning summary is chosen here, with the notifications it needs.
         Spacer(Modifier.height(22.dp))
