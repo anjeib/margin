@@ -468,7 +468,7 @@ fun TopicScreen(task: Task, data: AppData, vm: MainVm, startTab: Int, startHl: S
                             Action(s.actShare, false, { menu = false; shareTopic(ctx, task) }) { ShareGlyph(it, 22.dp) },
                             if (!task.done) Action(s.toArchive, false, { menu = false; dialog = "archive" }) { ArchiveGlyph(it, 22.dp) }
                             else Action(s.bringBack, false, { menu = false; vm.reviveTopic(task.id) }) { ArchiveGlyph(it, 22.dp) },
-                            Action(s.delete, false, { menu = false; dialog = "delete" }) { TrashGlyph(it, 22.dp) },
+                            Action(s.delete, false, { menu = false; dialog = "delete" }, danger = true) { TrashGlyph(it, 22.dp) },
                         ))
                     }
                 }

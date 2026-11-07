@@ -36,7 +36,7 @@ fun AppData.removeEntry(owner: String, id: String) = editEntries(owner) { l -> l
 
 /** A blank text removes a block that has nothing else (no files, not a list). */
 fun AppData.editEntryText(owner: String, id: String, text: String) = editEntries(owner) { l ->
-    l.mapNotNull { if (it.id != id) it else if (text.isBlank() && it.attachments.isEmpty() && !it.isList) null else it.copy(text = text.sentence()) }
+    l.mapNotNull { if (it.id != id) it else if (text.isBlank() && it.attachments.isEmpty() && !it.isList && it.tags.isEmpty() && it.description.isBlank()) null else it.copy(text = text.sentence()) }
 }
 
 fun AppData.editAttachment(owner: String, entryId: String, attId: String, f: (Attachment) -> Attachment) = editEntries(owner) { l ->

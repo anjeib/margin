@@ -80,7 +80,7 @@ fun SearchScreen(data: AppData, vm: MainVm, initial: String = "", onBack: () -> 
     BackHandler { if (viewing != null) viewing = null else onBack() }
     // «ё» is «е», and a longer word is matched by its stem: «Маше» finds «Маша», «макеты» — «макет».
     fun norm(x: String) = x.lowercase().replace('ё', 'е')
-    val words = norm(q).split(' ').filter { it.isNotBlank() }.map { if (it.length >= 5) it.dropLast(if (it.length >= 7) 2 else 1) else it }
+    val words = norm(q).split(' ').map { it.removePrefix("#") }.filter { it.isNotBlank() }.map { if (it.length >= 5) it.dropLast(if (it.length >= 7) 2 else 1) else it }
     val browsing = words.isEmpty() && kind != null
     fun hit(hay: String) = browsing || (words.isNotEmpty() && norm(hay).let { h -> words.all { it in h } })
     fun wants(k: String) = kind == null || kind == k

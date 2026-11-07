@@ -1,5 +1,8 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.materialBody
+import ru.anjeib.margin.data.fullText
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -122,7 +125,7 @@ private fun InlineComment(cm: Comment, ref: String, vm: MainVm) {
         SoftMenu(menu, { menu = false }) {
             SoftMenuItem(s.edit) { menu = false; edit = true }
             SoftMenuItem(s.toArchive) { menu = false; vm.archiveComment(ref, cm.id) }
-            SoftMenuItem(s.deleteNow) { menu = false; vm.deleteNotePiece("c|$ref|${cm.id}") }
+            SoftMenuItem(s.deleteNow, danger = true) { menu = false; vm.deleteNotePiece("c|$ref|${cm.id}") }
         }
     }
     if (edit) TextDialog(s.edit, cm.text, "", onDismiss = { edit = false }) { v -> if (v.isNotBlank()) vm.editComment(ref, cm.id, v.trim()); edit = false }
@@ -140,7 +143,8 @@ fun InlineNoteBody(t: Task, vm: MainVm) {
     Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 10.dp)) {
         t.entries.filter { it.text.isNotBlank() || it.attachments.isNotEmpty() }.forEach { e ->
             Column(Modifier.padding(top = 4.dp)) {
-                if (e.text.isNotBlank()) Text(vm.data.value.mentionsPlain(e.text), style = Type.body.copy(color = M.c.ink, fontSize = 15.5.sp, lineHeight = 22.sp))
+                if (e.isSavedMaterial) MaterialDetails(e, "task:${t.id}", vm)
+                if (e.materialBody.isNotBlank()) Text(vm.data.value.mentionsPlain(e.materialBody), style = Type.body.copy(color = M.c.ink, fontSize = 15.5.sp, lineHeight = 22.sp))
                 if (e.attachments.isNotEmpty()) androidx.compose.foundation.layout.Box(Modifier.padding(top = 6.dp)) { AttachmentsView(e.attachments) }
             }
         }
@@ -154,6 +158,9 @@ fun InlinePieceBody(key: String, vm: MainVm) {
     val p = data.notePiece(key) ?: return
     val (kind, ref, id) = key.split('|')
     Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        if (kind == "e") data.tasks.find { it.id == ref }?.entries?.find { it.id == id }?.takeIf { it.isSavedMaterial }?.let {
+            MaterialDetails(it, "task:$ref", vm, editable = !p.removed)
+        }
         if (p.text.isNotBlank()) Text(data.mentionsPlain(p.text), style = Type.body.copy(color = M.c.ink, fontSize = 15.5.sp, lineHeight = 22.sp))
         if (p.files.isNotEmpty()) androidx.compose.foundation.layout.Box(Modifier.padding(top = 6.dp)) { AttachmentsView(p.files) }
     }

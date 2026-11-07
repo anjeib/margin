@@ -1,8 +1,12 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.materialBody
+import ru.anjeib.margin.data.fullText
+
 import androidx.compose.foundation.layout.Spacer
 
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -189,7 +193,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
     Box(Modifier.fillMaxSize().ruledPage(pageLines).screenRule()) {
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())) {
           findable(found, find, { k -> (k as? String)?.let { linkedText[it] }?.let { find != null && findHit(find.words, it) }
-              ?: (data.taskOfKey(k)?.let { t -> find != null && findHit(find.words, t.title + " " + data.mentionsPlain(t.entries.joinToString(" ") { it.text })) } == true) }) {
+              ?: (data.taskOfKey(k)?.let { t -> find != null && findHit(find.words, t.title + " " + data.mentionsPlain(t.entries.joinToString(" ") { it.fullText })) } == true) }) {
             // Owner, 16 окт: the head stays put; only the diary scrolls.
             // In the diary's frame the head is the frame's (Frame.kt).
             // «Дневник»: its name and line, the way back on the margin (App); no calendar, no spheres.
@@ -233,7 +237,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                     val n = x as Task
                     item("n" + n.id) {
                         val at = n.bornAt()
-                        val body = n.entries.filter { it.text.isNotBlank() }.joinToString("\n\n") { it.text }
+                        val body = n.entries.filter { it.materialBody.isNotBlank() }.joinToString("\n\n") { it.materialBody }
                         val plainBody = data.mentionsPlain(body)
                         // The title only when the words don't already begin with it (a note written here is its own first line).
                         val showTitle = n.title.isNotBlank() && !plainBody.trimStart().startsWith(n.title.trimEnd('…').take(40))
@@ -243,26 +247,20 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = (if (first) 4.dp else 8.dp) + KnotDrop)) { MarginNote(hour) }
                         }) {
                             var menu by remember(n.id) { mutableStateOf(false) }
-                            var edit by remember(n.id) { mutableStateOf(false) }
-                            val firstWords = n.entries.firstOrNull { it.text.isNotBlank() }
-                            if (edit && firstWords != null) TextDialog(s.edit, firstWords.text, "", onDismiss = { edit = false }) { v ->
-                                if (v.isNotBlank()) vm.editEntryText("task:${n.id}", firstWords.id, v.trim()); edit = false
-                            }
                             val rowActs = LocalRowActions.current
                             // Owner, 16 окт: a long press offers what the note's card does.
                             Box(Modifier.fillMaxWidth()) { Box(Modifier.align(Alignment.TopEnd).padding(top = 8.dp)) { SoftMenu(menu, { menu = false }) {
-                                // Owner, 16 окт: changes from the hold; a tap only unfolds it.
-                                if (firstWords != null) SoftMenuItem(s.edit) { menu = false; edit = true }
+                                // Editing and reading use the same complete note card.
+                                SoftMenuItem(s.edit) { menu = false; onOpen(n.id) }
                                 SoftMenuItem(s.actToMatter) { menu = false; vm.ideaToMatter(n.id) }
                                 rowActs?.let { r -> SoftMenuItem(s.actToTopic) { menu = false; r.toTopic(n.id) } }
                                 SoftMenuItem(s.toArchive) { menu = false; vm.archiveTopic(n.id) }
                                 SoftMenuItem(s.deleteNow) { menu = false; vm.deleteNow(n.id) }
                             } } }
-                            PanelPiece(seatOf(i, list.size)) {
-                                // Prototype «inline»: a tap unfolds the note right here — all of it, written on in place.
-                                val inline = LocalInline.current
-                                val unfolded = inline?.open == n.id
-                                Column(Modifier.fillMaxWidth().combinedClickable(onClick = { if (inline != null) inline.toggle(n.id) else onOpen(n.id) }, onLongClick = { menu = true }).padding(horizontal = if (planner) 0.dp else 16.dp).padding(top = if (first) 4.dp else 8.dp, bottom = 8.dp)) {
+                            Column(Modifier.padding(vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                                .background(c.card).border(1.dp, c.hairline, RoundedCornerShape(14.dp))) {
+                                // Each note is a separate card; a tap opens its complete editor.
+                                Column(Modifier.fillMaxWidth().combinedClickable(onClick = { onOpen(n.id) }, onLongClick = { menu = true }).padding(horizontal = 14.dp).padding(top = if (first) 4.dp else 8.dp, bottom = 8.dp)) {
                                     var titleLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
                                     var bodyLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
                                     // Three lines of a note at most (owner, 14 окт) — the whole of it is in its card.
@@ -270,14 +268,17 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                                         else Type.body.copy(color = c.ink, fontSize = 16.5.sp, lineHeight = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
                                         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                         onTextLayout = { titleLayout = it }, modifier = Modifier.foundMarks(n.title) { titleLayout })
-                                    if (unfolded) InlineNoteBody(n, vm)
-                                    else if (body.isNotBlank()) {
+                                    if (body.isNotBlank()) {
                                         val shown = mentionsText(body, data, onPerson, onOpen)
                                         WordText(shown, style = Type.body.copy(fontFamily = rowFamily, color = c.ink.copy(alpha = 0.9f), fontSize = rowSize, lineHeight = rowLine), onTextLayout = { bodyLayout = it },
                                             maxLines = if (showTitle) 2 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(top = if (showTitle) 3.dp else 0.dp).foundMarks(shown.text) { bodyLayout })
                                     }
-                                    if (!unfolded) n.entries.flatMap { it.attachments }.takeIf { it.isNotEmpty() }?.let { Box(Modifier.padding(top = 8.dp)) { AttachmentsView(it) } }
+                                    n.entries.filter { it.isSavedMaterial }.forEach { entry ->
+                                        if (entry.tags.isNotEmpty()) Text(entry.tags.joinToString("  ") { "#$it" }, style = Type.small.copy(color = c.link), modifier = Modifier.padding(top = 6.dp))
+                                        if (entry.description.isNotBlank()) Text(entry.description, style = Type.small.copy(color = c.graphite), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    }
+                                    n.entries.flatMap { it.attachments }.takeIf { it.isNotEmpty() }?.let { Box(Modifier.padding(top = 8.dp)) { AttachmentsView(it) } }
                                     // Who and what the note touches, quietly — when it was made in the field with marks.
                                     val tags = (n.people.map { it } + listOfNotNull(n.place?.let { "⌖ $it" })).filter { t -> !plainBody.contains(t.removePrefix("⌖ ")) }
                                     if (tags.isNotEmpty()) Text(tags.joinToString("  ·  "), style = Type.small.copy(color = c.link, fontSize = subSize), modifier = Modifier.padding(top = 4.dp))

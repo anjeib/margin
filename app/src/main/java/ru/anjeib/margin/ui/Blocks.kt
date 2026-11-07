@@ -200,6 +200,7 @@ private fun Block(owner: String, e: Entry, vm: MainVm, onFill: (Fill) -> Unit, a
     val s = M.s
     val at = runCatching { LocalDateTime.parse(e.at) }.getOrNull()
     Column {
+        if (e.isSavedMaterial) MaterialDetails(e, owner, vm)
         if (showDate) Text(at?.let { it.toLocalDate().dayMonth() + " · " + it.toLocalTime().toString().take(5) }?.uppercase() ?: "",
             style = Type.label.copy(color = c.graphite, fontSize = 10.5.sp))
         if (e.text.isNotBlank()) {
@@ -228,7 +229,7 @@ private fun Block(owner: String, e: Entry, vm: MainVm, onFill: (Fill) -> Unit, a
                 "video" -> VideoBlock(a, onView = { onView(a) }, onCaption = { onFill(Fill("caption", e.id, a.id, a.caption)) })
                 "audio" -> VoiceBlock(a, vm)
                 "contact" -> ContactBlock(a)
-                "link" -> LinkBlock(a)
+                "link" -> SourceCard(a)
                 else -> FileBlock(a, onView = { onView(a) })
             }
         }

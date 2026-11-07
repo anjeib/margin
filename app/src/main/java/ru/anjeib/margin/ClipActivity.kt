@@ -33,7 +33,9 @@ class ClipActivity : ComponentActivity() {
         lifecycleScope.launch {
             val files = listOfNotNull(uri?.let { runCatching { Files.import(this@ClipActivity, it) }.getOrNull() })
             Processor.toInbox(this@ClipActivity, Queued(text = text, files = files))
-            Toast.makeText(this@ClipActivity, strings.inboxSaved, Toast.LENGTH_SHORT).show()
+            ru.anjeib.margin.data.Store.get(this@ClipActivity).flush()
+            val material = ru.anjeib.margin.data.SavedMaterials.links(text).isNotEmpty() || files.any { it.kind == "photo" }
+            Toast.makeText(this@ClipActivity, if (material) "Сохранено в заметки" else strings.inboxSaved, Toast.LENGTH_SHORT).show()
             finish()
         }
     }

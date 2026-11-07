@@ -91,11 +91,18 @@ class ForwardActivity : ComponentActivity() {
                             text = text, files = files.toList() + extra, via = via, comment = comment.ifBlank { null }, subject = subject,
                             from = sender?.let { it.name ?: it.company ?: it.address },
                         )
-                        // No cloud AI (owner, 14 окт): kept as it is in «Входящие», sorted there by hand — nothing is guessed.
+                        // Links and images are diary notes; other messages stay in the inbox. No cloud AI.
                         if (!BuildConfig.CLOUD_AI) {
                             Processor.toInbox(this, q)
                             currentFocus?.let { v -> getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.hideSoftInputFromWindow(v.windowToken, 0) }
-                            Toast.makeText(this, strings.inboxSaved, Toast.LENGTH_SHORT).show(); finish(); return@ForwardSheet
+                            sorting.value = true
+                            lifecycleScope.launch {
+                                ru.anjeib.margin.data.Store.get(this@ForwardActivity).flush()
+                                val savedNote = ru.anjeib.margin.data.SavedMaterials.links(text).isNotEmpty() || q.files.any { it.kind == "photo" }
+                                Toast.makeText(this@ForwardActivity, if (savedNote) "Сохранено в заметки" else strings.inboxSaved, Toast.LENGTH_SHORT).show()
+                                finish()
+                            }
+                            return@ForwardSheet
                         }
                         Processor.enqueue(this, q)
                         currentFocus?.let { v -> getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.hideSoftInputFromWindow(v.windowToken, 0) }

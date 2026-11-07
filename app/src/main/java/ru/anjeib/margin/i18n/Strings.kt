@@ -459,6 +459,8 @@ interface Strings {
     val voiceAiHint: String
     val voiceModel: String
     val voiceSendNow: String
+    val voiceAutoStop: String get() = "Останавливать запись после паузы"
+    val voiceAutoStopHint: String get() = "Завершать диктовку, когда вы договорили и замолчали на пару секунд"
 
     // v7
     val freshSummary: String
@@ -588,6 +590,11 @@ interface Strings {
     val obSetupTitle: String get() = "Почти готово"
     val obNext: String get() = "Дальше"
     val obMic: String get() = "Микрофон"
+    val obNoteTitle: String get() = "Заметка — как лист бумаги"
+    val obNoteText: String get() = "Нажмите текст — и правьте. Нажмите рядом — сохранено. Подержите строку: «Список» добавит номер 1; у вложений есть «Поделиться»."
+    val obNoteName: String get() = "Идея для проекта"
+    val obNoteLine: String get() = "Посмотреть статью"
+    val obNoteEdited: String get() = "Посмотреть статью вечером"
     val obScenes: List<Pair<String, String>> get() = listOf(
         "Всё на одном экране" to "Сверху — что открыто и шесть значков, под ними неделя, ниже лента дней, внизу поле. Нажимайте и смотрите.",
         "Говорите — и готово" to "Микрофон, пара слов, «✓», «↑». Речь распознаётся прямо на телефоне. Файл — скрепкой, человек — по имени. Кружок на линии — сделано.",
@@ -595,6 +602,7 @@ interface Strings {
         "Ждём и обещали" to "«Маша пришлёт договор до пятницы» — Margin запомнит, кто кому должен, и напомнит в срок.",
         "Дневник — тоже голосом" to "Книжка в шапке открывает дневник. Скажите, что было за день, — запись встанет со временем, отдельно от дел.",
         "Контакты — из ваших дел" to "Имя под делом — ссылка: в карточке человека телефон и все дела с ним — что ждёте и что обещали.",
+        obNoteTitle to obNoteText,
     )
     val obTour: List<String> get() = listOf(
         "Фильтр — личное или работа, только дела или темы, «ждём» и «обещали»",
@@ -1087,7 +1095,7 @@ object Ru : Strings {
     override val helpSearch = "Поиск по справке…"
     override val helpGroups = listOf(
         "Как это устроено" to listOf("Как это устроено", "Понятия и связи", "Шапка и меню", "Всё на телефоне"),
-        "Экраны" to listOf("Дела", "Календарь", "Фильтр", "Дневник", "Тема", "Страница дела", "Входящие", "Материалы", "Архив"),
+        "Экраны" to listOf("Дела", "Календарь", "Фильтр", "Дневник", "Карточка заметки", "Меню заметки", "Тема", "Страница дела", "Входящие", "Материалы", "Архив"),
         "Ввод" to listOf("Поле ввода и метки", "Окошко тем", "Даты, время, повторы", "Списки", "Голос и файлы", "Быстрый ввод и отзыв", "Пересылка в Margin"),
         "Люди и обещания" to listOf("Люди и обещания", "Контакты", "Неделя, напоминания, виджет"),
         "Значки и жесты" to listOf("Значки", "Поля и цвета", "Жесты"),
@@ -1123,13 +1131,15 @@ object Ru : Strings {
         )),
         HelpSection("Календарь", "Под значками — неделя того дня, что сверху ленты; сегодня обведено, этот день закрашен. Нажатие на число прокручивает ленту к этому дню, смахивание по неделе — неделя назад или вперёд. «ОКТ ▾» на полях или потянуть шапку вниз — весь месяц: точки под числом — сколько дел, стрелками листаются месяцы. «ОКТ ▴», смахивание шапки вверх или выбор дня складывают месяц обратно в неделю.", image = "calendar"),
         HelpSection("Фильтр", "Значок фильтра в шапке — что оставить в ленте: «Личное» или «Работа»; «Дела» или «Темы»; «Ждём» или «Обещали» — только то, кто кому должен, перед звонком. Выбранное отмечено галочкой, сам значок — петролем, пока что-то отфильтровано; повторное нажатие на пункт или «Показать всё» снимают фильтр. С «Темами» тема стоит в каждом дне, где у неё что-то есть: дело, заметка, начало или срок."),
-        HelpSection("Дневник", "Значок дневника справа в шапке. Записи только для себя по дням, со временем на полях. Дневник отдельный: дела, темы и заметки к ним сюда не попадают, а то, что здесь, не появляется в «Делах». Поле внизу пишет прямо сюда, ничего не разбирая; «@» отметит человека. Неделя и месяц шапки листают и дневник. Повторное нажатие на значок — обратно в «Дела». Фильтра у дневника нет."),
+        HelpSection("Дневник", "Значок дневника справа в шапке. Записи только для себя по дням, со временем на полях. Дневник отдельный: дела, темы и заметки к ним сюда не попадают, а то, что здесь, не появляется в «Делах». Поле внизу пишет прямо сюда, ничего не разбирая; «@» отметит человека. Неделя и месяц шапки листают и дневник. Повторное нажатие на значок — обратно в «Дела». Фильтра у дневника нет. Каждая запись — отдельная карточка; нажмите, чтобы открыть и править на месте.", image = "note"),
+        HelpSection("Карточка заметки", "Нажмите заметку в дневнике — откроется её карточка. Нажмите заголовок, строку текста, подпись файла или адрес ссылки: курсор появится в месте нажатия. Исправьте и нажмите вне поля — правки сохранятся; при закрытии карточки они тоже сохраняются. Кнопки «Редактировать» и «Сохранить» не нужны. Поле внизу добавляет запись в эту же заметку; скрепка прикрепляет фото, видео или файл. Нажмите теги, чтобы изменить их; поиск учитывает теги, текст и адреса ссылок.", image = "note"),
+        HelpSection("Меню заметки", "Подержите строку, ссылку, фото, видео или файл: появится «Удалить», «Скопировать», «Список». «Удалить» убирает выбранную строку или вложение, а не всю заметку. «Список» ставит перед строкой номер 1; Enter продолжает нумерацию. У вложения номер появляется перед ним. У фото, видео и файлов есть ещё «Поделиться»: Android покажет приложения телефона; выберите получателя и отправьте. Ссылка правится в карточке по обычному нажатию на адрес.", image = "note_menu"),
         HelpSection("Тема", "Тема открывается окном поверх ленты, как дело: «вся тема ›», «# Тема» под делом или поиск. Наверху — с какого дня, «тема · 7 дел · 4 заметки» и «Когда · Послать · В архив»; ниже её название, все дела и заметки по дням, на полях — только время. Дело или заметка темы открывается своим окном поверх; закрывается всё нажатием мимо или «назад»; в теме пишут голосом или в поле: «Добавь в тему Ремонт купить затирку». Долгое нажатие на строку темы — Переименовать, Поделиться PDF, В архив."),
         HelpSection("Страница дела", "Открывается нажатием в любом месте строки — у любого дела, простого и из темы, — окном поверх ленты; лента под ним затуманена. Закрывается нажатием мимо окна или «назад». На полях — день и день недели, под линией — час и само дело; наверху одной строкой «дело · кто · где», ряд «Готово · Когда · Повтор · Люди · Место · Ещё». Поле внизу дописывает заметку к делу; внизу — «создано …», нажатие покажет, как было написано.", image = "deal", pairs = listOf(
             "число и час на полях" to "нажмите, чтобы изменить день или время",
             "Готово" to "отметить сделанным",
             "Когда · Повтор · Люди · Место" to "что задать; заданное — цветом. Повтор: день, будни, неделя, месяц, год; «вт и чт 17:30» и «10 и 25 числа» проще сказать словами в поле",
-            "Ещё" to "Ждём, Обещал, В тему, В заметки, В архив; у сделанного — Удалить",
+            "Ещё" to "+ шаг (разбить дело на шаги), Ждём, Обещал, В тему, В заметки, В архив (убрать в архив в меню ≡) и Удалить (удалить сразу, с «Отменить»)",
             "# Тема" to "у дела из темы — сверху; открывает окно темы",
             "Что изменить?" to "поле внизу: «перенеси на пятницу», «место: Ленина 5» выполняется, остальное остаётся комментарием",
         )),
@@ -1145,12 +1155,12 @@ object Ru : Strings {
         )),
         HelpSection("Окошко тем", "«#» показывает ваши темы, свежие сверху. Начните печатать название, чтобы найти нужную.", image = "composer_hash",
             examples = listOf("#ремонт купить затирку до пятницы", "/жду @Маша ключи до субботы", "/обещаю @Лёша исходники завтра", "/готово #зерно упаковку: Олег одобрил", "#квартира /запись хозяйка согласна на кошку", "позвонить @ЖЭК насчёт счётчиков")),
-        HelpSection("Входящие", "Что пришло со стороны и ещё не разложено: «Поделиться → В Margin» из любого приложения, выделенный текст → «В Margin», плитка «Во Входящие» в шторке. Нажмите и подержите строку — в дело, в заметку, в тему; смахните влево — «Убрать», вправо — «В тему…».", image = "inbox"),
+        HelpSection("Входящие", "Что пришло со стороны и ещё не разложено: «Поделиться → В Margin» из любого приложения, выделенный текст → «В Margin», плитка «Во Входящие» в шторке. Ссылки и изображения из «Поделиться» сразу становятся заметками дневника; у ссылки появляются название сайта, миниатюра, если доступна, и тег домена. Остальные сообщения остаются здесь. Нажмите и подержите строку — в дело, в заметку, в тему; смахните влево — «Убрать», вправо — «В тему…».", image = "inbox"),
         HelpSection("Материалы", "Все фото, файлы и голосовые по дням. Над файлами — ссылка на тему или дело. Кнопки «Фото», «Документы», «Голосовые» оставляют один вид; лупа ищет по подписям.", image = "materials"),
         HelpSection("Контакты", "Две вкладки: «Люди» и «Компании». Сверху — «Часто»: с кем больше всего дел за месяц; ниже — все, по алфавиту или сначала новые. Внизу — «Упомянуты»: люди из ваших дел, которых вы ещё не заводили; «+ контакт» у имени делает карточку. В карточке — телефон, почта, адрес, MAX, Telegram и соцсети; нажатие звонит, пишет или открывает, долгое — изменить. Там же «О человеке», дела и история. В «Ещё» — переименовать, «Объединить» (если один человек записан дважды под разными именами) и «Это компания».", image = "contacts"),
         HelpSection("Архив", "Всё, что убрано через «В архив», по видам: темы (со всеми делами, заметками и файлами), дела, заметки дел и тем, записи дневника, контакты. Нажатие или удержание строки — «Открыть», «Вернуть», «Удалить насовсем». Сделанные дела в архив сами не уходят: они остаются зачёркнутыми в своём дне. Сколько всего в архиве — видно в меню ≡ у строки «Архив». Не нужно хранить — «Удалить» в меню удержания или в карточке: сразу, без архива, с «Отменить» на несколько секунд."),
         HelpSection("Настройки", "", image = "settings", pairs = listOf(
-            "Голос" to "отправлять сразу после диктовки или сначала показать текст",
+            "Голос" to "автоматическая остановка записи после паузы; отправлять сразу после диктовки или сначала показать текст",
             "Календарь" to "учитывать встречи из календаря телефона",
             "Уведомления" to "утренняя сводка и вечерний итог: включить и выбрать час",
             "Оформление" to "светлая, тёмная или как в системе",
@@ -1179,7 +1189,7 @@ object Ru : Strings {
             "+ ждём от… · + обещали…" to "в карточке дела, в «Ещё»; нажатие на «ждём от Димы» — сменить или убрать",
             "в день срока" to "утром уведомление «Сегодня ждём от Димы: макет» — «Получено» или «Завтра»",
         )),
-        HelpSection("Списки", "Начните строку с «1.», «1)», «-» или «•» — Enter продолжит список, Enter на пустом пункте закончит. Одна отправка — одно дело: список или несколько дел через запятую Margin не делит, они остаются одним делом с этими словами. Каждое дело — своей фразой: «купить сахар», отправить, «позвонить бухгалтеру», отправить."),
+        HelpSection("Списки", "В карточке заметки подержите строку и выберите «Список» — она станет пунктом 1. Начните строку с «1.», «1)», «-» или «•» — Enter продолжит список, Enter на пустом пункте закончит. Одна отправка — одно дело: список или несколько дел через запятую Margin не делит, они остаются одним делом с этими словами. Каждое дело — своей фразой: «купить сахар», отправить, «позвонить бухгалтеру», отправить."),
         HelpSection("Жесты", "", pairs = listOf(
             "кольцо на линии (или дата на полях)" to "сделано; у сделанного — вернуть",
             "смахнуть неделю в шапке" to "неделя назад или вперёд",
@@ -1187,17 +1197,19 @@ object Ru : Strings {
             "нажатие на дело" to "его карточка (в любом месте строки)",
             "долгое нажатие на дело" to "меню: Отложить, Когда, Время, Изменить, В тему, В архив",
             "долгое нажатие в теме" to "меню строки",
+            "в карточке дневника: нажать текст или адрес" to "курсор и правка; нажать вне поля — сохранить",
+            "подержать строку или вложение заметки" to "Удалить, Скопировать, Список; у файлов, фото и видео ещё Поделиться",
             "во «Входящих»: влево / вправо" to "Убрать / В тему…",
             "телефон, почта, ссылка в тексте" to "звонок, письмо или приложение по адресу (Telegram, MAX…)",
             "«Отменить»" to "появляется на несколько секунд после любого изменения",
         )),
         HelpSection("Голос и файлы", "", pairs = listOf(
-            "микрофон" to "диктовка на телефоне, текст появляется в поле; слова, как и всегда, разбираются на дела и даты",
+            "микрофон" to "диктовка на телефоне: после паузы запись останавливается сама (или нажмите галочку); слова, как и всегда, разбираются на дела и даты",
             "скрепка" to "фото, камера, файл, контакт",
             "«+» в начале строки карточки" to "метки",
             "Поделиться → В Margin" to "из любого приложения — во «Входящие»; выделенный текст → «В Margin»",
         )),
-        HelpSection("Пересылка в Margin", "Из Telegram, MAX, почты: «Поделиться» или выделить текст → «В Margin». Или «Копировать» — и в Margin появится «Вставить скопированное». Пересланное ложится во «Входящие»: подержите строку и выберите, куда ему — в дело, заметку или тему. Голосовые из Telegram и WhatsApp телефон расшифровывает сам, без интернета: слова встают вместо «Голосовое»."),
+        HelpSection("Пересылка в Margin", "Из Telegram, MAX, почты: «Поделиться» или выделить текст → «В Margin». Или «Копировать» — и в Margin появится «Вставить скопированное». Ссылки и изображения сразу попадают в дневник как заметки. Для ссылки загружаются название сайта и миниатюра, если сайт её предоставляет; без сети исходный материал сохраняется сразу, оформление дождётся подключения. Другие сообщения остаются во «Входящих»: подержите строку и выберите, куда ему — в дело, заметку или тему. Голосовые из Telegram и WhatsApp телефон расшифровывает сам, без интернета: слова встают вместо «Голосовое»."),
         HelpSection("Быстрый ввод и отзыв", "Быстро записать можно с плитки «Записать» в шторке (добавьте её через карандаш в быстрых настройках) или долгим нажатием на значок приложения — «Записать» / «Надиктовать». Если Margin понял фразу не так, нажмите «Не совсем понял» под результатом. «Отправить отзыв» в меню открывает письмо разработчику с журналами ошибок; ваши записи не отправляются."),
         HelpSection("Неделя, напоминания, виджет", "По воскресеньям в ленте под сегодняшним днём появляется итог недели: сколько сделано, кто кому должен, какие темы стоят на месте; «Скрыть» убирает его до следующего воскресенья. Утренняя сводка и вечерний итог включаются в Настройках → «Уведомления». Виджет «Margin · Сегодня» на рабочем столе показывает дела дня и открывает поле ввода или диктовку. Тему целиком можно отправить заказчику страницей PDF: «Ещё» → «Поделиться PDF»."),
         HelpSection("Приватность", "Настройки → «Приватность»: вход по отпечатку (или коду блокировки) и «Где ваши данные» — где хранятся записи и что уходит с телефона (ничего, кроме копии в Google, если вы её включили). На экране блокировки напоминания показываются без текста дел."),
@@ -1435,7 +1447,7 @@ object Ru : Strings {
     override val subtaskOne = "Подзадача"
     override val freeDay = "Свободный день"
     override fun nextDue(d: String) = "ближайшее: $d"
-    override val archivedOne = "Убрано в архив"
+    override val archivedOne = "Убрано в архив (меню ≡)"
     override val restoredOne = "Возвращено"
     override val deletedOne = "Удалено"
     override val toArchive = "В архив"
@@ -1981,7 +1993,7 @@ object Ru : Strings {
     override val removedWord = "удалено"
     override val restoreWord2 = "Вернуть"
     override val purgeWord = "Удалить насовсем"
-    override val underLine = "Добавить дело"
+    override val underLine = "Добавить шаг"
     override val dueWord = "Дата"
     override val slashWhat = "Что это?"
     override val feedTitle = "Ежедневник"
@@ -1994,8 +2006,8 @@ object Ru : Strings {
     override val peopleBadge = "Люди"
     override val markOrg = "Это компания"
     override val markPerson = "Это человек"
-    override val stepOne = "дело"
-    override val stepHint = "Какое дело добавить?"
+    override val stepOne = "шаг"
+    override val stepHint = "Какой шаг добавить?"
     override val peopleSub = "люди и компании из ваших дел и тем"
     override val archiveSub = "всё, что убрано: темы, дела, заметки"
     override val sinceWord = "с"
@@ -2010,7 +2022,7 @@ object Ru : Strings {
     override val actWait = "Ждём"
     override val actPromised = "Обещал"
     override val actDay = "+ день"
-    override val actStep = "+ дело"
+    override val actStep = "+ шаг"
     override val actPostpone = "Позже"
     override val backToToday = "к сегодняшнему дню ›"
     override val contentsTitle = "Содержание"
@@ -2074,18 +2086,25 @@ object Ru : Strings {
 }
 
 object En : Strings {
+    override val obNoteTitle = "A note is a sheet of paper"
+    override val obNoteText = "Tap text to edit; tap beside it to save. Long-press a line: List starts it at 1. Attachments also have Share."
+    override val obNoteName = "An idea for the project"
+    override val obNoteLine = "Read the article"
+    override val obNoteEdited = "Read the article tonight"
     override val helpTitle = "Help"
     override val helpIntro = "Sections, marks and gestures"
     override val helpSearch = "Search help…"
     override val helpGroups = listOf(
         "How it works" to listOf("How it works", "AI assistant", "Three kinds", "Menu"),
-        "Screens" to listOf("Today", "Calendar", "Overview", "Today · Calendar · Overview", "Inside a topic", "Inbox, Materials, Archive"),
+        "Screens" to listOf("Today", "Calendar", "Overview", "Today · Calendar · Overview", "Inside a topic", "Diary note", "Note menu", "Inbox, Materials, Archive"),
         "Writing" to listOf("Marks in the field", "Examples", "Dates, times, repeats", "Lists", "Quick entry and feedback", "Sharing to Margin", "Offline"),
         "People and promises" to listOf("The week, reminders, widget"),
         "Icons" to listOf("Icons", "Margin and colours"),
         "Settings and data" to listOf("Privacy"),
     )
     override val helpSections = listOf(
+        HelpSection("Diary note", "Tap a diary note to open its card. Tap the title, a text line, a file label or a link address to place the caret. Edit, then tap outside the field: changes are saved, including when you close the card. No Edit or Save button is needed. The bottom field adds to the same note; the paperclip attaches photos, videos and files. Tap tags to change them. Search includes tags, text and link addresses.", image = "note"),
+        HelpSection("Note menu", "Long-press a line, link, photo, video or file for Delete, Copy and List. Delete removes the selected row or attachment, not the whole note. List starts the row at 1; Enter continues numbering. Attachments show the number beside them. Photos, videos and files also have Share: Android opens the phone's app chooser. Tap a link address normally to edit it.", image = "note_menu"),
         HelpSection("How it works", "Margin is a planner you write to like a messenger. One field at the bottom: type or dictate, and your words become to-dos, topics and ideas. It is read right on the phone, without internet; the AI joins only for the hard parts, when online.",
             examples = listOf("Call Marina tomorrow at 3", "Buy cat food", "Idea: a design blog")),
         HelpSection("AI assistant", "The built-in assistant keeps the planner from your words: it turns phrases into to-dos, dates and promises, moves and closes to-dos, keeps topics — and answers questions about your affairs briefly, in two or three sentences. It works online with an invite code; plain phrases are understood without it. It does not write long texts like contracts — «prepare a contract» becomes your to-do.", pairs = listOf(
@@ -2129,7 +2148,7 @@ object En : Strings {
         )),
         HelpSection("Icons", "One column right of the line holds the one mark of a row: what it is and what a tap on it does.", legend = "icons"),
         HelpSection("Margin and colours", "", legend = "badges"),
-        HelpSection("Sharing to Margin", "From Telegram, MAX, mail: “Share” or select text → “To Margin”. Or “Copy” — and “Paste what you copied” appears in Margin. Margin reads other people’s words as theirs: what they promise you becomes “waiting”, what they ask — a to-do."),
+        HelpSection("Sharing to Margin", "From Telegram, MAX, mail: “Share” or select text → “To Margin”. Or “Copy” — and “Paste what you copied” appears in Margin. Links and images are saved straight to the diary as notes. Links get a site title, thumbnail when available and a domain tag; offline, the original is saved first and the preview loads later. Other shared messages stay in Inbox."),
         HelpSection("Quick entry and feedback", "The “Write” tile in quick settings (add it with the pencil there) and a long press on the app icon — “Write” / “Dictate”. Understood wrong — “Understood wrong” under the result. “Send feedback” in the menu opens an e-mail to the developer with the error logs; your records are not sent."),
         HelpSection("The week, reminders, widget", "On Sundays «Today» shows a quiet card of the week: done, who owes whom, topics that stood still; «Dismiss» hides it until next Sunday. When someone's promise is late, «remind» next to it prepares a message (SMS if the phone is known, otherwise Share); you send it. On the day someone promised something, or you did, a reminder comes in the morning. The morning and evening summaries change in words: “morning summary at 9”, “evening summary at 9pm”, “no evening summary”. The «Margin · Today» widget shows the day and opens the field or dictation. A whole topic can be sent to a client or a colleague as a PDF page: ⋯ → «Share as PDF»."),
         HelpSection("Privacy", "Settings → Privacy: a fingerprint (or screen lock) when Margin opens, and «Where your data is» — where the records live and what leaves the phone. On the lock screen reminders show without the to-do's words."),

@@ -123,7 +123,7 @@ fun ForwardSheet(
                 }
                 return@Column
             }
-            Text(if (sorting) s.forwardSorting else s.forwardHint, style = Type.italic.copy(color = if (sorting) c.link else c.graphite, fontSize = 14.5.sp), modifier = Modifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp))
+            Text(if (sorting) s.forwardSorting else "Ссылки и изображения — в заметки. Остальное — во входящие.", style = Type.italic.copy(color = if (sorting) c.link else c.graphite, fontSize = 14.5.sp), modifier = Modifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp))
             // The same live field as everywhere: words, voice, «+» — what to do with it, or just send.
             SmartComposer(
                 vm,

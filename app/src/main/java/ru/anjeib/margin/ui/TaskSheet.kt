@@ -210,13 +210,14 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         ))
                         androidx.compose.animation.AnimatedVisibility(more) {
                             MoreActions(listOfNotNull(
+                                if (!task.done) Action(s.actStep, false, { more = false; fill("step") }) { PlusGlyph(it, 19.dp) } else null,
                                 Action(s.actWait, false, { dialog = "waiting" }) { HandGlyph(it, 23.dp, incoming = true) },
                                 Action(s.actPromised, false, { dialog = "promised" }) { HandGlyph(it, 23.dp) },
                                 if (!task.done) rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } } else null,
                                 Action(s.actToIdea, false, { commitTitle(); vm.taskToNote(task.id)?.let(onOpenNote) }) { NoteGlyph(it, 21.dp) },
                                 // Owner, 16 окт: «В архив»; 26 окт — and «Удалить» at once too, with «Отменить».
                                 if (!task.done) Action(s.toArchive, false, { commitTitle(); onClose(); vm.archiveMatter(task.id) }) { ArchiveGlyph(it, 22.dp) } else null,
-                                Action(s.deleteNow, false, { onClose(); vm.deleteNow(task.id) }) { TrashGlyph(it, 22.dp) },
+                                Action(s.deleteNow, false, { onClose(); vm.deleteNow(task.id) }, danger = true) { TrashGlyph(it, 22.dp) },
                             ))
                         }
                     }

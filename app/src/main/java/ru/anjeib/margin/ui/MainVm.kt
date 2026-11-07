@@ -1,5 +1,9 @@
 package ru.anjeib.margin.ui
 
+import ru.anjeib.margin.data.removeCardAttachment
+import ru.anjeib.margin.data.changeSource
+import ru.anjeib.margin.data.saveDiaryCard
+
 import ru.anjeib.margin.data.retextSamples
 import ru.anjeib.margin.data.withoutCopiedNotes
 import kotlinx.coroutines.flow.first
@@ -253,7 +257,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         // No cloud AI: kept as it is in «Входящие», sorted there by hand (owner, 14 окт).
         if (!ru.anjeib.margin.BuildConfig.CLOUD_AI) {
             Processor.toInbox(ctx, ru.anjeib.margin.data.Queued(text = text, via = via, comment = comment?.ifBlank { null }, files = files, from = from))
-            _toast.value = L.s.inboxSaved
+            _toast.value = if (ru.anjeib.margin.data.SavedMaterials.links(text).isNotEmpty() || files.any { it.kind == "photo" }) "Сохранено в заметки" else L.s.inboxSaved
             return
         }
         Processor.enqueue(ctx, ru.anjeib.margin.data.Queued(text = text, via = via, comment = comment?.ifBlank { null }, files = files, from = from))
@@ -316,7 +320,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** Adds the picked calendar day in words when the phrase has no date of its own — the parser and the AI then read it as said. */
     private fun onPickedDay(t: String): String {
-        val day = calendarDay.value ?: return t
+        val day = calendarDay.value ?: pageDay.value?.takeIf { !weekMode.value && !it.isBefore(LocalDate.now()) } ?: return t
         // Ideas, topics, records and «#тема» have no day of their own.
         if (Regex("(?<!\\p{L})/(иде|тем|запис|idea|topic|note)|#", RegexOption.IGNORE_CASE).containsMatchIn(t)) return t
         val items = runCatching { ru.anjeib.margin.ai.LocalParser.parse(t, data.value).items }.getOrDefault(emptyList())
@@ -693,6 +697,73 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         store.update { it.removeEntry(owner, id) }
     }
 
+    fun renameDiaryTitle(id: String, value: String) {
+        store.update { d -> d.copy(tasks = d.tasks.map { if (it.id == id) it.copy(title = value.trim().ifBlank { "Заметка" }) else it }) }
+    }
+
+    fun updateDiaryEntry(taskId: String, entryId: String, edit: (Entry) -> Entry) {
+        store.update { d -> d.editEntries("task:$taskId") { entries -> entries.map { if (it.id == entryId) edit(it) else it } } }
+        val e = data.value.tasks.find { it.id == taskId }?.entries?.find { it.id == entryId }
+        if (e?.attachments?.any { it.kind == "link" && !it.previewLoaded } == true)
+            ru.anjeib.margin.data.MaterialPreviewWorker.schedule(ctx, entryId)
+    }
+
+    fun editDiarySource(taskId: String, entryId: String, attachmentId: String, value: String): Boolean {
+        val address = value.trim()
+        if (address.isNotEmpty() && ru.anjeib.margin.data.SavedMaterials.site(address) == null) {
+            say("Проверьте адрес ссылки: нужен http:// или https://")
+            return false
+        }
+        updateDiaryEntry(taskId, entryId) { e ->
+            val old = e.attachments.find { it.id == attachmentId } ?: return@updateDiaryEntry e
+            if (address.isEmpty()) e.removeCardAttachment(attachmentId)
+            else if (old.url == address) e
+            else {
+                val changed = e.changeSource(attachmentId, address)
+                val oldSite = old.url?.let(ru.anjeib.margin.data.SavedMaterials::site)
+                val newSite = ru.anjeib.margin.data.SavedMaterials.site(address)
+                changed.copy(attachments = changed.attachments.map { if (it.id == attachmentId) it.copy(id = ru.anjeib.margin.data.newId(), numbered = old.numbered) else it },
+                    tags = (changed.tags.filterNot { it == oldSite && changed.attachments.none { a -> a.url?.let(ru.anjeib.margin.data.SavedMaterials::site) == oldSite } } + listOfNotNull(newSite)).distinct())
+            }
+        }
+        return true
+    }
+
+    fun saveDiaryCard(draft: ru.anjeib.margin.data.DiaryCardDraft): Boolean {
+        if (!draft.valid || data.value.tasks.none { it.id == draft.taskId && it.thought }) return false
+        store.update { it.saveDiaryCard(draft) }
+        data.value.tasks.find { it.id == draft.taskId }?.entries.orEmpty().filter { e -> e.attachments.any { it.kind == "link" && !it.previewLoaded } }.forEach {
+            ru.anjeib.margin.data.MaterialPreviewWorker.schedule(ctx, it.id)
+        }
+        return true
+    }
+
+    fun discardCardImports(draft: ru.anjeib.margin.data.DiaryCardDraft) {
+        val original = draft.baseEntries.flatMap { it.attachments }.map { it.id }.toSet()
+        val d = data.value
+        val usedFiles = (d.tasks.flatMap { it.entries + it.removedEntries }.flatMap { it.attachments } +
+            d.notes.flatMap { it.entries }.flatMap { it.attachments } + d.queue.flatMap { it.files }).mapNotNull { it.file }.toSet()
+        draft.entries.flatMap { it.attachments }.filter { it.id !in original && it.file !in usedFiles }.forEach { Files.delete(ctx, it) }
+    }
+
+    fun addMaterialLink(owner: String, id: String, url: String): Boolean {
+        val address = url.trim()
+        val site = ru.anjeib.margin.data.SavedMaterials.site(address) ?: return false
+        store.update { d -> d.editEntries(owner) { entries -> entries.map { e ->
+            if (e.id != id || e.attachments.any { it.url == address }) e else e.copy(
+                attachments = e.attachments + Attachment(kind = "link", url = address, name = site, siteName = site),
+                tags = (e.tags + site).distinct())
+        } } }
+        ru.anjeib.margin.data.MaterialPreviewWorker.schedule(ctx, id)
+        return true
+    }
+
+    fun editMaterial(owner: String, id: String, tags: String, description: String) {
+        store.update { d -> d.editEntries(owner) { entries -> entries.map {
+            if (it.id != id) it else it.copy(tags = ru.anjeib.margin.data.SavedMaterials.tags(tags), description = description.trim())
+        } } }
+    }
+
     fun editEntryText(owner: String, id: String, text: String) {
         store.update { it.editEntryText(owner, id, text) }
         linkTitles(owner, id)
@@ -724,6 +795,25 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** The planner's day tabs: the day the main page shows (null — today). */
     val pageDay = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)
+    /** True when the week icon before Mon is selected — shows all matters of that week. */
+    val weekMode = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    fun pickDay(d: LocalDate, today: LocalDate = LocalDate.now()) {
+        weekMode.value = false
+        pageDay.value = d.takeIf { it != today }
+        feedDay.value = null
+        feedJump.value++
+        monthOpen.value = false
+    }
+
+    fun pickWeek(monday: LocalDate, today: LocalDate = LocalDate.now()) {
+        val todayMon = today.minusDays(today.dayOfWeek.value - 1L)
+        weekMode.value = true
+        pageDay.value = if (monday == todayMon) null else monday
+        feedDay.value = null
+        feedJump.value++
+        monthOpen.value = false
+    }
 
     /** The calendar's feed: the day at its top (the frame shows it; closing the calendar opens it), and each ask to go to a day. */
     val feedDay = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)
@@ -1199,7 +1289,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         val named = first.ifBlank { heard.orEmpty() }
         val title = (if (named.length > 70) named.take(70).substringBeforeLast(' ') + "…" else named)
             .ifBlank { e.attachments.firstOrNull()?.let { it.caption ?: it.name } ?: L.s.diaryTitle }.sentence()
-        val t = Task(title = title, topic = true, thought = true, entries = listOf(Entry(at = e.at, text = listOfNotNull(e.text.trim().ifBlank { null }, e.from?.let { "— $it" }).joinToString("\n"), attachments = e.attachments)),
+        val t = Task(title = title, topic = true, thought = true, entries = listOf(e.copy(session = null)),
             history = listOf(ru.anjeib.margin.data.Change(kind = "created", by = "you")))
         store.update { d -> d.copy(tasks = d.tasks + t, notes = d.notes.map { n -> if (n.id == inbox.id) n.copy(entries = n.entries.filterNot { it.id == e.id }) else n }) }
         _toast.value = L.s.inboxMadeNote

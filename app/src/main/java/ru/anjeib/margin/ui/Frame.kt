@@ -290,10 +290,12 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
     val sphere by vm.diarySphere.collectAsState()
     val kind by vm.kindFilter.collectAsState()
     val monthOpen by vm.monthOpen.collectAsState()
+    val weekMode by vm.weekMode.collectAsState()
     val topicF by vm.topicFilter.collectAsState()
     val topicTitle = topicF?.let { id -> data.tasks.find { it.id == id }?.title }
     val today = LocalDate.now()
-    fun pick(d: LocalDate) { vm.pageDay.value = d.takeIf { it != today }; vm.feedJump.value++; vm.monthOpen.value = false }
+    fun pick(d: LocalDate) = vm.pickDay(d, today)
+    fun pickWeek(mon: LocalDate) = vm.pickWeek(mon, today)
     @Composable fun mark(label: String, on: Boolean, onClick: () -> Unit, glyph: @Composable (androidx.compose.ui.graphics.Color) -> Unit) {
         // A finger's 44 dp and a name for TalkBack (ChatGPT's audit of 0.89: 40 dp, no names); the lit circle stays 40 dp.
         // 48 dp cut «простые и сложные» under «Дела» — six marks leave no room at 48.
@@ -362,33 +364,88 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
             if (open) Box(Modifier.padding(top = 4.dp)) {
                 MonthPanel(data, vm, top, events, margin = { MonthFold(top, open = true) { vm.monthOpen.value = false } }) { pick(it) }
             }
-            else WeekStrip(top, today, { pick(it) }) { vm.monthOpen.value = true }
+            else WeekStrip(top, today, weekMode, { pickWeek(it) }, { pick(it) }) { vm.monthOpen.value = true }
         }
         // One hairline under the week (owner, 18 окт: the double rule was the heaviest thing on the screen once the days lost theirs).
         Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp).padding(horizontal = 14.dp).height(1.dp).background(c.ink.copy(alpha = 0.18f)))
     }
 }
 
-/** The week of [day]: the weekday small over each number, [day] filled, today ringed; the month on the margin opens the month. */
+private const val WEEKS_HALF = 500
+const val WEEK_PAGES_TOTAL = WEEKS_HALF * 2 * 8
+
+/**
+ * Maps a ([day], [weekMode]) state to a page index in the 8-slots-per-week horizontal pager:
+ * slot 0 = whole week (Mon..Sun), slots 1..7 = Mon..Sun of that week.
+ */
+fun weekPageOf(day: LocalDate, weekMode: Boolean, today: LocalDate = LocalDate.now()): Int {
+    val todayMon = today.minusDays(today.dayOfWeek.value - 1L)
+    val mon = day.minusDays(day.dayOfWeek.value - 1L)
+    val w = java.time.temporal.ChronoUnit.WEEKS.between(todayMon, mon).toInt().coerceIn(-WEEKS_HALF + 1, WEEKS_HALF - 1)
+    val slot = if (weekMode) 0 else day.dayOfWeek.value
+    return (WEEKS_HALF + w) * 8 + slot
+}
+
+/**
+ * Maps a horizontal pager index back to (monday, dayOrNullIfWeekMode):
+ * second is null when slot == 0 (whole week view for [first]), or the specific LocalDate (Mon..Sun) when slot in 1..7.
+ */
+fun fromWeekPage(page: Int, today: LocalDate = LocalDate.now()): Pair<LocalDate, LocalDate?> {
+    val todayMon = today.minusDays(today.dayOfWeek.value - 1L)
+    val w = Math.floorDiv(page, 8) - WEEKS_HALF
+    val slot = Math.floorMod(page, 8)
+    val mon = todayMon.plusWeeks(w.toLong())
+    return mon to (if (slot == 0) null else mon.plusDays((slot - 1).toLong()))
+}
+
+/** Shown in the whole-week view when none of the 7 days has any matters or notes. */
 @Composable
-private fun WeekStrip(day: LocalDate, today: LocalDate, onPick: (LocalDate) -> Unit, onMonth: () -> Unit) {
+fun FeedWeekEmptyHead(monday: LocalDate, today: LocalDate, freeWord: String? = null) {
     val c = M.c
+    val s = M.s
+    val sunday = monday.plusDays(6)
+    val span = spanWord(monday, sunday, today).replace("\n", " ")
+    val words = span + "  ·  " + (freeWord ?: s.emptyWeek.lowercase())
+    Margined(Modifier.padding(top = 22.dp, bottom = 6.dp)) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.Text(words, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                style = Type.meta.copy(color = c.ink.copy(alpha = 0.85f), fontWeight = androidx.compose.ui.text.font.FontWeight(500)))
+        }
+    }
+}
+
+/** The week of [day]: before Mon — the whole-week icon; then Mon..Sun, [day] filled (or the week icon when [weekMode]), today ringed. */
+@Composable
+private fun WeekStrip(day: LocalDate, today: LocalDate, weekMode: Boolean, onPickWeek: (LocalDate) -> Unit, onPick: (LocalDate) -> Unit, onMonth: () -> Unit) {
+    val c = M.c
+    val s = M.s
     val monday = day.minusDays(day.dayOfWeek.value - 1L)
     val loc = if (ru.anjeib.margin.i18n.L.lang == ru.anjeib.margin.i18n.Lang.Ru) java.util.Locale.forLanguageTag("ru") else java.util.Locale.ENGLISH
     val pick by androidx.compose.runtime.rememberUpdatedState(onPick)
+    val pickW by androidx.compose.runtime.rememberUpdatedState(onPickWeek)
     val now by androidx.compose.runtime.rememberUpdatedState(day)
+    val isWeek by androidx.compose.runtime.rememberUpdatedState(weekMode)
     // «ОКТ ▾» on the line of the weekdays (owner, 17 окт).
     Margined(Modifier.padding(top = 4.dp), margin = { Box(Modifier.height(32.dp), contentAlignment = Alignment.CenterEnd) { MonthFold(day, open = false, onClick = onMonth, top = 0.dp) } }) {
         // A swipe across the week — the week before or after.
         Row(Modifier.fillMaxWidth().pointerInput(Unit) {
             var dx = 0f
             detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = {
-                if (dx < -48.dp.toPx()) pick(now.plusDays(7)) else if (dx > 48.dp.toPx()) pick(now.minusDays(7))
+                val mon = now.minusDays(now.dayOfWeek.value - 1L)
+                if (dx < -48.dp.toPx()) { if (isWeek) pickW(mon.plusDays(7)) else pick(now.plusDays(7)) }
+                else if (dx > 48.dp.toPx()) { if (isWeek) pickW(mon.minusDays(7)) else pick(now.minusDays(7)) }
             }) { ch, d -> dx += d; ch.consume() }
-        }) {
+        }, verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f).height(32.dp).padding(end = 3.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                .background(if (weekMode) c.link else androidx.compose.ui.graphics.Color.Transparent)
+                .clickable(onClickLabel = s.weekTitle, role = androidx.compose.ui.semantics.Role.Tab) { onPickWeek(monday) }
+                .semantics { contentDescription = s.weekTitle; selected = weekMode },
+                contentAlignment = Alignment.Center) {
+                WeekGlyph(if (weekMode) c.bg else c.ink, 18.dp)
+            }
             (0L..6L).forEach { i ->
                 val d = monday.plusDays(i)
-                val sel = d == day
+                val sel = !weekMode && d == day
                 val weekend = d.dayOfWeek.value >= 6
                 Column(Modifier.weight(1f).padding(horizontal = 1.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
                     .background(if (sel) c.link else androidx.compose.ui.graphics.Color.Transparent)
@@ -401,6 +458,22 @@ private fun WeekStrip(day: LocalDate, today: LocalDate, onPick: (LocalDate) -> U
                 }
             }
         }
+    }
+}
+
+/** A calendar page with a highlighted week row inside — the whole-week icon before Monday in [WeekStrip]. */
+@Composable
+fun WeekGlyph(color: androidx.compose.ui.graphics.Color, size: androidx.compose.ui.unit.Dp = 18.dp) = androidx.compose.foundation.Canvas(Modifier.size(size)) {
+    val w = this.size.width; val h = this.size.height; val st = 1.4.dp.toPx()
+    drawRoundRect(color, topLeft = androidx.compose.ui.geometry.Offset(w * 0.12f, h * 0.20f),
+        size = androidx.compose.ui.geometry.Size(w * 0.76f, h * 0.66f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.12f),
+        style = androidx.compose.ui.graphics.drawscope.Stroke(width = st))
+    drawLine(color, androidx.compose.ui.geometry.Offset(w * 0.12f, h * 0.40f), androidx.compose.ui.geometry.Offset(w * 0.88f, h * 0.40f), strokeWidth = st)
+    drawLine(color, androidx.compose.ui.geometry.Offset(w * 0.34f, h * 0.10f), androidx.compose.ui.geometry.Offset(w * 0.34f, h * 0.28f), strokeWidth = st, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+    drawLine(color, androidx.compose.ui.geometry.Offset(w * 0.66f, h * 0.10f), androidx.compose.ui.geometry.Offset(w * 0.66f, h * 0.28f), strokeWidth = st, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+    for (x in listOf(0.30f, 0.50f, 0.70f)) {
+        drawCircle(color, radius = w * 0.055f, center = androidx.compose.ui.geometry.Offset(w * x, h * 0.63f))
     }
 }
 

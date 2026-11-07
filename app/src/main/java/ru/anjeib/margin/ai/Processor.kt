@@ -46,13 +46,16 @@ object Processor {
     }
 
     /**
-     * Without a cloud AI (owner, 14 окт): whatever comes in from another app — shared, picked from a selection, copied — goes to
-     * «Входящие» as it is, with where it came from; it is sorted there by hand («В дело», «В заметку», «В тему», «Разобрать»).
+     * Shared links and images become saved diary notes; other forwarded words stay in the inbox.
+     * The original is stored first; public-page metadata is fetched separately, without cloud AI.
      */
     fun toInbox(ctx: Context, q: Queued) {
         val words = listOfNotNull(q.comment?.takeIf { it.isNotBlank() }, q.text.trim().takeIf { it.isNotBlank() }).joinToString("\n\n")
         val from = listOfNotNull(q.from, q.via?.let { L.s.forwardFrom(Forward.viaName(it)) }).joinToString(", ").ifBlank { null }
-        Store.get(ctx).update { inbox(it, Entry(text = words.take(4000), attachments = q.files, from = from)) }
+        val entry = ru.anjeib.margin.data.SavedMaterials.prepare(Entry(text = words, attachments = q.files, from = from))
+        val material = entry.attachments.any { it.kind == "link" || it.kind == "photo" }
+        Store.get(ctx).update { if (material) ru.anjeib.margin.data.SavedMaterials.add(it, entry) else inbox(it, entry) }
+        if (material) ru.anjeib.margin.data.MaterialPreviewWorker.schedule(ctx, entry.id)
     }
 
     /** Puts attachments where the AI's changes landed: the touched task / note, else the scope's default place. */

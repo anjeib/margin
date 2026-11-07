@@ -169,4 +169,26 @@ class PcmTest {
         assertFalse(Pcm.silent(x))
         assertTrue(abs(rms(x) - 0.5 / sqrt(2.0)) < 0.01)
     }
+
+    @Test fun endOfSpeechWaitsForVoiceThenPause() {
+        val rate = 16_000
+        val step = 1600 // 0.1 s
+        // Pure silence never triggers auto-stop (user hasn't started speaking yet).
+        val silentOnly = Pcm.EndOfSpeech(rate)
+        repeat(50) { assertFalse(silentOnly.push(0.001f, step)) }
+
+        // A brief tap click in the first 0.25 s followed by silence does not trigger auto-stop.
+        val tapOnly = Pcm.EndOfSpeech(rate)
+        repeat(2) { assertFalse(tapOnly.push(0.08f, step)) }
+        repeat(40) { assertFalse(tapOnly.push(0.001f, step)) }
+
+        // Normal phrase (0.8 s after guard) + short 1.0 s pause + another word + 2.2 s pause stops at the end.
+        val eos = Pcm.EndOfSpeech(rate)
+        repeat(3) { assertFalse(eos.push(0.001f, step)) } // 0.3 s initial silence
+        repeat(8) { assertFalse(eos.push(0.06f, step)) }  // 0.8 s speech
+        repeat(10) { assertFalse(eos.push(0.002f, step)) } // 1.0 s pause between words (must not stop yet)
+        repeat(5) { assertFalse(eos.push(0.05f, step)) }  // 0.5 s more speech
+        repeat(21) { assertFalse(eos.push(0.002f, step)) } // 2.1 s silence
+        assertTrue(eos.push(0.002f, step)) // 2.2 s silence reached -> auto-stop!
+    }
 }

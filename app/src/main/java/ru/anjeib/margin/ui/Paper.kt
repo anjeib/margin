@@ -572,8 +572,8 @@ fun Avatar(name: String, size: Dp = 34.dp) {
     }
 }
 
-/** One tool of a card: a drawn mark over its word; set — petrol. */
-class Action(val label: String, val on: Boolean, val onClick: () -> Unit, val glyph: @Composable (Color) -> Unit)
+/** One tool of a card: a drawn mark over its word; set — petrol; destructive — terracotta. */
+class Action(val label: String, val on: Boolean, val onClick: () -> Unit, val danger: Boolean = false, val glyph: @Composable (Color) -> Unit)
 
 /** The card's row of tools: «Когда · Повтор · Люди · Место · Ещё», each a mark over its word; [slots] — columns, so a shorter second row stands under the first. */
 @Composable
@@ -581,7 +581,11 @@ fun ActionBar(items: List<Action>, modifier: Modifier = Modifier, slots: Int = i
     val c = M.c
     Row(modifier.fillMaxWidth()) {
         items.forEach { a ->
-            val col = if (a.on) c.link else c.graphite
+            val col = when {
+                a.danger -> c.accentText
+                a.on -> c.link
+                else -> c.graphite
+            }
             Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = a.label, onClick = a.onClick).padding(vertical = 8.dp, horizontal = 2.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { a.glyph(col) }

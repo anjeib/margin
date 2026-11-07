@@ -1,112 +1,152 @@
 package ru.anjeib.margin.ui
 
-import ru.anjeib.margin.data.dayMonthShort
-
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.layout.*
+import androidx.compose.ui.platform.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.outlined.DeleteOutline
-import ru.anjeib.margin.data.Entry
-import ru.anjeib.margin.data.Task
+import androidx.core.content.FileProvider
+import ru.anjeib.margin.data.*
 
-/**
- * An idea on half the screen, written like a notebook page: the title and the text are edited right where they stand,
- * each piece with its day and hour on the margin; an empty line at the end takes the next thought. The whole feed
- * (files, matters) is one tap further — «Открыть целиком».
- */
-@OptIn(ExperimentalMaterial3Api::class)
+/** Notes are written directly on the same paper as matters, one editable row at a time. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Unit) {
     val c = M.c
     val s = M.s
-    var title by remember(task.id) { mutableStateOf(task.title) }
-    fun commitTitle() {
-        val cur = vm.data.value.tasks.find { it.id == task.id } ?: return
-        if (title.isNotBlank() && title.trim() != cur.title) vm.saveTask(cur.copy(title = title.trim()))
-    }
-    DisposableEffect(task.id) { onDispose { commitTitle() } }
-    val owner = "task:${task.id}"
-    // Written on the card itself (owner, 13 окт); the bar under it — the microphone and «send», «+» on the page.
-    val pageDraft = remember(task.id) { mutableStateOf("") }
-    val pageFiles = remember(task.id) { androidx.compose.runtime.mutableStateListOf<ru.anjeib.margin.data.Attachment>() }
-    val pageSend = remember(task.id) { PageSend() }
-    androidx.compose.runtime.DisposableEffect(task.id) { onDispose { pageSend.send() } }
-    var writeTick by remember { mutableStateOf(0) }
+    val ctx = LocalContext.current
+    val focus = LocalFocusManager.current
+    var fieldBounds by remember { mutableStateOf<Rect?>(null) }
+    val activeBounds by rememberUpdatedState(fieldBounds)
+    var rootBounds by remember { mutableStateOf(Rect.Zero) }
     val rowActs = LocalRowActions.current
-    var more by remember(task.id) { mutableStateOf(false) }
-    // A page of the planner, as every card (owner, 14 окт; design/v9/v9-card-note.png).
-    CardPage(onClose = { commitTitle(); onClose() }) {
-        Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth()) {
-            val scroll = rememberScrollState()
-            val pageLines = rememberPageLines()
-            Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().screenRule()) {
-                // When it was begun — its first record — on the margin as a day of the diary, the weekday under it.
-                val bornAt = task.entries.minOfOrNull { it.at } ?: task.history.firstOrNull { it.kind == "created" }?.at ?: task.createdAt
-                val bornDay = runCatching { java.time.LocalDate.parse(bornAt.take(10)) }.getOrNull()
-                androidx.compose.foundation.layout.Spacer(Modifier.size(4.dp))
-                // Owner, 16 окт: the head shows what is about the note, not its words again — a title only when it isn't their beginning.
-                val words = task.entries.firstOrNull { it.text.isNotBlank() }?.text?.trim().orEmpty()
-                val ownTitle = title.isNotBlank() && !words.startsWith(title.trimEnd('…', '.').take(40))
-                NoteHead(bornDay, emptyList(), {}, task.sphere, { vm.setSphere(task.id, it) }, title = if (!ownTitle) null else ({
-                    BasicTextField(title, { title = it.replace("\n", " ") }, textStyle = Type.display.copy(color = c.ink, fontSize = 27.sp, lineHeight = 32.sp),
-                        cursorBrush = SolidColor(c.link), modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
-                }), tools = {
-                        // Owner, 14 окт: the same row of tools as every card; three things, so no «Ещё».
-                        ActionBar(listOfNotNull(
-                            Action(s.actToMatter, false, { commitTitle(); vm.ideaToMatter(task.id); onClose() }) { DealGlyph(it, 22.dp) },
-                            rowActs?.let { r -> Action(s.actToTopic, false, { commitTitle(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } },
-                            // Owner, 14 окт: put away (it stays in «Архив», with «Отменить») before deleting.
-                            // Owner, 16 окт: «В архив»; an archived note — «Вернуть» and only then «Удалить».
-                            if (!task.done) Action(s.toArchive, false, { commitTitle(); vm.archiveTopic(task.id); onClose() }) { ArchiveGlyph(it, 22.dp) }
-                            else Action(s.bringBack, false, { vm.reviveTopic(task.id) }) { ArchiveGlyph(it, 22.dp) },
-                            Action(s.deleteNow, false, { onClose(); vm.deleteNow(task.id) }) { TrashGlyph(it, 22.dp) },
-                        ), slots = 4)
+    var viewing by remember { mutableStateOf<Attachment?>(null) }
+    var tagsFor by remember { mutableStateOf<Entry?>(null) }
+    val bornAt = task.entries.minOfOrNull { it.at } ?: task.createdAt
+    val day = runCatching { java.time.LocalDate.parse(bornAt.take(10)) }.getOrNull()
+    fun blur() { focus.clearFocus() }
+    fun copyText(text: String) { ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Margin", text)) }
+    fun update(e: Entry, f: (Entry) -> Entry) = vm.updateDiaryEntry(task.id, e.id, f)
+    fun copyFile(e: Entry, a: Attachment) {
+        vm.copyRecord("task:${task.id}", e.id, a.id)
+        val file = Files.file(ctx, a)
+        if (file != null) {
+            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", file)
+            ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newUri(ctx.contentResolver, a.name, uri))
+        } else copyText(a.url ?: a.name)
+    }
+    CardPage(onClose = { blur(); onClose() }) {
+        Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().screenRule()
+            .onGloballyPositioned { rootBounds = it.boundsInRoot() }
+            .pointerInput(Unit) { awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                val rect = activeBounds
+                if (rect != null && !rect.contains(rootBounds.topLeft + down.position)) focus.clearFocus()
+            } }) {
+            Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+                Spacer(Modifier.height(4.dp))
+                NoteHead(day, emptyList(), {}, task.sphere, { blur(); vm.setSphere(task.id, it) }, title = {
+                    var selected by remember { mutableStateOf(task.title) }
+                    NoteRowMenu(onDelete = { vm.renameDiaryTitle(task.id, "") }, onCopy = { copyText(selected) },
+                        onList = { vm.renameDiaryTitle(task.id, numberedNoteLine(selected)) }) { open ->
+                        NoteInlineText("title:${task.id}", task.title, Type.display.copy(color = c.ink, fontSize = 27.sp, lineHeight = 32.sp),
+                            onSave = { vm.renameDiaryTitle(task.id, it); true }, onLong = { selected = it; open() }, onBounds = { fieldBounds = it })
+                    }
+                }, tools = {
+                    ActionBar(listOfNotNull(
+                        Action(s.actToMatter, false, { blur(); vm.ideaToMatter(task.id); onClose() }) { DealGlyph(it, 22.dp) },
+                        rowActs?.let { r -> Action(s.actToTopic, false, { blur(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } },
+                        if (!task.done) Action(s.toArchive, false, { blur(); vm.archiveTopic(task.id); onClose() }) { ArchiveGlyph(it, 22.dp) }
+                        else Action(s.bringBack, false, { vm.reviveTopic(task.id) }) { ArchiveGlyph(it, 22.dp) },
+                        Action(s.deleteNow, false, { blur(); onClose(); vm.deleteNow(task.id) }) { TrashGlyph(it, 22.dp) },
+                    ), slots = 4)
                 })
-                // Owner, 16 окт: the head (day, title, marks, tools) stays put; only what is under it scrolls.
-                Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().ruledPage(pageLines).verticalScroll(scroll).padding(bottom = 24.dp)) {
-                // Everything of the note is here (owner, 14 окт: no second, «whole» view of it) — each file in its own record.
-                WrittenLane(task.entries.filter { it.text.isNotBlank() || it.attachments.isNotEmpty() }.map { LaneItem(it.id, it.at, it.text, it.attachments) }, s.ideaHint, Modifier.padding(top = 0.dp), after = null, label = s.records,
-                    canAdd = false, vm = vm,
-                    onEdit = { id, t -> if (t.isBlank()) vm.removeRecord(task.id, id) else vm.editEntryText(owner, id, t.trim()) },
-                    onAdd = { t, at -> vm.insertEntry(owner, null, Entry(at = at, text = t)) })
-                // Begun when its first words were written (owner, 14 окт: it said «создано» on the day it was last touched).
-                bornDay?.let { d -> Margined { Voice(s.begunOn(d.dayMonthShort()), Modifier.padding(top = 22.dp, bottom = 6.dp)) } }
-                PageEnd(pageLines)
-                }
+                CardRule()
+                task.entries.forEach { e -> key(e.id) {
+                    Margined(margin = { Stamp(e.at) }) {
+                        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (e.tags.isNotEmpty()) Text(e.tags.joinToString("  ") { "#$it" }, style = Type.small.copy(color = c.link),
+                                modifier = Modifier.fillMaxWidth().clickable { blur(); tagsFor = e }.padding(vertical = 6.dp))
+                            val sources = e.attachments.mapNotNull { it.url }.toSet()
+                            e.text.split('\n').forEachIndexed { index, line ->
+                                if (line.trim() !in sources && (line.isNotEmpty() || e.attachments.isEmpty())) key("line:$index") {
+                                    var selected by remember { mutableStateOf(line) }
+                                    NoteRowMenu(onDelete = { update(e) { it.replaceNoteLine(index, null) } }, onCopy = { copyText(selected) },
+                                        onList = { update(e) { current -> current.replaceNoteLine(index, numberedNoteLine(current.text.split('\n').getOrElse(index) { selected })) } }) { open ->
+                                        NoteInlineText("${e.id}:$index", line, Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 24.sp),
+                                            onSave = { value -> update(e) { SavedMaterials.prepare(it.replaceNoteLine(index, value)) }; true },
+                                            onLong = { selected = it; open() }, onBounds = { fieldBounds = it })
+                                    }
+                                }
+                            }
+                            if (e.description.isNotEmpty()) {
+                                var selected by remember { mutableStateOf(e.description) }
+                                NoteRowMenu(onDelete = { update(e) { it.copy(description = "") } }, onCopy = { copyText(selected) },
+                                    onList = { update(e) { it.copy(description = numberedNoteLine(it.description)) } }) { open ->
+                                    NoteInlineText("desc:${e.id}", e.description, Type.body.copy(color = c.graphite, fontSize = 16.sp, lineHeight = 24.sp),
+                                        onSave = { value -> update(e) { it.copy(description = value) }; true }, onLong = { selected = it; open() }, onBounds = { fieldBounds = it })
+                                }
+                            }
+                            e.attachments.forEach { a -> key(a.id) {
+                                NoteRowMenu(onDelete = { update(e) { current ->
+                                    val changed = current.removeCardAttachment(a.id)
+                                    val site = a.url?.let(SavedMaterials::site)
+                                    changed.copy(tags = changed.tags.filterNot { it == site && changed.attachments.none { other -> other.url?.let(SavedMaterials::site) == site } })
+                                } }, onCopy = { if (a.kind == "link") copyText(a.url.orEmpty()) else copyFile(e, a) },
+                                    onList = { update(e) { it.copy(attachments = it.attachments.map { item -> if (item.id == a.id) item.copy(numbered = true) else item }) } },
+                                    onShare = if (a.kind in setOf("photo", "video", "file", "audio")) ({ Files.shareIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } } }) else null) { open ->
+                                    Row(Modifier.fillMaxWidth().background(if (a.kind == "link") c.chip else c.bg, RoundedCornerShape(12.dp))
+                                        .combinedClickable(onClick = { blur(); if (a.kind == "photo" || a.kind == "video") viewing = a else if (a.kind != "link") Files.openIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } } }, onLongClick = open)
+                                        .padding(if (a.kind == "link") 12.dp else 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                                        if (a.numbered) Text("1.", style = Type.body.copy(color = c.ink), modifier = Modifier.padding(top = 4.dp))
+                                        if (a.kind in setOf("photo", "video") || (a.kind == "link" && a.file != null)) Thumb(a, if (a.kind == "link") 56.dp else 84.dp)
+                                        Column(Modifier.weight(1f)) {
+                                            NoteInlineText("name:${a.id}", a.name.ifEmpty { "Файл" }, Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp),
+                                                onSave = { value -> update(e) { it.copy(attachments = it.attachments.map { item -> if (item.id == a.id) item.copy(name = value, titleFromUser = a.kind == "link") else item }) }; true },
+                                                onLong = { open() }, onBounds = { fieldBounds = it })
+                                            if (a.kind == "link") NoteInlineText("url:${a.id}", a.url.orEmpty(), Type.small.copy(color = c.link, fontSize = 14.sp),
+                                                onSave = { vm.editDiarySource(task.id, e.id, a.id, it) }, onLong = { open() }, onBounds = { fieldBounds = it })
+                                        }
+                                    }
+                                }
+                            } }
+                            e.items.forEach { item ->
+                                NoteRowMenu(onDelete = { update(e) { it.copy(items = it.items.filterNot { x -> x.id == item.id }) } }, onCopy = { copyText(item.title) },
+                                    onList = { update(e) { it.copy(items = it.items.map { x -> if (x.id == item.id) x.copy(title = numberedNoteLine(x.title)) else x }) } }) { open ->
+                                    NoteInlineText("item:${item.id}", item.title, Type.body.copy(color = c.ink, fontSize = 16.sp),
+                                        onSave = { value -> update(e) { it.copy(items = it.items.map { x -> if (x.id == item.id) x.copy(title = value) else x }) }; true }, onLong = { open() }, onBounds = { fieldBounds = it })
+                                }
+                            }
+                        }
+                    }
+                } }
             }
-            Column(Modifier.fillMaxWidth().background(c.bg).padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(top = 8.dp, bottom = 8.dp)) {
+            Column(Modifier.fillMaxWidth().background(c.bg).padding(bottom = 10.dp).fieldBand().fieldRule().padding(start = 14.dp, end = 4.dp).padding(vertical = 8.dp)) {
                 SmartComposer(vm, s.cardNoteHint, false, onSend = { t, f ->
-                    // An idea's words stay words: a record with its photos and files, nothing parsed out of them.
-                    if (t.isNotBlank() || f.isNotEmpty()) vm.insertEntry(owner, null, Entry(text = t.trim(), attachments = f))
+                    blur()
+                    if (t.isNotBlank() || f.isNotEmpty()) {
+                        val entry = SavedMaterials.prepare(Entry(text = t.trim(), attachments = f))
+                        vm.insertEntry("task:${task.id}", null, entry)
+                        if (entry.attachments.any { it.kind == "link" }) MaterialPreviewWorker.schedule(ctx, entry.id)
+                    }
                 }, slash = false, floating = planner)
             }
         }
     }
+    viewing?.let { Viewer(it, vm, onClose = { viewing = null }) }
+    tagsFor?.let { e -> TextDialog("Теги", e.tags.joinToString(", "), "Через запятую", onDismiss = { tagsFor = null }) { value ->
+        update(e) { it.copy(tags = SavedMaterials.tags(value)) }; tagsFor = null
+    } }
 }

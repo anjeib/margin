@@ -27,6 +27,8 @@ data class Settings(
     val voiceModel: String = DEFAULT_VOICE,
     /** Send dictated text right away instead of leaving it in the composer. */
     val voiceSendNow: Boolean = true,
+    /** Automatically stop voice recording after the speaker pauses (~2.2 s of silence). */
+    val voiceAutoStop: Boolean = true,
     /** Who reads the words: local (the phone only) | auto (the phone, the AI for hard phrases when online) | cloud (the AI when online). */
     val parseMode: String = "local",
     /** Android Auto Backup to the Google account (see MarginBackupAgent). Off by default (Fable, 15 окт): «никакого облака» means no copy leaves the phone unasked. */
@@ -86,6 +88,7 @@ class Prefs private constructor(context: Context) {
         voiceAi = sp.getBoolean("voiceAi", true),
         voiceModel = sp.getString("voiceModel", null) ?: Settings.DEFAULT_VOICE,
         voiceSendNow = sp.getBoolean("voiceAutoSend", true),
+        voiceAutoStop = sp.getBoolean("voiceAutoStop", true),
         // Owner, 13 окт: no cloud AI for now — everything read on the phone. Installs from before are switched once to «Телефон».
         // Without a cloud AI in the build (owner, 14 окт) the phone reads everything, whatever was chosen before — nothing waits for it.
         parseMode = if (!ru.anjeib.margin.BuildConfig.CLOUD_AI || !sp.getBoolean("phoneFirst", false)) "local" else sp.getString("parseMode", null)?.takeIf { it in setOf("local", "auto", "cloud") } ?: "local",
@@ -125,6 +128,7 @@ class Prefs private constructor(context: Context) {
             putBoolean("voiceAi", s.voiceAi)
             putString("voiceModel", s.voiceModel)
             putBoolean("voiceAutoSend", s.voiceSendNow)
+            putBoolean("voiceAutoStop", s.voiceAutoStop)
             putString("parseMode", s.parseMode)
             putBoolean("phoneFirst", true)
             putBoolean("googleBackup", s.googleBackup)

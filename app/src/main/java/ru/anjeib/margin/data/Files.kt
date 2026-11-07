@@ -102,7 +102,7 @@ object Files {
                 "video" -> MediaMetadataRetriever().run {
                     setDataSource(f.absolutePath); val b = getFrameAtTime(0); release(); b?.let { scale(it, px) }
                 }
-                "photo" -> {
+                "photo", "link" -> {
                     val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     BitmapFactory.decodeFile(f.absolutePath, o)
                     var sample = 1
@@ -142,6 +142,9 @@ object Files {
     }
 
     fun openIntent(ctx: Context, a: Attachment): Intent? {
+        if (a.kind == "link") return a.url?.takeIf { SavedMaterials.site(it) != null }?.let {
+            Intent(Intent.ACTION_VIEW, Uri.parse(it))
+        }
         val f = file(ctx, a) ?: return null
         val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
         return Intent(Intent.ACTION_VIEW).setDataAndType(uri, a.mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -162,7 +165,7 @@ object Files {
     fun shareIntent(ctx: Context, a: Attachment): Intent? {
         val f = file(ctx, a) ?: return null
         val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
-        return Intent.createChooser(Intent(Intent.ACTION_SEND).setType(a.mime ?: "*/*").putExtra(Intent.EXTRA_STREAM, uri)
+        return Intent.createChooser(Intent(Intent.ACTION_SEND).setType(a.mime ?: "*/*").putExtra(Intent.EXTRA_STREAM, uri).apply { clipData = android.content.ClipData.newUri(ctx.contentResolver, a.name, uri) }
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null)
     }
 
@@ -228,6 +231,7 @@ class WavRecorder(private val ctx: Context) {
     private var thread: Thread? = null
     @Volatile private var running = false
     @Volatile var level: Float = 0f; private set
+    @Volatile var pauseReached: Boolean = false; private set
     private var out: File? = null
     private var startedAt = 0L
 
@@ -239,8 +243,9 @@ class WavRecorder(private val ctx: Context) {
             ?: return false
         if (r.state != AudioRecord.STATE_INITIALIZED) { r.release(); return false }
         val f = File(Files.dir(ctx), newId() + ".wav")
-        out = f; rec = r; running = true; startedAt = System.currentTimeMillis()
+        out = f; rec = r; running = true; pauseReached = false; startedAt = System.currentTimeMillis()
         r.startRecording()
+        val eos = ru.anjeib.margin.voice.Pcm.EndOfSpeech(rate)
         thread = Thread {
             RandomAccessFile(f, "rw").use { raf ->
                 raf.write(ByteArray(44)) // header placeholder
@@ -251,12 +256,17 @@ class WavRecorder(private val ctx: Context) {
                     val n = r.read(buf, 0, buf.size)
                     if (n <= 0) continue
                     var peak = 0
+                    var sumSq = 0.0
                     for (i in 0 until n) {
                         val v = buf[i].toInt()
                         bytes[i * 2] = (v and 0xff).toByte(); bytes[i * 2 + 1] = (v shr 8 and 0xff).toByte()
                         peak = maxOf(peak, abs(v))
+                        val norm = v / 32768.0
+                        sumSq += norm * norm
                     }
                     level = (peak / 32768f).coerceIn(0f, 1f)
+                    val rms = kotlin.math.sqrt(sumSq / n).toFloat()
+                    pauseReached = eos.push(rms, n)
                     raf.write(bytes, 0, n * 2); total += n * 2
                 }
                 raf.seek(0); raf.write(wavHeader(total, rate))

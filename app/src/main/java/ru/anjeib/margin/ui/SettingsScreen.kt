@@ -93,6 +93,7 @@ fun SettingsScreen(settings: Settings, vm: MainVm, contentPadding: PaddingValues
             // that — nothing goes to the cloud. The model comes by itself over Wi-Fi (ModelWorker); nothing to download or delete here.
             // Owner, 14 окт: no switch and no model row here — the app comes with its speech model (RuStore); while testing it is
             // fetched by itself, and how far that is shows under the contents («Распознавание речи · 42 %»).
+            ToggleRow(s.voiceAutoStop, s.voiceAutoStopHint, settings.voiceAutoStop) { v -> vm.updateSettings { it.copy(voiceAutoStop = v) } }
             ToggleRow(s.voiceSendNow, null, settings.voiceSendNow) { v -> vm.updateSettings { it.copy(voiceSendNow = v) } }
         }
 

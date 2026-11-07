@@ -16,6 +16,8 @@ import ru.anjeib.margin.data.label
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -65,7 +67,7 @@ import java.time.LocalDate
  * opens its card: the tick, the words (edited in place), the day and the hour, who owes it, the user's comment,
  * and the way to the topic it belongs to.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenTopic: (() -> Unit)?, onOpenPerson: ((String) -> Unit)? = null,
               /** A matter under another one: its parent's card opens from the line under the title (by the parent's id). */
@@ -162,13 +164,14 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                         ))
                         androidx.compose.animation.AnimatedVisibility(more) {
                             MoreActions(listOfNotNull(
+                                if (!q.done) Action(s.actStep, false, { more = false; fill("step") }) { PlusGlyph(it, 19.dp) } else null,
                                 Action(s.actWait, false, { dialog = "waiting" }) { HandGlyph(it, 23.dp, incoming = true) },
                                 Action(s.actPromised, false, { dialog = "promised" }) { HandGlyph(it, 23.dp) },
                                 if (!q.done) rowActs?.let { r -> Action(s.actToTopic, false, { commit(); onClose(); r.toTopic(ref) }) { TopicGlyph(it, 19.dp) } } else null,
                                 Action(s.actToIdea, false, { commit(); vm.dealToIdea(topic.id, q.id); onClose() }) { NoteGlyph(it, 21.dp) },
                                 // Owner, 16 окт: into the topic's «Архив», not deleted.
                                 Action(s.toArchive, false, { vm.archiveMatter(ref); onClose() }) { ArchiveGlyph(it, 22.dp) },
-                                Action(s.deleteNow, false, { onClose(); vm.deleteNow(ref) }) { TrashGlyph(it, 22.dp) },
+                                Action(s.deleteNow, false, { onClose(); vm.deleteNow(ref) }, danger = true) { TrashGlyph(it, 22.dp) },
                             ))
                         }
                     }
@@ -179,6 +182,47 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 CardRule()
                 MatterTitle(title, { title = it }, q.done, q.time, if (q.slots.isEmpty() && due != null) ({ dialog = "time" }) else null, late,
                     mark = if ((q.from != null || q.promisedTo != null) && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = q.from != null, size = 28.dp) } }) else null)
+                val steps = topic.subtasks.filter { it.parent == q.id }
+                if (steps.isNotEmpty()) {
+                    Margined(Modifier.padding(top = 2.dp, bottom = 4.dp)) {
+                        Column {
+                            steps.forEach { st ->
+                                var stMenu by remember(st.id) { mutableStateOf(false) }
+                                var stEdit by remember(st.id) { mutableStateOf(false) }
+                                Box {
+                                    Row(
+                                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                                            .combinedClickable(
+                                                onClick = { vm.toggleQuestion(topic.id, st.id) },
+                                                onLongClick = { stMenu = true },
+                                            )
+                                            .padding(vertical = 5.dp, horizontal = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        CheckCircle(st.done, size = 18.dp, onToggle = { vm.toggleQuestion(topic.id, st.id) })
+                                        Spacer(Modifier.width(10.dp))
+                                        StrikeText(
+                                            st.title,
+                                            Type.body.copy(fontFamily = rowFamily, fontSize = 15.sp, lineHeight = 21.sp, color = if (st.done) c.graphite else c.ink),
+                                            if (st.done) 1f else 0f,
+                                            c.faint,
+                                            maxLines = 3,
+                                        )
+                                    }
+                                    SoftMenu(stMenu, { stMenu = false }) {
+                                        SoftMenuItem(s.edit) { stMenu = false; stEdit = true }
+                                        SoftMenuItem(s.toArchive) { stMenu = false; vm.removeDeal(topic.id, st.id) }
+                                        SoftMenuItem(s.deleteNow, danger = true) { stMenu = false; vm.deleteNow("q:${topic.id}:${st.id}") }
+                                    }
+                                }
+                                if (stEdit) TextDialog(s.edit, st.title, "", onDismiss = { stEdit = false }) { v ->
+                                    if (v.isNotBlank()) vm.renameSubtask(topic.id, st.id, v.trim()); stEdit = false
+                                }
+                            }
+                            if (!q.done) QuietLink(s.actStep) { fill("step") }
+                        }
+                    }
+                }
                 val born = topic.events.firstOrNull { it.ref == q.id && (it.kind == "q" || it.kind == "wait") }?.at ?: topic.createdAt
                 WrittenLane(q.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,
                     canAdd = false, heading = s.records, vm = vm,

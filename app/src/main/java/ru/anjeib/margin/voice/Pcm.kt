@@ -208,4 +208,40 @@ object Pcm {
         for (v in x) s += v * v.toDouble()
         return x.isEmpty() || sqrt(s / x.size) < 0.002
     }
+
+    /**
+     * Spots when the speaker has finished talking and paused for [silenceSec] seconds (after at least [minVoicedSec] of speech,
+     * ignoring the first [guardSec] where the finger's tap on the glass can click).
+     */
+    class EndOfSpeech(
+        private val rate: Int = RATE,
+        private val silenceSec: Float = 2.2f,
+        private val minVoicedSec: Float = 0.30f,
+        private val guardSec: Float = 0.25f,
+        private val speechRms: Float = 0.015f,
+        private val quietRms: Float = 0.008f,
+    ) {
+        private var totalSamples = 0L
+        private var voicedSamples = 0L
+        private var quietSamples = 0L
+        var done: Boolean = false; private set
+
+        fun push(rms: Float, frames: Int): Boolean {
+            if (frames <= 0 || done) return done
+            totalSamples += frames
+            if (totalSamples <= (guardSec * rate).toLong()) return false
+            val minVoiced = (minVoicedSec * rate).toLong()
+            if (rms >= speechRms) {
+                voicedSamples += frames
+                quietSamples = 0L
+            } else if (voicedSamples >= minVoiced && rms <= quietRms) {
+                quietSamples += frames
+                if (quietSamples >= (silenceSec * rate).toLong()) done = true
+            } else if (rms > quietRms) {
+                // Soft trailing sound between quietRms and speechRms resets the silence timer without counting as strong speech.
+                quietSamples = 0L
+            }
+            return done
+        }
+    }
 }

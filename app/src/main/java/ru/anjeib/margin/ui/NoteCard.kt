@@ -156,6 +156,9 @@ fun NoteCard(key: String, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     // The words, written right here, their day and hour on the margin — as in the diary's own note.
                     Margined(margin = { Box(Modifier.padding(top = 9.dp)) { Stamp(n.at) } }) {
                         Column {
+                            if (kind == "e") data.tasks.find { it.id == ref }?.entries?.find { it.id == id }?.takeIf { it.isSavedMaterial }?.let {
+                                MaterialDetails(it, "task:$ref", vm, editable = !n.removed)
+                            }
                             if (n.text.isNotBlank() || n.files.isEmpty())
                                 BasicTextField(text, { text = continueList(text, it) }, readOnly = n.removed,
                                     textStyle = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp), cursorBrush = SolidColor(c.link),

@@ -43,9 +43,11 @@ object Samples {
                 lesson("6", "Шаг — маленькое кольцо под своим делом", parent = "ex-c5"),
                 lesson("7", "Шаг — отметьте его этим кольцом", parent = "ex-c5"),
                 lesson("8", "6. Напишите что-нибудь для себя в «Дневник» — книжка в шапке"),
+                lesson("9", "7. Откройте запись дневника: нажмите текст, исправьте и нажмите рядом — сохранено"),
+                lesson("10", "8. Подержите строку заметки: «Список» поставит номер 1. У файла — «Поделиться»"),
             ),
             events = listOf(ev("09:00", "ex-c1"), ev("09:01", "ex-c2", entry = "ex-c-e2"), ev("09:01", "ex-c3", wait = true, entry = "ex-c-e2"),
-                ev("09:02", "ex-c4"), ev("09:02", "ex-c5"), ev("09:02", "ex-c6"), ev("09:02", "ex-c7"), ev("09:03", "ex-c8")),
+                ev("09:02", "ex-c4"), ev("09:02", "ex-c5"), ev("09:02", "ex-c6"), ev("09:02", "ex-c7"), ev("09:03", "ex-c8"), ev("09:04", "ex-c9"), ev("09:04", "ex-c10")),
         )
         val persons = listOf(Person(id = "ex-p-katya", name = "Катя", about = "ведёт курс Margin", kept = true, aboutFromUser = true))
         return AppData(tasks = listOf(course), persons = persons)

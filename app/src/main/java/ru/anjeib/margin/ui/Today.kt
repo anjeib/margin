@@ -162,7 +162,7 @@ fun MatterRow(
                     if (acts != null) {
                         SoftMenuItem(if (t.topicId != null) s.toOtherTopic else s.toTopicPick) { quick = false; acts.toTopic(t.id) }
                         SoftMenuItem(s.toArchive) { quick = false; acts.remove(t.id) }
-                        SoftMenuItem(s.deleteNow) { quick = false; acts.delete(t.id) }
+                        SoftMenuItem(s.deleteNow, danger = true) { quick = false; acts.delete(t.id) }
                     }
                 }
                 RowBody(
@@ -290,7 +290,7 @@ fun PromisePaperRow(t: Task, seat: Seat, today: LocalDate, data: AppData, onOpen
             SoftMenuItem(s.actWhen) { menu = false; dlg = "dates" }
             SoftMenuItem(s.fieldTime) { menu = false; dlg = "time" }
             SoftMenuItem(s.edit) { menu = false; dlg = "title" }
-            LocalRowActions.current?.let { r -> SoftMenuItem(s.toArchive) { menu = false; r.remove(t.id) }; SoftMenuItem(s.deleteNow) { menu = false; r.delete(t.id) } }
+            LocalRowActions.current?.let { r -> SoftMenuItem(s.toArchive) { menu = false; r.remove(t.id) }; SoftMenuItem(s.deleteNow, danger = true) { menu = false; r.delete(t.id) } }
         } }
         RowTitle(t.title, marked = late)
         // Words never broken: at a large font «напомнить» goes to the next line whole (FlowRow).
@@ -679,7 +679,7 @@ fun TopicHold(topicId: String, open: Boolean, onDismiss: () -> Unit) {
         SoftMenuItem(s.rename) { onDismiss(); dialog = "rename" }
         SoftMenuItem(s.sharePdf) { onDismiss(); shareTopic(ctx, t) }
         SoftMenuItem(s.toArchive) { onDismiss(); dialog = "archive" }
-        SoftMenuItem(s.deleteNow) { onDismiss(); dialog = "deleteNow" }
+        SoftMenuItem(s.deleteNow, danger = true) { onDismiss(); dialog = "deleteNow" }
     } } }
     when (dialog) {
         "rename" -> TextDialog(s.rename, t.title, "", onDismiss = { dialog = null }) { v ->

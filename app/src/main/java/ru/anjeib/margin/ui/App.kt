@@ -215,8 +215,12 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     LaunchedEffect(searchReq) { searchReq?.let { allFor = it; searching = true; vm.searchOpened() } }
     fun closeFind() { keepSearch(ctx, find.query); find.open = false; find.query = ""; find.cur = 0 }
     BackHandler(find.open && !searching) { closeFind() }
-    // Turned to another day with the tabs: back is today's page.
-    BackHandler(!drawer.isOpen && vm.pageDay.collectAsState().value != null && !contents && (screen == TOPICS || screen == TASKS && (view == Views.TODAY || view == Views.NOTES))) { vm.pageDay.value = null }
+    // Turned to another day or week with the tabs: back is today's page.
+    val weekMode by vm.weekMode.collectAsState()
+    BackHandler(!drawer.isOpen && (vm.pageDay.collectAsState().value != null || weekMode) && !contents && (screen == TOPICS || screen == TASKS && (view == Views.TODAY || view == Views.NOTES))) {
+        vm.weekMode.value = false
+        vm.pageDay.value = null
+    }
     val plannerLook = planner
     BackHandler(!drawer.isOpen && openNote == null && openPerson == null && !searching && (screen != TASKS || view != Views.TODAY)) {
         // A section goes back to the contents it was opened from (owner, 14 окт); «Темы» and «Заметки» — to «Сегодня».
@@ -421,8 +425,9 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         val todayF = LocalDate.now()
                         val feedDay by vm.feedDay.collectAsState()
                         val inJournal = screen == JOURNAL
+                        val topDay = (if (inJournal) feedDay else null) ?: pageDay ?: todayF
                         Column(Modifier.fillMaxSize().screenRule()) {
-                            PlannerHead(sphereShown, vm, events, top = feedDay ?: pageDay ?: todayF, journalOn = inJournal,
+                            PlannerHead(sphereShown, vm, events, top = topDay, journalOn = inJournal,
                                 onPeople = { go(PEOPLE) }, onJournal = { if (inJournal) { screen = TASKS; view = Views.TODAY } else go(JOURNAL) }, onMenu = { contents = true })
                             Box(Modifier.weight(1f).fillMaxWidth()) {
                                 androidx.compose.runtime.CompositionLocalProvider(LocalFramed provides true) {
@@ -430,15 +435,17 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                         if (j) page(PageKey(JOURNAL, view, pageDay)) else page(PageKey(TASKS, Views.TODAY, pageDay))
                                     }
                                 }
-                                // Gone far along the feed (owner, 17 окт): a quiet «↑ сегодня» / «↓ сегодня» over the field brings it back.
-                                val awayDay = feedDay?.takeIf { it != todayF }
+                                // Gone to another week: a quiet «сегодня» pill over the field brings it back.
+                                val todayMon = todayF.minusDays(todayF.dayOfWeek.value - 1L)
+                                val topMon = topDay.minusDays(topDay.dayOfWeek.value - 1L)
+                                val awayDay = if (inJournal) feedDay?.takeIf { it != todayF } else topDay.takeIf { topMon != todayMon }
                                 androidx.compose.animation.AnimatedVisibility(awayDay != null, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), enter = fadeIn(), exit = fadeOut()) {
                                     val up = (awayDay ?: todayF).isAfter(todayF)
                                     val pill = RoundedCornerShape(16.dp)
-                                    Text((if (up) "↑  " else "↓  ") + s.today.lowercase(),
+                                    Text((if (up) "←  " else "") + s.today.lowercase() + (if (!up) "  →" else ""),
                                         style = Type.meta.copy(color = c.link, fontWeight = FontWeight.Medium),
                                         modifier = Modifier.shadow(3.dp, pill).clip(pill).background(c.bg).border(1.dp, c.hairline, pill)
-                                            .clickable { vm.pageDay.value = null; vm.feedJump.value++ }.padding(horizontal = 16.dp, vertical = 8.dp))
+                                            .clickable { vm.pickDay(todayF, todayF) }.padding(horizontal = 16.dp, vertical = 8.dp))
                                 }
                             }
                         }
@@ -533,11 +540,12 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         }
                     }
                     val calDay by vm.calendarDay.collectAsState()
+                    val pickedDayHint = (calDay ?: pageDay?.takeIf { !weekMode && !it.isBefore(LocalDate.now()) })?.takeIf { screen == TASKS }
                     // «Inline»: the field writes into what is unfolded; what is done with it is in its long-press menu.
                     val inlineHint = data.inlineHint(expandedKey).takeIf { screen == TASKS }
                     SmartComposer(
                         vm,
-                        hint = inlineHint ?: if (screen == JOURNAL) s.journalHint else if (screen == TOPICS) s.topicsHint else if (screen == NOTES) s.notesHint else if (screen == TASKS && view == Views.NOTES && !contents) s.diaryHint else calDay?.takeIf { screen == TASKS }?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
+                        hint = inlineHint ?: if (screen == JOURNAL) s.journalHint else if (screen == TOPICS) s.topicsHint else if (screen == NOTES) s.notesHint else if (screen == TASKS && view == Views.NOTES && !contents) s.diaryHint else pickedDayHint?.let { s.dealOnHint(it.dayMonth()) } ?: s.composerHint,
                         busy = busy == (if (screen == NOTES) "notes" else "main"),
                         // «Темы»: the words start a topic — its name, and a list under it becomes its matters.
                         onSend = { t, f -> if (screen == JOURNAL) vm.addDiaryNote(t, f) else if (screen == TASKS && inlineHint != null && vm.inlineSend(expandedKey, t, f)) Unit else if (screen == TOPICS) vm.send("/" + s.tagTopic + " " + t, files = f) else if (screen == TASKS && view == Views.NOTES) vm.addDiaryNote(t, f) else {
@@ -968,10 +976,10 @@ private fun ContentsPage(data: AppData, screen: String, onGo: (String, String?) 
         line(s.inboxNote, data.inboxCount().takeIf { it > 0 }?.toString() ?: "", screen == INBOX) { onGo(INBOX, null) }
         line(s.materialsTitle, "", screen == MATERIALS) { onGo(MATERIALS, null) }
         line(s.archiveTitle, data.archiveCount().takeIf { it > 0 }?.toString() ?: "", screen == ARCHIVE) { onGo(ARCHIVE, null) }
+        line(s.helpTitle, "", screen == HELP) { onGo(HELP, null) }
         Spacer(Modifier.height(18.dp))
         SectionHead(s.aboutApp, top = 6.dp)
         line(s.settings, "", screen == SETTINGS, small = true) { onGo(SETTINGS, null) }
-        line(s.helpTitle, "", screen == HELP, small = true) { onGo(HELP, null) }
         line(s.sendFeedback, "", false, small = true) { onFeedback() }
         Margined(Modifier.padding(top = 14.dp)) {
             Column {

@@ -91,6 +91,11 @@ data class Attachment(
     val ocr: String? = null,
     /** For «link»: the address; [name] holds the page title. */
     val url: String? = null,
+    val siteName: String? = null,
+    val previewLoaded: Boolean = false,
+    /** A manually edited link title survives metadata refresh. */
+    val titleFromUser: Boolean = false,
+    val numbered: Boolean = false,
 )
 
 /** A dated record: a line of a note's stream or of a task's log, with optional attachments. */
@@ -107,6 +112,9 @@ data class Entry(
     val isList: Boolean = false,
     /** Where a thing in «Входящие» came from — «Марина, из Telegram», «из Chrome» (owner, 14 окт: what comes in is kept as is). */
     val from: String? = null,
+    /** Personal labels and description, independent of the original shared text. */
+    val tags: List<String> = emptyList(),
+    val description: String = "",
 )
 
 @Serializable
@@ -431,6 +439,10 @@ val Note.text: String get() = entries.joinToString("\n") { it.fullText }
  */
 val Entry.fullText: String get() = listOfNotNull(
     text.takeIf { it.isNotBlank() },
+    description.takeIf { it.isNotBlank() },
+    tags.joinToString(" ").takeIf { it.isNotBlank() },
+    attachments.mapNotNull { it.url }.joinToString(" "),
+    attachments.mapNotNull { it.siteName }.joinToString(" "),
     items.takeIf { it.isNotEmpty() }?.joinToString("; ") { it.title },
     *attachments.flatMap { a -> listOfNotNull(a.caption, a.transcript, a.ocr, if (a.kind == "link") a.name else null, a.contact?.let { c -> listOfNotNull(c.name, c.phone).joinToString(" ") }) }.toTypedArray(),
 ).joinToString(" · ")

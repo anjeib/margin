@@ -1,0 +1,94 @@
+{
+  "versionId": 2064932741,
+  "versionName": "0.98",
+  "versionCode": 98,
+  "apk": "releases/Margin-0.98.apk",
+  "sha256": "041c688091b20a9e4c1140b0983e72b4771f8396b5e52dc855d922dfe6005e7e",
+  "stage": "submitted",
+  "uploadResponse": {
+    "permissions": {
+      "CRITICAL": [],
+      "APPOP": [
+        {
+          "permission": "SCHEDULE_EXACT_ALARM",
+          "description": "Позволяет приложениям использовать точные API сигнализации."
+        }
+      ],
+      "NORMAL": [
+        {
+          "permission": "ACCESS_NETWORK_STATE",
+          "description": "Позволяет приложениям получать доступ к информации о сетях."
+        },
+        {
+          "permission": "FOREGROUND_SERVICE",
+          "description": "Позволяет приложению использовать Service.startForeground."
+        },
+        {
+          "permission": "INTERNET",
+          "description": "Позволяет приложениям открывать сетевые сокеты."
+        },
+        {
+          "permission": "RECEIVE_BOOT_COMPLETED",
+          "description": "Позволяет приложению получать Intent.ACTION_BOOT_COMPLETED, который транслируется после завершения загрузки системы."
+        },
+        {
+          "permission": "USE_BIOMETRIC",
+          "description": "Позволяет приложению использовать биометрические методы, поддерживаемые устройствами."
+        },
+        {
+          "permission": "USE_EXACT_ALARM",
+          "description": "Позволяет приложениям использовать точные сигналы тревоги так же, как и в SCHEDULE_EXACT_ALARM, но без необходимости запрашивать это разрешение у пользователя."
+        },
+        {
+          "permission": "USE_FINGERPRINT",
+          "description": "Это разрешение устарело на уровне API 28. Вместо этого приложения должны запрашивать USE_BIOMETRIC."
+        },
+        {
+          "permission": "WAKE_LOCK",
+          "description": "Позволяет использовать PowerManager WakeLocks для предотвращения перехода процессора в спящий режим или затемнения экрана."
+        }
+      ],
+      "DANGEROUS": [
+        {
+          "permission": "POST_NOTIFICATIONS",
+          "description": "Позволяет приложению публиковать уведомления"
+        },
+        {
+          "permission": "READ_CALENDAR",
+          "description": "Позволяет приложению читать данные календаря пользователя."
+        },
+        {
+          "permission": "RECORD_AUDIO",
+          "description": "Позволяет приложению записывать аудио."
+        }
+      ],
+      "DEPRECATED": [],
+      "SIGNATURE": []
+    }
+  },
+  "commitResponse": null,
+  "statusResponse": {
+    "content": [
+      {
+        "versionId": 2064932741,
+        "appName": "Margin — ежедневник и дневник",
+        "appType": "MAIN",
+        "versionName": "0.98",
+        "versionCode": 98,
+        "versionStatus": "AUTO_CHECK",
+        "publishType": "INSTANTLY",
+        "testingType": null,
+        "publishDateTime": null,
+        "sendDateForModer": "2026-11-05T07:34:54.141",
+        "partialValue": 100,
+        "whatsNew": "Дневник стал удобнее: каждая заметка открывается отдельной карточкой в стиле карточки дела. Заголовок и единое поле для текста, ссылок, фото, файлов и тегов. Добавляйте вложения скрепкой, меняйте текст и ссылки, удаляйте ненужные файлы и теги. Ссылки и изображения из «Поделиться» сразу сохраняются в заметки; ссылки получают карточку сайта с миниатюрой. Поиск учитывает теги и описание.",
+        "priceValue": 0,
+        "paid": false
+      }
+    ],
+    "pageNumber": 0,
+    "pageSize": 20,
+    "totalElements": 1,
+    "totalPages": 1
+  }
+}

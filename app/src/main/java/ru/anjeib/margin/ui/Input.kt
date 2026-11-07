@@ -169,6 +169,7 @@ fun SmartComposer(
     val ownFiles = remember { mutableStateListOf<Attachment>() }
     val files = pageFiles ?: ownFiles
     var recorder by remember { mutableStateOf<WavRecorder?>(null) }
+    var held by remember { mutableStateOf(false) }
     var level by remember { mutableFloatStateOf(0f) }
     val transcribing = "voice" in working
 
@@ -206,11 +207,27 @@ fun SmartComposer(
         if (settings.voiceSendNow && pageText == null) { onSend(tagged(full), files.toList()); text = ""; files.clear() } else { text = full; onWrite?.invoke() }
     }
 
+    fun finishRecording() {
+        val r = recorder ?: return
+        recorder = null
+        val audio = r.stop()
+        if (audio != null) vm.transcribe(audio) { gotSpeech(it, audio) }
+    }
+
     fun startRecording() {
         val r = WavRecorder(ctx)
         if (!r.start()) { Toast.makeText(ctx, s.voiceUnavailable, Toast.LENGTH_SHORT).show(); return }
         recorder = r
-        scope.launch { while (recorder === r) { delay(100); level = r.level } }
+        scope.launch {
+            while (recorder === r) {
+                delay(100)
+                level = r.level
+                if (settings.voiceAutoStop && !held && r.pauseReached) {
+                    finishRecording()
+                    break
+                }
+            }
+        }
     }
     var recSec by remember { mutableIntStateOf(0) }
     LaunchedEffect(recorder) {
@@ -386,12 +403,7 @@ fun SmartComposer(
         // is kept by itself (PageSend: keyboard hidden, page left).
         if (pageText != null) {
             SideEffect { pageSend?.send = { if (text.isNotBlank() || files.isNotEmpty()) send() } }
-            fun finish() {
-                val r = recorder ?: return
-                recorder = null
-                val audio = r.stop()
-                if (audio != null) vm.transcribe(audio) { gotSpeech(it, audio) }
-            }
+            fun finish() = finishRecording()
             val micBox: @Composable () -> Unit = {
                 if (transcribing) Box(Modifier.size(FieldH + 6.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = c.link, strokeWidth = 1.5.dp, modifier = Modifier.size(18.dp))
@@ -403,8 +415,13 @@ fun SmartComposer(
                             if (wasRecording) { finish(); return@detectTapGestures }
                             mic()
                             val t0 = System.currentTimeMillis()
-                            tryAwaitRelease()
-                            // Held: released means done. A short tap leaves it recording until the next tap.
+                            try {
+                                held = true
+                                tryAwaitRelease()
+                            } finally {
+                                held = false
+                            }
+                            // Held: released means done. A short tap leaves it recording until the next tap (or auto-stop after a pause).
                             if (System.currentTimeMillis() - t0 > 450) finish()
                         })
                     }, contentAlignment = Alignment.Center) {
@@ -607,7 +624,7 @@ fun SmartComposer(
  * sits at the field's start; on a page (owner, 13 окт) on the margin of the writing line, so what is added lands right there.
  */
 @Composable
-fun AttachPlus(vm: MainVm, size: Dp = 40.dp, tint: Color = M.c.graphite, glyph: (@Composable () -> Unit)? = null, onAdd: (Attachment) -> Unit) {
+fun AttachPlus(vm: MainVm, size: Dp = 40.dp, tint: Color = M.c.graphite, glyph: (@Composable () -> Unit)? = null, label: String? = null, onAdd: (Attachment) -> Unit) {
     val s = M.s
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -628,9 +645,12 @@ fun AttachPlus(vm: MainVm, size: Dp = 40.dp, tint: Color = M.c.graphite, glyph: 
         r.data?.data?.let { u -> Files.readContact(ctx, u)?.let { add(vm.contactAttachment(it)) } }
     }
     Box {
-        Box(Modifier.size(size).clip(CircleShape).clickable(onClickLabel = s.a11yAttach, role = androidx.compose.ui.semantics.Role.Button) { menu = true }
-            .semantics { contentDescription = s.a11yAttach }, contentAlignment = Alignment.Center) {
+        Row(Modifier.height(size).clip(CircleShape).clickable(onClickLabel = s.a11yAttach, role = androidx.compose.ui.semantics.Role.Button) { menu = true }
+            .semantics { contentDescription = label ?: s.a11yAttach }, verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(size), contentAlignment = Alignment.Center) {
             if (glyph != null) glyph() else PlusGlyph(tint, 18.dp)
+            }
+            if (label != null) Text(label, style = Type.small.copy(color = tint), modifier = Modifier.padding(end = 10.dp))
         }
         SoftMenu(menu, { menu = false }) {
             MenuItem({ PhotoGlyph(it, 21.dp) }, s.attachPhoto) { menu = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
@@ -728,7 +748,7 @@ fun AttachmentChip(a: Attachment, onRemove: (() -> Unit)? = null) {
 fun Thumb(a: Attachment, size: Dp, modifier: Modifier = Modifier) {
     val c = M.c
     val ctx = LocalContext.current
-    val bmp by produceState<Bitmap?>(null, a.id) { value = Files.thumb(ctx, a) }
+    val bmp by produceState<Bitmap?>(null, a.id, a.file) { value = Files.thumb(ctx, a) }
     Box(modifier.size(size).clip(RoundedCornerShape(12.dp)).background(c.chip), contentAlignment = Alignment.Center) {
         bmp?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.size(size)) }
         if (a.kind == "video") Box(Modifier.size(24.dp).clip(CircleShape).background(M.c.overlay.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
@@ -757,7 +777,7 @@ fun AttachmentsView(list: List<Attachment>) {
             media.forEach { Thumb(it, 76.dp, Modifier.clickable { open(it) }) }
         }
         other.forEach { a ->
-            Row(
+            if (a.kind == "link") SourceCard(a) else Row(
                 Modifier.clip(RoundedCornerShape(10.dp)).background(c.chip).clickable { open(a) }.padding(horizontal = 10.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

@@ -67,7 +67,7 @@ import ru.anjeib.margin.data.shortLabel
 fun Onboarding(vm: MainVm, onDone: () -> Unit) {
     val c = M.c
     val s = M.s
-    val scenes = 6
+    val scenes = s.obScenes.size
     val pager = androidx.compose.foundation.pager.rememberPagerState { scenes + 1 }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val last = pager.currentPage == scenes
@@ -126,13 +126,14 @@ private fun ScenePage(i: Int, shown: Boolean) {
                 2 -> SceneVoiceTopic(t.value)
                 3 -> SceneWait(t.value)
                 4 -> SceneDiary(t.value)
-                else -> ScenePeople(t.value)
+                5 -> ScenePeople(t.value)
+                else -> SceneNoteEditing(t.value)
             }
         }
     }
 }
 
-private val SceneMs = intArrayOf(12000, 17000, 14000, 7500, 8000, 4800)
+private val SceneMs = intArrayOf(12000, 17000, 14000, 7500, 8000, 4800, 11000)
 
 /** [t] mapped onto [a]..[b] of the scene's time, clamped to 0..1. */
 private fun seg(t: Float, a: Float, b: Float) = ((t - a) / (b - a)).coerceIn(0f, 1f)
@@ -621,5 +622,34 @@ private fun SetupPage(vm: MainVm) {
                 })
             }
         }
+    }
+}
+
+
+/** A short, looping example of edit -> blur -> long press -> numbered row. */
+@Composable
+private fun SceneNoteEditing(t: Float) {
+    val c = M.c
+    val s = M.s
+    val edited = t > 0.3f
+    val saved = t > 0.47f
+    val menu = t in 0.62f..0.82f
+    val numbered = t > 0.82f
+    Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 18.dp)) {
+        Text(s.obNoteName, style = Type.display.copy(color = c.ink, fontSize = 24.sp, lineHeight = 29.sp))
+        Text(s.cardKindNote, style = Type.italic.copy(color = c.graphite), modifier = Modifier.padding(top = 8.dp, bottom = 16.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(c.hairline))
+        Spacer(Modifier.height(16.dp))
+        Text((if (numbered) "1. " else "") + (if (edited) s.obNoteEdited else s.obNoteLine) + (if (t in 0.16f..0.46f) "│" else ""),
+            style = Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 24.sp))
+        Text("https://example.com", style = Type.small.copy(color = c.link), modifier = Modifier.padding(top = 10.dp))
+        if (saved && !menu) Text("✓ " + s.savedTick, style = Type.small.copy(color = c.link), modifier = Modifier.padding(top = 12.dp))
+        if (menu) Column(Modifier.padding(top = 10.dp).clip(RoundedCornerShape(12.dp)).background(c.chip).padding(12.dp)) {
+            Text(s.delete, style = Type.body.copy(color = c.accentText))
+            Text(if (s == ru.anjeib.margin.i18n.En) "Copy" else "Скопировать", style = Type.body.copy(color = c.ink), modifier = Modifier.padding(vertical = 8.dp))
+            Text(if (s == ru.anjeib.margin.i18n.En) "List" else "Список", style = Type.body.copy(color = c.link))
+        }
+        Spacer(Modifier.height(16.dp))
+        ClipGlyph(c.graphite, 22.dp)
     }
 }
