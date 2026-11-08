@@ -453,20 +453,39 @@ fun TaskList(
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1,
         ) { p ->
-            val (mon, singleD) = fromWeekPage(p, today)
-            val pageListState = androidx.compose.foundation.lazy.rememberLazyListState()
-            val pageDays = remember(data, events, today, kind, topicF, mon, singleD) {
-                if (singleD != null) buildFeedDays(listOf(singleD), singleDay = true)
-                else buildFeedDays((0L..6L).map { mon.plusDays(it) }, singleDay = false)
-            }
-            LazyColumn(Modifier.fillMaxSize(), state = pageListState, contentPadding = pad) {
-                findable(found, find?.takeIf { findPage != null && p == pagerState.currentPage }, { k -> (k as? String)?.let { ks -> findable.firstOrNull { ks.endsWith(it.id) } }?.let { t -> find != null && findHit(find.words, t.findText()) } == true }) {
-                    if (singleD == null && pageDays.isEmpty()) {
-                        item("fw-empty-$mon") { FeedWeekEmptyHead(mon, today) }
-                    } else {
-                        emitFeedDays(pageDays, singleDay = singleD != null)
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val screenWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
+            val screenWidthPx = with(density) { screenWidth.toPx() }
+            val pageTransform = remember(p, pagerState) {
+                FeedPageTransform(
+                    offset = { pagerState.getOffsetDistanceInPages(p) },
+                    offsetPx = {
+                        val size = pagerState.layoutInfo.pageSize
+                        val w = if (size > 0) size.toFloat() else screenWidthPx
+                        pagerState.getOffsetDistanceInPages(p) * w
                     }
-                    item("page-end") { PageEnd(pageLines) }
+                )
+            }
+            androidx.compose.runtime.CompositionLocalProvider(LocalFeedPageTransform provides pageTransform) {
+                val (mon, singleD) = fromWeekPage(p, today)
+                val pageDays = remember(data, events, today, kind, topicF, mon, singleD) {
+                    if (singleD != null) buildFeedDays(listOf(singleD), singleDay = true)
+                    else buildFeedDays((0L..6L).map { mon.plusDays(it) }, singleDay = false)
+                }
+                val initialIndex = remember(p, pageDays, today, undatedAll.size, kind, topicF) {
+                    if (singleD == null) calculateWeekFeedTargetIndex(pageDays, today, undatedAll, kind, topicF)
+                    else 0
+                }
+                val pageListState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+                LazyColumn(Modifier.fillMaxSize(), state = pageListState, contentPadding = pad) {
+                    findable(found, find?.takeIf { findPage != null && p == pagerState.currentPage }, { k -> (k as? String)?.let { ks -> findable.firstOrNull { ks.endsWith(it.id) } }?.let { t -> find != null && findHit(find.words, t.findText()) } == true }) {
+                        if (singleD == null && pageDays.isEmpty()) {
+                            item("fw-empty-$mon") { FeedWeekEmptyHead(mon, today) }
+                        } else {
+                            emitFeedDays(pageDays, singleDay = singleD != null)
+                        }
+                        item("page-end") { PageEnd(pageLines) }
+                    }
                 }
             }
         }
@@ -931,3 +950,63 @@ fun TopicPickDialog(data: AppData, ref: String, onDismiss: () -> Unit, onCreate:
 
 /** A day of the diary's feed: its plan, the notes written on it, the topics with something on it (and what — «начало», «срок»…). */
 internal class FeedDay(val day: LocalDate, val plan: DayPlan, val notes: List<LinkedNote>, val topics: List<Pair<Task, String?>>)
+
+/** Calculates initial scroll index for the week view so that recent tasks are visible, filling ~2/3 of the screen. */
+internal fun calculateWeekFeedTargetIndex(
+    pageDays: List<FeedDay>,
+    today: LocalDate,
+    undatedAll: List<Task>,
+    kind: String?,
+    topicF: String?,
+): Int {
+    var count = 0
+    var lastTaskIdx = 0
+    var hasTasks = false
+    pageDays.forEach { f ->
+        val d = f.day
+        val headIdx = count
+        count++ // FeedDayHead
+        var dayHasTasks = false
+
+        if (topicF != null && (kind == null || kind == "topics")) {
+            count += f.topics.size
+            if (f.topics.isNotEmpty()) dayHasTasks = true
+        }
+
+        if (kind == null || kind == "deals") {
+            val all = dayItems(f.plan, today)
+            val doneAll = all.filterIsInstance<DayItem.Done>()
+            val foldable = doneAll.size > 3
+            val shown = if (foldable) all.filter { it !is DayItem.Done } else all
+            val noteRowsCount = if (kind == null) f.notes.size else 0
+            val totalMatters = shown.size + noteRowsCount
+            count += totalMatters + (if (foldable) 1 else 0)
+            if (totalMatters > 0) dayHasTasks = true
+        } else if (kind == "notes") {
+            count += f.notes.size
+            if (f.notes.isNotEmpty()) dayHasTasks = true
+        }
+
+        if (topicF == null && (kind == null || kind == "topics")) {
+            count += f.topics.size
+            if (f.topics.isNotEmpty()) dayHasTasks = true
+        }
+
+        if (d == today) {
+            if ((kind == null || kind == "deals") && undatedAll.isNotEmpty()) {
+                count += undatedAll.size
+                dayHasTasks = true
+            }
+        }
+
+        if (dayHasTasks) {
+            lastTaskIdx = count - 1
+            hasTasks = true
+        } else if (d == today) {
+            lastTaskIdx = maxOf(lastTaskIdx, headIdx)
+        }
+    }
+
+    if (!hasTasks || count <= 4) return 0
+    return maxOf(0, lastTaskIdx - 4)
+}

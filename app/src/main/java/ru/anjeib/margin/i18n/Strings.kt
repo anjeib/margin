@@ -1467,7 +1467,7 @@ object Ru : Strings {
     override val saveToPhone = "Сохранить на телефон"
     override val savedToPhone = "Сохранено в папку Margin"
     override val saveFailed = "Не получилось сохранить — попробуйте «Переслать»"
-    override val shareWord = "Переслать"
+    override val shareWord = "Поделиться"
     override val closeWord2 = "Закрыть"
     override val contactInNote = "контакт в заметке"
     override fun noSubtask(n: Int) = "Нет дела под номером $n"

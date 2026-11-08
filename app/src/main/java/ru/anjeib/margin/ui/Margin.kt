@@ -2,6 +2,9 @@ package ru.anjeib.margin.ui
 
 import androidx.compose.foundation.layout.heightIn
 
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.foundation.layout.PaddingValues
 
@@ -69,6 +72,14 @@ internal fun marginFor(fontScale: Float): Dp = 10.dp + 64.dp * fontScale.coerceI
 /** Gap between the rule and the content. */
 val MarginGap = 14.dp
 
+/** Transform for horizontal day paging in the feed: margin stays pinned to the left and fades, content is clipped to the main field. */
+data class FeedPageTransform(
+    val offset: () -> Float,
+    val offsetPx: () -> Float,
+)
+
+val LocalFeedPageTransform = androidx.compose.runtime.staticCompositionLocalOf<FeedPageTransform?> { null }
+
 /** A row on the page: [margin] (a date, an hour, a glyph) left of the rule, [content] right of it; [node] — a dot on the rule. */
 @Composable
 fun Margined(
@@ -79,13 +90,61 @@ fun Margined(
     nodeSize: Dp = 9.dp,
     content: @Composable () -> Unit,
 ) {
+    val trans = LocalFeedPageTransform.current
+    val marginMod = if (trans != null) {
+        Modifier.graphicsLayer {
+            val off = trans.offset()
+            val offPx = trans.offsetPx()
+            translationX = -offPx
+            alpha = (1f - kotlin.math.abs(off)).coerceIn(0f, 1f)
+        }
+    } else Modifier
+
+    val marginDragMod = if (trans != null) {
+        Modifier.pointerInput(Unit) {
+            detectHorizontalDragGestures { change, _ ->
+                change.consume()
+            }
+        }
+    } else Modifier
+
+    val contentMod = if (trans != null) {
+        Modifier.drawWithContent {
+            val offPx = trans.offsetPx()
+            val clipLeft = kotlin.math.max(0f, -offPx)
+            if (clipLeft > 0f) {
+                clipRect(left = clipLeft) {
+                    this@drawWithContent.drawContent()
+                }
+            } else {
+                this@drawWithContent.drawContent()
+            }
+        }
+    } else Modifier
+
     Row(
         modifier.fillMaxWidth().then(if (node != null) Modifier.drawBehind {
-            drawCircle(node, radius = nodeSize.toPx() / 2, center = Offset(MarginW.toPx(), nodeY.toPx()))
+            val off = trans?.offset?.invoke() ?: 0f
+            val offPx = trans?.offsetPx?.invoke() ?: 0f
+            val cx = MarginW.toPx() - offPx
+            val alpha = if (trans != null) (1f - kotlin.math.abs(off)).coerceIn(0f, 1f) else 1f
+            drawCircle(node.copy(alpha = node.alpha * alpha), radius = nodeSize.toPx() / 2, center = Offset(cx, nodeY.toPx()))
         } else Modifier),
     ) {
-        Box(Modifier.width(MarginW).padding(end = 10.dp), contentAlignment = Alignment.TopEnd) { margin?.invoke() }
-        Box(Modifier.weight(1f).padding(start = MarginGap, end = 16.dp)) { content() }
+        Box(
+            Modifier
+                .width(MarginW)
+                .then(marginMod)
+                .then(marginDragMod)
+                .padding(end = 10.dp),
+            contentAlignment = Alignment.TopEnd
+        ) { margin?.invoke() }
+        Box(
+            Modifier
+                .weight(1f)
+                .then(contentMod)
+                .padding(start = MarginGap, end = 16.dp)
+        ) { content() }
     }
 }
 

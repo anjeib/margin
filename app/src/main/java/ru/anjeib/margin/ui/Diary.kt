@@ -1,5 +1,10 @@
 package ru.anjeib.margin.ui
 
+import android.content.Context
+import android.content.Intent
+import android.content.ClipData
+import androidx.core.content.FileProvider
+import ru.anjeib.margin.data.Files
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.CircleShape
@@ -136,6 +141,130 @@ fun mentionsText(text: String, data: AppData, onPerson: (String) -> Unit, onOpen
 /** When a note was begun: its first record, else the day it was made. */
 private fun Task.bornAt(): String = entries.minOfOrNull { it.at } ?: history.firstOrNull { it.kind == "created" }?.at ?: (createdAt.take(10) + "T00:00")
 
+/** Shares a diary note via the system share sheet (text + attachments if present). */
+fun shareNote(ctx: Context, task: Task, data: AppData) {
+    val title = task.title.trim()
+    val isGenericTitle = title.isBlank() || title.equals("Голосовая заметка", ignoreCase = true) ||
+        title.equals("Голосовое", ignoreCase = true) || title.equals("Voice note", ignoreCase = true)
+
+    val parts = mutableListOf<String>()
+    if (!isGenericTitle && title.isNotEmpty()) {
+        parts.add(title)
+    }
+
+    val allAttachments = task.entries.flatMap { it.attachments }
+    val audioTranscripts = allAttachments.filter { it.kind == "audio" }.mapNotNull { it.transcript?.takeIf { t -> t.isNotBlank() } }
+
+    task.entries.forEach { e ->
+        val plain = data.mentionsPlain(e.materialBody.ifBlank { e.text }).trim()
+        if (plain.isNotEmpty()) parts.add(plain)
+        if (e.description.isNotBlank() && !plain.contains(e.description.trim())) {
+            parts.add(e.description.trim())
+        }
+        if (e.tags.isNotEmpty()) {
+            parts.add(e.tags.joinToString(" ") { "#$it" })
+        }
+    }
+    if (parts.isEmpty() && audioTranscripts.isNotEmpty()) {
+        parts.addAll(audioTranscripts)
+    }
+
+    val links = allAttachments.filter { it.kind == "link" }.mapNotNull { it.url?.takeIf { u -> u.isNotBlank() } }
+    links.forEach { url ->
+        if (parts.none { it.contains(url) }) {
+            parts.add(url)
+        }
+    }
+
+    val shareText = parts.joinToString("\n\n").ifBlank { title.ifBlank { "Заметка" } }
+
+    val fileAtt = allAttachments.firstOrNull { it.kind in setOf("photo", "video", "audio", "file") }
+    val f = fileAtt?.let { Files.file(ctx, it) }
+
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        if (f != null) {
+            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+            type = fileAtt?.mime ?: "*/*"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newUri(ctx.contentResolver, fileAtt?.name ?: f.name, uri)
+            putExtra(Intent.EXTRA_TEXT, shareText)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } else {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, shareText)
+        }
+        if (title.isNotEmpty() && !isGenericTitle) {
+            putExtra(Intent.EXTRA_SUBJECT, title)
+        }
+    }
+    val chooser = Intent.createChooser(intent, "Поделиться заметкой").apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { ctx.startActivity(chooser) }
+}
+
+/** Shares a linked note of a matter or topic via the system share sheet. */
+internal fun shareLinkedNote(ctx: Context, l: LinkedNote, data: AppData) {
+    val parts = mutableListOf<String>()
+    val plain = data.mentionsPlain(l.text).trim()
+    if (plain.isNotEmpty()) parts.add(plain)
+    if (l.link.isNotBlank() && !plain.contains(l.link)) parts.add(l.link)
+    val shareText = parts.joinToString("\n\n").ifBlank { "Заметка" }
+
+    val fileAtt = l.files.firstOrNull()
+    val f = fileAtt?.let { Files.file(ctx, it) }
+
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        if (f != null) {
+            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+            type = fileAtt?.mime ?: "*/*"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newUri(ctx.contentResolver, fileAtt?.name ?: f.name, uri)
+            putExtra(Intent.EXTRA_TEXT, shareText)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } else {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, shareText)
+        }
+    }
+    val chooser = Intent.createChooser(intent, "Поделиться заметкой").apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { ctx.startActivity(chooser) }
+}
+
+/** Calculates the initial scroll index so the feed is filled ~2/3 with the latest entries. */
+internal fun calculateDiaryFeedTargetIndex(
+    daysToShow: Collection<LocalDate>,
+    byDay: Map<LocalDate, List<Any>>,
+    today: LocalDate,
+    showMemory: Boolean,
+): Int {
+    var count = 0
+    var lastNoteIdx = 0
+    var hasNotes = false
+    daysToShow.forEach { d ->
+        count++ // "jd$d" FeedDayHead
+        if (d == today && showMemory) {
+            count++ // "memory_rediscover"
+            lastNoteIdx = count - 1
+            hasNotes = true
+        }
+        val dayList = byDay[d]
+        if (!dayList.isNullOrEmpty()) {
+            val blocks = withTopicHeads(dayList) { (it as? LinkedNote)?.let { l -> l.open to l.link } }
+            blocks.forEach { _ ->
+                count++
+                lastNoteIdx = count - 1
+                hasNotes = true
+            }
+        }
+    }
+    if (!hasNotes || count == 0) return 0
+    // Keep ~3-4 items visible above the end to fill ~2/3 of the viewport
+    return maxOf(0, lastNoteIdx - 3)
+}
+
 /**
  * «Заметки» — the diary (owner, 14 окт: ideas became notes). Day by day, newest first: the date on the margin as on a day's page,
  * the weekday in the planner's italic; each note written straight on the page — its hour on the margin, its words, mentions as
@@ -236,8 +365,16 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
     val linkedText = remember(linked) { linked.associate { "l" + it.key to data.mentionsPlain(it.text) + " " + it.link } }
     val pageLines = rememberPageLines()
     val landed = vm.landed.collectAsState().value
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val filtered = cat != null || tagFilter != null
+    val daysToShow = remember(filtered, byDay, today, day) {
+        if (filtered) byDay.keys.toSortedSet() else (byDay.keys + today + day).toSortedSet()
+    }
+    val initialDiaryIndex = remember(daysToShow, byDay, today, showMemory) {
+        calculateDiaryFeedTargetIndex(daysToShow, byDay, today, showMemory)
+    }
     // Found on this page by the find bar: a note by its words.
-    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    val list = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = initialDiaryIndex)
     val find = LocalFind.current
     val found = remember { mutableListOf<FindHit>() }
     ReportFound("notes", found, list, data)
@@ -248,7 +385,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
     val feed = LocalFramed.current && monthOpen && !journal
     val feedStarts = remember { HashMap<LocalDate, Int>() }
     val feedJump by vm.feedJump.collectAsState()
-    FeedFollow((feed || journalFeed) && !(journal && gridMode), list, feedStarts, day, feedJump) { d ->
+    FeedFollow((feed || journalFeed) && !(journal && gridMode), list, feedStarts, day, feedJump, initialTargetIndex = initialDiaryIndex) { d ->
         if (d != null && vm.feedDay.value != d) {
             vm.feedDay.value = d
             vm.pageDay.value = d.takeIf { it != today }
@@ -340,6 +477,7 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                             Box(Modifier.fillMaxWidth()) { Box(Modifier.align(Alignment.TopEnd).padding(top = 8.dp)) { SoftMenu(menu, { menu = false }) {
                                 // Editing and reading use the same complete note card.
                                 SoftMenuItem(s.edit) { menu = false; onOpen(n.id) }
+                                SoftMenuItem(s.shareWord) { menu = false; shareNote(ctx, n, data) }
                                 related.firstOrNull()?.let { tp ->
                                     SoftMenuItem("↳ В тему «# ${tp.title}»") { menu = false; vm.intoTopic(n.id, tp.id) }
                                 }
@@ -425,8 +563,6 @@ fun DiaryPage(data: AppData, vm: MainVm, onOpen: (String) -> Unit, onPerson: (St
                 feedStarts.clear()
                 val cs = CountingScope(this)
                 if (byDay.isEmpty()) cs.item("empty") { Margined(Modifier.padding(top = 18.dp)) { Voice(s.journalEmpty) } }
-                val filtered = cat != null || tagFilter != null
-                val daysToShow = if (filtered) byDay.keys.toSortedSet() else (byDay.keys + today + day).toSortedSet()
                 daysToShow.forEach { d ->
                     feedStarts[d] = cs.n
                     cs.item("jd$d") { FeedDayHead(d, today, free = byDay[d].isNullOrEmpty(), freeWord = s.noEntriesWord) }
@@ -520,6 +656,7 @@ internal fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: 
                           /** The day's first: close under the day's number. */ first: Boolean = false) {
     val c = M.c
     val s = M.s
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var menu by remember(x.key) { mutableStateOf(false) }
     var edit by remember(x.key) { mutableStateOf(false) }
     if (edit) TextDialog(M.s.edit, x.text, "", onDismiss = { edit = false }) { v ->
@@ -534,6 +671,7 @@ internal fun LinkedNoteRow(x: LinkedNote, data: AppData, vm: MainVm, i: Int, n: 
         Box(Modifier.blockTint(block)) {
             Box(Modifier.align(Alignment.TopEnd).padding(top = 8.dp)) { SoftMenu(menu, { menu = false }) {
                 SoftMenuItem(s.edit) { menu = false; edit = true }
+                SoftMenuItem(s.shareWord) { menu = false; shareLinkedNote(ctx, x, data) }
                 SoftMenuItem(if (toTopic) s.toTheTopic else s.toTheMatter) { menu = false; onOpen(x.open) }
                 SoftMenuItem(s.toArchive) { menu = false; vm.removeNotePiece(x.card) }
                 SoftMenuItem(s.deleteNow) { menu = false; vm.deleteNotePiece(x.card) }
@@ -930,6 +1068,7 @@ internal fun DiaryMemoryCard(
 ) {
     val c = M.c
     val s = M.s
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val born = runCatching { LocalDate.parse(note.bornAt().take(10)) }.getOrNull()
     val daysAgo = if (born != null) java.time.temporal.ChronoUnit.DAYS.between(born, today).toInt() else 7
     val timeLabel = when {
@@ -1090,6 +1229,15 @@ internal fun DiaryMemoryCard(
                         .clickable { vm.archiveTopic(note.id) }
                         .padding(vertical = 2.dp, horizontal = 2.dp)
                 )
+                Text("·", style = Type.small.copy(color = c.hairline))
+                Text(
+                    "поделиться",
+                    style = Type.small.copy(color = c.graphite, fontSize = 12.sp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { shareNote(ctx, note, data) }
+                        .padding(vertical = 2.dp, horizontal = 2.dp)
+                )
             }
         }
     }
@@ -1122,10 +1270,12 @@ internal fun DiaryBinderCard(n: Task, data: AppData, vm: MainVm, onOpen: (String
 
     var menu by remember(n.id) { mutableStateOf(false) }
     val rowActs = LocalRowActions.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     Box(Modifier.fillMaxWidth()) {
         Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp)) {
             SoftMenu(menu, { menu = false }) {
                 SoftMenuItem(s.edit) { menu = false; onOpen(n.id) }
+                SoftMenuItem(s.shareWord) { menu = false; shareNote(ctx, n, data) }
                 related.firstOrNull()?.let { tp ->
                     SoftMenuItem("↳ В тему «# ${tp.title}»") { menu = false; vm.intoTopic(n.id, tp.id) }
                 }

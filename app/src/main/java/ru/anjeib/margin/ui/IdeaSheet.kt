@@ -80,10 +80,11 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
                     ActionBar(listOfNotNull(
                         Action(s.actToMatter, false, { blur(); vm.ideaToMatter(task.id); onClose() }) { DealGlyph(it, 22.dp) },
                         rowActs?.let { r -> Action(s.actToTopic, false, { blur(); onClose(); r.toTopic(task.id) }) { TopicGlyph(it, 19.dp) } },
+                        Action(s.shareWord, false, { blur(); shareNote(ctx, task, data) }) { ShareGlyph(it, 20.dp) },
                         if (!task.done) Action(s.toArchive, false, { blur(); vm.archiveTopic(task.id); onClose() }) { ArchiveGlyph(it, 22.dp) }
                         else Action(s.bringBack, false, { vm.reviveTopic(task.id) }) { ArchiveGlyph(it, 22.dp) },
                         Action(s.deleteNow, false, { blur(); onClose(); vm.deleteNow(task.id) }) { TrashGlyph(it, 22.dp) },
-                    ), slots = 4)
+                    ), slots = 5)
                 })
                 CardRule()
                 if (relatedTopics.isNotEmpty()) {

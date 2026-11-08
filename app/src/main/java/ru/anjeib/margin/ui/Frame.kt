@@ -270,9 +270,11 @@ fun Modifier.calendarDayHorizontalScroll(vm: MainVm): Modifier {
  */
 @Composable
 fun FeedFollow(on: Boolean, list: androidx.compose.foundation.lazy.LazyListState, starts: Map<LocalDate, Int>, target: LocalDate, jump: Int,
+               initialTargetIndex: Int? = null,
                onTop: (LocalDate?) -> Unit) {
     val tell by androidx.compose.runtime.rememberUpdatedState(onTop)
     val curTarget by androidx.compose.runtime.rememberUpdatedState(target)
+    val curInitialIndex by androidx.compose.runtime.rememberUpdatedState(initialTargetIndex)
     val monthPx = remember { intArrayOf(0) }
     val slack = with(androidx.compose.ui.platform.LocalDensity.current) { 24.dp.roundToPx() }
     var programmatic by remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -285,10 +287,10 @@ fun FeedFollow(on: Boolean, list: androidx.compose.foundation.lazy.LazyListState
         programmatic = true
         try {
             val goal = curTarget
-            var i = starts[goal]
+            var i = if (goal == LocalDate.now() && curInitialIndex != null) curInitialIndex else starts[goal]
             if (i == null) {
                 androidx.compose.runtime.withFrameNanos { }
-                i = starts[goal] ?: starts.entries.filter { !it.key.isAfter(goal) }.maxByOrNull { it.key }?.value
+                i = if (goal == LocalDate.now() && curInitialIndex != null) curInitialIndex else (starts[goal] ?: starts.entries.filter { !it.key.isAfter(goal) }.maxByOrNull { it.key }?.value)
             }
             if (i != null) {
                 val m = month(list.layoutInfo)

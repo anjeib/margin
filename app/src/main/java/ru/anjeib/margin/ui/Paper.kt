@@ -592,7 +592,8 @@ fun ActionBar(items: List<Action>, modifier: Modifier = Modifier, slots: Int = i
                 Spacer(Modifier.height(4.dp))
                 // A word is never cut to its first letter («В заметки» showed «В»): one line, a size smaller when long.
                 // One size for every word (owner, 14 окт: smaller words look wrong) — a row holds only what fits, the rest is in «Ещё».
-                Text(a.label, style = Type.small.copy(color = col, fontSize = 12.5.sp, fontWeight = if (a.on) FontWeight.Medium else null), maxLines = 1, softWrap = false)
+                val lblSize = if (slots >= 5) 11.sp else 12.5.sp
+                Text(a.label, style = Type.small.copy(color = col, fontSize = lblSize, fontWeight = if (a.on) FontWeight.Medium else null), maxLines = 1, softWrap = false)
             }
         }
         repeat((slots - items.size).coerceAtLeast(0)) { Spacer(Modifier.weight(1f)) }

@@ -796,7 +796,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     /** The planner's day tabs: the day the main page shows (null — today). */
     val pageDay = kotlinx.coroutines.flow.MutableStateFlow<LocalDate?>(null)
     /** True when the week icon before Mon is selected — shows all matters of that week. */
-    val weekMode = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val weekMode = kotlinx.coroutines.flow.MutableStateFlow(true)
 
     fun pickDay(d: LocalDate, today: LocalDate = LocalDate.now()) {
         weekMode.value = false

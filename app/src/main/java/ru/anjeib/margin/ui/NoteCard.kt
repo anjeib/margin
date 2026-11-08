@@ -49,6 +49,37 @@ data class NotePiece(val key: String, val at: String, val text: String, val file
 fun entryKey(taskId: String, entryId: String) = "e|$taskId|$entryId"
 fun commentKey(ref: String, commentId: String) = "c|$ref|$commentId"
 
+/** Shares a note piece of a topic or matter via the system share sheet. */
+fun shareNotePiece(ctx: android.content.Context, n: NotePiece, data: AppData) {
+    val parts = mutableListOf<String>()
+    val plain = data.mentionsPlain(n.text).trim()
+    if (plain.isNotEmpty()) parts.add(plain)
+    val trail = n.trail.map { it.second }.filter { it.isNotBlank() }.joinToString(" · ")
+    if (trail.isNotEmpty()) parts.add(trail)
+    val shareText = parts.joinToString("\n\n").ifBlank { "Заметка" }
+
+    val fileAtt = n.files.firstOrNull()
+    val f = fileAtt?.let { ru.anjeib.margin.data.Files.file(ctx, it) }
+
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        if (f != null) {
+            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+            type = fileAtt?.mime ?: "*/*"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            clipData = android.content.ClipData.newUri(ctx.contentResolver, fileAtt?.name ?: f.name, uri)
+            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } else {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+        }
+    }
+    val chooser = android.content.Intent.createChooser(intent, "Поделиться заметкой").apply {
+        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { ctx.startActivity(chooser) }
+}
+
 fun AppData.notePiece(key: String): NotePiece? {
     val p = key.split('|')
     if (p.size != 3) return null
@@ -119,6 +150,7 @@ fun CardRule() = Margined(Modifier.padding(top = 6.dp, bottom = 4.dp)) { Box(Mod
 fun NoteCard(key: String, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen: (String) -> Unit) {
     val c = M.c
     val s = M.s
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val n = data.notePiece(key)
     if (n == null) { LaunchedEffect(key) { onClose() }; return }
     val (kind, ref, id) = key.split('|')
@@ -143,12 +175,13 @@ fun NoteCard(key: String, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                         Action(if (n.trail.last().second.startsWith("#")) s.toTheTopic else s.toTheMatter, false, { save(); onOpen(n.ownerId) }) {
                             if (n.trail.last().second.startsWith("#")) TopicGlyph(it, 20.dp) else DealGlyph(it, 22.dp)
                         },
+                        Action(s.shareWord, false, { save(); shareNotePiece(ctx, n, data) }) { ShareGlyph(it, 20.dp) },
                         // Owner, 16 окт: «В архив»; «Удалить» only once it is there (with «Вернуть»).
                         if (!n.removed) Action(s.toArchive, false, { remove() }) { ArchiveGlyph(it, 22.dp) } else null,
                         if (n.removed) Action(s.bringBack, false, { vm.restoreNotePiece(key); onClose() }) { ArchiveGlyph(it, 22.dp) } else null,
                         if (n.removed) Action(s.delete, false, { vm.purgeNotePiece(key); onClose() }) { TrashGlyph(it, 22.dp) }
                         else Action(s.deleteNow, false, { onClose(); vm.deleteNotePiece(key) }) { TrashGlyph(it, 22.dp) },
-                    ), slots = 4)
+                    ), slots = 5)
                 })
                 // Owner, 16 окт: the head (day, where it lives, marks, tools) stays put; only the words under it scroll.
                 Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
