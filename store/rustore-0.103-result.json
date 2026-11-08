@@ -1,0 +1,190 @@
+{
+  "versionId": 2064940234,
+  "versionName": "0.103",
+  "versionCode": 103,
+  "apk": "releases/Margin-0.103.apk",
+  "sha256": "12e8c8168d7f428d6aba5c3a8c8f4bba0b3bc0e2da600955b99fc41ed7ff77c7",
+  "stage": "submitted",
+  "uploadResponse": {
+    "permissions": {
+      "CRITICAL": [],
+      "APPOP": [
+        {
+          "permission": "SCHEDULE_EXACT_ALARM",
+          "description": "Позволяет приложениям использовать точные API сигнализации."
+        }
+      ],
+      "NORMAL": [
+        {
+          "permission": "ACCESS_NETWORK_STATE",
+          "description": "Позволяет приложениям получать доступ к информации о сетях."
+        },
+        {
+          "permission": "FOREGROUND_SERVICE",
+          "description": "Позволяет приложению использовать Service.startForeground."
+        },
+        {
+          "permission": "INTERNET",
+          "description": "Позволяет приложениям открывать сетевые сокеты."
+        },
+        {
+          "permission": "RECEIVE_BOOT_COMPLETED",
+          "description": "Позволяет приложению получать Intent.ACTION_BOOT_COMPLETED, который транслируется после завершения загрузки системы."
+        },
+        {
+          "permission": "USE_BIOMETRIC",
+          "description": "Позволяет приложению использовать биометрические методы, поддерживаемые устройствами."
+        },
+        {
+          "permission": "USE_EXACT_ALARM",
+          "description": "Позволяет приложениям использовать точные сигналы тревоги так же, как и в SCHEDULE_EXACT_ALARM, но без необходимости запрашивать это разрешение у пользователя."
+        },
+        {
+          "permission": "USE_FINGERPRINT",
+          "description": "Это разрешение устарело на уровне API 28. Вместо этого приложения должны запрашивать USE_BIOMETRIC."
+        },
+        {
+          "permission": "WAKE_LOCK",
+          "description": "Позволяет использовать PowerManager WakeLocks для предотвращения перехода процессора в спящий режим или затемнения экрана."
+        }
+      ],
+      "DANGEROUS": [
+        {
+          "permission": "POST_NOTIFICATIONS",
+          "description": "Позволяет приложению публиковать уведомления"
+        },
+        {
+          "permission": "READ_CALENDAR",
+          "description": "Позволяет приложению читать данные календаря пользователя."
+        },
+        {
+          "permission": "RECORD_AUDIO",
+          "description": "Позволяет приложению записывать аудио."
+        }
+      ],
+      "DEPRECATED": [],
+      "SIGNATURE": []
+    }
+  },
+  "commitResponse": null,
+  "statusResponse": {
+    "content": [
+      {
+        "versionId": 2064940234,
+        "appName": "Margin — ежедневник и дневник",
+        "appType": "MAIN",
+        "versionName": "0.103",
+        "versionCode": 103,
+        "versionStatus": "AUTO_CHECK",
+        "publishType": "INSTANTLY",
+        "testingType": null,
+        "publishDateTime": null,
+        "sendDateForModer": "2026-11-08T14:26:29.357",
+        "partialValue": 100,
+        "whatsNew": "«Дела»: по умолчанию открывается режим «Неделя» со скроллом к последним записям; горизонтальное листание дней недели внутри основного поля. Невыполненные дела аккуратно переносятся на сегодня.\n«Дневник»: открывается на последних записях; интерактивный спектр категорий (Все, Статьи, Снимки, Аудио, Мысли) и тегов, переключение «Лента» / «Подшивка» (сетка). Утренняя карточка «Из архива».\nЛюбой заметкой дневника теперь можно поделиться целиком через системное меню (значок в карточке или меню удержания).\nГолосовые заметки: чистый текст и плеер, автоостановка записи по паузе.\nОбновлены справка, обучающий курс и знакомство с Margin.",
+        "priceValue": 0,
+        "paid": false
+      },
+      {
+        "versionId": 2064933096,
+        "appName": "Margin — ежедневник и дневник",
+        "appType": "MAIN",
+        "versionName": "0.99",
+        "versionCode": 99,
+        "versionStatus": "ACTIVE",
+        "publishType": "INSTANTLY",
+        "testingType": null,
+        "publishDateTime": "2026-11-05T20:33:52.161",
+        "sendDateForModer": "2026-11-05T10:12:52.534",
+        "partialValue": 100,
+        "whatsNew": "Заметки редактируются прямо в карточке: нажмите заголовок, текст или ссылку и исправьте. Правки сохраняются при нажатии вне поля. По долгому нажатию на строку или вложение — «Удалить», «Скопировать», «Список»; у фото, видео и файлов ещё «Поделиться» через приложения телефона. Обновлены помощь, иллюстрации и знакомство: новый пример показывает правку, сохранение и нумерованный список.",
+        "priceValue": 0,
+        "paid": false
+      },
+      {
+        "versionId": 2064932741,
+        "appName": "Margin — ежедневник и дневник",
+        "appType": "MAIN",
+        "versionName": "0.98",
+        "versionCode": 98,
+        "versionStatus": "ARCHIVED",
+        "publishType": "INSTANTLY",
+        "testingType": null,
+        "publishDateTime": null,
+        "sendDateForModer": "2026-11-05T07:34:54.141",
+        "partialValue": 100,
+        "whatsNew": "Дневник стал удобнее: каждая заметка открывается отдельной карточкой в стиле карточки дела. Заголовок и единое поле для текста, ссылок, фото, файлов и тегов. Добавляйте вложения скрепкой, меняйте текст и ссылки, удаляйте ненужные файлы и теги. Ссылки и изображения из «Поделиться» сразу сохраняются в заметки; ссылки получают карточку сайта с миниатюрой. Поиск учитывает теги и описание.",
+        "priceValue": 0,
+        "paid": false
+      },
+      {
+        "versionId": 2064926780,
+        "appName": "Margin — ежедневник и дневник",
+        "appType": "MAIN",
+        "versionName": "0.97",
+        "versionCode": 97,
+        "versionStatus": "ARCHIVED",
+        "publishType": "INSTANTLY",
+        "testingType": null,
+        "publishDateTime": null,
+        "sendDateForModer": "2026-11-02T16:41:13.226",
+        "partialValue": 100,
+        "whatsNew": "Исправлены ошибки",
+        "priceValue": 0,
+        "paid": false
+      },
+      {
+        "versionId": 2064911329,
+        "appName": "Margin — ежедневник и дневник",
+        "appType": "MAIN",
+        "versionName": "0.96",
+        "versionCode": 96,
+        "versionStatus": "PREVIOUS_ACTIVE",
+        "publishType": "INSTANTLY",
+        "testingType": null,
+        "publishDateTime": "2026-10-31T06:57:39.095",
+        "sendDateForModer": "2026-10-26T18:28:16.208",
+        "partialValue": 100,
+        "whatsNew": "Встречи из календаря телефона сами становятся делами, под ними — откуда они. Дело помнит, о каком человеке речь: если у вас две Маши, Margin один раз спросит, какая. Дела, темы и заметки можно удалить сразу, без архива. Прошедшие дни свёрнуты в «Прошедшее» — нажмите, чтобы развернуть. «Напомнить» у просроченного обещания. Пустая тема видна в ленте как тема.",
+        "priceValue": 0,
+        "paid": false
+      },
+      {
+        "versionId": 2064911226,
+        "appName": "Margin — ежедневник и дневник",
+        "appType": "MAIN",
+        "versionName": "0.94",
+        "versionCode": 94,
+        "versionStatus": "ARCHIVED",
+        "publishType": "INSTANTLY",
+        "testingType": null,
+        "publishDateTime": null,
+        "sendDateForModer": "2026-10-26T17:28:43.668",
+        "partialValue": 100,
+        "whatsNew": "Встречи из календаря телефона сами становятся делами, под ними — откуда они. Дело помнит, о каком человеке речь: если у вас две Маши, Margin один раз спросит, какая. Дела, темы и заметки можно удалить сразу, без архива. «Напомнить» у просроченного обещания. Пустая тема видна в ленте как тема.",
+        "priceValue": 0,
+        "paid": false
+      },
+      {
+        "versionId": 2064892580,
+        "appName": "Margin — ежедневник и дневник",
+        "appType": "MAIN",
+        "versionName": "0.93",
+        "versionCode": 93,
+        "versionStatus": "ARCHIVED",
+        "publishType": "INSTANTLY",
+        "testingType": null,
+        "publishDateTime": "2026-10-22T18:28:08.962",
+        "sendDateForModer": "2026-10-18T18:13:22.379",
+        "partialValue": 100,
+        "whatsNew": "Первая версия",
+        "priceValue": 0,
+        "paid": false
+      }
+    ],
+    "pageNumber": 0,
+    "pageSize": 20,
+    "totalElements": 7,
+    "totalPages": 1
+  }
+}
