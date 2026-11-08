@@ -440,6 +440,31 @@ fun Modifier.blockTint(pos: BlockPos?): Modifier = if (pos == null) this else co
 }
 
 @Composable
+fun TopicTailToggleRow(text: String, block: BlockPos, onClick: () -> Unit) {
+    val c = M.c
+    Margined(Modifier.fillMaxWidth(), margin = if (planner) ({ RowMargin("", false) }) else null) {
+        Box(
+            Modifier
+                .blockTint(block)
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 7.dp)
+        ) {
+            Text(
+                text,
+                style = Type.small.copy(
+                    fontFamily = rowFamily,
+                    fontSize = 13.5.sp,
+                    color = c.link,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                ),
+                modifier = Modifier.padding(start = 2.dp)
+            )
+        }
+    }
+}
+
+@Composable
 fun TopicBlockHead(title: String, raw: Boolean = false, top: androidx.compose.ui.unit.Dp = 14.dp, onOpen: () -> Unit) {
     val c = M.c
     Margined(Modifier.padding(top = top)) {
@@ -485,6 +510,9 @@ fun LazyListScope.dayPanel(
      * matters and topics — laid in among the matters by that hour, or into their topic's row.
      */
     extras: List<DayExtra> = emptyList(),
+    /** When a topic has many matters (> 4), the tail past the first 3 is folded until tapped. */
+    openTopicTails: Set<String> = emptySet(),
+    onTopicTailToggle: (String) -> Unit = {},
 ) {
     val all = dayItems(plan, today)
     val doneAll = all.filterIsInstance<DayItem.Done>()
@@ -527,8 +555,12 @@ fun LazyListScope.dayPanel(
         fun keyOf(t: Task) = when { t.dueDate?.isBefore(today) == true -> "0" + t.due; t.time == null -> "1"; else -> "2" + t.time!!.take(5) }
         val members: List<Pair<String, Any>> = (ms.map { keyOf(it) to (it as Any) } + ns.map { "2" + it.hour to (it as Any) }).sortedBy { it.first } +
             ds.map { "99" to (DayItem.Done(it) as Any) }
-        members.forEachIndexed { k, (_, x) ->
-            val pos = if (k == members.lastIndex) BlockPos.Last else BlockPos.Mid
+        val tailFoldable = members.size > 4
+        val tailExpanded = id in openTopicTails
+        val shownMembers = if (tailFoldable && !tailExpanded) members.take(3) else members
+        val hasTailRow = tailFoldable
+        shownMembers.forEachIndexed { k, (_, x) ->
+            val pos = if (!hasTailRow && k == shownMembers.lastIndex) BlockPos.Last else BlockPos.Mid
             when (x) {
                 is Task -> item(keyPrefix + x.id) { Box(Modifier.animateItem()) {
                     MatterRow(x, seatOf(0, 1), today, noteOf(x),
@@ -540,6 +572,16 @@ fun LazyListScope.dayPanel(
                     DonePaperRow(x.t, seatOf(0, 1), onToggle = { onDone(x.t.id) }, onOpen = { onOpen(x.t.id) })
                 } }
             }
+        }
+        if (tailFoldable) {
+            val rest = members.size - 3
+            item(keyPrefix + "g_tail_" + id) { Box(Modifier.animateItem()) {
+                TopicTailToggleRow(
+                    text = if (tailExpanded) "свернуть дела темы ▴" else "+ ещё $rest в теме ▾",
+                    block = BlockPos.Last,
+                    onClick = { onTopicTailToggle(id) }
+                )
+            } }
         }
     }
 

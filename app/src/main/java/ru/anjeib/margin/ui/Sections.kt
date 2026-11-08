@@ -282,7 +282,7 @@ fun MonthPanel(data: AppData, vm: MainVm, day: LocalDate, events: List<ru.anjeib
         (0L until 42L).associate { val d = from.plusDays(it); d to dayPlan(data, d, today, monthEvents) }
     }
     val loc = if (L.lang == ru.anjeib.margin.i18n.Lang.Ru) java.util.Locale.forLanguageTag("ru") else java.util.Locale.ENGLISH
-    Margined(Modifier.padding(top = 0.dp, bottom = 2.dp), margin = margin) {
+    Margined(Modifier.padding(top = 0.dp, bottom = 2.dp).calendarDayHorizontalScroll(vm), margin = margin) {
         Column {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(month.month.getDisplayName(TextStyle.FULL_STANDALONE, loc).replaceFirstChar { it.uppercase() } + if (month.year != today.year) " ${month.year}" else "",

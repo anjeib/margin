@@ -42,12 +42,20 @@ class MaterialPreviewWorker(ctx: Context, params: WorkerParameters) : CoroutineW
                         imageFile = name
                     }
                 }
-                val updated = a.copy(name = meta.title ?: a.name, siteName = meta.site ?: a.siteName, file = imageFile ?: a.file, previewLoaded = true)
+                val updated = a.copy(
+                    name = meta.title ?: a.name,
+                    siteName = meta.site ?: a.siteName,
+                    file = imageFile ?: a.file,
+                    transcript = meta.articleText ?: a.transcript,
+                    duration = if (meta.readMinutes > 0) meta.readMinutes else a.duration,
+                    previewLoaded = true,
+                )
                 var retained = false
                 store.update { d ->
                     fun change(e: Entry): Entry {
                         if (e.id != id) return e
-                        return e.copy(attachments = e.attachments.map { current ->
+                        val nextDesc = if (e.description.isBlank() && !meta.description.isNullOrBlank()) meta.description else e.description
+                        return e.copy(description = nextDesc, attachments = e.attachments.map { current ->
                             if (current.id != a.id || current.url != url) current else {
                                 retained = true
                                 updated.copy(name = if (current.titleFromUser) current.name else updated.name, titleFromUser = current.titleFromUser, caption = current.caption, numbered = current.numbered)
@@ -115,10 +123,19 @@ class MaterialPreviewWorker(ctx: Context, params: WorkerParameters) : CoroutineW
     }
 }
 
-internal data class PageMetadata(val title: String?, val site: String?, val image: String?) {
+internal data class PageMetadata(
+    val title: String?,
+    val site: String?,
+    val image: String?,
+    val description: String? = null,
+    val articleText: String? = null,
+    val readMinutes: Int = 0,
+) {
     companion object {
         fun parse(html: String, url: String): PageMetadata {
-            fun clean(s: String?) = s?.let { Html.fromHtml(it, Html.FROM_HTML_MODE_LEGACY).toString().replace(Regex("\\s+"), " ").trim().take(300) }?.takeIf { it.isNotBlank() }
+            fun decode(raw: String): String =
+                runCatching { Html.fromHtml(raw, Html.FROM_HTML_MODE_LEGACY)?.toString() }.getOrNull() ?: SavedMaterials.cleanHtmlText(raw)
+            fun clean(s: String?) = s?.let { decode(it).replace(Regex("\\s+"), " ").trim().take(300) }?.takeIf { it.isNotBlank() }
             val values = mutableMapOf<String, String>()
             val attr = Regex("([\\w:-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))")
             Regex("<meta\\b[^>]*>", RegexOption.IGNORE_CASE).findAll(html).forEach { tag ->
@@ -127,10 +144,13 @@ internal data class PageMetadata(val title: String?, val site: String?, val imag
                 if (key != null) attrs["content"]?.let { values.putIfAbsent(key, it) }
             }
             val title = clean(values["og:title"] ?: values["twitter:title"] ?: Regex("<title\\b[^>]*>(.*?)</title>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(html)?.groupValues?.get(1))
+            val description = clean(values["og:description"] ?: values["twitter:description"] ?: values["description"])
             val image = (values["og:image"] ?: values["twitter:image"])?.let { raw -> runCatching {
-                URI(url).resolve(Html.fromHtml(raw, Html.FROM_HTML_MODE_LEGACY).toString()).toString().takeIf { SavedMaterials.site(it) != null }
+                URI(url).resolve(decode(raw)).toString().takeIf { SavedMaterials.site(it) != null }
             }.getOrNull() }
-            return PageMetadata(title, clean(values["og:site_name"]), image)
+            val articleText = SavedMaterials.extractArticle(html)
+            val readMinutes = SavedMaterials.readingMinutes(articleText ?: description)
+            return PageMetadata(title, clean(values["og:site_name"]), image, description, articleText, readMinutes)
         }
     }
 }

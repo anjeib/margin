@@ -759,7 +759,7 @@ fun Thumb(a: Attachment, size: Dp, modifier: Modifier = Modifier) {
 
 /** Attachments inside an entry: photos as a row of thumbnails, the rest as quiet lines. Tap opens. */
 @Composable
-fun AttachmentsView(list: List<Attachment>) {
+fun AttachmentsView(list: List<Attachment>, showVoiceTranscript: Boolean = false) {
     if (list.isEmpty()) return
     val c = M.c
     val ctx = LocalContext.current
@@ -777,15 +777,28 @@ fun AttachmentsView(list: List<Attachment>) {
             media.forEach { Thumb(it, 76.dp, Modifier.clickable { open(it) }) }
         }
         other.forEach { a ->
-            if (a.kind == "link") SourceCard(a) else Row(
-                Modifier.clip(RoundedCornerShape(10.dp)).background(c.chip).clickable { open(a) }.padding(horizontal = 10.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Column {
-                    Text(attachmentLabel(a), style = Type.small.copy(color = c.ink, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    a.transcript?.takeIf { it.isNotBlank() }?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            when (a.kind) {
+                "link" -> SourceCard(a)
+                "audio" -> Column(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    VoicePlayerPill(a, Modifier.fillMaxWidth())
+                    if (showVoiceTranscript && !a.transcript.isNullOrBlank()) {
+                        Text(
+                            a.transcript!!,
+                            style = Type.body.copy(fontFamily = Literata, color = c.ink, fontSize = 14.5.sp, lineHeight = 21.sp),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                else -> Row(
+                    Modifier.clip(RoundedCornerShape(10.dp)).background(c.chip).clickable { open(a) }.padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(kindIcon(a.kind), null, tint = c.graphite, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(attachmentLabel(a), style = Type.small.copy(color = c.ink, fontSize = 13.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        a.transcript?.takeIf { it.isNotBlank() }?.let { Text(it, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                    }
                 }
             }
         }

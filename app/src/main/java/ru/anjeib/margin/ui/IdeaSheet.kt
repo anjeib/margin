@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.*
@@ -32,13 +33,24 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
     val activeBounds by rememberUpdatedState(fieldBounds)
     var rootBounds by remember { mutableStateOf(Rect.Zero) }
     val rowActs = LocalRowActions.current
+    val data by vm.data.collectAsState()
+    val relatedTopics = remember(task, data.tasks) { SavedMaterials.relatedTopics(task, data.tasks) }
     var viewing by remember { mutableStateOf<Attachment?>(null) }
     var tagsFor by remember { mutableStateOf<Entry?>(null) }
+    var readingIds by remember { mutableStateOf(setOf<String>()) }
     val bornAt = task.entries.minOfOrNull { it.at } ?: task.createdAt
     val day = runCatching { java.time.LocalDate.parse(bornAt.take(10)) }.getOrNull()
     fun blur() { focus.clearFocus() }
     fun copyText(text: String) { ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Margin", text)) }
     fun update(e: Entry, f: (Entry) -> Entry) = vm.updateDiaryEntry(task.id, e.id, f)
+    fun addQuote(e: Entry, quote: String) {
+        val q = "«" + quote.trim().trim('«', '»', '"') + "»"
+        update(e) { cur ->
+            val next = if (cur.text.isBlank()) q else cur.text.trimEnd() + "\n" + q
+            SavedMaterials.prepare(cur.copy(text = next))
+        }
+        vm.say("Цитата добавлена в заметку")
+    }
     fun copyFile(e: Entry, a: Attachment) {
         vm.copyRecord("task:${task.id}", e.id, a.id)
         val file = Files.file(ctx, a)
@@ -74,11 +86,32 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
                     ), slots = 4)
                 })
                 CardRule()
+                if (relatedTopics.isNotEmpty()) {
+                    Margined(Modifier.padding(top = 6.dp, bottom = 2.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            relatedTopics.forEach { tp ->
+                                Row(
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.linkSoft.copy(alpha = 0.55f))
+                                        .clickable { blur(); vm.intoTopic(task.id, tp.id); onClose() }
+                                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text("↳ Похоже на тему «# ${tp.title}»", style = Type.small.copy(color = c.ink, fontSize = 13.5.sp), modifier = Modifier.weight(1f))
+                                    Text("В тему ›", style = Type.small.copy(color = c.link, fontSize = 13.5.sp))
+                                }
+                            }
+                        }
+                    }
+                }
                 task.entries.forEach { e -> key(e.id) {
                     Margined(margin = { Stamp(e.at) }) {
                         Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (e.tags.isNotEmpty()) Text(e.tags.joinToString("  ") { "#$it" }, style = Type.small.copy(color = c.link),
-                                modifier = Modifier.fillMaxWidth().clickable { blur(); tagsFor = e }.padding(vertical = 6.dp))
+                            Text(
+                                if (e.tags.isNotEmpty()) e.tags.joinToString("  ") { "#$it" } else "+ тег",
+                                style = Type.small.copy(color = if (e.tags.isNotEmpty()) c.link else c.graphite),
+                                modifier = Modifier.fillMaxWidth().clickable { blur(); tagsFor = e }.padding(vertical = 4.dp),
+                            )
                             val sources = e.attachments.mapNotNull { it.url }.toSet()
                             e.text.split('\n').forEachIndexed { index, line ->
                                 if (line.trim() !in sources && (line.isNotEmpty() || e.attachments.isEmpty())) key("line:$index") {
@@ -100,24 +133,119 @@ fun IdeaSheet(task: Task, vm: MainVm, onClose: () -> Unit, onOpenFull: () -> Uni
                                 }
                             }
                             e.attachments.forEach { a -> key(a.id) {
-                                NoteRowMenu(onDelete = { update(e) { current ->
-                                    val changed = current.removeCardAttachment(a.id)
-                                    val site = a.url?.let(SavedMaterials::site)
-                                    changed.copy(tags = changed.tags.filterNot { it == site && changed.attachments.none { other -> other.url?.let(SavedMaterials::site) == site } })
-                                } }, onCopy = { if (a.kind == "link") copyText(a.url.orEmpty()) else copyFile(e, a) },
-                                    onList = { update(e) { it.copy(attachments = it.attachments.map { item -> if (item.id == a.id) item.copy(numbered = true) else item }) } },
-                                    onShare = if (a.kind in setOf("photo", "video", "file", "audio")) ({ Files.shareIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } } }) else null) { open ->
-                                    Row(Modifier.fillMaxWidth().background(if (a.kind == "link") c.chip else c.bg, RoundedCornerShape(12.dp))
-                                        .combinedClickable(onClick = { blur(); if (a.kind == "photo" || a.kind == "video") viewing = a else if (a.kind != "link") Files.openIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } } }, onLongClick = open)
-                                        .padding(if (a.kind == "link") 12.dp else 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-                                        if (a.numbered) Text("1.", style = Type.body.copy(color = c.ink), modifier = Modifier.padding(top = 4.dp))
-                                        if (a.kind in setOf("photo", "video") || (a.kind == "link" && a.file != null)) Thumb(a, if (a.kind == "link") 56.dp else 84.dp)
-                                        Column(Modifier.weight(1f)) {
-                                            NoteInlineText("name:${a.id}", a.name.ifEmpty { "Файл" }, Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp),
-                                                onSave = { value -> update(e) { it.copy(attachments = it.attachments.map { item -> if (item.id == a.id) item.copy(name = value, titleFromUser = a.kind == "link") else item }) }; true },
-                                                onLong = { open() }, onBounds = { fieldBounds = it })
-                                            if (a.kind == "link") NoteInlineText("url:${a.id}", a.url.orEmpty(), Type.small.copy(color = c.link, fontSize = 14.sp),
-                                                onSave = { vm.editDiarySource(task.id, e.id, a.id, it) }, onLong = { open() }, onBounds = { fieldBounds = it })
+                                val reading = a.id in readingIds
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    NoteRowMenu(onDelete = { update(e) { current ->
+                                        val changed = current.removeCardAttachment(a.id)
+                                        val site = a.url?.let(SavedMaterials::site)
+                                        changed.copy(tags = changed.tags.filterNot { it == site && changed.attachments.none { other -> other.url?.let(SavedMaterials::site) == site } })
+                                    } }, onCopy = { if (a.kind == "link") copyText(a.url.orEmpty()) else copyFile(e, a) },
+                                        onList = { update(e) { it.copy(attachments = it.attachments.map { item -> if (item.id == a.id) item.copy(numbered = true) else item }) } },
+                                        onShare = if (a.kind in setOf("photo", "video", "file", "audio")) ({ Files.shareIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } } }) else null) { open ->
+                                        Column(Modifier.fillMaxWidth().background(if (a.kind == "link") c.chip else c.bg, RoundedCornerShape(12.dp))
+                                            .combinedClickable(onClick = { blur(); if (a.kind == "photo" || a.kind == "video") viewing = a else if (a.kind != "link" && a.kind != "audio") Files.openIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } } }, onLongClick = open)
+                                            .padding(if (a.kind == "link") 12.dp else 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            if (a.kind == "audio") {
+                                                VoicePlayerPill(a, Modifier.fillMaxWidth())
+                                                if (!a.transcript.isNullOrBlank()) {
+                                                    Text(
+                                                        a.transcript!!,
+                                                        style = Type.body.copy(fontFamily = Literata, color = c.ink, fontSize = 15.sp, lineHeight = 22.sp),
+                                                        modifier = Modifier.padding(top = 2.dp, start = 2.dp)
+                                                    )
+                                                }
+                                            } else {
+                                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                                                    if (a.numbered) Text("1.", style = Type.body.copy(color = c.ink), modifier = Modifier.padding(top = 4.dp))
+                                                    if (a.kind in setOf("photo", "video") || (a.kind == "link" && a.file != null)) Thumb(a, if (a.kind == "link") 64.dp else 84.dp)
+                                                    Column(Modifier.weight(1f)) {
+                                                        if (a.kind == "link") {
+                                                            val site = a.siteName ?: a.url?.let(SavedMaterials::site).orEmpty()
+                                                            val mins = (a.duration ?: 0).takeIf { it > 0 }?.let { "$it мин чтения" }
+                                                            val metaLine = listOfNotNull(site.takeIf { it.isNotBlank() }, mins).joinToString("  ·  ")
+                                                            if (metaLine.isNotEmpty()) {
+                                                                Text(metaLine, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(bottom = 2.dp))
+                                                            }
+                                                        }
+                                                        NoteInlineText("name:${a.id}", a.name.ifEmpty { "Файл" }, Type.body.copy(color = c.ink, fontSize = 16.sp, lineHeight = 23.sp),
+                                                            onSave = { value -> update(e) { it.copy(attachments = it.attachments.map { item -> if (item.id == a.id) item.copy(name = value, titleFromUser = a.kind == "link") else item }) }; true },
+                                                            onLong = { open() }, onBounds = { fieldBounds = it })
+                                                        if (a.kind == "link") NoteInlineText("url:${a.id}", a.url.orEmpty(), Type.small.copy(color = c.link, fontSize = 13.5.sp),
+                                                            onSave = { vm.editDiarySource(task.id, e.id, a.id, it) }, onLong = { open() }, onBounds = { fieldBounds = it })
+                                                    }
+                                                }
+                                            }
+                                            if (a.kind == "link") {
+                                                Row(
+                                                    Modifier.fillMaxWidth().padding(top = 2.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                ) {
+                                                    if (!a.transcript.isNullOrBlank()) {
+                                                        Text(
+                                                            if (reading) "Свернуть статью ▴" else "Читать здесь ▾",
+                                                            style = Type.small.copy(color = c.link, fontSize = 13.5.sp),
+                                                            modifier = Modifier.clickable {
+                                                                blur()
+                                                                readingIds = if (reading) readingIds - a.id else readingIds + a.id
+                                                            }.padding(vertical = 2.dp),
+                                                        )
+                                                    }
+                                                    Text(
+                                                        "Открыть сайт ↗",
+                                                        style = Type.small.copy(color = c.link, fontSize = 13.5.sp),
+                                                        modifier = Modifier.clickable {
+                                                            blur()
+                                                            Files.openIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } }
+                                                        }.padding(vertical = 2.dp),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (a.kind == "link" && reading && !a.transcript.isNullOrBlank()) {
+                                        val paragraphs = remember(a.transcript) {
+                                            a.transcript.orEmpty().split("\n\n").map { it.trim() }.filter { it.isNotEmpty() }
+                                        }
+                                        Column(
+                                            Modifier.fillMaxWidth()
+                                                .background(c.card, RoundedCornerShape(12.dp))
+                                                .border(1.dp, c.hairline, RoundedCornerShape(12.dp))
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            Text(
+                                                "Текст статьи · нажмите на абзац, чтобы вынести в цитату",
+                                                style = Type.small.copy(color = c.graphite, fontSize = 12.sp),
+                                            )
+                                            paragraphs.forEachIndexed { pIdx, para ->
+                                                var paraMenu by remember(a.id, pIdx) { mutableStateOf(false) }
+                                                Box {
+                                                    Text(
+                                                        para,
+                                                        style = Type.body.copy(
+                                                            fontFamily = Literata,
+                                                            color = c.ink,
+                                                            fontSize = 15.5.sp,
+                                                            lineHeight = 24.sp,
+                                                        ),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                            .clickable { paraMenu = true }
+                                                            .padding(vertical = 2.dp),
+                                                    )
+                                                    SoftMenu(paraMenu, { paraMenu = false }) {
+                                                        SoftMenuItem("В цитату заметки") {
+                                                            paraMenu = false
+                                                            addQuote(e, para)
+                                                        }
+                                                        SoftMenuItem("Скопировать абзац") {
+                                                            paraMenu = false
+                                                            copyText(para)
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }

@@ -18,14 +18,18 @@ import ru.anjeib.margin.data.*
 fun SourceCard(a: Attachment) {
     val ctx = LocalContext.current
     val c = M.c
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.chip)
+    val site = a.siteName ?: a.url?.let(SavedMaterials::site).orEmpty()
+    val mins = (a.duration ?: 0).takeIf { it > 0 }?.let { "$it мин чтения" }
+    val saved = if (!a.transcript.isNullOrBlank() && mins == null) "текст сохранён" else null
+    val metaLine = listOfNotNull(site.takeIf { it.isNotBlank() }, mins, saved).joinToString("  ·  ")
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(c.chip)
         .clickable { Files.openIntent(ctx, a)?.let { runCatching { ctx.startActivity(it) } } }
-        .padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (a.file != null) Thumb(a, 64.dp)
+        .padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        if (a.file != null) Thumb(a, 52.dp)
         Column(Modifier.weight(1f)) {
-            Text(a.name.ifBlank { a.url.orEmpty() }, style = Type.body.copy(color = c.ink, fontSize = 16.sp), maxLines = 3, overflow = TextOverflow.Ellipsis)
-            Text(a.siteName ?: a.url?.let(SavedMaterials::site).orEmpty(), style = Type.small.copy(color = c.graphite), modifier = Modifier.padding(top = 4.dp))
-            a.url?.let { Text(it.removePrefix("https://").removePrefix("http://"), style = Type.small.copy(color = c.link), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp)) }
+            Text(a.name.ifBlank { a.url.orEmpty() }, style = Type.body.copy(color = c.ink, fontSize = 15.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (metaLine.isNotEmpty()) Text(metaLine, style = Type.small.copy(color = c.graphite, fontSize = 12.5.sp), modifier = Modifier.padding(top = 2.dp))
+            a.url?.let { Text(it.removePrefix("https://").removePrefix("http://"), style = Type.small.copy(color = c.link, fontSize = 12.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
         }
     }
 }

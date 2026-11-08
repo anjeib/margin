@@ -238,37 +238,82 @@ fun FeedPastHead(open: Boolean, days: Int, onToggle: () -> Unit) {
 }
 
 /**
+ * Horizontal swipe when the month calendar is open: each swipe steps the selected day inside the calendar (+1 on swipe left,
+ * -1 on swipe right) and scrolls the vertical feed to that day.
+ */
+@Composable
+fun Modifier.calendarDayHorizontalScroll(vm: MainVm): Modifier {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val triggerPx = with(density) { 36.dp.toPx() }
+    return this.pointerInput(vm, triggerPx) {
+        var dx = 0f
+        var stepped = false
+        detectHorizontalDragGestures(
+            onDragStart = { dx = 0f; stepped = false },
+        ) { ch, d ->
+            ch.consume()
+            dx += d
+            if (!stepped && kotlin.math.abs(dx) >= triggerPx) {
+                stepped = true
+                val today = LocalDate.now()
+                val cur = vm.feedDay.value ?: vm.pageDay.value ?: today
+                val next = if (dx < 0f) cur.plusDays(1) else cur.minusDays(1)
+                vm.pickDayInMonth(next, today)
+            }
+        }
+    }
+}
+
+/**
  * The calendar's feed (owner, 17 окт): every day in one list under the pinned month. A day picked in the month — or «сегодня ›»
- * ([jump] counts the asks) — brings its first row up under the month; scrolled, the day at the top is told to [onTop].
+ * ([jump] counts the asks) — brings its first row up under the month; scrolled vertically, the day at the top is told to [onTop].
  */
 @Composable
 fun FeedFollow(on: Boolean, list: androidx.compose.foundation.lazy.LazyListState, starts: Map<LocalDate, Int>, target: LocalDate, jump: Int,
                onTop: (LocalDate?) -> Unit) {
     val tell by androidx.compose.runtime.rememberUpdatedState(onTop)
-    // The pinned month's height, kept: once pinned, the list may not report it among its items.
+    val curTarget by androidx.compose.runtime.rememberUpdatedState(target)
     val monthPx = remember { intArrayOf(0) }
     val slack = with(androidx.compose.ui.platform.LocalDensity.current) { 24.dp.roundToPx() }
+    var programmatic by remember { androidx.compose.runtime.mutableStateOf(false) }
     fun month(info: androidx.compose.foundation.lazy.LazyListLayoutInfo): Int {
         info.visibleItemsInfo.firstOrNull { it.key == "month" }?.let { m -> monthPx[0] = maxOf(monthPx[0], m.size + maxOf(0, m.offset)) }
         return monthPx[0]
     }
-    androidx.compose.runtime.LaunchedEffect(on, target, jump) {
+    androidx.compose.runtime.LaunchedEffect(on, jump) {
         if (!on) return@LaunchedEffect
-        androidx.compose.runtime.withFrameNanos { }
-        val i = starts[target] ?: starts.entries.filter { !it.key.isAfter(target) }.maxByOrNull { it.key }?.value ?: return@LaunchedEffect
-        val m = month(list.layoutInfo)
-        list.scrollToItem(i)
-        if (m > 0) list.scrollBy(-m.toFloat())
+        programmatic = true
+        try {
+            val goal = curTarget
+            var i = starts[goal]
+            if (i == null) {
+                androidx.compose.runtime.withFrameNanos { }
+                i = starts[goal] ?: starts.entries.filter { !it.key.isAfter(goal) }.maxByOrNull { it.key }?.value
+            }
+            if (i != null) {
+                val m = month(list.layoutInfo)
+                list.scrollToItem(i)
+                if (m > 0) list.scrollBy(-m.toFloat())
+            }
+        } finally {
+            programmatic = false
+        }
     }
     androidx.compose.runtime.LaunchedEffect(on) {
         if (!on) { tell(null); return@LaunchedEffect }
         androidx.compose.runtime.snapshotFlow {
-            val info = list.layoutInfo
-            // A row showing only a sliver under the month doesn't make its day the top one.
-            val top = month(info) + slack
-            info.visibleItemsInfo.firstOrNull { it.key != "month" && it.offset + it.size > top }?.index
-        }.collect { idx ->
-            if (idx != null) tell(starts.entries.filter { it.value <= idx }.maxByOrNull { it.value }?.key ?: starts.keys.minOrNull())
+            if (programmatic || !list.isScrollInProgress) null
+            else {
+                val info = list.layoutInfo
+                val top = month(info) + slack
+                val idx = info.visibleItemsInfo.firstOrNull {
+                    it.key != "month" && it.key != "feed-end" && it.key != "page-end" && it.offset + it.size > top
+                }?.index
+                if (idx == null) null
+                else starts.entries.filter { it.value <= idx }.maxByOrNull { it.value }?.key ?: starts.keys.minOrNull()
+            }
+        }.collect { d ->
+            if (d != null) tell(d)
         }
     }
 }
@@ -311,7 +356,7 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
     Column(Modifier.fillMaxWidth().pointerInput(Unit) {
         var dy = 0f
         detectVerticalDragGestures(onDragStart = { dy = 0f }, onDragEnd = {
-            if (dy > 36.dp.toPx()) vm.monthOpen.value = true else if (dy < -36.dp.toPx()) vm.monthOpen.value = false
+            if (dy > 36.dp.toPx()) vm.openMonth(today) else if (dy < -36.dp.toPx()) vm.closeMonth(today)
         }) { ch, d -> dy += d; ch.consume() }
     }) {
         // On the paper's own ground: the margin's rule starts under the marks, at the week. Owner, 17 окт («длинный ряд иконок
@@ -360,11 +405,11 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
             mark(s.contentsTitle, false, onMenu) { MenuGlyph(it) }
         }
         AnimatedContent(monthOpen, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(120)) }, label = "calendar") { open ->
-            // The month folds back by «ОКТ ▴» on its margin (owner, 17 окт: «как свернуть?»), by a pull up, or by picking a day.
+            // The month folds back by «ОКТ ▴» on its margin (owner, 17 окт: «как свернуть?»), by a pull up, or by Back.
             if (open) Box(Modifier.padding(top = 4.dp)) {
-                MonthPanel(data, vm, top, events, margin = { MonthFold(top, open = true) { vm.monthOpen.value = false } }) { pick(it) }
+                MonthPanel(data, vm, top, events, margin = { MonthFold(top, open = true) { vm.closeMonth(today) } }) { vm.pickDayInMonth(it, today) }
             }
-            else WeekStrip(top, today, weekMode, { pickWeek(it) }, { pick(it) }) { vm.monthOpen.value = true }
+            else WeekStrip(top, today, weekMode, { pickWeek(it) }, { pick(it) }) { vm.openMonth(today) }
         }
         // One hairline under the week (owner, 18 окт: the double rule was the heaviest thing on the screen once the days lost theirs).
         Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp).padding(horizontal = 14.dp).height(1.dp).background(c.ink.copy(alpha = 0.18f)))

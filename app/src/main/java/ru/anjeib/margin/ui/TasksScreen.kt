@@ -235,6 +235,8 @@ fun TaskList(
     // Owner, 16 окт: topics in the day are folded rows; these are unfolded (for as long as the screen lives).
     val openTopics = rememberSaveable(saver = setSaver) { mutableStateOf(emptySet<String>()) }
     fun foldTopic(id: String) { openTopics.value = if (id in openTopics.value) openTopics.value - id else openTopics.value + id }
+    val openTopicTails = rememberSaveable(saver = setSaver) { mutableStateOf(emptySet<String>()) }
+    fun toggleTopicTail(id: String) { openTopicTails.value = if (id in openTopicTails.value) openTopicTails.value - id else openTopicTails.value + id }
     if (askTopic) TextDialog(s.newTopicTitle, "", s.newTopicHint, onDismiss = { askTopic = false }) { v -> askTopic = false; vm.newTopic(v)?.let(onOpen) }
     // «Поля и панели» (v8): the rule runs behind the whole list; rows sit on panels right of it, «когда» on the margin.
     val pad = PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())
@@ -255,12 +257,12 @@ fun TaskList(
     val owe = kind == "wait" || kind == "promise"
     val dealsKind = kind == "deals" || owe
     fun oweOk(t: Task) = if (kind == "wait") t.waitingFor != null && !t.done else t.promisedTo != null && !t.done
-    fun buildFeedDays(days: List<LocalDate>, singleDay: Boolean): List<FeedDay> {
+    fun buildFeedDays(days: List<LocalDate>, singleDay: Boolean, forceDays: Set<LocalDate> = emptySet()): List<FeedDay> {
         val data = topicF?.let { id -> data.copy(tasks = data.tasks.filter { it.id == id }) } ?: data
         fun dayOf(x: String?) = x?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
         val topics = if (owe) emptyList() else data.tasks.filter { it.topic && !it.thought && !it.done }
         return days.mapNotNull { d ->
-            // A window stands once in the week view — on its first day in the week, or on today while it goes on;
+            // A window stands once in the week/month view — on its first day in the range, or on today while it goes on;
             // on a single day's page it stands on every day of its window.
             val p0 = dayPlan(data, d, today, events).let { p0 ->
                 if (singleDay) p0 else p0.copy(deals = p0.deals.filter { t ->
@@ -300,7 +302,7 @@ fun TaskList(
                 "notes" -> notes.isNotEmpty()
                 else -> p.deals.isNotEmpty() || p.events.isNotEmpty() || p.done.isNotEmpty() || notes.isNotEmpty() || allTops.isNotEmpty()
             }
-            if (singleDay || d == today || has) FeedDay(d, p, notes, allTops) else null
+            if (singleDay || d == today || d in forceDays || has) FeedDay(d, p, notes, allTops) else null
         }
     }
     androidx.compose.runtime.LaunchedEffect(monthOpen) { if (monthOpen && !feed) listState.animateScrollToItem(0) }
@@ -341,10 +343,12 @@ fun TaskList(
             }
         }
     }
-    fun androidx.compose.foundation.lazy.LazyListScope.emitFeedDays(daysList: List<FeedDay>, singleDay: Boolean) {
+    fun androidx.compose.foundation.lazy.LazyListScope.emitFeedDays(daysList: List<FeedDay>, singleDay: Boolean, starts: MutableMap<LocalDate, Int>? = null) {
+        starts?.clear()
         val cs = CountingScope(this)
         daysList.forEach { f ->
             val d = f.day
+            starts?.put(d, cs.n)
             val free = f.plan.deals.isEmpty() && f.plan.events.isEmpty() && f.plan.done.isEmpty() && f.notes.isEmpty() &&
                 f.topics.isEmpty() && (d != today || undatedAll.isEmpty() || (kind != null && kind != "deals"))
             cs.item("fd$d") { FeedDayHead(d, today, free) }
@@ -370,8 +374,10 @@ fun TaskList(
                 }
             }
             if (topicF != null && (kind == null || kind == "topics")) topicRows()
+            val openTailsHere = openTopicTails.value.filter { it.startsWith("$d|") }.map { it.removePrefix("$d|") }.toSet()
             if (kind == null || dealsKind) cs.dayPanel(f.plan, today, "f$d", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
-                doneOpen = isOpen("s-done-$d"), onDoneFold = { toggle("s-done-$d") }, openTopics = openHere, onTopicFold = { foldTopic("$d|$it") }, extras = noteRows)
+                doneOpen = isOpen("s-done-$d"), onDoneFold = { toggle("s-done-$d") }, openTopics = openHere, onTopicFold = { foldTopic("$d|$it") }, extras = noteRows,
+                openTopicTails = openTailsHere, onTopicTailToggle = { toggleTopicTail("$d|$it") })
             if (topicF == null && (kind == null || kind == "topics")) topicRows()
             if (kind == "notes") cs.linkedNotesOfDay(d, f.notes, data, vm, onOpen, onOpenPiece, onPerson)
             if (d == today) {
@@ -388,7 +394,34 @@ fun TaskList(
     // ran over each other and over the fading month — now everything simply stands in its new place.
     androidx.compose.runtime.key(monthOpen) {
     androidx.compose.runtime.CompositionLocalProvider(LocalHoursOnly provides feed) {
-    if (feed) {
+    if (feed && monthOpen) {
+        val feedDay by vm.feedDay.collectAsState()
+        val feedJump by vm.feedJump.collectAsState()
+        val activeDay = feedDay ?: pageDay ?: today
+        var pinnedDays by remember { mutableStateOf(setOf(activeDay)) }
+        pinnedDays = if (listState.isScrollInProgress) pinnedDays + activeDay else setOf(activeDay)
+        val allFeedDays = remember(data, events, today, kind, topicF, pinnedDays) {
+            val minD = minOf(today.minusDays(180), (pinnedDays.minOrNull() ?: today).minusDays(45))
+            val maxD = maxOf(today.plusDays(180), (pinnedDays.maxOrNull() ?: today).plusDays(45))
+            val count = java.time.temporal.ChronoUnit.DAYS.between(minD, maxD).toInt()
+            val range = (0..count).map { minD.plusDays(it.toLong()) }
+            buildFeedDays(range, singleDay = false, forceDays = pinnedDays)
+        }
+        val feedStarts = remember { HashMap<LocalDate, Int>() }
+        FeedFollow(true, listState, feedStarts, activeDay, feedJump) { d ->
+            if (d != null && vm.feedDay.value != d) {
+                vm.feedDay.value = d
+                vm.pageDay.value = d.takeIf { it != today }
+            }
+        }
+        LazyColumn(Modifier.fillMaxSize().calendarDayHorizontalScroll(vm), state = listState, contentPadding = pad) {
+            findable(found, find?.takeIf { findPage != null }, { k -> (k as? String)?.let { ks -> findable.firstOrNull { ks.endsWith(it.id) } }?.let { t -> find != null && findHit(find.words, t.findText()) } == true }) {
+                emitFeedDays(allFeedDays, singleDay = false, starts = feedStarts)
+                item("page-end") { PageEnd(pageLines) }
+                item("feed-end") { Box(Modifier.fillParentMaxHeight(0.7f)) }
+            }
+        }
+    } else if (feed) {
         val targetPage = weekPageOf(pageDay ?: today, weekMode, today)
         val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = targetPage) { WEEK_PAGES_TOTAL }
         val motion = motionOn()
@@ -472,7 +505,8 @@ fun TaskList(
                 monthItem()
                 val dayEmpty = plan.deals.isEmpty() && plan.events.isEmpty() && plan.done.isEmpty()
                 if (!dayEmpty) dayPanel(plan, today, "t", landed, onOpen, { vm.completeWithUndo(it) }, { postponing = it }, { timeFor = it },
-                    doneOpen = isOpen("s-done-today"), onDoneFold = { toggle("s-done-today") }, openTopics = openTopics.value, onTopicFold = ::foldTopic)
+                    doneOpen = isOpen("s-done-today"), onDoneFold = { toggle("s-done-today") }, openTopics = openTopics.value, onTopicFold = ::foldTopic,
+                    openTopicTails = openTopicTails.value, onTopicTailToggle = ::toggleTopicTail)
                 if (undated.isNotEmpty()) undatedRows(undated)
                 if (day == today) {
                     val wk = today.minusDays(today.dayOfWeek.value - 1L).toString()

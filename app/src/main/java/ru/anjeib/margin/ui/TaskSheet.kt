@@ -230,6 +230,18 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                     mark = if (!task.done && (task.waitingFor != null || task.promisedTo != null)) ({
                         Box(Modifier.clip(CircleShape).clickable { vm.toggleTask(task.id) }) { PromiseMark(incoming = task.waitingFor != null, size = 28.dp) }
                     }) else null)
+                val contactCtx = remember(task, data.tasks, data.persons) {
+                    beforeContactLines(listOfNotNull(task.waitingFor, task.promisedTo) + task.people, task.who, task.id, data)
+                }
+                if (contactCtx.isNotEmpty()) {
+                    Margined(Modifier.padding(top = 2.dp, bottom = 2.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            contactCtx.forEach { (pName, line) ->
+                                Voice(line, link = true, onClick = { vm.nameTapped(pName, data.personIn(pName, task.who)?.id) })
+                            }
+                        }
+                    }
+                }
                 // Owner, 16 окт: what is written in the matter is its «Заметки» (they show in «Заметки» too, with a link here);
                 // added only from the field below.
                 WrittenLane(task.comments.map { LaneItem(it.id, it.at, it.text) }, s.commentHint, Modifier.padding(top = 4.dp), after = null, label = s.commentsTitle,

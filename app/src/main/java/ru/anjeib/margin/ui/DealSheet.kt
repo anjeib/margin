@@ -182,6 +182,18 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 CardRule()
                 MatterTitle(title, { title = it }, q.done, q.time, if (q.slots.isEmpty() && due != null) ({ dialog = "time" }) else null, late,
                     mark = if ((q.from != null || q.promisedTo != null) && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = q.from != null, size = 28.dp) } }) else null)
+                val contactCtx = remember(q, row.people, data.tasks, data.persons) {
+                    beforeContactLines(listOfNotNull(q.from, q.promisedTo) + row.people, q.who, ref, data)
+                }
+                if (contactCtx.isNotEmpty()) {
+                    Margined(Modifier.padding(top = 2.dp, bottom = 2.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            contactCtx.forEach { (pName, line) ->
+                                Voice(line, link = true, onClick = { person(pName) })
+                            }
+                        }
+                    }
+                }
                 val steps = topic.subtasks.filter { it.parent == q.id }
                 if (steps.isNotEmpty()) {
                     Margined(Modifier.padding(top = 2.dp, bottom = 4.dp)) {

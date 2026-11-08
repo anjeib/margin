@@ -806,6 +806,31 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         monthOpen.value = false
     }
 
+    /** Selects [d] while the month calendar is open, keeping the calendar open and scrolling the all-matters feed to [d]. */
+    fun pickDayInMonth(d: LocalDate, today: LocalDate = LocalDate.now()) {
+        weekMode.value = false
+        pageDay.value = d.takeIf { it != today }
+        feedDay.value = d
+        feedJump.value++
+    }
+
+    /** Opens the month calendar focused on the currently active day. */
+    fun openMonth(today: LocalDate = LocalDate.now()) {
+        val d = feedDay.value ?: pageDay.value ?: today
+        weekMode.value = false
+        pageDay.value = d.takeIf { it != today }
+        feedDay.value = d
+        monthOpen.value = true
+        feedJump.value++
+    }
+
+    /** Closes the month calendar, keeping the day that was focused in it. */
+    fun closeMonth(today: LocalDate = LocalDate.now()) {
+        feedDay.value?.let { d -> pageDay.value = d.takeIf { it != today } }
+        feedDay.value = null
+        monthOpen.value = false
+    }
+
     fun pickWeek(monday: LocalDate, today: LocalDate = LocalDate.now()) {
         val todayMon = today.minusDays(today.dayOfWeek.value - 1L)
         weekMode.value = true
@@ -1601,6 +1626,12 @@ class MainVm(app: Application) : AndroidViewModel(app) {
 
     /** «Заметки» narrowed to «личное» or «работа» (owner, 16 окт); a note written there then takes that sphere. */
     val diarySphere = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    /** Smart collection filter in «Дневник»: null — all, or "links" / "media" / "files" / "notes". */
+    val diaryCategory = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    /** Tag filter in «Дневник»: null — all, or a #tag name. */
+    val diaryTag = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    /** View mode in «Дневник»: false — chronological «Лента», true — 2-column visual «Подшивка» (Fabric-style). */
+    val diaryGrid = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     fun addDiaryNote(text0: String, files: List<Attachment>) {
         val text = text0.trim()
@@ -1608,14 +1639,19 @@ class MainVm(app: Application) : AndroidViewModel(app) {
         // «Добавь в тему X …» said here too goes exactly there, not into the diary as words about it.
         if (intoPlace(text, files)) return
         val d = data.value
+        val entry = ru.anjeib.margin.data.SavedMaterials.prepare(Entry(text = text, attachments = files))
+        val urls = entry.attachments.filter { it.kind == "link" }.mapNotNull { it.url }.toSet()
         val plain = d.mentionsPlain(text)
-        val first = plain.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+        val first = plain.lineSequence().firstOrNull { it.isNotBlank() && it.trim() !in urls }?.trim()
+            ?: entry.attachments.firstOrNull { it.kind == "link" }?.name?.takeIf { it.isNotBlank() }
+            ?: plain.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
         val title = (if (first.length > 70) first.take(70).substringBeforeLast(' ') + "…" else first).ifBlank { L.s.diaryTitle }.sentence()
         val people = Regex("@\\[([^\\]]+)]").findAll(text).map { it.groupValues[1] }.filter { !it.startsWith("p:") && !it.startsWith("d:") }.map { d.personFor(it) }.distinct().toList()
         val place = Regex("@\\[p:([^\\]]+)]").find(text)?.groupValues?.get(1)
         val t = Task(title = title, topic = true, thought = true, people = people, place = place, sphere = diarySphere.value,
-            entries = listOf(Entry(text = text, attachments = files)), history = listOf(ru.anjeib.margin.data.Change(kind = "created", by = "you")))
+            entries = listOf(entry), history = listOf(ru.anjeib.margin.data.Change(kind = "created", by = "you")))
         store.update { it.copy(tasks = it.tasks + t).withMentionsOf(t, L.s.me) }
+        if (entry.attachments.any { it.kind == "link" }) ru.anjeib.margin.data.MaterialPreviewWorker.schedule(ctx, entry.id)
         land(listOf(t.id))
     }
 

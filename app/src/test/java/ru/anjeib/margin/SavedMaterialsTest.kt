@@ -57,4 +57,62 @@ class SavedMaterialsTest {
         assertTrue(moved.notes.single().entries.isEmpty())
         assertEquals(entry, moved.tasks.single().entries.single())
     }
+
+    @Test fun extractsArticleParagraphsAndReadingTimeForOfflineReaderAndSearch() {
+        val html = """
+            <html>
+            <head>
+                <meta property="og:title" content="Типографика бумажных заметок &mdash; руководство">
+                <meta property="og:description" content="Как устроена полоса набора и почему засечки помогают читать длинные тексты.">
+                <meta property="og:site_name" content="Журнал">
+            </head>
+            <body>
+                <nav><p>Меню навигации по сайту которое не должно попасть в статью вообще никогда</p></nav>
+                <article>
+                    <h2>Полоса набора и поля</h2>
+                    <p>Хорошая книжная полоса держится на ритме строк, спокойном цвете бумаги и достаточном воздухе на полях слева и справа.</p>
+                    <blockquote>Бумага терпит всё, но любит порядок и ясную иерархию заголовков в каждом разделе.</blockquote>
+                </article>
+            </body>
+            </html>
+        """.trimIndent()
+        val meta = PageMetadata.parse(html, "https://example.com/typography")
+        assertEquals("Типографика бумажных заметок — руководство", meta.title)
+        assertEquals("Как устроена полоса набора и почему засечки помогают читать длинные тексты.", meta.description)
+        assertNotNull(meta.articleText)
+        assertTrue(meta.articleText!!.contains("Полоса набора и поля"))
+        assertTrue(meta.articleText!!.contains("Хорошая книжная полоса держится на ритме строк"))
+        assertTrue(meta.articleText!!.contains("«Бумага терпит всё"))
+        assertFalse(meta.articleText!!.contains("Меню навигации"))
+    }
+
+    @Test fun categorizesNotesAndFindsRelatedTopicsOnDevice() {
+        val linkNote = Task(id = "n1", title = "Выбор плитки", topic = true, thought = true,
+            entries = listOf(SavedMaterials.prepare(Entry(text = "https://example.com/tiles Керамогранит для ремонта кухни"))))
+        val photoNote = Task(id = "n2", title = "Снимок", topic = true, thought = true,
+            entries = listOf(Entry(attachments = listOf(Attachment(kind = "photo", file = "a.jpg")))))
+        val thoughtNote = Task(id = "n3", title = "Мысль о шрифтах", topic = true, thought = true,
+            entries = listOf(Entry(text = "Засечки лучше читаются вечером")))
+        assertEquals("links", SavedMaterials.categoryOf(linkNote))
+        assertEquals("media", SavedMaterials.categoryOf(photoNote))
+        assertEquals("notes", SavedMaterials.categoryOf(thoughtNote))
+
+        val kitchenTopic = Task(id = "t1", title = "Ремонт кухни", topic = true, thought = false)
+        val otherTopic = Task(id = "t2", title = "Отпуск в августе", topic = true, thought = false)
+        val related = SavedMaterials.relatedTopics(linkNote, listOf(kitchenTopic, otherTopic, linkNote))
+        assertEquals(listOf(kitchenTopic), related)
+    }
+
+    @Test fun summarizesOtherOpenMattersBeforeContact() {
+        val masha = Person(id = "p1", name = "Маша")
+        val current = Task(id = "t1", title = "Позвонить Маше по смете", people = listOf("Маша"), who = mapOf("маша" to "p1"))
+        val wait = Task(id = "t2", title = "Правки по договору", waitingFor = "Маша", who = mapOf("маша" to "p1"))
+        val promise = Task(id = "t3", title = "Прислать презентацию", promisedTo = "Маша", who = mapOf("маша" to "p1"))
+        val data = AppData(tasks = listOf(current, wait, promise), persons = listOf(masha))
+        val lines = ru.anjeib.margin.ui.beforeContactLines(current.people, current.who, current.id, data)
+        assertEquals(1, lines.size)
+        assertEquals("Маша", lines.single().first)
+        assertTrue(lines.single().second.contains("ждём 1"))
+        assertTrue(lines.single().second.contains("обещано 1"))
+    }
 }

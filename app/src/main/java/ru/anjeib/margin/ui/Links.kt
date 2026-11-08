@@ -4,8 +4,10 @@ import ru.anjeib.margin.data.AppData
 import ru.anjeib.margin.data.Entry
 import ru.anjeib.margin.data.Note
 import ru.anjeib.margin.data.Person
+import ru.anjeib.margin.data.Subtask
 import ru.anjeib.margin.data.Task
 import ru.anjeib.margin.data.isIn
+import ru.anjeib.margin.data.personIn
 import ru.anjeib.margin.data.dayMonth
 import ru.anjeib.margin.data.shortLabel
 import ru.anjeib.margin.data.text
@@ -85,3 +87,54 @@ fun ideaChains(project: String, d: AppData): List<Chain> =
     d.notes.filter { it.project == project }.flatMap { n -> n.entries.filter { it.text.isNotBlank() }.map { n to it } }
         .map { (n, e) -> Chain(n, e, tasksOfEntry(n, e, d)) }
         .sortedByDescending { it.entry.at }.take(8)
+
+/**
+ * «Перед контактом»: for each person on a matter, summarizes other open waits, promises, and matters with that person
+ * so the user sees the full picture before calling or writing, and can open their card in one tap.
+ */
+fun beforeContactLines(names: List<String>, who: Map<String, String>, excludeRef: String, d: AppData): List<Pair<String, String>> {
+    fun flat(l: List<Subtask>): List<Subtask> = l.flatMap { listOf(it) + flat(it.children) }
+    val distinctNames = names.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    if (distinctNames.isEmpty()) return emptyList()
+    return distinctNames.mapNotNull { n ->
+        val p = d.personIn(n, who)
+        fun same(other: String?, otherWho: Map<String, String>): Boolean {
+            if (other.isNullOrBlank()) return false
+            return if (p != null) p.isIn(other, otherWho) else other.equals(n, ignoreCase = true)
+        }
+        var waits = 0
+        var promises = 0
+        var deals = 0
+        d.tasks.filter { !it.done && !it.thought }.forEach { t ->
+            if (!t.topic && t.id != excludeRef) {
+                when {
+                    same(t.waitingFor, t.who) -> waits++
+                    same(t.promisedTo, t.who) -> promises++
+                    t.people.any { same(it, t.who) } -> deals++
+                }
+            } else if (t.topic) {
+                flat(t.subtasks).filter { !it.done && "q:${t.id}:${it.id}" != excludeRef }.forEach { q ->
+                    when {
+                        same(q.from, q.who) -> waits++
+                        same(q.promisedTo, q.who) -> promises++
+                        q.people.any { same(it, q.who) } || same(q.assignee, q.who) -> deals++
+                    }
+                }
+            }
+        }
+        if (waits + promises + deals == 0) null
+        else {
+            val parts = buildList {
+                if (waits > 0) add("ждём $waits")
+                if (promises > 0) add("обещано $promises")
+                if (deals > 0) add("дел $deals")
+            }
+            val label = if (distinctNames.size == 1) {
+                "Ещё с ${p?.name ?: n}: " + parts.joinToString(" · ") + " ›"
+            } else {
+                "${p?.name ?: n} — ещё: " + parts.joinToString(" · ") + " ›"
+            }
+            n to label
+        }
+    }
+}

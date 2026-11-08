@@ -217,9 +217,13 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
     BackHandler(find.open && !searching) { closeFind() }
     // Turned to another day or week with the tabs: back is today's page.
     val weekMode by vm.weekMode.collectAsState()
+    val monthOpenTop by vm.monthOpen.collectAsState()
     BackHandler(!drawer.isOpen && (vm.pageDay.collectAsState().value != null || weekMode) && !contents && (screen == TOPICS || screen == TASKS && (view == Views.TODAY || view == Views.NOTES))) {
         vm.weekMode.value = false
         vm.pageDay.value = null
+    }
+    BackHandler(!drawer.isOpen && monthOpenTop && !contents && !searching && openTask == null && openDeal == null && openPerson == null && openNote == null) {
+        vm.closeMonth()
     }
     val plannerLook = planner
     BackHandler(!drawer.isOpen && openNote == null && openPerson == null && !searching && (screen != TASKS || view != Views.TODAY)) {
@@ -425,7 +429,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                         val todayF = LocalDate.now()
                         val feedDay by vm.feedDay.collectAsState()
                         val inJournal = screen == JOURNAL
-                        val topDay = (if (inJournal) feedDay else null) ?: pageDay ?: todayF
+                        val topDay = (if (inJournal || monthOpen) feedDay else null) ?: pageDay ?: todayF
                         Column(Modifier.fillMaxSize().screenRule()) {
                             PlannerHead(sphereShown, vm, events, top = topDay, journalOn = inJournal,
                                 onPeople = { go(PEOPLE) }, onJournal = { if (inJournal) { screen = TASKS; view = Views.TODAY } else go(JOURNAL) }, onMenu = { contents = true })
@@ -435,17 +439,19 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
                                         if (j) page(PageKey(JOURNAL, view, pageDay)) else page(PageKey(TASKS, Views.TODAY, pageDay))
                                     }
                                 }
-                                // Gone to another week: a quiet «сегодня» pill over the field brings it back.
+                                // Gone to another week (or another day in the open calendar): a quiet «сегодня» pill over the field brings it back.
                                 val todayMon = todayF.minusDays(todayF.dayOfWeek.value - 1L)
                                 val topMon = topDay.minusDays(topDay.dayOfWeek.value - 1L)
-                                val awayDay = if (inJournal) feedDay?.takeIf { it != todayF } else topDay.takeIf { topMon != todayMon }
+                                val awayDay = if (inJournal || monthOpen) topDay.takeIf { it != todayF } else topDay.takeIf { topMon != todayMon }
                                 androidx.compose.animation.AnimatedVisibility(awayDay != null, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), enter = fadeIn(), exit = fadeOut()) {
                                     val up = (awayDay ?: todayF).isAfter(todayF)
                                     val pill = RoundedCornerShape(16.dp)
-                                    Text((if (up) "←  " else "") + s.today.lowercase() + (if (!up) "  →" else ""),
+                                    val label = if (inJournal || monthOpen) (if (up) "↑  " else "↓  ") + s.today.lowercase()
+                                        else (if (up) "←  " else "") + s.today.lowercase() + (if (!up) "  →" else "")
+                                    Text(label,
                                         style = Type.meta.copy(color = c.link, fontWeight = FontWeight.Medium),
                                         modifier = Modifier.shadow(3.dp, pill).clip(pill).background(c.bg).border(1.dp, c.hairline, pill)
-                                            .clickable { vm.pickDay(todayF, todayF) }.padding(horizontal = 16.dp, vertical = 8.dp))
+                                            .clickable { if (monthOpen) vm.pickDayInMonth(todayF, todayF) else vm.pickDay(todayF, todayF) }.padding(horizontal = 16.dp, vertical = 8.dp))
                                 }
                             }
                         }
