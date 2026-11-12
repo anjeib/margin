@@ -402,9 +402,20 @@ fun PlannerHead(data: ru.anjeib.margin.data.AppData, vm: MainVm, events: List<ru
             mark(s.peopleTitle, false, onPeople) { PersonGlyph(it, 21.dp) }
             if (t != null) mark(s.search, t.searchOn, t.search) { SearchGlyph(it, 21.dp) }
             // «Дела» and «Дневник» side by side (owner, 17 окт: «как из Дневника вернуться?»): the one open is lit.
-            mark(s.kindDeals, !journalOn, { if (journalOn) onJournal() }) { DealGlyph(it, 22.dp) }
-            mark(s.journalTitle, journalOn, { if (!journalOn) onJournal() }) { DiaryGlyph(it, 21.dp) }
             mark(s.contentsTitle, false, onMenu) { MenuGlyph(it) }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp)) {
+            listOf(s.kindDeals to false, s.journalTitle to true).forEach { (label, journal) ->
+                val active = journalOn == journal
+                Column(Modifier.weight(1f).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .clickable(role = androidx.compose.ui.semantics.Role.Tab) { if (!active) onJournal() }
+                    .semantics { selected = active }
+                    .padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    androidx.compose.material3.Text(label, style = Type.markM.copy(color = if (active) c.link else c.graphite,
+                        fontWeight = if (active) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal))
+                    Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(2.dp).background(if (active) c.link else c.hairline))
+                }
+            }
         }
         AnimatedContent(monthOpen, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(120)) }, label = "calendar") { open ->
             // The month folds back by «ОКТ ▴» on its margin (owner, 17 окт: «как свернуть?»), by a pull up, or by Back.
@@ -473,7 +484,7 @@ private fun WeekStrip(day: LocalDate, today: LocalDate, weekMode: Boolean, onPic
     val now by androidx.compose.runtime.rememberUpdatedState(day)
     val isWeek by androidx.compose.runtime.rememberUpdatedState(weekMode)
     // «ОКТ ▾» on the line of the weekdays (owner, 17 окт).
-    Margined(Modifier.padding(top = 4.dp), margin = { Box(Modifier.height(32.dp), contentAlignment = Alignment.CenterEnd) { MonthFold(day, open = false, onClick = onMonth, top = 0.dp) } }) {
+    Margined(Modifier.padding(top = 4.dp), margin = { Box(Modifier.height(48.dp), contentAlignment = Alignment.CenterEnd) { MonthFold(day, open = false, onClick = onMonth, top = 0.dp) } }) {
         // A swipe across the week — the week before or after.
         Row(Modifier.fillMaxWidth().pointerInput(Unit) {
             var dx = 0f
@@ -483,12 +494,15 @@ private fun WeekStrip(day: LocalDate, today: LocalDate, weekMode: Boolean, onPic
                 else if (dx > 48.dp.toPx()) { if (isWeek) pickW(mon.minusDays(7)) else pick(now.minusDays(7)) }
             }) { ch, d -> dx += d; ch.consume() }
         }, verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f).height(32.dp).padding(end = 3.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            Box(Modifier.weight(1f).height(48.dp).padding(end = 3.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
                 .background(if (weekMode) c.link else androidx.compose.ui.graphics.Color.Transparent)
                 .clickable(onClickLabel = s.weekTitle, role = androidx.compose.ui.semantics.Role.Tab) { onPickWeek(monday) }
                 .semantics { contentDescription = s.weekTitle; selected = weekMode },
                 contentAlignment = Alignment.Center) {
-                WeekGlyph(if (weekMode) c.bg else c.ink, 18.dp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    WeekGlyph(if (weekMode) c.bg else c.ink, 16.dp)
+                    androidx.compose.material3.Text(s.weekTitle, style = Type.small.copy(fontSize = 9.sp, lineHeight = 12.sp, color = if (weekMode) c.bg else c.ink))
+                }
             }
             (0L..6L).forEach { i ->
                 val d = monday.plusDays(i)
@@ -498,10 +512,12 @@ private fun WeekStrip(day: LocalDate, today: LocalDate, weekMode: Boolean, onPic
                     .background(if (sel) c.link else androidx.compose.ui.graphics.Color.Transparent)
                     .then(if (d == today && !sel) Modifier.border(1.dp, c.link, androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) else Modifier)
                     .clickable { onPick(d) }.padding(vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    // Only the weekdays (owner, 17 окт): the dates are the feed's, on its margin.
+                    // Dates make the week readable without opening each day.
                     androidx.compose.material3.Text(d.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, loc).lowercase(),
                         style = Type.markM.copy(color = if (sel) c.bg else if (weekend) weekendInk else c.ink, lineHeight = 22.sp,
                             fontWeight = if (sel || d == today) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal))
+                    androidx.compose.material3.Text(d.dayOfMonth.toString(), style = Type.small.copy(fontSize = 11.sp, lineHeight = 14.sp,
+                        color = if (sel) c.bg else if (d == today) c.link else c.graphite))
                 }
             }
         }

@@ -141,6 +141,8 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                     }) }
                     q.repeat?.let { add(MetaItem(Meta.plain("↻ " + it.label()), Meta.quiet()) { dialog = "repeat" }) }
                 }
+                MatterTitle(title, { title = it }, q.done, q.time, if (q.slots.isEmpty() && due != null) ({ dialog = "time" }) else null, late,
+                    mark = if ((q.from != null || q.promisedTo != null) && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = q.from != null, size = 28.dp) } }) else null)
                 CardHead(title, { title = it }, q.done, onToggle = ::tick, kind = s.cardKindDeal.takeIf { q.from == null && q.promisedTo == null },
                     // Where it belongs, over the title in one line (owner, 14 окт): its topic, then the matter it is part of.
                     trail = listOfNotNull(
@@ -180,8 +182,6 @@ fun DealSheet(topic: Task, qid: String, vm: MainVm, onClose: () -> Unit, onOpenT
                 // Owner, 16 окт: the head (day, title, marks, tools) stays put; only what is under it scrolls.
                 Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().ruledPage(pageLines).verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
                 CardRule()
-                MatterTitle(title, { title = it }, q.done, q.time, if (q.slots.isEmpty() && due != null) ({ dialog = "time" }) else null, late,
-                    mark = if ((q.from != null || q.promisedTo != null) && !q.done) ({ Box(Modifier.clip(CircleShape).clickable(onClick = ::tick)) { PromiseMark(incoming = q.from != null, size = 28.dp) } }) else null)
                 val contactCtx = remember(q, row.people, data.tasks, data.persons) {
                     beforeContactLines(listOfNotNull(q.from, q.promisedTo) + row.people, q.who, ref, data)
                 }

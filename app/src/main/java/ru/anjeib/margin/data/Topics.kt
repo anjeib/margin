@@ -182,17 +182,27 @@ object Topics {
             } ?: run { evs += TopicEvent(kind = "became", entry = entry) }
         }
         if (t.topic) {
+            fun allMatters(items: List<Subtask>): List<Subtask> = items.flatMap { listOf(it) + allMatters(it.children) }
+            val previous = allMatters(o.subtasks).associateBy { it.id }
+            val matters = allMatters(n.subtasks)
             added.forEach { evs += TopicEvent(kind = if (it.isWait) "wait" else "q", ref = it.id, entry = entry) }
             settled.forEach { evs += TopicEvent(kind = if (it.isWait) "got" else "solved", ref = it.id, entry = entry) }
             // A repeating matter leaves the next one behind, as a simple matter does — once, whoever ticked it.
             val again = settled.filter { s -> t.subtasks.none { !it.done && it.repeat != null && it.title == s.title } }.mapNotNull { it.nextOccurrence() }
             if (again.isNotEmpty()) { t = t.copy(subtasks = t.subtasks + again); again.forEach { evs += TopicEvent(kind = "q", ref = it.id, entry = entry) } }
-            // News in an archived topic brings it back.
-            if (o.topic && o.done && grew) { t = t.copy(done = false, doneAt = null); evs += TopicEvent(kind = "revived") }
+            // Returning a completed matter to work also returns its topic.
+            val reopened = matters.any { s -> !s.done && previous[s.id]?.done == true }
+            if (o.topic && o.done && (grew || reopened)) { t = t.copy(done = false, doneAt = null); evs += TopicEvent(kind = "revived") }
             else if (o.topic && o.done && !n.done) evs += TopicEvent(kind = "revived")
             // A question ticked off by hand keeps the day it was settled.
             if (settled.any { it.doneAt == null }) t = t.copy(subtasks = t.subtasks.map { s -> if (settled.any { it.id == s.id } && s.doneAt == null) s.copy(doneAt = LocalDate.now().toString()) else s })
             if (n.subtasks.any { s -> !s.done && s.doneAt != null }) t = t.copy(subtasks = t.subtasks.map { if (!it.done && it.doneAt != null) it.copy(doneAt = null) else it })
+            // Check after adding repeats: a next occurrence keeps the topic in work.
+            fun finished(s: Subtask): Boolean = s.done && s.slots.all { it.done } && s.children.all { finished(it) }
+            val completed = matters.any { s -> s.done && previous[s.id]?.done == false }
+            if (!t.done && !t.thought && completed && t.subtasks.all { finished(it) }) {
+                t = t.copy(done = true, doneAt = LocalDate.now().toString(), remindAt = null)
+            }
         }
         return if (evs.isEmpty() && t === n) n else t.copy(events = t.events + evs)
     }

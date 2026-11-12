@@ -62,12 +62,13 @@ class TopicsTest {
         assertEquals("Игорь", rows.single().waitingFor)
     }
 
-    @Test fun lastQuestionSettledOffersArchive() {
+    @Test fun lastQuestionSettledCompletesTopic() {
         val t0 = Task(title = "Приказ о зачислении", topic = true, subtasks = listOf(ru.anjeib.margin.data.Subtask(title = "Документы", done = false)))
         var d = AppData(tasks = listOf(t0))
         d = step(d, "документы отправил", t0.id, o("type" to "complete_subtask", "task_id" to t0.id, "subtask_id" to t0.subtasks[0].id))
         val t = d.tasks.single()
-        assertTrue(t.noNextStep)
+        assertTrue(t.done)
+        assertEquals(today.toString(), t.doneAt)
         assertEquals("solved", t.events.last().kind)
     }
 

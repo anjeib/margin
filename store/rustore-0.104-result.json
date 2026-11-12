@@ -1,0 +1,94 @@
+{
+  "versionId": 2064950186,
+  "versionName": "0.104",
+  "versionCode": 104,
+  "apk": "releases/Margin-0.104.apk",
+  "sha256": "808b12e8e3266c696719f9c82041d3556fd402fbd708febe2e0a2faa8eaede59",
+  "stage": "submitted",
+  "uploadResponse": {
+    "permissions": {
+      "CRITICAL": [],
+      "APPOP": [
+        {
+          "permission": "SCHEDULE_EXACT_ALARM",
+          "description": "Позволяет приложениям использовать точные API сигнализации."
+        }
+      ],
+      "NORMAL": [
+        {
+          "permission": "ACCESS_NETWORK_STATE",
+          "description": "Позволяет приложениям получать доступ к информации о сетях."
+        },
+        {
+          "permission": "FOREGROUND_SERVICE",
+          "description": "Позволяет приложению использовать Service.startForeground."
+        },
+        {
+          "permission": "INTERNET",
+          "description": "Позволяет приложениям открывать сетевые сокеты."
+        },
+        {
+          "permission": "RECEIVE_BOOT_COMPLETED",
+          "description": "Позволяет приложению получать Intent.ACTION_BOOT_COMPLETED, который транслируется после завершения загрузки системы."
+        },
+        {
+          "permission": "USE_BIOMETRIC",
+          "description": "Позволяет приложению использовать биометрические методы, поддерживаемые устройствами."
+        },
+        {
+          "permission": "USE_EXACT_ALARM",
+          "description": "Позволяет приложениям использовать точные сигналы тревоги так же, как и в SCHEDULE_EXACT_ALARM, но без необходимости запрашивать это разрешение у пользователя."
+        },
+        {
+          "permission": "USE_FINGERPRINT",
+          "description": "Это разрешение устарело на уровне API 28. Вместо этого приложения должны запрашивать USE_BIOMETRIC."
+        },
+        {
+          "permission": "WAKE_LOCK",
+          "description": "Позволяет использовать PowerManager WakeLocks для предотвращения перехода процессора в спящий режим или затемнения экрана."
+        }
+      ],
+      "DANGEROUS": [
+        {
+          "permission": "POST_NOTIFICATIONS",
+          "description": "Позволяет приложению публиковать уведомления"
+        },
+        {
+          "permission": "READ_CALENDAR",
+          "description": "Позволяет приложению читать данные календаря пользователя."
+        },
+        {
+          "permission": "RECORD_AUDIO",
+          "description": "Позволяет приложению записывать аудио."
+        }
+      ],
+      "DEPRECATED": [],
+      "SIGNATURE": []
+    }
+  },
+  "statusResponse": {
+    "content": [
+      {
+        "versionId": 2064950186,
+        "appName": "Margin — ежедневник и дневник",
+        "appType": "MAIN",
+        "versionName": "0.104",
+        "versionCode": 104,
+        "versionStatus": "AUTO_CHECK",
+        "publishType": "INSTANTLY",
+        "testingType": null,
+        "publishDateTime": null,
+        "sendDateForModer": "2026-11-12T17:42:23.891",
+        "partialValue": 100,
+        "whatsNew": "Подписали вкладки «Дела» и «Дневник», добавили числа к дням недели. В карточке дела первым показывается название.\nСократили знакомство: учебный курс теперь добавляется по желанию. После ввода проще изменить или отменить результат, дополнительные действия — в «Ещё».\nТема автоматически завершается, когда выполнены все её дела. Новое дело или возврат выполненного в работу снова открывают тему.\nОбновили помощь и подсказки.",
+        "priceValue": 0,
+        "paid": false
+      }
+    ],
+    "pageNumber": 0,
+    "pageSize": 20,
+    "totalElements": 1,
+    "totalPages": 1
+  },
+  "commitResponse": null
+}

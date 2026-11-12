@@ -150,7 +150,7 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     companion object {
         /** Bumped when the examples change: 2 — the owner's edits after the first test (0.26); 3 — «Примеры» from the designer's demo in place of «Знакомство с Margin» (0.29). */
         const val INTRO_VERSION = 4
-        const val AUTO_CONFIRM_MS = 5000L
+        const val AUTO_CONFIRM_MS = 8000L
         fun key(scope: Scope) = when (scope) { Scope.Main -> "main"; Scope.Notes -> "notes"; is Scope.InTask -> "task:" + scope.taskId }
     }
 
@@ -1808,13 +1808,13 @@ class MainVm(app: Application) : AndroidViewModel(app) {
     fun samplesHere() = L.lang == ru.anjeib.margin.i18n.Lang.Ru
 
     /** «Примеры»: one of each thing the app does, from the designer's demo — once, on a fresh start (not in the demo copy). */
-    fun addIntroOnce() {
+    fun addIntroOnce(course: Boolean = false) {
         val ui = ctx.getSharedPreferences("ui", android.content.Context.MODE_PRIVATE)
         if (ui.getBoolean("introAdded", false) || ru.anjeib.margin.BuildConfig.DEMO) return
         ui.edit().putBoolean("introAdded", true).apply()
         ui.edit().putInt("introVersion", INTRO_VERSION).apply()
         // Owner, 16 окт: «пустота напрягает при первом знакомстве» — a fresh start gets the course in Margin, as ordinary records.
-        if (samplesHere()) putSamples()
+        if (course && samplesHere()) putSamples()
     }
 
     /** The topic's two files are drawn off the main thread; the set goes in as one change. */

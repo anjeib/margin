@@ -267,6 +267,7 @@ private fun ResultBubble(p: Pending, now: AppData, onConfirm: () -> Unit, onEdit
         if (people > 0) s.kindContact else null,
     ).joinToString(" · ")
 
+    var extra by remember(p.id) { mutableStateOf(false) }
     var picking by remember(p.id) { mutableStateOf(false) }
     var reported by remember(p.id) { mutableStateOf(false) }
     val touched = p.preview.touchedTasks.toSet()
@@ -303,28 +304,30 @@ private fun ResultBubble(p: Pending, now: AppData, onConfirm: () -> Unit, onEdit
             }
             if (p.auto) Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)) { BubbleCountdown(p.id) }
         }
-        // Several quiet links wrap to a second line instead of breaking a word.
-        androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 4.dp, end = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End)) {
-            // A new task without a time: offer the clock instead of asking in words; ignored, it leaves with the bubble.
-            p.preview.touchedTasks.firstNotNullOfOrNull { id -> after.tasks.find { it.id == id && current.tasks.none { o -> o.id == id } && it.time == null && it.waitingFor == null } }?.let { nt ->
-                val what = if (nt.dueDate == null && nt.startDate == null) "dates" else "time"
-                QuietLink(if (what == "dates") s.askWhen else s.askTime) { onAskWhen(nt.id, what) }
-            }
+        Row(Modifier.padding(top = 4.dp, end = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (!p.auto) QuietLink(s.create, onConfirm)
-            // The words were about another matter: pick the topic, they are read again there.
-            if ((topics > 0 || changed > 0 || created == 1 || notes > 0) && moveTargets.isNotEmpty()) QuietLink(if (topics > 0 || changed > 0) s.toOtherTopic else s.toTopicPick) { onHold(); picking = !picking }
-            // One new matter that looks like part of an open topic: offer that topic by name, one tap.
-            if (created == 1 && topics == 0 && changed == 0) remember(p.id) {
-                val nt = p.preview.touchedTasks.firstNotNullOfOrNull { id -> after.tasks.find { it.id == id && current.tasks.none { o -> o.id == id } } }
-                nt?.let { current.likelyTopic(p.source.ifBlank { it.title }, it.people + listOfNotNull(it.waitingFor, it.promisedTo), touched) }
-            }?.let { lt -> QuietLink(s.likelyTopic(lt.title)) { onMoveTo(lt.id) } }
-            if (appended) QuietLink(s.toSeparateNote, onSeparate)
             QuietLink(s.edit, onEdit)
             QuietLink(s.undo, onReject)
-            // Beta: the words and what came of them go to the developer's log; the bubble stays so it can still be fixed.
-            if (!reported) QuietLink(s.misparsed) {
-                onHold(); reported = true
-                onMisparse(p, lines.joinToString(" | ") { (t, m) -> if (m.isBlank()) t else "$t — $m" } + if (kind.isNotBlank()) " [$kind]" else "")
+            Box {
+                QuietLink(s.actMore) { onHold(); extra = true }
+                SoftMenu(extra, { extra = false }) {
+                    p.preview.touchedTasks.firstNotNullOfOrNull { id -> after.tasks.find { it.id == id && current.tasks.none { o -> o.id == id } && it.time == null && it.waitingFor == null } }?.let { nt ->
+                        val what = if (nt.dueDate == null && nt.startDate == null) "dates" else "time"
+                        SoftMenuItem(if (what == "dates") s.askWhen else s.askTime) { extra = false; onAskWhen(nt.id, what) }
+                    }
+                    if ((topics > 0 || changed > 0 || created == 1 || notes > 0) && moveTargets.isNotEmpty()) {
+                        SoftMenuItem(if (topics > 0 || changed > 0) s.toOtherTopic else s.toTopicPick) { extra = false; picking = !picking }
+                    }
+                    if (created == 1 && topics == 0 && changed == 0) remember(p.id) {
+                        val nt = p.preview.touchedTasks.firstNotNullOfOrNull { id -> after.tasks.find { it.id == id && current.tasks.none { o -> o.id == id } } }
+                        nt?.let { current.likelyTopic(p.source.ifBlank { it.title }, it.people + listOfNotNull(it.waitingFor, it.promisedTo), touched) }
+                    }?.let { lt -> SoftMenuItem(s.likelyTopic(lt.title)) { extra = false; onMoveTo(lt.id) } }
+                    if (appended) SoftMenuItem(s.toSeparateNote) { extra = false; onSeparate() }
+                    if (!reported) SoftMenuItem(s.misparsed) {
+                        extra = false; reported = true
+                        onMisparse(p, lines.joinToString(" | ") { (t, m) -> if (m.isBlank()) t else "$t — $m" } + if (kind.isNotBlank()) " [$kind]" else "")
+                    }
+                }
             }
         }
         if (picking) Column(Modifier.padding(start = 48.dp, top = 2.dp).widthIn(max = 320.dp).clip(RoundedCornerShape(14.dp)).background(c.card)) {

@@ -2,7 +2,7 @@
 
 Ежедневник для Android (Kotlin + Compose), только русский интерфейс. Пишете или диктуете в одно поле, Margin сам раскладывает дела, обещания, темы и заметки, а время держит на полях.
 
-**Сейчас:** версия **0.100**, рабочая ветка **`main`**, рабочая папка — эта (`~/Desktop/Проекты/Margin`), GitHub — `anjeib/margin`. Других рабочих копий нет.
+**Сейчас:** релиз **0.104** (отправлен в RuStore, проверка перед модерацией), тестовая копия **0.104-test**, рабочая ветка **`main`**, рабочая папка — эта (`~/Desktop/Проекты/Margin`), GitHub — `anjeib/margin`. Других рабочих копий нет.
 
 | Что | Где |
 |---|---|
@@ -20,6 +20,8 @@
 | Движок и модель речи | `third_party/` (вне git) |
 | Ключ подписи | `release.jks` + `keystore.properties` — не трогать, копия должна быть вне Mac |
 | Устаревшее | `archive/` (см. `archive/README.md`), теги `archive/*`, `archive/local/` (вне git) |
+
+Тестовый APK: `releases/Margin-0.104-test.apk`; пакет `ru.margin.app.test` устанавливается рядом с основным приложением. Сборка тестового варианта: `JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew assemblePreview`.
 
 Сборка: `JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew assembleRelease` (подробно — `CLAUDE.md`, «Сборка» и «Версии и откат»). Выпуск — только по команде владельца.
 

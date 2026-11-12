@@ -193,6 +193,10 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 }
                 // Owner, 16 окт («как в заметках»): on top what is about the matter — its day, kind, marks, tools; the matter itself
                 // under the rule with its hour on the margin.
+                MatterTitle(title, { title = it }, task.done, task.time, if (task.slots.isEmpty() && due != null) ({ dialog = "time" }) else null, late,
+                    mark = if (!task.done && (task.waitingFor != null || task.promisedTo != null)) ({
+                        Box(Modifier.clip(CircleShape).clickable { vm.toggleTask(task.id) }) { PromiseMark(incoming = task.waitingFor != null, size = 28.dp) }
+                    }) else null)
                 CardHead(title, { title = it }, task.done, onToggle = { vm.toggleTask(task.id) }, sphere = task.sphere, onSphere = { vm.setSphere(task.id, it) }, kind = s.cardKindDeal.takeIf { owes == null },
                     margin = if (task.slots.isEmpty()) ({ CardMargin(due, null, late, prefix = windowPrefix(task.startDate.takeIf { task.dueDate != null }, due), strongPrefix = true,
                         under = due?.weekdayWord(), onDay = { dialog = "dates" }) }) else null,
@@ -226,10 +230,6 @@ fun TaskSheet(task: Task, data: AppData, vm: MainVm, onClose: () -> Unit, onOpen
                 // Owner, 16 окт: the head (day, title, marks, tools) stays put; only what is under it scrolls.
                 Column(Modifier.weight(1f, fill = cardFill).fillMaxWidth().ruledPage(pageLines).verticalScroll(rememberScrollState())) {
                 CardRule()
-                MatterTitle(title, { title = it }, task.done, task.time, if (task.slots.isEmpty() && due != null) ({ dialog = "time" }) else null, late,
-                    mark = if (!task.done && (task.waitingFor != null || task.promisedTo != null)) ({
-                        Box(Modifier.clip(CircleShape).clickable { vm.toggleTask(task.id) }) { PromiseMark(incoming = task.waitingFor != null, size = 28.dp) }
-                    }) else null)
                 val contactCtx = remember(task, data.tasks, data.persons) {
                     beforeContactLines(listOfNotNull(task.waitingFor, task.promisedTo) + task.people, task.who, task.id, data)
                 }

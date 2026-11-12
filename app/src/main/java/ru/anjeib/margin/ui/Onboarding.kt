@@ -64,33 +64,27 @@ import ru.anjeib.margin.data.shortLabel
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun Onboarding(vm: MainVm, onDone: () -> Unit) {
+fun Onboarding(vm: MainVm, onDone: (Boolean) -> Unit) {
     val c = M.c
     val s = M.s
-    val scenes = s.obScenes.size
-    val pager = androidx.compose.foundation.pager.rememberPagerState { scenes + 1 }
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val last = pager.currentPage == scenes
+    var course by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var setup by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Margin", style = Type.label.copy(color = c.accentText, fontSize = 13.sp), modifier = Modifier.weight(1f))
-            if (!last) Text(s.obSkip, style = Type.small.copy(color = c.graphite, fontSize = 14.sp),
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { scope.launch { pager.animateScrollToPage(scenes) } }.padding(12.dp))
+        Text("Margin", style = Type.label.copy(color = c.accentText, fontSize = 13.sp), modifier = Modifier.padding(start = 24.dp, top = 18.dp))
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (setup) SetupPage(vm) else ScenePage(1, true)
         }
-        androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth()) { page ->
-            if (page < scenes) ScenePage(page, pager.currentPage == page)
-            else SetupPage(vm)
-        }
-        // Where you are: one dot per page, the current one in sea.
-        Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                repeat(scenes + 1) { i ->
-                    Box(Modifier.size(if (i == pager.currentPage) 8.dp else 6.dp).clip(CircleShape).background(if (i == pager.currentPage) c.sea else c.hairline))
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
+            if (!setup) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { course = !course }, verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Checkbox(course, { course = it })
+                    Text(s.optionalCourse, style = Type.small.copy(color = c.graphite), modifier = Modifier.weight(1f))
                 }
             }
-            Pill(if (last) s.begin else s.obNext, filled = true, onClick = {
-                if (last) onDone() else scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
-            })
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { QuietLink(if (setup) s.obBackToStart else s.obPermissions) { setup = !setup } }
+                Pill(s.obFirstEntry, filled = true, onClick = { onDone(course) })
+            }
         }
     }
 }

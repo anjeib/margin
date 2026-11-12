@@ -762,7 +762,7 @@ fun App(vm: MainVm, shared: String?, onSharedConsumed: () -> Unit,
 
     viewing?.let { a -> Viewer(a, vm, onClose = { viewing = null }) }
 
-    if (!settings.onboarded) Onboarding(vm, onDone = { vm.updateSettings { it.copy(onboarded = true) }; vm.addIntroOnce(); vm.finishSetup() })
+    if (!settings.onboarded) Onboarding(vm, onDone = { course -> vm.updateSettings { it.copy(onboarded = true) }; vm.addIntroOnce(course); vm.finishSetup(); focusKey = System.currentTimeMillis() })
     // Once per install: offer the sample data (the user's own is kept aside and comes back from Settings).
     // Only where the designer's months are the point (the demo build loads them by itself); others get «Знакомство с Margin».
     var demoOffer by remember { mutableStateOf(ru.anjeib.margin.BuildConfig.DEMO && !vm.demoAsked()) }
